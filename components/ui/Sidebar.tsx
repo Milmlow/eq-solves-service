@@ -2,8 +2,10 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, MapPin, Package, ClipboardCheck,
-  Zap, FileText, Settings, ChevronLeft
+  Zap, FileText, Settings, ChevronLeft, Users, LogOut
 } from 'lucide-react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 
 const navItems = [
@@ -16,8 +18,9 @@ const navItems = [
   { label: 'Settings',    href: '/settings',     icon: Settings },
 ]
 
-export function Sidebar() {
+export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const [collapsed, setCollapsed] = useState(false)
+  const pathname = usePathname()
 
   return (
     <aside className={cn(
@@ -36,19 +39,54 @@ export function Sidebar() {
         </button>
       </div>
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {navItems.map(({ label, href, icon: Icon }) => (
-          <a
-            key={href}
-            href={href}
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
-          >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>{label}</span>}
-          </a>
-        ))}
+        {navItems.map(({ label, href, icon: Icon }) => {
+          const active = pathname === href || pathname.startsWith(href + '/')
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                active
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              )}
+            >
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>{label}</span>}
+            </Link>
+          )
+        })}
+        {isAdmin && (
+          <>
+            <div className={cn('mt-4 mb-1 px-3 text-[10px] uppercase tracking-wider text-white/30', collapsed && 'sr-only')}>
+              Admin
+            </div>
+            <Link
+              href="/admin/users"
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                pathname.startsWith('/admin/users')
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              )}
+            >
+              <Users className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Users</span>}
+            </Link>
+          </>
+        )}
       </nav>
-      <div className="px-4 py-3 border-t border-white/10 text-xs text-white/30">
-        {!collapsed && 'EQ Solves Service v1.0'}
+      <div className="border-t border-white/10 p-2">
+        <form action="/auth/signout" method="post">
+          <button
+            type="submit"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
+          >
+            <LogOut className="w-4 h-4 flex-shrink-0" />
+            {!collapsed && <span>Sign out</span>}
+          </button>
+        </form>
       </div>
     </aside>
   )

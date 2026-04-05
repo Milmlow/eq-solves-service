@@ -4,6 +4,49 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 2] 2026-04-05 — Auth, MFA & User Management
+
+### Added
+- DB migration `0001_profiles_and_recovery_codes.sql` — `profiles` table (role-based: admin/user, is_active soft-delete, last_login_at), `mfa_recovery_codes` table, `handle_new_user()` trigger (auto-creates profile, seeds admin role for `dev@eq.solutions`), `is_admin()` SECURITY DEFINER helper, `set_updated_at()` trigger, full RLS policies (users see/update own, admins see/update all, users cannot change their own role)
+- `lib/supabase/admin.ts` — service-role client for server-only admin operations (invites, recovery code writes)
+- `lib/supabase/middleware.ts` — `updateSession()` helper that refreshes cookies and returns user + AAL level
+- `proxy.ts` (Next 16 — replaces middleware.ts) — session refresh on every request, AAL1→AAL2 enforcement, admin route guard, deactivated-user signout, auto-redirect authed users away from public auth pages
+- `/auth/signin` — email+password form via server action, updates `last_login_at` on success
+- `/auth/forgot-password` + `/auth/reset-password` — Supabase email reset flow
+- `/auth/callback` — exchanges reset/invite email codes for session
+- `/auth/enroll-mfa` — TOTP QR code (Google/Microsoft Authenticator), verify, generates 8 bcrypt-hashed recovery codes (`XXXXX-XXXXX` format) shown once with download option
+- `/auth/mfa` — challenge page with TOTP 6-digit code + recovery-code fallback (consumes code, unenrols factor, forces re-enrolment)
+- `/auth/signout` — POST/GET route, wired from sidebar
+- `/admin/users` — admin-only page: list all users, invite by email (sends Supabase invite with `reset-password` redirect, assigns role), toggle active, change role (cannot self-deactivate or self-demote)
+- Sidebar: admin section with Users link (only when `isAdmin`), active-route highlighting, signout button at bottom, converted to `next/link`
+
+### Removed
+- Old `/app/(auth)/login/page.tsx` placeholder
+
+### Verified
+- `npx next build` passes — 19 routes, 0 TypeScript errors, proxy compiled
+- Migration applied to project `urjhmkhbgaxrofurpbgc`, security advisors clean (search_path fixed on `set_updated_at`)
+
+### Decisions Made
+- **`proxy.ts` (not `middleware.ts`)** — Next.js 16 renamed middleware to proxy with `proxy()` export. Idiomatic v16 pattern, not flagged as a deviation.
+- **Custom recovery codes** — Supabase has no built-in recovery code API for TOTP; implemented bcrypt-hashed storage in `mfa_recovery_codes` with RLS (users read own, service-role writes).
+- **Service role for admin ops** — user invites, recovery code inserts, and admin user mutations go via `createAdminClient()` to bypass RLS. Key is server-side only.
+- **Admin bootstrap** — `handle_new_user()` trigger seeds admin role for emails in hardcoded array (`dev@eq.solutions`). First admin is created by signing up with that email.
+- Password minimum length: 10 chars (on reset).
+
+### Blocked / Flagged for Chat
+- **`SUPABASE_SERVICE_ROLE_KEY` required in `.env.local` on user's machine** to run locally — Royce confirmed already added.
+- **MFA is enforced on all app routes.** Any authenticated user without a TOTP factor is forced to `/auth/enroll-mfa` before accessing any page. If you need to bypass this temporarily for dev/testing, flag to Chat.
+- **Email delivery uses Supabase default SMTP** (rate-limited, from `noreply@mail.supabase.co`). Production will need a custom SMTP provider configured in Supabase Auth settings.
+
+### Files Touched
+- Created: `supabase/migrations/0001_profiles_and_recovery_codes.sql`, `lib/supabase/admin.ts`, `lib/supabase/middleware.ts`, `proxy.ts`, `app/(auth)/auth/{signin,forgot-password,reset-password,enroll-mfa,mfa,callback}/*`, `app/auth/signout/route.ts`, `app/(app)/admin/users/{page,actions,InviteUserForm,UsersTable}.tsx`
+- Modified: `components/ui/Sidebar.tsx` (admin link, signout, active state), `app/(app)/layout.tsx` (fetches isAdmin), `app/(auth)/layout.tsx` (EQ branded auth shell)
+- Removed: `app/(auth)/login/page.tsx`
+- Installed: `bcryptjs@^3.0.3`
+
+---
+
 ## [Sprint 1] 2026-04-05 — Next.js scaffold and EQ design system
 
 ### Added

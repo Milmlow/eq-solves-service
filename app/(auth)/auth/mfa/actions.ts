@@ -1,0 +1,71 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import bcrypt from 'bcryptjs'
+import { redirect } from 'next/navigation'
+
+export async function mfaChallengeVerifyAction(formData: FormData) {
+  const code = String(formData.get('code') || '').trim()
+  if (!code) return { error: 'Code required.' }
+
+  const supabase = await createClient()
+  const { data: factors, error: fErr } = await supabase.auth.mfa.listFactors()
+  if (fErr) return { error: fErr.message }
+
+  const totp = factors?.totp?.find((f) => f.status === 'verified')
+  if (!totp) return { error: 'No verified authenticator on file.' }
+
+  const challenge = await supabase.auth.mfa.challenge({ factorId: totp.id })
+  if (challenge.error) return { error: challenge.error.message }
+
+  const verify = await supabase.auth.mfa.verify({
+    factorId: totp.id,
+    challengeId: challenge.data.id,
+    code,
+  })
+  if (verify.error) return { error: verify.error.message }
+
+  redirect('/dashboard')
+}
+
+export async function mfaRecoveryAction(formData: FormData) {
+  const code = String(formData.get('code') || '').trim().toUpperCase()
+  if (!code) return { error: 'Recovery code required.' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Session expired.' }
+
+  const admin = createAdminClient()
+  const { data: rows, error } = await admin
+    .from('mfa_recovery_codes')
+    .select('id, code_hash, used_at')
+    .eq('user_id', user.id)
+    .is('used_at', null)
+
+  if (error) return { error: error.message }
+  if (!rows || rows.length === 0) return { error: 'No recovery codes available.' }
+
+  let matchedId: string | null = null
+  for (const r of rows) {
+    if (await bcrypt.compare(code, r.code_hash)) {
+      matchedId = r.id
+      break
+    }
+  }
+  if (!matchedId) return { error: 'Invalid recovery code.' }
+
+  await admin
+    .from('mfa_recovery_codes')
+    .update({ used_at: new Date().toISOString() })
+    .eq('id', matchedId)
+
+  // Unenrol all existing TOTP factors so the user is forced to re-enrol.
+  const { data: factors } = await supabase.auth.mfa.listFactors()
+  for (const f of factors?.totp ?? []) {
+    await supabase.auth.mfa.unenroll({ factorId: f.id })
+  }
+
+  redirect('/auth/enroll-mfa')
+}
