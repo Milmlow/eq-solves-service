@@ -9,11 +9,12 @@ const PER_PAGE = 25
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; page?: string }>
+  searchParams: Promise<{ search?: string; page?: string; show_archived?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
+  const showArchived = params.show_archived === '1'
 
   const supabase = await createClient()
 
@@ -36,6 +37,10 @@ export default async function CustomersPage({
     .from('customers')
     .select('*', { count: 'exact' })
     .order('name')
+
+  if (!showArchived) {
+    query = query.eq('is_active', true)
+  }
 
   if (search) {
     query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%,email.ilike.%${search}%`)

@@ -9,12 +9,13 @@ const PER_PAGE = 25
 export default async function SitesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; customer_id?: string; page?: string }>
+  searchParams: Promise<{ search?: string; customer_id?: string; page?: string; show_archived?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const customerId = params.customer_id ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
+  const showArchived = params.show_archived === '1'
 
   const supabase = await createClient()
 
@@ -44,6 +45,10 @@ export default async function SitesPage({
     .from('sites')
     .select('*, customers(name), assets(count)', { count: 'exact' })
     .order('name')
+
+  if (!showArchived) {
+    query = query.eq('is_active', true)
+  }
 
   if (search) {
     query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%`)

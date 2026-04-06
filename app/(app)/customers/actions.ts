@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
+import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin } from '@/lib/utils/roles'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '@/lib/validations/customer'
 
@@ -27,6 +28,7 @@ export async function createCustomerAction(formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'create', entityType: 'customer', summary: `Created customer "${parsed.data.name}"` })
     revalidatePath('/customers')
     return { success: true }
   } catch (e: unknown) {
@@ -57,6 +59,7 @@ export async function updateCustomerAction(id: string, formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'customer', entityId: id, summary: `Updated customer` })
     revalidatePath('/customers')
     return { success: true }
   } catch (e: unknown) {
@@ -76,6 +79,7 @@ export async function toggleCustomerActiveAction(id: string, isActive: boolean) 
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'customer', entityId: id, summary: isActive ? 'Reactivated customer' : 'Deactivated customer' })
     revalidatePath('/customers')
     return { success: true }
   } catch (e: unknown) {

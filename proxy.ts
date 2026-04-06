@@ -67,15 +67,15 @@ export async function proxy(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (!profile || profile.role !== 'admin' || !profile.is_active) {
+    if (!profile || !['super_admin', 'admin'].includes(profile.role) || !profile.is_active) {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }
   }
 
-  // Deactivated users are signed out.
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin')) {
+  // Deactivated users are signed out on any protected route.
+  if (!isPublic && !isAalExempt) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_active')

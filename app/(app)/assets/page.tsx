@@ -9,13 +9,14 @@ const PER_PAGE = 25
 export default async function AssetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; asset_type?: string; page?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; asset_type?: string; page?: string; show_archived?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
   const assetType = params.asset_type ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
+  const showArchived = params.show_archived === '1'
 
   const supabase = await createClient()
 
@@ -53,6 +54,10 @@ export default async function AssetsPage({
     .from('assets')
     .select('*, sites(name)', { count: 'exact' })
     .order('name')
+
+  if (!showArchived) {
+    query = query.eq('is_active', true)
+  }
 
   if (search) {
     query = query.or(`name.ilike.%${search}%,asset_type.ilike.%${search}%,serial_number.ilike.%${search}%,maximo_id.ilike.%${search}%`)

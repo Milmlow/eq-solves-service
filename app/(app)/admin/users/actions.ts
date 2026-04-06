@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
+import { logAuditEvent } from '@/lib/actions/audit'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -14,7 +15,7 @@ async function requireAdmin() {
     .select('role, is_active')
     .eq('id', user.id)
     .single()
-  if (!profile || profile.role !== 'admin' || !profile.is_active) {
+  if (!profile || !['super_admin', 'admin'].includes(profile.role) || !profile.is_active) {
     throw new Error('Not authorised.')
   }
   return { supabase, user }
@@ -51,6 +52,7 @@ export async function inviteUserAction(formData: FormData) {
       .eq('id', data.user.id)
   }
 
+  await logAuditEvent({ action: 'create', entityType: 'user', entityId: data.user?.id, summary: `Invited user ${email} with role ${role}` })
   revalidatePath('/admin/users')
   return { ok: true }
 }
@@ -69,6 +71,7 @@ export async function setActiveAction(formData: FormData) {
   const { error } = await admin.from('profiles').update({ is_active: isActive }).eq('id', userId)
   if (error) return { error: error.message }
 
+  await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'user', entityId: userId, summary: isActive ? 'Reactivated user' : 'Deactivated user' })
   revalidatePath('/admin/users')
   return { ok: true }
 }
@@ -82,7 +85,7 @@ export async function setRoleAction(formData: FormData) {
   }
 
   const { user } = await requireAdmin()
-  if (userId === user.id && role !== 'admin') {
+  if (userId === user.id && !['super_admin', 'admin'].includes(role)) {
     return { error: 'You cannot demote yourself.' }
   }
 
@@ -90,6 +93,7 @@ export async function setRoleAction(formData: FormData) {
   const { error } = await admin.from('profiles').update({ role }).eq('id', userId)
   if (error) return { error: error.message }
 
+  await logAuditEvent({ action: 'update', entityType: 'user', entityId: userId, summary: `Changed user role to ${role}` })
   revalidatePath('/admin/users')
   return { ok: true }
 }

@@ -1,4 +1,4 @@
-import type { Frequency, CheckStatus, CheckItemResult } from '@/lib/types'
+import type { Frequency, CheckStatus, CheckItemResult, TestResult, AcbTestType, AcbTestResult, NsxTestType, NsxTestResult } from '@/lib/types'
 
 const frequencyLabels: Record<Frequency, string> = {
   weekly: 'Weekly',
@@ -33,6 +33,59 @@ const checkItemResultLabels: Record<CheckItemResult, string> = {
 
 export function formatCheckItemResult(result: CheckItemResult): string {
   return checkItemResultLabels[result] ?? result
+}
+
+const testResultLabels: Record<TestResult, string> = {
+  pending: 'Pending',
+  pass: 'Pass',
+  fail: 'Fail',
+  defect: 'Defect',
+}
+
+export function formatTestResult(result: TestResult): string {
+  return testResultLabels[result] ?? result
+}
+
+const acbTestTypeLabels: Record<AcbTestType, string> = {
+  Initial: 'Initial',
+  Routine: 'Routine',
+  Special: 'Special',
+}
+
+export function formatAcbTestType(type: AcbTestType): string {
+  return acbTestTypeLabels[type] ?? type
+}
+
+const acbTestResultLabels: Record<AcbTestResult, string> = {
+  Pending: 'Pending',
+  Pass: 'Pass',
+  Fail: 'Fail',
+  Defect: 'Defect',
+}
+
+export function formatAcbTestResult(result: AcbTestResult): string {
+  return acbTestResultLabels[result] ?? result
+}
+
+const nsxTestTypeLabels: Record<NsxTestType, string> = {
+  Initial: 'Initial',
+  Routine: 'Routine',
+  Special: 'Special',
+}
+
+export function formatNsxTestType(type: NsxTestType): string {
+  return nsxTestTypeLabels[type] ?? type
+}
+
+const nsxTestResultLabels: Record<NsxTestResult, string> = {
+  Pending: 'Pending',
+  Pass: 'Pass',
+  Fail: 'Fail',
+  Defect: 'Defect',
+}
+
+export function formatNsxTestResult(result: NsxTestResult): string {
+  return nsxTestResultLabels[result] ?? result
 }
 
 export function formatDate(dateStr: string): string {

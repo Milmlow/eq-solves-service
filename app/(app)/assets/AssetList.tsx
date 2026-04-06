@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { AssetForm } from './AssetForm'
+import { ImportAssetsModal } from './ImportAssetsModal'
 import type { Asset, Site, JobPlan } from '@/lib/types'
 import { Pencil, Upload } from 'lucide-react'
 
@@ -29,6 +30,7 @@ interface AssetListProps {
 export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalPages, isAdmin, canWrite: canWriteRole }: AssetListProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   function openCreate() {
     setSelected(null)
@@ -88,9 +90,11 @@ export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalP
           ]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">
-          <Button variant="secondary" size="sm" disabled title="Coming soon — CSV import">
-            <Upload className="w-4 h-4 mr-1" /> Import
-          </Button>
+          {canWriteRole && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
           {canWriteRole && (
             <Button onClick={openCreate}>Add Asset</Button>
           )}
@@ -123,6 +127,12 @@ export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalP
         jobPlans={selected ? (jobPlansMap[selected.site_id] ?? []) : []}
         isAdmin={isAdmin}
         canWrite={canWriteRole}
+      />
+
+      <ImportAssetsModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        sites={sites}
       />
     </>
   )

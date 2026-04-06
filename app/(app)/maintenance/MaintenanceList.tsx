@@ -10,7 +10,7 @@ import { SearchFilter } from '@/components/ui/SearchFilter'
 import { CreateCheckForm } from './CreateCheckForm'
 import { CheckDetail } from './CheckDetail'
 import { formatDate } from '@/lib/utils/format'
-import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile } from '@/lib/types'
+import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile, Attachment } from '@/lib/types'
 import { Eye } from 'lucide-react'
 
 type CheckRow = MaintenanceCheck & {
@@ -24,6 +24,7 @@ type CheckRow = MaintenanceCheck & {
 interface MaintenanceListProps {
   checks: CheckRow[]
   itemsMap: Record<string, MaintenanceCheckItem[]>
+  attachmentsMap: Record<string, Attachment[]>
   jobPlans: (Pick<JobPlan, 'id' | 'name' | 'site_id' | 'frequency'> & { sites?: { name: string } | null })[]
   sites: Pick<Site, 'id' | 'name'>[]
   technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
@@ -46,7 +47,7 @@ function statusToBadge(status: CheckStatus) {
 }
 
 export function MaintenanceList({
-  checks, itemsMap, jobPlans, sites, technicians,
+  checks, itemsMap, attachmentsMap, jobPlans, sites, technicians,
   page, totalPages, isAdmin, canWrite: canWriteRole, currentUserId,
 }: MaintenanceListProps) {
   const [createOpen, setCreateOpen] = useState(false)
@@ -157,6 +158,7 @@ export function MaintenanceList({
           onClose={() => setDetailCheck(null)}
           check={detailCheck}
           items={itemsMap[detailCheck.id] ?? []}
+          attachments={attachmentsMap[detailCheck.id] ?? []}
           isAdmin={isAdmin}
           canWrite={canWriteRole}
           isAssigned={detailCheck.assigned_to === currentUserId}

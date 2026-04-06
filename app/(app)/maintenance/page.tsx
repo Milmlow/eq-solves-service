@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { MaintenanceList } from './MaintenanceList'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
-import type { Role, MaintenanceCheckItem } from '@/lib/types'
+import type { Role, MaintenanceCheckItem, Attachment } from '@/lib/types'
 
 const PER_PAGE = 25
 
@@ -116,8 +116,25 @@ export default async function MaintenancePage({
     }
   })
 
-  // Fetch all check items for visible checks (for detail panel + completed counts)
+  // Fetch attachments for visible checks
   const checkIds = checks.map((c) => c.id)
+  let attachmentsMap: Record<string, Attachment[]> = {}
+  if (checkIds.length > 0) {
+    const { data: allAttachments } = await supabase
+      .from('attachments')
+      .select('*')
+      .eq('entity_type', 'maintenance_check')
+      .in('entity_id', checkIds)
+      .order('created_at')
+    attachmentsMap = (allAttachments ?? []).reduce((acc, att) => {
+      const key = att.entity_id as string
+      if (!acc[key]) acc[key] = []
+      acc[key].push(att as Attachment)
+      return acc
+    }, {} as Record<string, Attachment[]>)
+  }
+
+  // Fetch all check items for visible checks (for detail panel + completed counts)
   let itemsMap: Record<string, MaintenanceCheckItem[]> = {}
   if (checkIds.length > 0) {
     const { data: allItems } = await supabase
@@ -159,6 +176,7 @@ export default async function MaintenancePage({
       <MaintenanceList
         checks={filteredChecks as never}
         itemsMap={itemsMap}
+        attachmentsMap={attachmentsMap}
         jobPlans={(jobPlans ?? []) as never}
         sites={sites ?? []}
         technicians={technicians}

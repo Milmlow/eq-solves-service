@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
+import { logAuditEvent } from '@/lib/actions/audit'
 import {
   CreateJobPlanSchema,
   UpdateJobPlanSchema,
@@ -31,6 +32,7 @@ export async function createJobPlanAction(formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'create', entityType: 'job_plan', summary: `Created job plan "${parsed.data.name}"` })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -60,6 +62,7 @@ export async function updateJobPlanAction(id: string, formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'job_plan', entityId: id, summary: 'Updated job plan' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -79,6 +82,7 @@ export async function toggleJobPlanActiveAction(id: string, isActive: boolean) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'job_plan', entityId: id, summary: isActive ? 'Reactivated job plan' : 'Deactivated job plan' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -109,6 +113,7 @@ export async function createJobPlanItemAction(jobPlanId: string, formData: FormD
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'create', entityType: 'job_plan_item', summary: 'Added job plan item' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -138,6 +143,7 @@ export async function updateJobPlanItemAction(jobPlanId: string, itemId: string,
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'job_plan_item', entityId: itemId, summary: 'Updated job plan item' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -158,6 +164,7 @@ export async function deleteJobPlanItemAction(jobPlanId: string, itemId: string)
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'delete', entityType: 'job_plan_item', entityId: itemId, summary: 'Deleted job plan item' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {

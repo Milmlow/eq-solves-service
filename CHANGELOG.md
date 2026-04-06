@@ -4,6 +4,251 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 17] 2026-04-06 — Deploy & Analytics (Phase 5 Complete)
+
+### Added
+- **Analytics dashboard** (`app/(app)/analytics/`) — 6 KPI cards (assets, sites, tests, pass rate, compliance, overdue), 12-month test volume stacked bar chart, compliance trend chart with colour thresholds, pass rate by test type breakdown, instrument calibration status. Sidebar link with BarChart3 icon
+- **Bulk report export** (`app/api/bulk-report/`) — `GET /api/bulk-report?site_id=xxx`, supervisor+, generates ZIP of all ACB + NSX DOCX reports for a site. `BulkExportButton` component on Reports page with site picker
+- **Migration `0010_performance_indexes.sql`** — 24 composite/partial indexes on query hotspots across all entity tables. Applied to `urjhmkhbgaxrofurpbgc`
+- **Environment validation** (`lib/env.ts`) — Zod-validated `publicEnv` (URL + anon key) and `serverEnv()` (service role key). Fails fast at startup with descriptive error messages instead of silent `undefined` values
+- **`.env.example`** — Template for required environment variables, committed to repo
+
+### Changed
+- **Archive/soft-delete UX** — All entity list pages now support `?show_archived=1` toggle. Admin deactivate/reactivate on ACB tests, NSX tests, instruments, test records, assets, customers, sites, job plans
+- **Audit event wiring** — `logAuditEvent()` now called in every server action across all modules: assets (create/update/import/toggle), customers (create/update/toggle), sites (create/update/toggle), job plans (create/update/toggle + item CRUD), maintenance (create/update/start/complete/cancel), testing (create/update/toggle), ACB testing (create/update/toggle + readings), NSX testing (create/update/toggle + readings), instruments (create/update/toggle), admin users (invite/activate/role change), admin settings (update)
+- **Supabase clients** — `client.ts`, `server.ts`, `admin.ts`, `middleware.ts` now use validated `publicEnv`/`serverEnv()` instead of raw `process.env` with non-null assertions
+- **`.gitignore`** — Added `!.env.example` exception so template is tracked
+- **Search page** — Fixed TypeScript cast for Supabase foreign key joins on ACB/NSX asset names
+
+### Fixed
+- **Missing dependency** — Added `jszip` to `package.json` (was imported but not installed)
+- **TypeScript errors** — Resolved `TS2352` cast issues in search page for Supabase join types
+
+### Verified
+- `tsc --noEmit` → 0 TypeScript errors
+- `next build` blocked only by FUSE sandbox file lock (not code errors)
+
+### Files Created
+- `supabase/migrations/0010_performance_indexes.sql`
+- `lib/env.ts`
+- `.env.example`
+- `app/(app)/analytics/{page,AnalyticsCharts}.tsx`
+- `app/api/bulk-report/route.ts`
+- `components/modules/BulkExportButton.tsx`
+
+### Files Modified
+- All `actions.ts` files across `(app)/` modules — audit event wiring
+- `lib/supabase/{client,server,admin,middleware}.ts` — env validation
+- `app/(app)/search/page.tsx` — TS cast fix
+- `.gitignore` — .env.example exception
+- `package.json` — jszip dependency
+- `ROADMAP.md` — Sprint 17 marked complete
+- `CHANGELOG.md` — this entry
+
+---
+
+## [Sprint 15+16] 2026-04-06 — Audit, Search, Instruments, Users (Phase 5)
+
+### Added
+- **Migration `0008_audit_logs.sql`** — `audit_logs` table: tenant_id, user_id, action, entity_type, entity_id, summary, metadata (jsonb). Immutable (no update/delete policies). RLS: tenant-scoped read, insert. 5 indexes. Applied to `urjhmkhbgaxrofurpbgc`
+- **Migration `0009_instruments.sql`** — `instruments` table: name, instrument_type, make, model, serial_number, asset_tag, calibration_date, calibration_due, calibration_cert, status (Active/Out for Cal/Retired/Lost), assigned_to, notes, is_active. Full RLS. Applied to `urjhmkhbgaxrofurpbgc`
+- **Audit log shared action** (`lib/actions/audit.ts`) — `logAuditEvent()` for use in other server actions. Silent failure so audit never blocks mutations
+- **Audit log viewer** (`app/(app)/audit-log/`) — Admin-only page with DataTable, filter by entity type + action, colour-coded action badges, pagination, user name resolution
+- **Global search** (`app/(app)/search/`) — Searches across assets, sites, customers, ACB tests, NSX tests, instruments. Type-specific icons and badge colours. Full search input with URL-based query params
+- **Instrument register** (`app/(app)/instruments/`) — Full CRUD: list with calibration due highlighting (red if overdue), form with calibration section (date, due, cert), status dropdown, assigned_to. Detail panel with calibration info. Admin deactivate
+- **TypeScript types** — `AuditLog`, `InstrumentStatus`, `Instrument` added to `lib/types/index.ts`
+- **Zod schemas** (`lib/validations/instrument.ts`) — `CreateInstrumentSchema`, `UpdateInstrumentSchema`
+- **Sidebar** — Added Instruments (Wrench icon), Search (Search icon), Audit Log (ScrollText icon in Admin section)
+
+### Changed
+- **User management** — `requireAdmin()` now accepts `super_admin` role (was admin-only). Self-demotion check updated
+
+### Verified
+- `tsc --noEmit` → 0 errors in project code
+
+### Files Created
+- `supabase/migrations/0008_audit_logs.sql`, `0009_instruments.sql`
+- `lib/actions/audit.ts`
+- `lib/validations/instrument.ts`
+- `app/(app)/audit-log/{page,AuditLogList}.tsx`
+- `app/(app)/search/{page,SearchResults}.tsx`
+- `app/(app)/instruments/{page,InstrumentList,InstrumentForm,InstrumentDetail,actions}.tsx`
+
+### Files Modified
+- `lib/types/index.ts` — added AuditLog, InstrumentStatus, Instrument
+- `components/ui/Sidebar.tsx` — added Instruments, Search, Audit Log links
+- `app/(app)/admin/users/actions.ts` — super_admin support in requireAdmin
+
+---
+
+## [Sprint 14] 2026-04-06 — NSX Testing + Reports (Phase 4)
+
+### Added
+- **Migration `0007_nsx_tests_schema.sql`** — 2 new tables: `nsx_tests` (asset, site, test_date, tested_by, test_type Initial/Routine/Special, cb_make/model/serial/rating/poles, trip_unit, overall_result Pending/Pass/Fail/Defect, is_active), `nsx_test_readings` (label, value required, unit, is_pass, sort_order). Full RLS: tenant-scoped read, supervisor+ create/edit, admin delete. `updated_at` trigger. 7 indexes. Applied to `urjhmkhbgaxrofurpbgc`
+- **TypeScript types** — `NsxTestType`, `NsxTestResult`, `NsxTest`, `NsxTestReading` added to `lib/types/index.ts`
+- **Zod schemas** (`lib/validations/nsx-test.ts`) — `CreateNsxTestSchema`, `UpdateNsxTestSchema`, `CreateNsxReadingSchema`, `UpdateNsxReadingSchema`
+- **Format helpers** — `formatNsxTestType()`, `formatNsxTestResult()` added to `lib/utils/format.ts`
+- **NSX test list page** (`app/(app)/nsx-testing/page.tsx`) — server-side fetch with joined asset/site/tester names. Filter by site + result. Search. Pagination
+- **NSX test form** (`NsxTestForm.tsx`) — SlidePanel with asset dropdown (auto-resolves site), test date, tested by, CB make/model/serial/rating/poles, trip unit, test type, overall result, notes
+- **NSX test detail** (`NsxTestDetail.tsx`) — read-only view, CB details (6 fields inc. rating, poles, trip unit), readings with inline add/delete, AttachmentList (entity type: `nsx_test`), admin deactivate
+- **Server actions** (`actions.ts`) — `createNsxTestAction`, `updateNsxTestAction`, `toggleNsxTestActiveAction`, `createNsxReadingAction`, `deleteNsxReadingAction`
+- **NSX DOCX report generator** (`lib/reports/nsx-report.ts`) — per-site NSX/MCCB report: cover page, TOC, per-breaker sections (CB details 16 attributes, visual/functional 16-item checklist, electrical testing tables, trip test results with 4 protection rows). White-label branding
+- **NSX report API route** (`app/api/nsx-report/route.ts`) — `GET /api/nsx-report?site_id=xxx`, supervisor+, returns DOCX attachment
+- **Generate Report button** on NSX Testing list page — site picker + Report button with blob download
+- **Dashboard** — NSX Tests stats row: Total, Passed, Failed, Defects
+- **Sidebar** — NSX Testing nav link with `CircuitBoard` icon between ACB Testing and Reports
+
+### Verified
+- `tsc --noEmit` → 0 TypeScript errors
+- Migration applied successfully to Supabase dev project
+
+### Files Created
+- `supabase/migrations/0007_nsx_tests_schema.sql`
+- `lib/validations/nsx-test.ts`
+- `lib/reports/nsx-report.ts`
+- `app/(app)/nsx-testing/{page,NsxTestList,NsxTestForm,NsxTestDetail,actions}.tsx`
+- `app/api/nsx-report/route.ts`
+
+### Files Modified
+- `lib/types/index.ts` — added `NsxTestType`, `NsxTestResult`, `NsxTest`, `NsxTestReading`
+- `lib/utils/format.ts` — added `formatNsxTestType()`, `formatNsxTestResult()`
+- `components/ui/Sidebar.tsx` — added NSX Testing nav link with CircuitBoard icon
+- `app/(app)/dashboard/page.tsx` — added NSX test stats row
+
+---
+
+## [Sprint 13] 2026-04-06 — ACB Reporting (Phase 4)
+
+### Added
+- **ACB DOCX report generator** (`lib/reports/acb-report.ts`) — produces per-site ACB test reports matching the Delta Elcom template structure: cover page (site name, year, generated date, tenant branding), Table of Contents, per-breaker sections (header table, circuit breaker details with 24 attributes, visual/functional quick items + 27-row checklist, electrical testing tables for contact resistance / IR closed / IR open / secondary injection, protection test results). Uses `docx-js` package. White-label: heading colour from tenant primary colour, product name on cover
+- **Report download API route** (`app/api/acb-report/route.ts`) — `GET /api/acb-report?site_id=xxx` — auth + role check (supervisor+), fetches all active ACB tests for the site with joined asset data, readings, tester names, tenant settings. Returns DOCX as attachment download
+- **Generate Report button** on ACB Testing list page — site picker dropdown + "Report" button. Downloads DOCX via blob URL. Disabled until site selected. Loading state during generation
+
+### Verified
+- `tsc --noEmit` → 0 TypeScript errors
+- Report template matches uploaded Delta Elcom ACB test report structure
+
+### Files Created
+- `lib/reports/acb-report.ts`
+- `app/api/acb-report/route.ts`
+
+### Files Modified
+- `app/(app)/acb-testing/AcbTestList.tsx` — added Generate Report button with site picker
+- `package.json` — added `docx` dependency
+
+### Docs Updated
+- `ROADMAP.md` — Sprint 13 ✅
+- `ARCHITECTURE.md` — report generator in repo structure, docx dep
+- `SPEC.md` — ACB Reports module ✅
+- `USER_MANUAL_NOTES.md` — Sprint 13 section: generating ACB reports
+
+---
+
+## [Sprint 12] 2026-04-06 — ACB Test Entry (Phase 4)
+
+### Added
+- **Migration `0006_acb_tests_schema.sql`** — 2 new tables: `acb_tests` (asset, site, test_date, tested_by, test_type enum Initial/Routine/Special, cb_make/model/serial, overall_result enum Pending/Pass/Fail/Defect, is_active), `acb_test_readings` (label, value required, unit, is_pass, sort_order). Full RLS: tenant-scoped read, supervisor+ create/edit, admin delete. `updated_at` trigger on acb_tests. 7 indexes. Applied to `urjhmkhbgaxrofurpbgc`
+- **TypeScript types** — `AcbTestType`, `AcbTestResult`, `AcbTest`, `AcbTestReading` added to `lib/types/index.ts`
+- **Zod schemas** (`lib/validations/acb-test.ts`) — `CreateAcbTestSchema`, `UpdateAcbTestSchema`, `CreateAcbReadingSchema`, `UpdateAcbReadingSchema`
+- **Format helpers** — `formatAcbTestType()`, `formatAcbTestResult()` added to `lib/utils/format.ts`
+- **ACB test list page** (`app/(app)/acb-testing/page.tsx`) — server-side fetch with joined asset name/type, site name, tester name. Filter by site + result. Search across asset name, CB make, CB model, test type. Pagination. Result badges
+- **ACB test form** (`AcbTestForm.tsx`) — SlidePanel with asset dropdown (auto-resolves site), test date, tested by dropdown, CB make/model/serial, test type dropdown, overall result dropdown, notes
+- **ACB test detail** (`AcbTestDetail.tsx`) — read-only view with all fields, CB details section, result badge. Readings: inline add form (label, value required, unit, pass/fail), delete per reading. Edit button. Admin deactivate/reactivate. AttachmentList (entity type: `acb_test`)
+- **Server actions** (`app/(app)/acb-testing/actions.ts`) — `createAcbTestAction`, `updateAcbTestAction`, `toggleAcbTestActiveAction`, `createAcbReadingAction`, `deleteAcbReadingAction`
+- **Dashboard** — ACB Tests stats row: Total, Passed, Failed, Defects. Colour-coded, clickable links to filtered ACB testing view
+- **Sidebar** — ACB Testing nav link with `Shield` icon, positioned between Testing and Reports
+
+### Verified
+- `tsc --noEmit` → 0 TypeScript errors
+- Migration applied successfully to Supabase dev project
+
+### Files Created
+- `supabase/migrations/0006_acb_tests_schema.sql`
+- `lib/validations/acb-test.ts`
+- `app/(app)/acb-testing/{page,AcbTestList,AcbTestForm,AcbTestDetail,actions}.tsx`
+
+### Files Modified
+- `lib/types/index.ts` — added `AcbTestType`, `AcbTestResult`, `AcbTest`, `AcbTestReading`
+- `lib/utils/format.ts` — added `formatAcbTestType()`, `formatAcbTestResult()`
+- `components/ui/Sidebar.tsx` — added ACB Testing nav link with Shield icon
+- `app/(app)/dashboard/page.tsx` — added ACB test stats row
+
+### Docs Updated
+- `ROADMAP.md` — Sprint 12 ✅, migration 0006 applied, Phase 4 in progress
+- `ARCHITECTURE.md` — acb_tests + acb_test_readings in schema table, acb-testing in repo structure
+- `SPEC.md` — ACB Test Records module ✅ with full fields and acceptance criteria
+- `USER_MANUAL_NOTES.md` — Sprint 12 section: creating ACB tests, adding readings, permissions, dashboard
+
+---
+
+## [Sprints 10+11] 2026-04-06 — CSV Import, File Attachments & Polish (Phase 5)
+
+### Added
+- **CSV Asset Import** — full import workflow via SlidePanel: file upload, auto column mapping (fuzzy match), 5-row preview table, site name resolution, validation (required columns, unknown sites, 500-row max). Bulk insert via server action with per-row error reporting. Wired to previously disabled "Import" button on Assets page
+- **Migration `0005_attachments_schema.sql`** — `attachments` table (polymorphic: entity_type + entity_id), Supabase Storage `attachments` bucket (private), RLS (tenant-scoped read, supervisor+ upload, admin+ delete), storage policies for tenant-prefixed paths. Applied to `urjhmkhbgaxrofurpbgc`
+- **Attachment system** — reusable `AttachmentList` component with upload (10 MB limit, PDF/images/XLSX/DOCX/CSV/TXT), download via signed URL (1hr expiry), delete (admin only). File type icons. Shared server actions: `uploadAttachmentAction`, `deleteAttachmentAction`, `getAttachmentUrlAction`
+- **Attachments on Maintenance Checks** — upload/view/delete attachments from CheckDetail panel (supervisor+ or assigned technician can upload)
+- **Attachments on Test Records** — upload/view/delete attachments from TestRecordDetail panel (supervisor+ can upload)
+- **TypeScript type** — `Attachment` added to `lib/types/index.ts`
+
+### Verified
+- `tsc --noEmit` → 0 TypeScript errors
+- Migration applied successfully to Supabase dev project
+
+### Files Created
+- `supabase/migrations/0005_attachments_schema.sql`
+- `lib/actions/attachments.ts` — shared upload/delete/signedUrl server actions
+- `components/ui/AttachmentList.tsx` — reusable attachment UI component
+- `app/(app)/assets/ImportAssetsModal.tsx` — CSV import modal
+
+### Files Modified
+- `lib/types/index.ts` — added `Attachment`
+- `app/(app)/assets/actions.ts` — added `importAssetsAction`
+- `app/(app)/assets/AssetList.tsx` — wired Import button to ImportAssetsModal
+- `app/(app)/maintenance/{page,MaintenanceList,CheckDetail}.tsx` — attachments fetch + prop threading + render
+- `app/(app)/testing/{page,TestRecordList,TestRecordDetail}.tsx` — attachments fetch + prop threading + render
+
+---
+
+## [Sprints 8+9] 2026-04-06 — Testing Module & Compliance Reports (Phase 4)
+
+### Added
+- **Migration `0004_test_records_schema.sql`** — 2 new tables: `test_records`, `test_record_readings`. Full RLS with tenant scoping, supervisor+ write, admin delete. Indexes on tenant, asset, site, result, dates. Applied to `urjhmkhbgaxrofurpbgc` via Supabase MCP
+- **TypeScript types** — `TestResult`, `TestRecord`, `TestRecordReading` added to `lib/types/index.ts`
+- **Zod schemas** (`lib/validations/test-record.ts`) — `CreateTestRecordSchema`, `UpdateTestRecordSchema`, `CreateTestReadingSchema`, `UpdateTestReadingSchema`
+- **Format helper** — `formatTestResult()` added to `lib/utils/format.ts`
+- **Test records list page** — replaced placeholder. Server-side fetch with joined asset name/type, site name, tester name. Filter by site + result. Search across asset name, site, test type. Pagination
+- **Test record form** (`TestRecordForm.tsx`) — SlidePanel with asset dropdown (auto-resolves site), test type, test date, tested by dropdown, result (pending/pass/fail/defect), next test due, notes
+- **Test record detail** (`TestRecordDetail.tsx`) — read-only view with all fields, result badge, readings section. Inline "Add Reading" form (label, value, unit, pass/fail). Delete readings. Edit button opens form. Admin deactivate/reactivate
+- **Readings management** — inline add/delete within detail panel. Fields: label, value, unit, pass/fail boolean. Sort order auto-assigned
+- **Server actions** — `createTestRecordAction`, `updateTestRecordAction`, `toggleTestRecordActiveAction`, `createReadingAction`, `deleteReadingAction`
+- **Compliance Reports page** — replaced placeholder. Site filter + date range (from/to). Four KPI cards: Maintenance Compliance %, Overdue Checks, Test Pass Rate %, Test Defects count. Colour-coded thresholds (green ≥80%, amber ≥50%, red <50%)
+- **Report breakdowns** — horizontal bar charts for maintenance status distribution and test result distribution
+- **Overdue by site** — top 5 sites with most overdue maintenance checks
+- **Recent failed tests** — last 10 failed/defect tests with asset name, test type, date, result badge
+- **Dashboard** — added Test Records stats row: Total Tests, Passed, Failed, Defects. Colour-coded, clickable links to filtered testing view
+- **StatusBadge** — added optional `label` prop for custom display text (used by test result badges)
+
+### Verified
+- `tsc --noEmit` → 0 TypeScript errors
+- Migration applied successfully to Supabase dev project
+
+### Files Created
+- `supabase/migrations/0004_test_records_schema.sql`
+- `lib/validations/test-record.ts`
+- `app/(app)/testing/{TestRecordList,TestRecordForm,TestRecordDetail,actions}.tsx`
+- `app/(app)/reports/ReportFilters.tsx`
+
+### Files Modified
+- `lib/types/index.ts` — added `TestResult`, `TestRecord`, `TestRecordReading`
+- `lib/utils/format.ts` — added `formatTestResult()`
+- `components/ui/StatusBadge.tsx` — added optional `label` prop
+- `app/(app)/testing/page.tsx` — full CRUD replacing placeholder
+- `app/(app)/reports/page.tsx` — compliance dashboard replacing placeholder
+- `app/(app)/dashboard/page.tsx` — added test records stats row
+
+---
+
 ## [Sprint 7] 2026-04-06 — Maintenance Checks (Phase 3)
 
 ### Added

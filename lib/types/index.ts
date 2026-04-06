@@ -155,6 +155,155 @@ export interface MaintenanceCheckItem {
   updated_at: string
 }
 
+export type TestResult = 'pending' | 'pass' | 'fail' | 'defect'
+
+export interface TestRecord {
+  id: string
+  tenant_id: string
+  asset_id: string
+  site_id: string
+  test_type: string
+  test_date: string
+  tested_by: string | null
+  result: TestResult
+  notes: string | null
+  next_test_due: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface TestRecordReading {
+  id: string
+  tenant_id: string
+  test_record_id: string
+  label: string
+  value: string | null
+  unit: string | null
+  pass: boolean | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type AcbTestType = 'Initial' | 'Routine' | 'Special'
+
+export type AcbTestResult = 'Pending' | 'Pass' | 'Fail' | 'Defect'
+
+export interface AcbTest {
+  id: string
+  tenant_id: string
+  asset_id: string
+  site_id: string
+  test_date: string
+  tested_by: string | null
+  test_type: AcbTestType
+  cb_make: string | null
+  cb_model: string | null
+  cb_serial: string | null
+  overall_result: AcbTestResult
+  notes: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AcbTestReading {
+  id: string
+  acb_test_id: string
+  tenant_id: string
+  label: string
+  value: string
+  unit: string | null
+  is_pass: boolean | null
+  sort_order: number
+  created_at: string
+}
+
+export interface Attachment {
+  id: string
+  tenant_id: string
+  entity_type: string
+  entity_id: string
+  file_name: string
+  file_size: number
+  content_type: string
+  storage_path: string
+  uploaded_by: string | null
+  created_at: string
+}
+
+export type NsxTestType = 'Initial' | 'Routine' | 'Special'
+
+export type NsxTestResult = 'Pending' | 'Pass' | 'Fail' | 'Defect'
+
+export interface NsxTest {
+  id: string
+  tenant_id: string
+  asset_id: string
+  site_id: string
+  test_date: string
+  tested_by: string | null
+  test_type: NsxTestType
+  cb_make: string | null
+  cb_model: string | null
+  cb_serial: string | null
+  cb_rating: string | null
+  cb_poles: string | null
+  trip_unit: string | null
+  overall_result: NsxTestResult
+  notes: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface NsxTestReading {
+  id: string
+  nsx_test_id: string
+  tenant_id: string
+  label: string
+  value: string
+  unit: string | null
+  is_pass: boolean | null
+  sort_order: number
+  created_at: string
+}
+
+export interface AuditLog {
+  id: string
+  tenant_id: string
+  user_id: string | null
+  action: string
+  entity_type: string
+  entity_id: string | null
+  summary: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+}
+
+export type InstrumentStatus = 'Active' | 'Out for Cal' | 'Retired' | 'Lost'
+
+export interface Instrument {
+  id: string
+  tenant_id: string
+  name: string
+  instrument_type: string
+  make: string | null
+  model: string | null
+  serial_number: string | null
+  asset_tag: string | null
+  calibration_date: string | null
+  calibration_due: string | null
+  calibration_cert: string | null
+  status: InstrumentStatus
+  assigned_to: string | null
+  notes: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface ApiResponse<T> {
   data: T | null
   error: string | null

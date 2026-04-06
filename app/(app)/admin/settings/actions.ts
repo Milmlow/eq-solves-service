@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin } from '@/lib/utils/roles'
+import { logAuditEvent } from '@/lib/actions/audit'
 import { z } from 'zod'
 
 const UpdateTenantSettingsSchema = z.object({
@@ -40,6 +41,7 @@ export async function updateTenantSettingsAction(formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'tenant_settings', summary: 'Updated tenant settings' })
     revalidatePath('/', 'layout')
     return { success: true }
   } catch (e: unknown) {

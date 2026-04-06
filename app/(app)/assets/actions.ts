@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { CreateAssetSchema, UpdateAssetSchema } from '@/lib/validations/asset'
+import { logAuditEvent } from '@/lib/actions/audit'
 
 export async function createAssetAction(formData: FormData) {
   try {
@@ -31,6 +32,7 @@ export async function createAssetAction(formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'create', entityType: 'asset', summary: `Created asset "${parsed.data.name}"` })
     revalidatePath('/assets')
     return { success: true }
   } catch (e: unknown) {
@@ -65,10 +67,60 @@ export async function updateAssetAction(id: string, formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'asset', entityId: id, summary: 'Updated asset' })
     revalidatePath('/assets')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
+  }
+}
+
+export async function importAssetsAction(
+  assets: {
+    name: string
+    asset_type: string
+    site_id: string
+    manufacturer: string | null
+    model: string | null
+    serial_number: string | null
+    maximo_id: string | null
+    location: string | null
+    install_date: string | null
+  }[]
+) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.', imported: 0, rowErrors: [] as string[] }
+
+    if (assets.length === 0) return { success: false, error: 'No valid rows to import.', imported: 0, rowErrors: [] as string[] }
+    if (assets.length > 500) return { success: false, error: 'Maximum 500 rows per import.', imported: 0, rowErrors: [] as string[] }
+
+    const rowErrors: string[] = []
+    const validRows: typeof assets = []
+
+    for (let i = 0; i < assets.length; i++) {
+      const row = assets[i]
+      if (!row.name?.trim()) { rowErrors.push(`Row ${i + 1}: Name is required.`); continue }
+      if (!row.asset_type?.trim()) { rowErrors.push(`Row ${i + 1}: Asset type is required.`); continue }
+      if (!row.site_id) { rowErrors.push(`Row ${i + 1}: Invalid or unknown site.`); continue }
+      validRows.push(row)
+    }
+
+    if (validRows.length === 0) {
+      return { success: false, error: 'No valid rows after validation.', imported: 0, rowErrors }
+    }
+
+    // Batch insert with tenant_id
+    const insertRows = validRows.map((r) => ({ ...r, tenant_id: tenantId }))
+    const { error } = await supabase.from('assets').insert(insertRows)
+
+    if (error) return { success: false, error: error.message, imported: 0, rowErrors }
+
+    await logAuditEvent({ action: 'create', entityType: 'asset', summary: `Imported ${validRows.length} assets from CSV` })
+    revalidatePath('/assets')
+    return { success: true, imported: validRows.length, rowErrors }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message, imported: 0, rowErrors: [] as string[] }
   }
 }
 
@@ -84,6 +136,7 @@ export async function toggleAssetActiveAction(id: string, isActive: boolean) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'asset', entityId: id, summary: isActive ? 'Reactivated asset' : 'Deactivated asset' })
     revalidatePath('/assets')
     return { success: true }
   } catch (e: unknown) {

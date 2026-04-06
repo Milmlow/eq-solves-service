@@ -11,7 +11,8 @@ import {
   updateCheckItemAction,
 } from './actions'
 import { formatDate, formatCheckStatus } from '@/lib/utils/format'
-import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, CheckItemResult } from '@/lib/types'
+import { AttachmentList } from '@/components/ui/AttachmentList'
+import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
 import { CheckCircle, XCircle, MinusCircle } from 'lucide-react'
 
 interface CheckDetailProps {
@@ -23,6 +24,7 @@ interface CheckDetailProps {
     assignee_name?: string | null
   }
   items: MaintenanceCheckItem[]
+  attachments: Attachment[]
   isAdmin: boolean
   canWrite: boolean
   isAssigned: boolean
@@ -39,7 +41,7 @@ function statusToBadge(status: CheckStatus) {
   return map[status]
 }
 
-export function CheckDetail({ open, onClose, check, items, isAdmin, canWrite: canWriteRole, isAssigned }: CheckDetailProps) {
+export function CheckDetail({ open, onClose, check, items, attachments, isAdmin, canWrite: canWriteRole, isAssigned }: CheckDetailProps) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -166,6 +168,15 @@ export function CheckDetail({ open, onClose, check, items, isAdmin, canWrite: ca
             )}
           </div>
         </div>
+
+        {/* Attachments */}
+        <AttachmentList
+          entityType="maintenance_check"
+          entityId={check.id}
+          attachments={attachments}
+          canWrite={canWriteRole || isAssigned}
+          isAdmin={isAdmin}
+        />
       </div>
     </SlidePanel>
   )

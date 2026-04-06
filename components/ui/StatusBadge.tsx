@@ -12,14 +12,14 @@ const statusConfig: Record<Status, { label: string; className: string }> = {
   'inactive':    { label: 'Inactive',    className: 'bg-gray-100 text-gray-500' },
 }
 
-export function StatusBadge({ status }: { status: Status }) {
+export function StatusBadge({ status, label }: { status: Status; label?: string }) {
   const config = statusConfig[status]
   return (
     <span className={cn(
       'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide',
       config.className
     )}>
-      {config.label}
+      {label ?? config.label}
     </span>
   )
 }

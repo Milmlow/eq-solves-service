@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
+import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin } from '@/lib/utils/roles'
 import { CreateSiteSchema, UpdateSiteSchema } from '@/lib/validations/site'
 
@@ -30,6 +31,7 @@ export async function createSiteAction(formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'create', entityType: 'site', summary: `Created site "${parsed.data.name}"` })
     revalidatePath('/sites')
     return { success: true }
   } catch (e: unknown) {
@@ -63,6 +65,7 @@ export async function updateSiteAction(id: string, formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'site', entityId: id, summary: 'Updated site' })
     revalidatePath('/sites')
     return { success: true }
   } catch (e: unknown) {
@@ -82,6 +85,7 @@ export async function toggleSiteActiveAction(id: string, isActive: boolean) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'site', entityId: id, summary: isActive ? 'Reactivated site' : 'Deactivated site' })
     revalidatePath('/sites')
     return { success: true }
   } catch (e: unknown) {

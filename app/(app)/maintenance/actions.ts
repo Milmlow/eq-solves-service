@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
+import { logAuditEvent } from '@/lib/actions/audit'
 import {
   CreateMaintenanceCheckSchema,
   UpdateMaintenanceCheckSchema,
@@ -63,6 +64,8 @@ export async function createCheckAction(formData: FormData) {
       if (itemsError) return { success: false, error: itemsError.message }
     }
 
+    await logAuditEvent({ action: 'create', entityType: 'maintenance_check', summary: 'Created maintenance check' })
+
     revalidatePath('/maintenance')
     return { success: true, checkId: check.id }
   } catch (e: unknown) {
@@ -106,6 +109,8 @@ export async function updateCheckAction(id: string, formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Updated maintenance check' })
+
     revalidatePath('/maintenance')
     return { success: true }
   } catch (e: unknown) {
@@ -141,6 +146,7 @@ export async function startCheckAction(id: string) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Started maintenance check' })
     revalidatePath('/maintenance')
     return { success: true }
   } catch (e: unknown) {
@@ -188,6 +194,7 @@ export async function completeCheckAction(id: string) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Completed maintenance check' })
     revalidatePath('/maintenance')
     return { success: true }
   } catch (e: unknown) {
@@ -210,6 +217,7 @@ export async function cancelCheckAction(id: string) {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'delete', entityType: 'maintenance_check', entityId: id, summary: 'Cancelled maintenance check' })
     revalidatePath('/maintenance')
     return { success: true }
   } catch (e: unknown) {
