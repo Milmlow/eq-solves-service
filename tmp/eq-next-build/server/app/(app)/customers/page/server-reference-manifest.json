@@ -1,0 +1,41 @@
+{
+  "node": {
+    "40bf98918e0c9d7b3684bfd093e781deb6591b5c5a": {
+      "workers": {
+        "app/(app)/customers/page": {
+          "moduleId": 83910,
+          "async": false,
+          "exportedName": "createCustomerAction",
+          "filename": "app/(app)/customers/actions.ts"
+        }
+      },
+      "exportedName": "createCustomerAction",
+      "filename": "app/(app)/customers/actions.ts"
+    },
+    "601d987eecc0db2cc1986186fdd264a1c60476e922": {
+      "workers": {
+        "app/(app)/customers/page": {
+          "moduleId": 83910,
+          "async": false,
+          "exportedName": "updateCustomerAction",
+          "filename": "app/(app)/customers/actions.ts"
+        }
+      },
+      "exportedName": "updateCustomerAction",
+      "filename": "app/(app)/customers/actions.ts"
+    },
+    "60717fee41599ab02b10fe372481ee803a43af11e8": {
+      "workers": {
+        "app/(app)/customers/page": {
+          "moduleId": 83910,
+          "async": false,
+          "exportedName": "toggleCustomerActiveAction",
+          "filename": "app/(app)/customers/actions.ts"
+        }
+      },
+      "exportedName": "toggleCustomerActiveAction",
+      "filename": "app/(app)/customers/actions.ts"
+    }
+  },
+  "edge": {}
+}

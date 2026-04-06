@@ -1,0 +1,53 @@
+{
+  "node": {
+    "40dfdb3a25f3f4bf8a92f6f589ca3556754f573a21": {
+      "workers": {
+        "app/(app)/assets/page": {
+          "moduleId": 18661,
+          "async": false,
+          "exportedName": "createAssetAction",
+          "filename": "app/(app)/assets/actions.ts"
+        }
+      },
+      "exportedName": "createAssetAction",
+      "filename": "app/(app)/assets/actions.ts"
+    },
+    "606348cf01bd7583c6a4b7bac24176a2119fb72ffe": {
+      "workers": {
+        "app/(app)/assets/page": {
+          "moduleId": 18661,
+          "async": false,
+          "exportedName": "updateAssetAction",
+          "filename": "app/(app)/assets/actions.ts"
+        }
+      },
+      "exportedName": "updateAssetAction",
+      "filename": "app/(app)/assets/actions.ts"
+    },
+    "60c453b484cd6dbec115d3a03fa07b7c504987dc00": {
+      "workers": {
+        "app/(app)/assets/page": {
+          "moduleId": 18661,
+          "async": false,
+          "exportedName": "toggleAssetActiveAction",
+          "filename": "app/(app)/assets/actions.ts"
+        }
+      },
+      "exportedName": "toggleAssetActiveAction",
+      "filename": "app/(app)/assets/actions.ts"
+    },
+    "0023242d886ad635a7fd523c0037de7c37d5fe5a8c": {
+      "workers": {
+        "app/(app)/assets/page": {
+          "moduleId": 18661,
+          "async": false,
+          "exportedName": "requireUser",
+          "filename": "lib/actions/auth.ts"
+        }
+      },
+      "exportedName": "requireUser",
+      "filename": "lib/actions/auth.ts"
+    }
+  },
+  "edge": {}
+}
