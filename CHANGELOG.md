@@ -4,6 +4,43 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 7] 2026-04-06 — Maintenance Checks (Phase 3)
+
+### Added
+- **Migration `0003_maintenance_checks_schema.sql`** — 2 new tables: `maintenance_checks`, `maintenance_check_items`. Full RLS with tenant scoping, role-based access (supervisor+ create, technician can update assigned checks), `updated_at` triggers, 8 indexes. Applied to `urjhmkhbgaxrofurpbgc` via Supabase MCP.
+- **TypeScript types** — `MaintenanceCheck`, `MaintenanceCheckItem`, `CheckStatus`, `CheckItemResult` added to `lib/types/index.ts`
+- **Zod schemas** (`lib/validations/maintenance-check.ts`) — `CreateMaintenanceCheckSchema`, `UpdateMaintenanceCheckSchema`, `UpdateCheckItemResultSchema`
+- **Format helpers** — `formatCheckStatus()`, `formatCheckItemResult()` added to `lib/utils/format.ts`
+- **Maintenance list page** — replaced placeholder. Server-side fetch with joined job plan name, site name, assignee name, item counts. Filter by site + status. Pagination. Search across job plan and site names
+- **Create check form** — SlidePanel with job plan dropdown (shows site + frequency), due date, assignee dropdown (all active tenant members), notes. On submit: copies all job_plan_items into maintenance_check_items
+- **Check detail panel** — read-only header (site, due date, assignee, status, progress count). Action buttons: Start Check, Complete Check (validates required items), Cancel Check (admin only)
+- **Technician workflow** — check items display with pass/fail/na toggle buttons (green checkmark, red X, grey dash). Inline notes per item. Items only editable when check is `in_progress`. Required items flagged. Complete blocked until all required items have results
+- **Server actions** — `createCheckAction` (copies plan items), `updateCheckAction`, `startCheckAction`, `completeCheckAction` (validates required items), `cancelCheckAction` (admin only), `updateCheckItemAction` (result + notes with completed_at/completed_by tracking)
+- **Dashboard** — expanded with maintenance stats row: Scheduled, In Progress, Overdue, Complete counts. Colour-coded (blue, amber, green). Clickable links to filtered maintenance view
+
+### Schema Design Decisions
+- **Template → Instance pattern**: Job plans are templates, maintenance_checks are instances. Items are copied at check creation so the plan can change without affecting in-progress checks
+- **Technician self-service**: assigned technicians can start/complete their own checks and update item results without supervisor intervention
+- **Result tracking**: pass/fail/na per item with `completed_at` + `completed_by` audit trail
+- **Soft status workflow**: scheduled → in_progress → complete (or overdue/cancelled). No hard deletes — admin can cancel
+
+### Verified
+- `tsc --noEmit` → 0 TypeScript errors
+- Migration applied successfully to Supabase dev project
+
+### Files Created
+- `supabase/migrations/0003_maintenance_checks_schema.sql`
+- `lib/validations/maintenance-check.ts`
+- `app/(app)/maintenance/{actions,CreateCheckForm,CheckDetail,MaintenanceList}.tsx`
+
+### Files Modified
+- `lib/types/index.ts` — added `CheckStatus`, `CheckItemResult`, `MaintenanceCheck`, `MaintenanceCheckItem`
+- `lib/utils/format.ts` — added `formatCheckStatus()`, `formatCheckItemResult()`
+- `app/(app)/maintenance/page.tsx` — full CRUD replacing placeholder
+- `app/(app)/dashboard/page.tsx` — added maintenance stats row
+
+---
+
 ## [Sprint 4] 2026-04-06 — Customers & Sites CRUD UI
 
 ### Added

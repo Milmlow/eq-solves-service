@@ -119,6 +119,42 @@ export interface JobPlanItem {
   updated_at: string
 }
 
+export type CheckStatus = 'scheduled' | 'in_progress' | 'complete' | 'overdue' | 'cancelled'
+
+export type CheckItemResult = 'pass' | 'fail' | 'na'
+
+export interface MaintenanceCheck {
+  id: string
+  tenant_id: string
+  job_plan_id: string
+  site_id: string
+  assigned_to: string | null
+  status: CheckStatus
+  due_date: string
+  started_at: string | null
+  completed_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MaintenanceCheckItem {
+  id: string
+  tenant_id: string
+  check_id: string
+  job_plan_item_id: string | null
+  asset_id: string | null
+  description: string
+  sort_order: number
+  is_required: boolean
+  result: CheckItemResult | null
+  notes: string | null
+  completed_at: string | null
+  completed_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ApiResponse<T> {
   data: T | null
   error: string | null

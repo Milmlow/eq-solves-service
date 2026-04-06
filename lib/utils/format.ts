@@ -1,4 +1,4 @@
-import type { Frequency } from '@/lib/types'
+import type { Frequency, CheckStatus, CheckItemResult } from '@/lib/types'
 
 const frequencyLabels: Record<Frequency, string> = {
   weekly: 'Weekly',
@@ -11,6 +11,28 @@ const frequencyLabels: Record<Frequency, string> = {
 
 export function formatFrequency(freq: Frequency): string {
   return frequencyLabels[freq] ?? freq
+}
+
+const checkStatusLabels: Record<CheckStatus, string> = {
+  scheduled: 'Scheduled',
+  in_progress: 'In Progress',
+  complete: 'Complete',
+  overdue: 'Overdue',
+  cancelled: 'Cancelled',
+}
+
+export function formatCheckStatus(status: CheckStatus): string {
+  return checkStatusLabels[status] ?? status
+}
+
+const checkItemResultLabels: Record<CheckItemResult, string> = {
+  pass: 'Pass',
+  fail: 'Fail',
+  na: 'N/A',
+}
+
+export function formatCheckItemResult(result: CheckItemResult): string {
+  return checkItemResultLabels[result] ?? result
 }
 
 export function formatDate(dateStr: string): string {
