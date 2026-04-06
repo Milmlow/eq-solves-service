@@ -1,26 +1,37 @@
 'use client'
 import { cn } from '@/lib/utils/cn'
 import {
-  LayoutDashboard, MapPin, Package, ClipboardCheck,
+  LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
   Zap, FileText, Settings, ChevronLeft, Users, LogOut
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
+import type { TenantSettings } from '@/lib/types'
 
 const navItems = [
   { label: 'Dashboard',   href: '/dashboard',   icon: LayoutDashboard },
+  { label: 'Customers',   href: '/customers',   icon: Building2 },
   { label: 'Sites',       href: '/sites',        icon: MapPin },
   { label: 'Assets',      href: '/assets',       icon: Package },
+  { label: 'Job Plans',   href: '/job-plans',    icon: FileCheck },
   { label: 'Maintenance', href: '/maintenance',  icon: ClipboardCheck },
   { label: 'Testing',     href: '/testing',      icon: Zap },
   { label: 'Reports',     href: '/reports',      icon: FileText },
   { label: 'Settings',    href: '/settings',     icon: Settings },
 ]
 
-export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
+interface SidebarProps {
+  isAdmin?: boolean
+  settings?: TenantSettings
+}
+
+export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
+
+  const productName = settings?.product_name || 'EQ Solves'
+  const logoUrl = settings?.logo_url
 
   return (
     <aside className={cn(
@@ -29,7 +40,12 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
     )}>
       <div className="flex items-center justify-between px-4 h-14 border-b border-white/10">
         {!collapsed && (
-          <span className="font-bold text-sm tracking-wide text-eq-sky">EQ Solves Service</span>
+          logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={productName} className="h-6 w-auto object-contain" />
+          ) : (
+            <span className="font-bold text-sm tracking-wide text-eq-sky">{productName}</span>
+          )
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -73,6 +89,18 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
             >
               <Users className="w-4 h-4 flex-shrink-0" />
               {!collapsed && <span>Users</span>}
+            </Link>
+            <Link
+              href="/admin/settings"
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                pathname.startsWith('/admin/settings')
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              )}
+            >
+              <Settings className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Tenant Settings</span>}
             </Link>
           </>
         )}

@@ -27,12 +27,15 @@ export function InviteUserForm() {
         <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Role</label>
         <select
           name="role"
-          defaultValue="user"
+          defaultValue="technician"
           disabled={pending}
           className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
         >
-          <option value="user">User</option>
+          <option value="super_admin">Super Admin</option>
           <option value="admin">Admin</option>
+          <option value="supervisor">Supervisor</option>
+          <option value="technician">Technician</option>
+          <option value="read_only">Read Only</option>
         </select>
       </div>
       <Button type="submit" disabled={pending}>

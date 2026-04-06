@@ -1,11 +1,14 @@
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+import { TenantLogo } from '@/components/ui/TenantLogo'
+import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
+
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  const { settings } = await getTenantSettings()
+
   return (
     <div className="min-h-screen bg-eq-ice flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <div className="text-2xl font-bold text-eq-ink tracking-tight">
-            EQ <span className="text-eq-sky">Solves</span>
-          </div>
+          <TenantLogo settings={settings} size="lg" />
           <div className="text-xs text-eq-grey uppercase tracking-wide mt-1">
             Service Platform
           </div>

@@ -67,8 +67,11 @@ export function UsersTable({
                   onChange={(e) => changeRole(u.id, e.target.value)}
                   className="h-8 px-2 border border-gray-200 rounded text-xs text-eq-ink bg-white disabled:opacity-50"
                 >
-                  <option value="user">User</option>
+                  <option value="super_admin">Super Admin</option>
                   <option value="admin">Admin</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="technician">Technician</option>
+                  <option value="read_only">Read Only</option>
                 </select>
               </td>
               <td className="px-4 py-3">

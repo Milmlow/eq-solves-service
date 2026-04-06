@@ -25,8 +25,9 @@ export async function inviteUserAction(formData: FormData) {
   const role = String(formData.get('role') || 'user')
   const full_name = String(formData.get('full_name') || '').trim()
 
+  const validRoles = ['super_admin', 'admin', 'supervisor', 'technician', 'read_only']
   if (!email) return { error: 'Email is required.' }
-  if (role !== 'user' && role !== 'admin') return { error: 'Invalid role.' }
+  if (!validRoles.includes(role)) return { error: 'Invalid role.' }
 
   await requireAdmin()
 
@@ -75,7 +76,8 @@ export async function setActiveAction(formData: FormData) {
 export async function setRoleAction(formData: FormData) {
   const userId = String(formData.get('user_id') || '')
   const role = String(formData.get('role') || 'user')
-  if (!userId || (role !== 'admin' && role !== 'user')) {
+  const validRoles = ['super_admin', 'admin', 'supervisor', 'technician', 'read_only']
+  if (!userId || !validRoles.includes(role)) {
     return { error: 'Invalid request.' }
   }
 

@@ -4,6 +4,110 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 4] 2026-04-06 — Customers & Sites CRUD UI
+
+### Added
+- **Customers list page** (`app/(app)/customers/page.tsx`) — server-side data fetching, search (name/code/email), pagination (25/page), DataTable with status badges, SlidePanel create/edit forms, deactivate/reactivate (admin+)
+- **Customer form** (`CustomerForm.tsx`) — name, code, email, phone, address fields. Edit mode shows "Sites" quick-link to filtered sites view
+- **Sites list page** — replaced placeholder. Server-side fetch with joined customer name and asset count column. Customer dropdown filter, search, pagination. Clickable asset count navigates to `/assets?site_id=xxx`
+- **Site form** (`SiteForm.tsx`) — name, code, customer dropdown, address, city, state, postcode, country (default Australia). Deactivate/reactivate for admin+
+- **Customers nav item** — added to Sidebar between Dashboard and Sites, using `Building2` icon
+- **Dashboard** — replaced hardcoded stats with live counts (customers, sites, assets, job plans) fetched from Supabase. Clickable cards link to respective list pages
+- **Server actions** for customers and sites — `createCustomerAction`, `updateCustomerAction`, `toggleCustomerActiveAction`, `createSiteAction`, `updateSiteAction`, `toggleSiteActiveAction`
+
+### Verified
+- `npx next build` → 26 routes compiled, 0 TypeScript errors
+- Seed data renders correctly (Equinix, Schneider customers; SY1, SY4, MEL1 sites)
+
+---
+
+## [Sprint 5] 2026-04-06 — Asset Register UI
+
+### Added
+- **Assets list page** — replaced placeholder. Server-side fetch with joined site name. Filter bar: site dropdown + asset type dropdown + search (name/type/serial/maximo). Pagination
+- **Asset type filter** — dynamically fetches distinct `asset_type` values from the assets table
+- **Asset form** (`AssetForm.tsx`) — grouped sections (Identification, Location, Details). Site dropdown (required), date picker for install date. Admin section for deactivate/reactivate
+- **Asset detail view** — read-only detail panel with all fields displayed, "Edit" button to switch to form mode, "Job Plans" section showing plans linked to the asset's site
+- **Import placeholder** — disabled "Import" button with "Coming soon — CSV import" tooltip
+- **Server actions** — `createAssetAction` (supervisor+), `updateAssetAction` (supervisor+), `toggleAssetActiveAction` (admin+)
+
+---
+
+## [Sprint 6] 2026-04-06 — Job Plans UI & Tenant Settings
+
+### Added
+- **Job Plans list page** (`app/(app)/job-plans/page.tsx`) — server-side fetch with joined site name and item count. Filter bar: site dropdown + frequency dropdown + search. Pagination
+- **Job Plan form** (`JobPlanForm.tsx`) — name, site dropdown, description textarea, frequency dropdown (Weekly/Monthly/Quarterly/Bi-annual/Annual/Ad Hoc). Deactivate/reactivate for admin+
+- **Job Plan Items** — inline task management below job plan form. Add/edit/delete individual items with description, sort order, required flag. Hard delete for items
+- **Job Plans nav item** — added to Sidebar between Assets and Maintenance, using `FileCheck` icon
+- **Tenant Settings editor** — replaced placeholder with full editing form. Branding section: product name, 4 colour pickers with live hex display and preview strip. Contact section: support email. Logo URL input (file upload deferred). Saves via server action, updates CSS vars on next page load
+- **Format helpers** (`lib/utils/format.ts`) — `formatFrequency()`, `formatDate()` (DD MMM YYYY), `formatDateTime()` (DD MMM YYYY, HH:mm)
+- **Role utilities** (`lib/utils/roles.ts`) — `isAdmin()`, `canWrite()`, `isSuperAdmin()` extracted from server action context
+- **Server action auth** (`lib/actions/auth.ts`) — `requireUser()` resolves authenticated user + tenant + role for server actions
+
+### Shared Components Added
+- **Pagination** (`components/ui/Pagination.tsx`) — Page X of Y with Previous/Next, URL-based via searchParams
+- **SearchFilter** (`components/ui/SearchFilter.tsx`) — reusable search input + dropdown filters, URL-based
+- **StatusBadge** extended with `active`/`inactive` variants (green/grey)
+
+### Fixed
+- **Zod error access** — changed `.error.errors[0]` to `.error.issues[0]` across all server actions (correct Zod v3 API)
+
+### Files Created
+- `app/(app)/customers/{page,CustomerList,CustomerForm,actions}.tsx`
+- `app/(app)/sites/{SiteList,SiteForm,actions}.tsx`
+- `app/(app)/assets/{AssetList,AssetForm,actions}.tsx`
+- `app/(app)/job-plans/{page,JobPlanList,JobPlanForm,actions}.tsx`
+- `app/(app)/admin/settings/{TenantSettingsForm,actions}.tsx`
+- `lib/actions/auth.ts`, `lib/utils/roles.ts`, `lib/utils/format.ts`
+- `components/ui/{Pagination,SearchFilter}.tsx`
+
+### Files Modified
+- `components/ui/Sidebar.tsx` — added Customers + Job Plans nav items
+- `components/ui/StatusBadge.tsx` — added active/inactive variants
+- `app/(app)/dashboard/page.tsx` — live counts from Supabase
+- `app/(app)/sites/page.tsx` — full CRUD replacing placeholder
+- `app/(app)/assets/page.tsx` — full CRUD replacing placeholder
+- `app/(app)/admin/settings/page.tsx` — full editor replacing placeholder
+
+---
+
+## [Sprint 3] 2026-04-06 — Core Schema, API Layer, White-Label Engine, Expanded Roles
+
+### Added
+- **Migration `0002_core_schema.sql`** — 8 new tables: `tenants`, `tenant_settings`, `tenant_members`, `customers`, `sites`, `assets`, `job_plans`, `job_plan_items`. Full RLS on every table, `updated_at` triggers, indexes.
+- **Helper functions**: `get_user_tenant_ids()`, `is_super_admin()`, `get_user_role(tenant_id)`, `is_tenant_admin(tenant_id)` — all SECURITY DEFINER with explicit search_path.
+- **Expanded roles**: profiles constraint updated to support `super_admin`, `admin`, `supervisor`, `technician`, `read_only`, `user`. Invite form and users table updated with all 5 roles.
+- **TypeScript types** (`lib/types/index.ts`): `Tenant`, `TenantSettings`, `TenantMember`, `Profile`, `Customer`, `Site`, `Asset`, `JobPlan`, `JobPlanItem`, `ApiResponse<T>`, `PaginationMeta`, `Role`, `Frequency`.
+- **Zod validation schemas** (`lib/validations/`): `tenant.ts`, `customer.ts`, `site.ts`, `asset.ts`, `job-plan.ts` — create + update schemas for all entities.
+- **API helpers** (`lib/api/`): `response.ts` (ok, created, err, unauthorized, forbidden, notFound), `pagination.ts` (parsePagination, paginationMeta), `auth.ts` (getApiUser, isAdmin, canWrite, isSuperAdmin).
+- **CRUD API routes**: tenants (super_admin only), customers, sites (filter by customer_id), assets (filter by site_id), job-plans (filter by site_id), job-plan-items — all with Zod validation, pagination, role-based access, soft deletes. 12 route files total.
+- **White-label engine**: `lib/tenant/getTenantSettings.ts` resolves tenant settings for current user. `app/(app)/layout.tsx` injects `--eq-sky`, `--eq-deep`, `--eq-ice`, `--eq-ink` CSS vars from `tenant_settings` — changing colours in DB changes the app without redeploy. `TenantLogo` component renders logo image or text fallback.
+- **Sidebar**: now uses `TenantLogo` + `product_name` from tenant settings. Added "Tenant Settings" admin link.
+- **Auth layout**: uses `TenantLogo` component for branded auth screens.
+- **`/admin/settings`**: placeholder page showing current tenant settings (colours, product name, logo status). Editing deferred to Sprint 4.
+- **Seed data**: SKS Technologies tenant with settings, 2 customers (Equinix, Schneider), 3 sites (SY1, SY4, MEL1), 5 assets (ACB, NSX, Switchboard, ATS), 1 job plan with 3 items. Both existing admin users linked as `super_admin`.
+- **Installed**: `zod` for schema validation.
+
+### Verified
+- `npx next build` → 31 routes compiled, 0 TypeScript errors
+- Migration applied to `urjhmkhbgaxrofurpbgc`, security advisors clean
+- Seed data visible in Supabase dashboard
+
+### Decisions Made
+- **Tables before functions** in migration — Postgres requires referenced tables to exist when creating SECURITY DEFINER functions with inline SQL.
+- **Tenant resolution**: single-tenant per user for now (first active `tenant_members` row). Multi-tenant user support (switching tenants) deferred.
+- **Admin route guard**: updated to check `tenant_members.role` for `super_admin` or `admin`, replacing `profiles.role` check.
+- **Soft deletes via `is_active`**: consistent across all entities, per TECH_SPEC.
+- **Pagination**: default 25/page, max 100, using Supabase `.range()`.
+
+### Files Touched
+- Created: `supabase/migrations/0002_core_schema.sql`, `lib/types/index.ts` (rewritten), `lib/api/{response,pagination,auth}.ts`, `lib/validations/{tenant,customer,site,asset,job-plan}.ts`, `lib/tenant/getTenantSettings.ts`, `components/ui/TenantLogo.tsx`, `app/api/{tenants,customers,sites,assets,job-plans}/**/*.ts` (12 route files), `app/(app)/admin/settings/page.tsx`
+- Modified: `app/(app)/layout.tsx` (tenant CSS vars + settings prop), `app/(auth)/layout.tsx` (TenantLogo), `components/ui/Sidebar.tsx` (TenantLogo, settings prop, admin settings link, expanded roles), `app/(app)/admin/users/{InviteUserForm,UsersTable,actions}.tsx` (5 roles)
+- Installed: `zod`
+
+---
+
 ## [Sprint 2] 2026-04-05 — Auth, MFA & User Management
 
 ### Added
