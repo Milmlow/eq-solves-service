@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
-import { updateTenantSettingsAction } from './actions'
+import { updateTenantSettingsAction, uploadLogoAction } from './actions'
+import { extractColoursFromImage } from '@/lib/utils/extract-colours'
 import type { TenantSettings } from '@/lib/types'
+import { Upload, Wand2 } from 'lucide-react'
 
 interface TenantSettingsFormProps {
   settings: TenantSettings
@@ -21,6 +23,13 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
   const [ice, setIce] = useState(settings.ice_colour)
   const [ink, setInk] = useState(settings.ink_colour)
 
+  // Logo
+  const [logoUrl, setLogoUrl] = useState(settings.logo_url ?? '')
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [extracting, setExtracting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
@@ -28,6 +37,8 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     setLoading(true)
 
     const formData = new FormData(e.currentTarget)
+    // Ensure logo_url is current
+    formData.set('logo_url', logoUrl)
     const result = await updateTenantSettingsAction(formData)
 
     setLoading(false)
@@ -35,6 +46,38 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
       setSuccess(true)
     } else {
       setError(result.error ?? 'Something went wrong.')
+    }
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setUploadError(null)
+
+    const formData = new FormData()
+    formData.append('logo', file)
+    const result = await uploadLogoAction(formData)
+
+    setUploading(false)
+    if (result.success && result.url) {
+      setLogoUrl(result.url)
+    } else {
+      setUploadError(result.error ?? 'Upload failed.')
+    }
+  }
+
+  async function handleExtractColours() {
+    if (!logoUrl) return
+    setExtracting(true)
+    const colours = await extractColoursFromImage(logoUrl)
+    setExtracting(false)
+    if (colours) {
+      setPrimary(colours.primary)
+      setDeep(colours.deep)
+      setIce(colours.ice)
+      setInk(colours.ink)
     }
   }
 
@@ -51,6 +94,66 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
             defaultValue={settings.product_name}
             placeholder="e.g. EQ Solves"
           />
+
+          {/* Logo Upload */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Logo</label>
+            <div className="flex items-start gap-4">
+              {/* Preview */}
+              <div className="w-24 h-24 border border-gray-200 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Logo" className="max-w-full max-h-full object-contain" />
+                ) : (
+                  <span className="text-xs text-eq-grey">No logo</span>
+                )}
+              </div>
+              <div className="space-y-2 flex-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    <Upload className="w-4 h-4 mr-1" />
+                    {uploading ? 'Uploading...' : 'Upload Logo'}
+                  </Button>
+                  {logoUrl && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleExtractColours}
+                      disabled={extracting}
+                    >
+                      <Wand2 className="w-4 h-4 mr-1" />
+                      {extracting ? 'Extracting...' : 'Extract Colours'}
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-eq-grey">PNG, JPEG, SVG or WebP. Max 2MB.</p>
+                {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+                <FormInput
+                  label="Or enter URL"
+                  name="logo_url_display"
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                  placeholder="https://example.com/logo.svg"
+                />
+              </div>
+            </div>
+          </div>
+          {/* Hidden input for form submission */}
+          <input type="hidden" name="logo_url" value={logoUrl} />
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
@@ -123,14 +226,6 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
               <span className="flex-1">Ink</span>
             </div>
           </div>
-
-          <FormInput
-            label="Logo URL"
-            name="logo_url"
-            defaultValue={settings.logo_url ?? ''}
-            placeholder="https://example.com/logo.svg"
-            hint="File upload coming in a future sprint"
-          />
         </div>
       </div>
 

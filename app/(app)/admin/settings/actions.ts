@@ -16,6 +16,52 @@ const UpdateTenantSettingsSchema = z.object({
   support_email: z.string().email().nullable().optional(),
 })
 
+export async function uploadLogoAction(formData: FormData) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Insufficient permissions.', url: null }
+
+    const file = formData.get('logo') as File | null
+    if (!file || file.size === 0) return { success: false, error: 'No file selected.', url: null }
+
+    // Validate file type
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      return { success: false, error: 'File must be PNG, JPEG, SVG, or WebP.', url: null }
+    }
+
+    // Max 2MB
+    if (file.size > 2 * 1024 * 1024) {
+      return { success: false, error: 'File must be under 2MB.', url: null }
+    }
+
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png'
+    const storagePath = `${tenantId}/logo.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('attachments')
+      .upload(storagePath, file, { upsert: true, contentType: file.type })
+
+    if (uploadError) return { success: false, error: uploadError.message, url: null }
+
+    const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(storagePath)
+
+    // Update tenant settings with logo URL
+    const { error: updateError } = await supabase
+      .from('tenant_settings')
+      .update({ logo_url: urlData.publicUrl })
+      .eq('tenant_id', tenantId)
+
+    if (updateError) return { success: false, error: updateError.message, url: null }
+
+    await logAuditEvent({ action: 'update', entityType: 'tenant_settings', summary: 'Uploaded new logo' })
+    revalidatePath('/', 'layout')
+    return { success: true, url: urlData.publicUrl }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message, url: null }
+  }
+}
+
 export async function updateTenantSettingsAction(formData: FormData) {
   try {
     const { supabase, tenantId, role } = await requireUser()
