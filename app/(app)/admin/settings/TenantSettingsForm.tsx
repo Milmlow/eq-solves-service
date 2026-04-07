@@ -65,6 +65,16 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     setUploading(false)
     if (result.success && result.url) {
       setLogoUrl(result.url)
+      // Auto-extract colours from the just-uploaded file
+      setExtracting(true)
+      const colours = await extractColoursFromImage(file)
+      setExtracting(false)
+      if (colours) {
+        setPrimary(colours.primary)
+        setDeep(colours.deep)
+        setIce(colours.ice)
+        setInk(colours.ink)
+      }
     } else {
       setUploadError(result.error ?? 'Upload failed.')
     }
@@ -133,7 +143,7 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
                     <Upload className="w-4 h-4 mr-1" />
                     {uploading ? 'Uploading...' : 'Upload Logo'}
                   </Button>
-                  {logoUrl && (
+                  {(logoUrl || logoFile) && (
                     <Button
                       type="button"
                       variant="secondary"
