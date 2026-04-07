@@ -3,10 +3,10 @@
 -- Polymorphic attachments for any entity (maintenance_checks, test_records, assets, etc.)
 -- ============================================================
 
--- 1. Create storage bucket for attachments (private)
+-- 1. Create storage bucket for attachments (public for logo/branding access)
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('attachments', 'attachments', false)
-ON CONFLICT (id) DO NOTHING;
+VALUES ('attachments', 'attachments', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- 2. Attachments metadata table
 CREATE TABLE IF NOT EXISTS public.attachments (
