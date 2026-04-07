@@ -25,6 +25,7 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
 
   // Logo
   const [logoUrl, setLogoUrl] = useState(settings.logo_url ?? '')
+  const [logoFile, setLogoFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [extracting, setExtracting] = useState(false)
@@ -53,6 +54,7 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setLogoFile(file)
     setUploading(true)
     setUploadError(null)
 
@@ -69,15 +71,19 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
   }
 
   async function handleExtractColours() {
-    if (!logoUrl) return
+    if (!logoUrl && !logoFile) return
     setExtracting(true)
-    const colours = await extractColoursFromImage(logoUrl)
+    // Prefer the local file (avoids CORS), fall back to URL
+    const source = logoFile ?? logoUrl
+    const colours = await extractColoursFromImage(source)
     setExtracting(false)
     if (colours) {
       setPrimary(colours.primary)
       setDeep(colours.deep)
       setIce(colours.ice)
       setInk(colours.ink)
+    } else {
+      setUploadError('Could not extract colours. Try uploading the logo directly.')
     }
   }
 
