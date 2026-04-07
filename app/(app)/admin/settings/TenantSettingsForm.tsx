@@ -6,7 +6,14 @@ import { Button } from '@/components/ui/Button'
 import { updateTenantSettingsAction, uploadLogoAction } from './actions'
 import { extractColoursFromImage } from '@/lib/utils/extract-colours'
 import type { TenantSettings } from '@/lib/types'
-import { Upload, Wand2 } from 'lucide-react'
+import { Upload, Wand2, RotateCcw } from 'lucide-react'
+
+const DEFAULT_COLOURS = {
+  primary: '#3DA8D8',
+  deep: '#2986B4',
+  ice: '#EAF5FB',
+  ink: '#1A1A2E',
+} as const
 
 interface TenantSettingsFormProps {
   settings: TenantSettings
@@ -97,6 +104,13 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     }
   }
 
+  function handleRestoreDefaults() {
+    setPrimary(DEFAULT_COLOURS.primary)
+    setDeep(DEFAULT_COLOURS.deep)
+    setIce(DEFAULT_COLOURS.ice)
+    setInk(DEFAULT_COLOURS.ink)
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-8 max-w-2xl">
       {/* Branding Section */}
@@ -155,6 +169,15 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
                       {extracting ? 'Extracting...' : 'Extract Colours'}
                     </Button>
                   )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRestoreDefaults}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-1" />
+                    Restore Defaults
+                  </Button>
                 </div>
                 <p className="text-xs text-eq-grey">PNG, JPEG, SVG or WebP. Max 2MB.</p>
                 {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
