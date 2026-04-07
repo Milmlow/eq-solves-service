@@ -70,6 +70,57 @@ export async function updateJobPlanAction(id: string, formData: FormData) {
   }
 }
 
+export async function importJobPlansAction(
+  jobPlans: {
+    name: string
+    site_id: string
+    description: string | null
+    frequency: string | null
+  }[]
+) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.', imported: 0, rowErrors: [] as string[] }
+
+    if (jobPlans.length === 0) return { success: false, error: 'No valid rows to import.', imported: 0, rowErrors: [] as string[] }
+    if (jobPlans.length > 500) return { success: false, error: 'Maximum 500 rows per import.', imported: 0, rowErrors: [] as string[] }
+
+    const validFrequencies = ['weekly', 'monthly', 'quarterly', 'biannual', 'annual', 'ad_hoc']
+    const rowErrors: string[] = []
+    const validRows: typeof jobPlans = []
+
+    for (let i = 0; i < jobPlans.length; i++) {
+      const row = jobPlans[i]
+      if (!row.name?.trim()) { rowErrors.push(`Row ${i + 1}: Name is required.`); continue }
+      if (!row.site_id) { rowErrors.push(`Row ${i + 1}: Invalid or unknown site.`); continue }
+      if (row.frequency && !validFrequencies.includes(row.frequency.toLowerCase())) {
+        rowErrors.push(`Row ${i + 1}: Invalid frequency "${row.frequency}". Must be one of: ${validFrequencies.join(', ')}`)
+        continue
+      }
+      validRows.push(row)
+    }
+
+    if (validRows.length === 0) {
+      return { success: false, error: 'No valid rows after validation.', imported: 0, rowErrors }
+    }
+
+    const insertRows = validRows.map((r) => ({
+      ...r,
+      tenant_id: tenantId,
+      frequency: r.frequency?.toLowerCase() || 'ad_hoc',
+    }))
+    const { error } = await supabase.from('job_plans').insert(insertRows)
+
+    if (error) return { success: false, error: error.message, imported: 0, rowErrors }
+
+    await logAuditEvent({ action: 'create', entityType: 'job_plan', summary: `Imported ${validRows.length} job plans from CSV` })
+    revalidatePath('/job-plans')
+    return { success: true, imported: validRows.length, rowErrors }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message, imported: 0, rowErrors: [] as string[] }
+  }
+}
+
 export async function toggleJobPlanActiveAction(id: string, isActive: boolean) {
   try {
     const { supabase, role } = await requireUser()

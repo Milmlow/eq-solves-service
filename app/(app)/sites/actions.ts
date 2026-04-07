@@ -73,6 +73,55 @@ export async function updateSiteAction(id: string, formData: FormData) {
   }
 }
 
+export async function importSitesAction(
+  sites: {
+    name: string
+    code: string | null
+    customer_id: string | null
+    address: string | null
+    city: string | null
+    state: string | null
+    postcode: string | null
+    country: string | null
+  }[]
+) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Insufficient permissions.', imported: 0, rowErrors: [] as string[] }
+
+    if (sites.length === 0) return { success: false, error: 'No valid rows to import.', imported: 0, rowErrors: [] as string[] }
+    if (sites.length > 500) return { success: false, error: 'Maximum 500 rows per import.', imported: 0, rowErrors: [] as string[] }
+
+    const rowErrors: string[] = []
+    const validRows: typeof sites = []
+
+    for (let i = 0; i < sites.length; i++) {
+      const row = sites[i]
+      if (!row.name?.trim()) { rowErrors.push(`Row ${i + 1}: Name is required.`); continue }
+      validRows.push(row)
+    }
+
+    if (validRows.length === 0) {
+      return { success: false, error: 'No valid rows after validation.', imported: 0, rowErrors }
+    }
+
+    const insertRows = validRows.map((r) => ({
+      ...r,
+      tenant_id: tenantId,
+      country: r.country || 'Australia',
+    }))
+    const { error } = await supabase.from('sites').insert(insertRows)
+
+    if (error) return { success: false, error: error.message, imported: 0, rowErrors }
+
+    await logAuditEvent({ action: 'create', entityType: 'site', summary: `Imported ${validRows.length} sites from CSV` })
+    revalidatePath('/sites')
+    return { success: true, imported: validRows.length, rowErrors }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message, imported: 0, rowErrors: [] as string[] }
+  }
+}
+
 export async function toggleSiteActiveAction(id: string, isActive: boolean) {
   try {
     const { supabase, role } = await requireUser()

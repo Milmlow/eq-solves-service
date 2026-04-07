@@ -81,6 +81,64 @@ export async function updateInstrumentAction(id: string, formData: FormData) {
   }
 }
 
+export async function importInstrumentsAction(
+  instruments: {
+    name: string
+    instrument_type: string
+    make: string | null
+    model: string | null
+    serial_number: string | null
+    asset_tag: string | null
+    calibration_date: string | null
+    calibration_due: string | null
+    calibration_cert: string | null
+    status: string | null
+    notes: string | null
+  }[]
+) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.', imported: 0, rowErrors: [] as string[] }
+
+    if (instruments.length === 0) return { success: false, error: 'No valid rows to import.', imported: 0, rowErrors: [] as string[] }
+    if (instruments.length > 500) return { success: false, error: 'Maximum 500 rows per import.', imported: 0, rowErrors: [] as string[] }
+
+    const validStatuses = ['Active', 'Out for Cal', 'Retired', 'Lost']
+    const rowErrors: string[] = []
+    const validRows: typeof instruments = []
+
+    for (let i = 0; i < instruments.length; i++) {
+      const row = instruments[i]
+      if (!row.name?.trim()) { rowErrors.push(`Row ${i + 1}: Name is required.`); continue }
+      if (!row.instrument_type?.trim()) { rowErrors.push(`Row ${i + 1}: Instrument type is required.`); continue }
+      if (row.status && !validStatuses.includes(row.status)) {
+        rowErrors.push(`Row ${i + 1}: Invalid status "${row.status}". Must be one of: ${validStatuses.join(', ')}`)
+        continue
+      }
+      validRows.push(row)
+    }
+
+    if (validRows.length === 0) {
+      return { success: false, error: 'No valid rows after validation.', imported: 0, rowErrors }
+    }
+
+    const insertRows = validRows.map((r) => ({
+      ...r,
+      tenant_id: tenantId,
+      status: r.status || 'Active',
+    }))
+    const { error } = await supabase.from('instruments').insert(insertRows)
+
+    if (error) return { success: false, error: error.message, imported: 0, rowErrors }
+
+    await logAuditEvent({ action: 'create', entityType: 'instrument', summary: `Imported ${validRows.length} instruments from CSV` })
+    revalidatePath('/instruments')
+    return { success: true, imported: validRows.length, rowErrors }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message, imported: 0, rowErrors: [] as string[] }
+  }
+}
+
 export async function toggleInstrumentActiveAction(id: string, isActive: boolean) {
   try {
     const { supabase, role } = await requireUser()

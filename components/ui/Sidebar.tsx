@@ -7,6 +7,7 @@ import {
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
+import { NotificationBell } from '@/components/ui/NotificationBell'
 import type { TenantSettings } from '@/lib/types'
 
 const navItems = [
@@ -52,12 +53,15 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             <span className="font-bold text-sm tracking-wide text-eq-sky">{productName}</span>
           )
         )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-1 rounded hover:bg-white/10 transition-colors ml-auto"
-        >
-          <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} />
-        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          <NotificationBell />
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-1 rounded hover:bg-white/10 transition-colors"
+          >
+            <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} />
+          </button>
+        </div>
       </div>
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
         {navItems.map(({ label, href, icon: Icon }) => {

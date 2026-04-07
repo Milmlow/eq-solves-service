@@ -9,9 +9,12 @@ import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { InstrumentForm } from './InstrumentForm'
 import { InstrumentDetail } from './InstrumentDetail'
+import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
+import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
+import { importInstrumentsAction } from './actions'
 import { formatDate } from '@/lib/utils/format'
 import type { Instrument, InstrumentStatus, Profile } from '@/lib/types'
-import { Eye } from 'lucide-react'
+import { Eye, Upload } from 'lucide-react'
 
 type InstrumentRow = Instrument & { assignee_name?: string | null } & Record<string, unknown>
 
@@ -41,6 +44,44 @@ export function InstrumentList({
   const [createOpen, setCreateOpen] = useState(false)
   const [editInst, setEditInst] = useState<InstrumentRow | null>(null)
   const [detailInst, setDetailInst] = useState<InstrumentRow | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+
+  const instrumentImportConfig: ImportCSVConfig<{
+    name: string
+    instrument_type: string
+    make: string | null
+    model: string | null
+    serial_number: string | null
+    asset_tag: string | null
+    calibration_date: string | null
+    calibration_due: string | null
+    calibration_cert: string | null
+    status: string | null
+    notes: string | null
+  }> = {
+    entityName: 'Instruments',
+    requiredColumns: ['name', 'instrument_type'],
+    optionalColumns: ['make', 'model', 'serial_number', 'asset_tag', 'calibration_date', 'calibration_due', 'calibration_cert', 'status', 'notes'],
+    mapRow: (row, columnMap) => {
+      const name = row[columnMap['name']]?.trim()
+      const instrument_type = row[columnMap['instrument_type']]?.trim()
+      if (!name || !instrument_type) return null
+      return {
+        name,
+        instrument_type,
+        make: row[columnMap['make']]?.trim() || null,
+        model: row[columnMap['model']]?.trim() || null,
+        serial_number: row[columnMap['serial_number']]?.trim() || null,
+        asset_tag: row[columnMap['asset_tag']]?.trim() || null,
+        calibration_date: row[columnMap['calibration_date']]?.trim() || null,
+        calibration_due: row[columnMap['calibration_due']]?.trim() || null,
+        calibration_cert: row[columnMap['calibration_cert']]?.trim() || null,
+        status: row[columnMap['status']]?.trim() || null,
+        notes: row[columnMap['notes']]?.trim() || null,
+      }
+    },
+    importAction: importInstrumentsAction,
+  }
 
   const columns: DataTableColumn<InstrumentRow>[] = [
     {
@@ -118,9 +159,16 @@ export function InstrumentList({
             { key: 'instrument_type', label: 'All Types', options: typeOptions },
           ]}
         />
-        {canWriteRole && (
-          <Button onClick={() => setCreateOpen(true)} className="ml-4 shrink-0">Add Instrument</Button>
-        )}
+        <div className="flex items-center gap-2 ml-4 shrink-0">
+          {canWriteRole && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
+          {canWriteRole && (
+            <Button onClick={() => setCreateOpen(true)}>Add Instrument</Button>
+          )}
+        </div>
       </div>
 
       {instruments.length === 0 ? (
@@ -162,6 +210,12 @@ export function InstrumentList({
           onEdit={() => { setEditInst(detailInst); setDetailInst(null) }}
         />
       )}
+
+      <ImportCSVModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        config={instrumentImportConfig}
+      />
     </>
   )
 }

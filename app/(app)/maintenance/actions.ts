@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { createNotification } from '@/lib/actions/notifications'
 import {
   CreateMaintenanceCheckSchema,
   UpdateMaintenanceCheckSchema,
@@ -64,6 +65,26 @@ export async function createCheckAction(formData: FormData) {
       if (itemsError) return { success: false, error: itemsError.message }
     }
 
+    // Create notification if assigned
+    if (parsed.data.assigned_to) {
+      const { data: jobPlan } = await supabase
+        .from('job_plans')
+        .select('name')
+        .eq('id', parsed.data.job_plan_id)
+        .single()
+
+      const jobPlanName = jobPlan?.name ?? 'Maintenance Check'
+      await createNotification({
+        tenantId,
+        userId: parsed.data.assigned_to as string,
+        type: 'check_assigned',
+        title: `You've been assigned a maintenance check: ${jobPlanName}`,
+        body: `Due date: ${parsed.data.due_date}`,
+        entityType: 'maintenance_check',
+        entityId: check.id,
+      })
+    }
+
     await logAuditEvent({ action: 'create', entityType: 'maintenance_check', summary: 'Created maintenance check' })
 
     revalidatePath('/maintenance')
@@ -78,12 +99,12 @@ export async function createCheckAction(formData: FormData) {
  */
 export async function updateCheckAction(id: string, formData: FormData) {
   try {
-    const { supabase, role, user } = await requireUser()
+    const { supabase, role, user, tenantId } = await requireUser()
 
     // Check if user can update: write role OR assigned technician
     const { data: existing } = await supabase
       .from('maintenance_checks')
-      .select('assigned_to')
+      .select('assigned_to, job_plans(name)')
       .eq('id', id)
       .single()
 
@@ -108,6 +129,20 @@ export async function updateCheckAction(id: string, formData: FormData) {
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
+
+    // Create notification if assigned_to changed
+    if (formData.has('assigned_to') && parsed.data.assigned_to && parsed.data.assigned_to !== existing.assigned_to) {
+      const jpData = existing.job_plans as unknown as { name: string } | null
+      const jobPlanName = jpData?.name ?? 'Maintenance Check'
+      await createNotification({
+        tenantId,
+        userId: parsed.data.assigned_to as string,
+        type: 'check_assigned',
+        title: `You've been assigned a maintenance check: ${jobPlanName}`,
+        entityType: 'maintenance_check',
+        entityId: id,
+      })
+    }
 
     await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Updated maintenance check' })
 
@@ -159,11 +194,11 @@ export async function startCheckAction(id: string) {
  */
 export async function completeCheckAction(id: string) {
   try {
-    const { supabase, role, user } = await requireUser()
+    const { supabase, role, user, tenantId } = await requireUser()
 
     const { data: existing } = await supabase
       .from('maintenance_checks')
-      .select('assigned_to, status')
+      .select('assigned_to, status, job_plans(name)')
       .eq('id', id)
       .single()
 
@@ -193,6 +228,21 @@ export async function completeCheckAction(id: string) {
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
+
+    // Create notification to assigned technician's supervisor (if assigned)
+    if (existing.assigned_to && existing.assigned_to !== user.id) {
+      const jpData = existing.job_plans as unknown as { name: string } | null
+      const jobPlanName = jpData?.name ?? 'Maintenance Check'
+      await createNotification({
+        tenantId,
+        userId: existing.assigned_to as string,
+        type: 'check_completed',
+        title: `Maintenance check completed: ${jobPlanName}`,
+        body: 'This check has been marked as complete.',
+        entityType: 'maintenance_check',
+        entityId: id,
+      })
+    }
 
     await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Completed maintenance check' })
     revalidatePath('/maintenance')
@@ -274,6 +324,128 @@ export async function updateCheckItemAction(checkId: string, itemId: string, for
 
     revalidatePath('/maintenance')
     return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Batch create maintenance checks from a job plan between start and end dates.
+ * Calculates check dates based on job plan frequency.
+ * Max 52 checks per batch (1 year of weeklies).
+ */
+export async function batchCreateChecksAction(formData: FormData) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const jobPlanId = formData.get('job_plan_id') as string
+    const startDate = formData.get('start_date') as string
+    const endDate = formData.get('end_date') as string
+    const assignedTo = (formData.get('assigned_to') as string) || null
+
+    if (!jobPlanId || !startDate || !endDate) {
+      return { success: false, error: 'Job plan, start date, and end date are required.' }
+    }
+
+    // Fetch job plan
+    const { data: jobPlan } = await supabase
+      .from('job_plans')
+      .select('id, site_id, frequency')
+      .eq('id', jobPlanId)
+      .single()
+
+    if (!jobPlan) return { success: false, error: 'Job plan not found.' }
+
+    // Generate check dates based on frequency
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const checkDates: Date[] = []
+
+    const frequency = jobPlan.frequency as string
+    let current = new Date(start)
+
+    while (current <= end && checkDates.length < 52) {
+      checkDates.push(new Date(current))
+
+      // Advance to next interval based on frequency
+      if (frequency === 'weekly') {
+        current.setDate(current.getDate() + 7)
+      } else if (frequency === 'monthly') {
+        current.setMonth(current.getMonth() + 1)
+      } else if (frequency === 'quarterly') {
+        current.setMonth(current.getMonth() + 3)
+      } else if (frequency === 'biannual') {
+        current.setMonth(current.getMonth() + 6)
+      } else if (frequency === 'annual') {
+        current.setFullYear(current.getFullYear() + 1)
+      } else {
+        // ad_hoc: just use start date
+        break
+      }
+    }
+
+    if (checkDates.length === 0) {
+      return { success: false, error: 'No check dates generated for the given range.' }
+    }
+
+    // Fetch job plan items once
+    const { data: planItems } = await supabase
+      .from('job_plan_items')
+      .select('id, asset_id, description, sort_order, is_required')
+      .eq('job_plan_id', jobPlanId)
+      .order('sort_order')
+
+    // Create checks and their items
+    let createdCount = 0
+    for (const dueDate of checkDates) {
+      const dueDateStr = dueDate.toISOString().split('T')[0]
+
+      // Insert the check
+      const { data: check } = await supabase
+        .from('maintenance_checks')
+        .insert({
+          tenant_id: tenantId,
+          job_plan_id: jobPlanId,
+          site_id: jobPlan.site_id,
+          assigned_to: assignedTo,
+          status: 'scheduled',
+          due_date: dueDateStr,
+          notes: null,
+        })
+        .select('id')
+        .single()
+
+      if (!check) continue
+
+      // Copy job plan items into check items
+      if (planItems && planItems.length > 0) {
+        const checkItems = planItems.map((item) => ({
+          tenant_id: tenantId,
+          check_id: check.id,
+          job_plan_item_id: item.id,
+          asset_id: item.asset_id,
+          description: item.description,
+          sort_order: item.sort_order,
+          is_required: item.is_required,
+        }))
+
+        await supabase
+          .from('maintenance_check_items')
+          .insert(checkItems)
+      }
+
+      createdCount += 1
+    }
+
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'maintenance_check',
+      summary: `Batch created ${createdCount} checks from job plan`,
+    })
+
+    revalidatePath('/maintenance')
+    return { success: true, created: createdCount }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }

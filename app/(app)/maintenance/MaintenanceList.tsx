@@ -8,10 +8,12 @@ import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { CreateCheckForm } from './CreateCheckForm'
+import { BatchCreateForm } from './BatchCreateForm'
 import { CheckDetail } from './CheckDetail'
 import { formatDate } from '@/lib/utils/format'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile, Attachment } from '@/lib/types'
-import { Eye } from 'lucide-react'
+import { Eye, Calendar, LayoutGrid, List } from 'lucide-react'
+import { KanbanBoard } from './KanbanBoard'
 
 type CheckRow = MaintenanceCheck & {
   job_plans?: { name: string } | null
@@ -51,7 +53,9 @@ export function MaintenanceList({
   page, totalPages, isAdmin, canWrite: canWriteRole, currentUserId,
 }: MaintenanceListProps) {
   const [createOpen, setCreateOpen] = useState(false)
+  const [batchOpen, setBatchOpen] = useState(false)
   const [detailCheck, setDetailCheck] = useState<CheckRow | null>(null)
+  const [view, setView] = useState<'table' | 'kanban'>('table')
 
   const columns: DataTableColumn<CheckRow>[] = [
     {
@@ -121,9 +125,43 @@ export function MaintenanceList({
             { key: 'status', label: 'All Statuses', options: statusFilterOptions },
           ]}
         />
-        {canWriteRole && (
-          <Button onClick={() => setCreateOpen(true)} className="ml-4 shrink-0">Create Check</Button>
-        )}
+        <div className="flex gap-2 ml-4 shrink-0">
+          {/* View Toggle */}
+          <div className="flex gap-1 bg-gray-100 rounded-md p-1">
+            <button
+              onClick={() => setView('table')}
+              className={`p-2 rounded transition-colors ${
+                view === 'table'
+                  ? 'bg-white text-eq-sky shadow-sm'
+                  : 'text-eq-grey hover:text-eq-deep'
+              }`}
+              title="Table view"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setView('kanban')}
+              className={`p-2 rounded transition-colors ${
+                view === 'kanban'
+                  ? 'bg-white text-eq-sky shadow-sm'
+                  : 'text-eq-grey hover:text-eq-deep'
+              }`}
+              title="Kanban view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+
+          {canWriteRole && (
+            <>
+              <Button onClick={() => setBatchOpen(true)} variant="secondary">
+                <Calendar className="w-4 h-4 mr-2" />
+                Batch Create
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>Create Check</Button>
+            </>
+          )}
+        </div>
       </div>
 
       {checks.length === 0 ? (
@@ -135,18 +173,36 @@ export function MaintenanceList({
         </div>
       ) : (
         <>
-          <DataTable
-            columns={columns}
-            rows={checks.map((c) => ({ ...c, actions: '' }))}
-            emptyMessage="No checks match your filters."
-          />
-          <Pagination page={page} totalPages={totalPages} />
+          {view === 'table' ? (
+            <>
+              <DataTable
+                columns={columns}
+                rows={checks.map((c) => ({ ...c, actions: '' }))}
+                emptyMessage="No checks match your filters."
+              />
+              <Pagination page={page} totalPages={totalPages} />
+            </>
+          ) : (
+            <KanbanBoard
+              checks={checks}
+              itemsMap={itemsMap}
+              onCheckClick={setDetailCheck}
+            />
+          )}
         </>
       )}
 
       <CreateCheckForm
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        jobPlans={jobPlans}
+        sites={sites}
+        technicians={technicians}
+      />
+
+      <BatchCreateForm
+        open={batchOpen}
+        onClose={() => setBatchOpen(false)}
         jobPlans={jobPlans}
         sites={sites}
         technicians={technicians}

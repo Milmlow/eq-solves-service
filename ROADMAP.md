@@ -1,7 +1,7 @@
 # EQ Solves — Project Roadmap
 
 > Source of truth for sprint progress. Updated by Cowork at the end of every sprint alongside CHANGELOG.md.
-> Last updated: Sprint 17 complete — 06 Apr 2026.
+> Last updated: Sprint 21 complete — 07 Apr 2026.
 
 ---
 
@@ -14,6 +14,8 @@
 | Phase 3: Workflows | Maintenance, testing, reports, attachments | ✅ Complete |
 | Phase 4: Advanced Testing | ACB module, NSX module, instrument register | ✅ Complete |
 | Phase 5: Polish & Deploy | Audit trail, search, users, env validation, analytics | ✅ Complete |
+| Phase 6: Data Onboarding | Universal CSV import for all entity types | ✅ Complete |
+| Phase 7: Operational Maturity | Site detail, batch checks, PM reports, Kanban, notifications, tests | ✅ Complete |
 
 ---
 
@@ -48,7 +50,7 @@
 | Sprint | Focus | Key Deliverables | Status |
 |--------|-------|-----------------|--------|
 | 12 | ACB Test Entry | Migration 0006, ACB test list/form/detail, readings management, dashboard ACB stats, sidebar nav | ✅ Done |
-| 13 | ACB Reporting | Per-breaker ACB test report (DOCX), cover page, TOC, CB details, visual/functional checks, electrical testing, protection results, white-label cover | ✅ Done |
+| 13 | ACB Reporting | Per-breaker ACB test report (DOCX ~6 pages/breaker), cover page, TOC, CB details table, visual/functional checklist (26+ items), electrical testing (contact resistance, insulation resistance), protection results, white-label cover. Page count scales with breakers tested. | ✅ Done |
 | 14 | NSX Testing + Reports | NSX test CRUD (migration, types, schemas, actions, UI), NSX DOCX report generator, dashboard + sidebar | ✅ Done |
 
 ### Phase 5 — Polish & Deploy
@@ -58,6 +60,20 @@
 | 15 | Audit, Search, Instruments | Audit log table + viewer, global search, instrument register CRUD, sidebar polish | ✅ Done |
 | 16 | User Management | Enhanced user management (super_admin support), role hierarchy fixes | ✅ Done |
 | 17 | Deploy & Analytics | Env validation, performance tuning, analytics dashboard, bulk report export, archive, audit wiring | ✅ Done |
+
+### Phase 6 — Data Onboarding
+
+| Sprint | Focus | Key Deliverables | Status |
+|--------|-------|-----------------|--------|
+| 18 | Universal CSV Import | Shared CSV parser utility (`lib/utils/csv-parser.ts`), generic `ImportCSVModal` component with column auto-mapping/preview/validation, CSV import for **Customers**, **Sites** (customer name lookup), **Instruments** (status validation), **Job Plans** (site name lookup, frequency validation), refactored Assets import to shared component. Import button on all list pages, 500-row limit, audit logging per import. | ✅ Done |
+
+### Phase 7 — Operational Maturity
+
+| Sprint | Focus | Key Deliverables | Status |
+|--------|-------|-----------------|--------|
+| 19 | Site Detail + Batch Checks | `/sites/[id]` unified detail page (stats, recent assets/checks/tests), batch check creation wizard (`batchCreateChecksAction` — frequency-based date scheduling, up to 52 checks/batch, copies job plan items), `BatchCreateForm` with date preview grid | ✅ Done |
+| 20 | PM Reports + Kanban | PM check sign-off DOCX report (`/api/pm-report`, cover page, summary table, items checklist with pass/fail/na, stats), download button on completed checks. Kanban board view for maintenance (Scheduled/In Progress/Overdue/Complete columns, progress bars, view toggle Table↔Kanban) | ✅ Done |
+| 21 | Notifications + Test Suite | Migration 0011 (notifications table + RLS), notification engine (`createNotification`, `markAsRead`, `markAllRead`), `/api/notifications` route, `NotificationBell` dropdown in sidebar, auto-notify on check assign/complete. Vitest test infrastructure (80 tests): CSV parser, role utils, format utils, Supabase mock, auth action integration tests | ✅ Done |
 
 ---
 
@@ -75,6 +91,7 @@
 | 0008_audit_logs.sql | Immutable audit log, 5 indexes | ✅ Applied |
 | 0009_instruments.sql | Instrument register with calibration tracking | ✅ Applied |
 | 0010_performance_indexes.sql | 24 indexes on query hotspots | ✅ Applied |
+| 0011_notifications.sql | Notifications table, RLS policies, user + entity indexes | ✅ Applied |
 
 ---
 

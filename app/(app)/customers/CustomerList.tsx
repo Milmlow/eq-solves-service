@@ -8,9 +8,12 @@ import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { CustomerForm } from './CustomerForm'
+import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
+import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
+import { importCustomersAction } from './actions'
 import type { Customer } from '@/lib/types'
 import { cn } from '@/lib/utils/cn'
-import { Pencil } from 'lucide-react'
+import { Pencil, Upload } from 'lucide-react'
 
 interface CustomerListProps {
   customers: Customer[]
@@ -19,9 +22,34 @@ interface CustomerListProps {
   isAdmin: boolean
 }
 
+const customerImportConfig: ImportCSVConfig<{
+  name: string
+  code: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+}> = {
+  entityName: 'Customers',
+  requiredColumns: ['name'],
+  optionalColumns: ['code', 'email', 'phone', 'address'],
+  mapRow: (row, columnMap) => {
+    const name = row[columnMap['name']]?.trim()
+    if (!name) return null
+    return {
+      name,
+      code: row[columnMap['code']]?.trim() || null,
+      email: row[columnMap['email']]?.trim() || null,
+      phone: row[columnMap['phone']]?.trim() || null,
+      address: row[columnMap['address']]?.trim() || null,
+    }
+  },
+  importAction: importCustomersAction,
+}
+
 export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerListProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<Customer | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   function openCreate() {
     setSelected(null)
@@ -62,9 +90,16 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
     <>
       <div className="flex items-center justify-between mb-4">
         <SearchFilter placeholder="Search customers..." />
-        {isAdmin && (
-          <Button onClick={openCreate} className="ml-4 shrink-0">Add Customer</Button>
-        )}
+        <div className="flex items-center gap-2 ml-4 shrink-0">
+          {isAdmin && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
+          {isAdmin && (
+            <Button onClick={openCreate}>Add Customer</Button>
+          )}
+        </div>
       </div>
 
       {customers.length === 0 ? (
@@ -94,6 +129,12 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
         onClose={() => { setPanelOpen(false); setSelected(null) }}
         customer={selected}
         isAdmin={isAdmin}
+      />
+
+      <ImportCSVModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        config={customerImportConfig}
       />
     </>
   )

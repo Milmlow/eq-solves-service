@@ -13,7 +13,7 @@ import {
 import { formatDate, formatCheckStatus } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
-import { CheckCircle, XCircle, MinusCircle } from 'lucide-react'
+import { CheckCircle, XCircle, MinusCircle, Download } from 'lucide-react'
 
 interface CheckDetailProps {
   open: boolean
@@ -141,6 +141,16 @@ export function CheckDetail({ open, onClose, check, items, attachments, isAdmin,
             >
               Complete Check
             </Button>
+          )}
+          {check.status === 'complete' && (
+            <a
+              href={`/api/pm-report?check_id=${check.id}`}
+              download
+              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Download Report
+            </a>
           )}
           {check.status !== 'complete' && check.status !== 'cancelled' && isAdmin && (
             <Button size="sm" variant="danger" onClick={handleCancel} disabled={loading}>

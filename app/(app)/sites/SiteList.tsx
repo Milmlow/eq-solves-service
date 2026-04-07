@@ -8,8 +8,11 @@ import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { SiteForm } from './SiteForm'
+import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
+import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
+import { importSitesAction } from './actions'
 import type { Site, Customer } from '@/lib/types'
-import { Pencil } from 'lucide-react'
+import { Pencil, Upload } from 'lucide-react'
 import Link from 'next/link'
 
 interface SiteWithCustomer extends Site {
@@ -28,6 +31,56 @@ interface SiteListProps {
 export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteListProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<SiteWithCustomer | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+
+  // Build customer name→id lookup for CSV import
+  const customerLookup: Record<string, string> = {}
+  for (const c of customers) customerLookup[c.name.toLowerCase()] = c.id
+
+  const siteImportConfig: ImportCSVConfig<{
+    name: string
+    code: string | null
+    customer_id: string | null
+    address: string | null
+    city: string | null
+    state: string | null
+    postcode: string | null
+    country: string | null
+  }> = {
+    entityName: 'Sites',
+    requiredColumns: ['name'],
+    optionalColumns: ['code', 'customer', 'address', 'city', 'state', 'postcode', 'country'],
+    validate: (rows, columnMap) => {
+      const errs: string[] = []
+      if (columnMap['customer']) {
+        const customerNames = new Set(customers.map((c) => c.name.toLowerCase()))
+        const unmapped = new Set<string>()
+        for (const row of rows) {
+          const cName = row[columnMap['customer']]?.toLowerCase()
+          if (cName && !customerNames.has(cName)) unmapped.add(row[columnMap['customer']])
+        }
+        if (unmapped.size > 0) {
+          errs.push(`Unknown customer names: ${[...unmapped].slice(0, 5).join(', ')}${unmapped.size > 5 ? ` (+${unmapped.size - 5} more)` : ''}`)
+        }
+      }
+      return errs
+    },
+    mapRow: (row, columnMap) => {
+      const name = row[columnMap['name']]?.trim()
+      if (!name) return null
+      return {
+        name,
+        code: row[columnMap['code']]?.trim() || null,
+        customer_id: customerLookup[row[columnMap['customer']]?.toLowerCase()] ?? null,
+        address: row[columnMap['address']]?.trim() || null,
+        city: row[columnMap['city']]?.trim() || null,
+        state: row[columnMap['state']]?.trim() || null,
+        postcode: row[columnMap['postcode']]?.trim() || null,
+        country: row[columnMap['country']]?.trim() || null,
+      }
+    },
+    importAction: importSitesAction,
+  }
 
   function openCreate() {
     setSelected(null)
@@ -42,7 +95,15 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
   type SiteRow = SiteWithCustomer & Record<string, unknown>
 
   const columns: DataTableColumn<SiteRow>[] = [
-    { key: 'name', header: 'Name' },
+    {
+      key: 'name',
+      header: 'Name',
+      render: (row) => (
+        <Link href={`/sites/${(row as SiteWithCustomer).id}`} className="text-eq-sky hover:text-eq-deep font-medium transition-colors">
+          {(row as SiteWithCustomer).name}
+        </Link>
+      ),
+    },
     { key: 'code', header: 'Code' },
     {
       key: 'customer_name',
@@ -98,9 +159,16 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
           placeholder="Search sites..."
           filters={[{ key: 'customer_id', label: 'All Customers', options: customerFilterOptions }]}
         />
-        {isAdmin && (
-          <Button onClick={openCreate} className="ml-4 shrink-0">Add Site</Button>
-        )}
+        <div className="flex items-center gap-2 ml-4 shrink-0">
+          {isAdmin && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
+          {isAdmin && (
+            <Button onClick={openCreate}>Add Site</Button>
+          )}
+        </div>
       </div>
 
       {sites.length === 0 ? (
@@ -127,6 +195,12 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
         site={selected}
         customers={customers}
         isAdmin={isAdmin}
+      />
+
+      <ImportCSVModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        config={siteImportConfig}
       />
     </>
   )
