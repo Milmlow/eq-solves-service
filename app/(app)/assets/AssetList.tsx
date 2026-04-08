@@ -23,6 +23,7 @@ interface AssetWithSite extends Asset {
 
 interface AssetListProps {
   assets: AssetWithSite[]
+  allAssets: AssetWithSite[]
   sites: Pick<Site, 'id' | 'name'>[]
   assetTypes: string[]
   allJobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
@@ -32,7 +33,7 @@ interface AssetListProps {
   canWrite: boolean
 }
 
-export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalPages, isAdmin, canWrite: canWriteRole }: AssetListProps) {
+export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, page, totalPages, isAdmin, canWrite: canWriteRole }: AssetListProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -153,7 +154,7 @@ export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalP
               <Pagination page={page} totalPages={totalPages} />
             </>
           ) : (
-            <AssetGroupedView assets={assets} onAssetClick={openDetail} />
+            <AssetGroupedView assets={allAssets} onAssetClick={openDetail} />
           )}
         </>
       )}

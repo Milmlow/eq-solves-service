@@ -79,7 +79,7 @@ export function AssetGroupedView({ assets, onAssetClick }: AssetGroupedViewProps
 }
 
 function SiteGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: (a: AssetWithSite) => void }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
 
   return (
     <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">

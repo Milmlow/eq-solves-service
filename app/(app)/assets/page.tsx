@@ -77,6 +77,20 @@ export default async function AssetsPage({
   const total = count ?? 0
   const totalPages = Math.ceil(total / PER_PAGE)
 
+  // Fetch ALL assets for grouped view (no pagination, same filters)
+  let allQuery = supabase
+    .from('assets')
+    .select('*, sites(name), job_plans(name, code)')
+    .order('name')
+    .limit(2000)
+
+  if (!showArchived) allQuery = allQuery.eq('is_active', true)
+  if (search) allQuery = allQuery.or(`name.ilike.%${search}%,asset_type.ilike.%${search}%,serial_number.ilike.%${search}%,maximo_id.ilike.%${search}%,location.ilike.%${search}%`)
+  if (siteId) allQuery = allQuery.eq('site_id', siteId)
+  if (assetType) allQuery = allQuery.eq('asset_type', assetType)
+
+  const { data: allAssets } = await allQuery
+
   // Fetch all job plans for the form dropdown
   const { data: allJobPlans } = await supabase
     .from('job_plans')
@@ -92,6 +106,7 @@ export default async function AssetsPage({
       </div>
       <AssetList
         assets={(assets ?? []) as never}
+        allAssets={(allAssets ?? []) as never}
         sites={sites ?? []}
         assetTypes={assetTypes}
         allJobPlans={(allJobPlans ?? []) as { id: string; name: string; code: string | null }[]}
