@@ -14,7 +14,7 @@ interface AssetFormProps {
   onClose: () => void
   asset?: Asset | null
   sites: Pick<Site, 'id' | 'name'>[]
-  jobPlans?: Pick<JobPlan, 'id' | 'name' | 'frequency'>[]
+  jobPlans?: Pick<JobPlan, 'id' | 'name' | 'code'>[]
   isAdmin: boolean
   canWrite: boolean
 }
@@ -114,23 +114,26 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
               <dt className="text-xs font-bold text-eq-grey uppercase">Install Date</dt>
               <dd className="text-eq-ink mt-1">{asset!.install_date ? formatDate(asset!.install_date) : '—'}</dd>
             </div>
-          </div>
-
-          {jobPlans.length > 0 && (
-            <div className="pt-4 border-t border-gray-200">
-              <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-2">Job Plans (Site)</h3>
-              <ul className="space-y-1">
-                {jobPlans.map((jp) => (
-                  <li key={jp.id} className="text-sm text-eq-ink">
-                    <a href={`/job-plans?search=${encodeURIComponent(jp.name)}`} className="text-eq-sky hover:text-eq-deep transition-colors">
-                      {jp.name}
-                    </a>
-                    <span className="text-eq-grey ml-2 text-xs">({jp.frequency})</span>
-                  </li>
-                ))}
-              </ul>
+            <div>
+              <dt className="text-xs font-bold text-eq-grey uppercase">Job Plan</dt>
+              <dd className="text-eq-ink mt-1">
+                {asset!.job_plan_id && jobPlans.length > 0 ? (
+                  (() => {
+                    const jp = jobPlans.find((j) => j.id === asset!.job_plan_id)
+                    return jp ? (
+                      <a href={`/job-plans?search=${encodeURIComponent(jp.name)}`} className="text-eq-sky hover:text-eq-deep transition-colors">
+                        {jp.name}{jp.code ? ` (${jp.code})` : ''}
+                      </a>
+                    ) : '—'
+                  })()
+                ) : '—'}
+              </dd>
             </div>
-          )}
+            <div>
+              <dt className="text-xs font-bold text-eq-grey uppercase">Dark Site Test</dt>
+              <dd className="text-eq-ink mt-1">{asset!.dark_site_test ? 'Yes' : 'No'}</dd>
+            </div>
+          </div>
         </div>
       </SlidePanel>
     )
@@ -164,6 +167,30 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
           </select>
         </div>
         <FormInput label="Location" name="location" defaultValue={asset?.location ?? ''} placeholder="e.g. Level 2, DB-03" />
+
+        <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide pt-4">Maintenance</h3>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Job Plan</label>
+          <select
+            name="job_plan_id"
+            defaultValue={asset?.job_plan_id ?? ''}
+            className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+          >
+            <option value="">No job plan</option>
+            {jobPlans.map((jp) => (
+              <option key={jp.id} value={jp.id}>{jp.name}{jp.code ? ` (${jp.code})` : ''}</option>
+            ))}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-eq-ink">
+          <input
+            type="checkbox"
+            name="dark_site_test"
+            defaultChecked={asset?.dark_site_test ?? false}
+            className="rounded border-gray-300 text-eq-sky focus:ring-eq-sky"
+          />
+          Dark Site Test asset
+        </label>
 
         <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide pt-4">Details</h3>
         <FormInput label="Install Date" name="install_date" type="date" defaultValue={asset?.install_date ?? ''} />

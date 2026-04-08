@@ -16,20 +16,21 @@ import { Pencil, Upload } from 'lucide-react'
 
 interface AssetWithSite extends Asset {
   sites: { name: string } | null
+  job_plans: { name: string; code: string | null } | null
 }
 
 interface AssetListProps {
   assets: AssetWithSite[]
   sites: Pick<Site, 'id' | 'name'>[]
   assetTypes: string[]
-  jobPlansMap: Record<string, Pick<JobPlan, 'id' | 'name' | 'frequency'>[]>
+  allJobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
   page: number
   totalPages: number
   isAdmin: boolean
   canWrite: boolean
 }
 
-export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalPages, isAdmin, canWrite: canWriteRole }: AssetListProps) {
+export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalPages, isAdmin, canWrite: canWriteRole }: AssetListProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -48,17 +49,23 @@ export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalP
   type AssetRow = AssetWithSite & Record<string, unknown>
 
   const columns: DataTableColumn<AssetRow>[] = [
+    { key: 'maximo_id', header: 'Maximo ID' },
     { key: 'name', header: 'Name' },
-    { key: 'asset_type', header: 'Type' },
     {
       key: 'site_name',
       header: 'Site',
       render: (row) => (row as AssetWithSite).sites?.name ?? '—',
     },
-    { key: 'manufacturer', header: 'Manufacturer' },
-    { key: 'model', header: 'Model' },
-    { key: 'serial_number', header: 'Serial #' },
-    { key: 'maximo_id', header: 'Maximo ID' },
+    { key: 'location', header: 'Location' },
+    {
+      key: 'job_plan_name',
+      header: 'Job Plan',
+      render: (row) => {
+        const a = row as AssetWithSite
+        if (!a.job_plans) return '—'
+        return a.job_plans.name
+      },
+    },
     {
       key: 'is_active',
       header: 'Status',
@@ -130,7 +137,7 @@ export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalP
         onClose={() => { setPanelOpen(false); setSelected(null) }}
         asset={selected}
         sites={sites}
-        jobPlans={selected ? (jobPlansMap[selected.site_id] ?? []) : []}
+        jobPlans={allJobPlans}
         isAdmin={isAdmin}
         canWrite={canWriteRole}
       />

@@ -21,6 +21,8 @@ export async function createAssetAction(formData: FormData) {
       maximo_id: formData.get('maximo_id') || null,
       install_date: formData.get('install_date') || null,
       location: formData.get('location') || null,
+      job_plan_id: formData.get('job_plan_id') || null,
+      dark_site_test: formData.get('dark_site_test') === 'on',
     }
 
     const parsed = CreateAssetSchema.safeParse(raw)
@@ -55,6 +57,8 @@ export async function updateAssetAction(id: string, formData: FormData) {
       maximo_id: formData.get('maximo_id') || null,
       install_date: formData.get('install_date') || null,
       location: formData.get('location') || null,
+      job_plan_id: formData.get('job_plan_id') || null,
+      dark_site_test: formData.get('dark_site_test') === 'on',
     }
 
     const parsed = UpdateAssetSchema.safeParse(raw)

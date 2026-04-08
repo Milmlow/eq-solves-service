@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { AssetList } from './AssetList'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
-import type { Role, JobPlan } from '@/lib/types'
+import type { Role } from '@/lib/types'
 
 const PER_PAGE = 25
 
@@ -49,10 +49,10 @@ export default async function AssetsPage({
 
   const assetTypes = [...new Set((typeRows ?? []).map((r) => r.asset_type))].filter(Boolean)
 
-  // Build assets query
+  // Build assets query (join job_plans for display)
   let query = supabase
     .from('assets')
-    .select('*, sites(name)', { count: 'exact' })
+    .select('*, sites(name), job_plans(name, code)', { count: 'exact' })
     .order('name')
 
   if (!showArchived) {
@@ -60,7 +60,7 @@ export default async function AssetsPage({
   }
 
   if (search) {
-    query = query.or(`name.ilike.%${search}%,asset_type.ilike.%${search}%,serial_number.ilike.%${search}%,maximo_id.ilike.%${search}%`)
+    query = query.or(`name.ilike.%${search}%,asset_type.ilike.%${search}%,serial_number.ilike.%${search}%,maximo_id.ilike.%${search}%,location.ilike.%${search}%`)
   }
   if (siteId) {
     query = query.eq('site_id', siteId)
@@ -77,24 +77,12 @@ export default async function AssetsPage({
   const total = count ?? 0
   const totalPages = Math.ceil(total / PER_PAGE)
 
-  // Fetch job plans grouped by site_id for the detail view
-  const siteIds = [...new Set((assets ?? []).map((a) => a.site_id))]
-  let jobPlansMap: Record<string, Pick<JobPlan, 'id' | 'name' | 'frequency'>[]> = {}
-  if (siteIds.length > 0) {
-    const { data: jps } = await supabase
-      .from('job_plans')
-      .select('id, name, frequency, site_id')
-      .in('site_id', siteIds)
-      .eq('is_active', true)
-      .order('name')
-
-    jobPlansMap = (jps ?? []).reduce((acc, jp) => {
-      const key = jp.site_id as string
-      if (!acc[key]) acc[key] = []
-      acc[key].push({ id: jp.id, name: jp.name, frequency: jp.frequency })
-      return acc
-    }, {} as Record<string, Pick<JobPlan, 'id' | 'name' | 'frequency'>[]>)
-  }
+  // Fetch all job plans for the form dropdown
+  const { data: allJobPlans } = await supabase
+    .from('job_plans')
+    .select('id, name, code')
+    .eq('is_active', true)
+    .order('name')
 
   return (
     <div className="space-y-6">
@@ -106,7 +94,7 @@ export default async function AssetsPage({
         assets={(assets ?? []) as never}
         sites={sites ?? []}
         assetTypes={assetTypes}
-        jobPlansMap={jobPlansMap}
+        allJobPlans={(allJobPlans ?? []) as { id: string; name: string; code: string | null }[]}
         page={page}
         totalPages={totalPages}
         isAdmin={isAdmin(userRole)}

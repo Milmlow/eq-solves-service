@@ -90,6 +90,8 @@ export interface Asset {
   maximo_id: string | null
   install_date: string | null
   location: string | null
+  job_plan_id: string | null
+  dark_site_test: boolean
   is_active: boolean
   created_at: string
   updated_at: string
@@ -135,17 +137,39 @@ export type CheckStatus = 'scheduled' | 'in_progress' | 'complete' | 'overdue' |
 
 export type CheckItemResult = 'pass' | 'fail' | 'na'
 
+export type MaintenanceFrequency = 'monthly' | 'quarterly' | 'semi_annual' | 'annual' | '2yr' | '3yr' | '5yr' | '8yr' | '10yr'
+
 export interface MaintenanceCheck {
   id: string
   tenant_id: string
-  job_plan_id: string
+  job_plan_id: string | null
   site_id: string
   assigned_to: string | null
   status: CheckStatus
+  frequency: MaintenanceFrequency | null
+  is_dark_site: boolean
+  custom_name: string | null
+  start_date: string | null
   due_date: string
+  maximo_wo_number: string | null
+  maximo_pm_number: string | null
   started_at: string | null
   completed_at: string | null
   notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CheckAssetStatus = 'pending' | 'completed' | 'na'
+
+export interface CheckAsset {
+  id: string
+  tenant_id: string
+  check_id: string
+  asset_id: string
+  status: CheckAssetStatus
+  notes: string | null
+  completed_at: string | null
   created_at: string
   updated_at: string
 }
@@ -154,6 +178,7 @@ export interface MaintenanceCheckItem {
   id: string
   tenant_id: string
   check_id: string
+  check_asset_id: string | null
   job_plan_item_id: string | null
   asset_id: string | null
   description: string
