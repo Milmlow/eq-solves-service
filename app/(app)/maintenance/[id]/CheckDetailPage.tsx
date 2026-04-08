@@ -222,10 +222,16 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             </Button>
           )}
           {check.status === 'complete' && (
-            <a href={`/api/pm-report?check_id=${check.id}`} download
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors">
-              <Download className="w-4 h-4" /> Download Report
-            </a>
+            <>
+              <a href={`/api/pm-asset-report?check_id=${check.id}`} download
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors">
+                <Download className="w-4 h-4" /> Asset Report
+              </a>
+              <a href={`/api/pm-report?check_id=${check.id}`} download
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-white text-eq-deep border border-eq-sky/40 rounded hover:bg-eq-ice transition-colors">
+                <Download className="w-4 h-4" /> Summary Report
+              </a>
+            </>
           )}
           {check.status !== 'complete' && check.status !== 'cancelled' && isAdmin && (
             <Button size="sm" variant="danger" onClick={handleCancel} disabled={loading}>Cancel</Button>
