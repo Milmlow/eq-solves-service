@@ -17,10 +17,12 @@ export async function createJobPlanAction(formData: FormData) {
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
-      site_id: formData.get('site_id'),
+      site_id: formData.get('site_id') || null,
       name: formData.get('name'),
+      code: formData.get('code') || null,
+      type: formData.get('type') || null,
       description: formData.get('description') || null,
-      frequency: formData.get('frequency'),
+      frequency: formData.get('frequency') || null,
     }
 
     const parsed = CreateJobPlanSchema.safeParse(raw)
@@ -46,10 +48,12 @@ export async function updateJobPlanAction(id: string, formData: FormData) {
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
-      site_id: formData.get('site_id'),
+      site_id: formData.get('site_id') || null,
       name: formData.get('name'),
+      code: formData.get('code') || null,
+      type: formData.get('type') || null,
       description: formData.get('description') || null,
-      frequency: formData.get('frequency'),
+      frequency: formData.get('frequency') || null,
     }
 
     const parsed = UpdateJobPlanSchema.safeParse(raw)
@@ -73,9 +77,10 @@ export async function updateJobPlanAction(id: string, formData: FormData) {
 export async function importJobPlansAction(
   jobPlans: {
     name: string
+    code: string | null
+    type: string | null
     site_id: string
     description: string | null
-    frequency: string | null
   }[]
 ) {
   try {
@@ -85,18 +90,12 @@ export async function importJobPlansAction(
     if (jobPlans.length === 0) return { success: false, error: 'No valid rows to import.', imported: 0, rowErrors: [] as string[] }
     if (jobPlans.length > 500) return { success: false, error: 'Maximum 500 rows per import.', imported: 0, rowErrors: [] as string[] }
 
-    const validFrequencies = ['weekly', 'monthly', 'quarterly', 'biannual', 'annual', 'ad_hoc']
     const rowErrors: string[] = []
     const validRows: typeof jobPlans = []
 
     for (let i = 0; i < jobPlans.length; i++) {
       const row = jobPlans[i]
       if (!row.name?.trim()) { rowErrors.push(`Row ${i + 1}: Name is required.`); continue }
-      if (!row.site_id) { rowErrors.push(`Row ${i + 1}: Invalid or unknown site.`); continue }
-      if (row.frequency && !validFrequencies.includes(row.frequency.toLowerCase())) {
-        rowErrors.push(`Row ${i + 1}: Invalid frequency "${row.frequency}". Must be one of: ${validFrequencies.join(', ')}`)
-        continue
-      }
       validRows.push(row)
     }
 
@@ -105,9 +104,12 @@ export async function importJobPlansAction(
     }
 
     const insertRows = validRows.map((r) => ({
-      ...r,
+      name: r.name,
+      code: r.code,
+      type: r.type,
+      site_id: r.site_id || null,
+      description: r.description,
       tenant_id: tenantId,
-      frequency: r.frequency?.toLowerCase() || 'ad_hoc',
     }))
     const { error } = await supabase.from('job_plans').insert(insertRows)
 

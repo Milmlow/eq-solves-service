@@ -107,17 +107,21 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
   return (
     <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Job Plan' : 'Add Job Plan'}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <FormInput label="Name" name="name" required defaultValue={jobPlan?.name ?? ''} placeholder="Job plan name" />
+        <div className="grid grid-cols-2 gap-3">
+          <FormInput label="Name" name="name" required defaultValue={jobPlan?.name ?? ''} placeholder="e.g. E1.12" />
+          <FormInput label="Job Code" name="code" defaultValue={jobPlan?.code ?? ''} placeholder="e.g. SJPNL1" />
+        </div>
+
+        <FormInput label="Type" name="type" defaultValue={jobPlan?.type ?? ''} placeholder="e.g. CP Distribution Panel (RPP)" />
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Site</label>
           <select
             name="site_id"
-            required
             defaultValue={jobPlan?.site_id ?? ''}
             className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
-            <option value="">Select site...</option>
+            <option value="">No site (global)</option>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
@@ -139,11 +143,10 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
           <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Frequency</label>
           <select
             name="frequency"
-            required
             defaultValue={jobPlan?.frequency ?? ''}
             className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
-            <option value="">Select frequency...</option>
+            <option value="">Per item (see tasks)</option>
             {FREQUENCIES.map((f) => (
               <option key={f.value} value={f.value}>{f.label}</option>
             ))}

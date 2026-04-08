@@ -3,10 +3,12 @@ import { z } from 'zod'
 const FREQUENCIES = ['weekly', 'monthly', 'quarterly', 'biannual', 'annual', 'ad_hoc'] as const
 
 export const CreateJobPlanSchema = z.object({
-  site_id: z.string().uuid('Valid site is required'),
+  site_id: z.string().uuid('Valid site is required').nullable().optional(),
   name: z.string().min(1, 'Name is required').max(200),
+  code: z.string().max(50).nullable().optional(),
+  type: z.string().max(200).nullable().optional(),
   description: z.string().max(1000).nullable().optional(),
-  frequency: z.enum(FREQUENCIES),
+  frequency: z.enum(FREQUENCIES).nullable().optional(),
 })
 
 export const UpdateJobPlanSchema = CreateJobPlanSchema.partial().extend({

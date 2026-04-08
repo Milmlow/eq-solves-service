@@ -100,8 +100,10 @@ export interface JobPlan {
   tenant_id: string
   site_id: string
   name: string
+  code: string | null
+  type: string | null
   description: string | null
-  frequency: Frequency
+  frequency: Frequency | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -115,6 +117,16 @@ export interface JobPlanItem {
   description: string
   sort_order: number
   is_required: boolean
+  dark_site: boolean
+  freq_monthly: boolean
+  freq_quarterly: boolean
+  freq_semi_annual: boolean
+  freq_annual: boolean
+  freq_2yr: boolean
+  freq_3yr: boolean
+  freq_5yr: boolean
+  freq_8yr: boolean
+  freq_10yr: boolean
   created_at: string
   updated_at: string
 }

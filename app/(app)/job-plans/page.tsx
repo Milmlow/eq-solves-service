@@ -9,12 +9,11 @@ const PER_PAGE = 25
 export default async function JobPlansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; frequency?: string; page?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; page?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
-  const frequency = params.frequency ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
 
   const supabase = await createClient()
@@ -47,13 +46,10 @@ export default async function JobPlansPage({
     .order('name')
 
   if (search) {
-    query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`)
+    query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%,type.ilike.%${search}%,description.ilike.%${search}%`)
   }
   if (siteId) {
     query = query.eq('site_id', siteId)
-  }
-  if (frequency) {
-    query = query.eq('frequency', frequency)
   }
 
   const from = (page - 1) * PER_PAGE

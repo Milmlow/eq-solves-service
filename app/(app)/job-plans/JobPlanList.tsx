@@ -11,8 +11,7 @@ import { JobPlanForm } from './JobPlanForm'
 import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importJobPlansAction } from './actions'
-import { formatFrequency } from '@/lib/utils/format'
-import type { JobPlan, JobPlanItem, Site, Frequency } from '@/lib/types'
+import type { JobPlan, JobPlanItem, Site } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Pencil, Upload } from 'lucide-react'
@@ -44,37 +43,24 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
 
   const jobPlanImportConfig: ImportCSVConfig<{
     name: string
+    code: string | null
+    type: string | null
     site_id: string
     description: string | null
-    frequency: string | null
   }> = {
     entityName: 'Job Plans',
-    requiredColumns: ['name', 'site'],
-    optionalColumns: ['description', 'frequency'],
-    validate: (rows, columnMap) => {
-      const errs: string[] = []
-      if (columnMap['site']) {
-        const siteNames = new Set(sites.map((s) => s.name.toLowerCase()))
-        const unmapped = new Set<string>()
-        for (const row of rows) {
-          const siteName = row[columnMap['site']]?.toLowerCase()
-          if (siteName && !siteNames.has(siteName)) unmapped.add(row[columnMap['site']])
-        }
-        if (unmapped.size > 0) {
-          errs.push(`Unknown site names: ${[...unmapped].slice(0, 5).join(', ')}${unmapped.size > 5 ? ` (+${unmapped.size - 5} more)` : ''}`)
-        }
-      }
-      return errs
-    },
+    requiredColumns: ['name'],
+    optionalColumns: ['jp code', 'type', 'site', 'description'],
     mapRow: (row, columnMap) => {
       const name = row[columnMap['name']]?.trim()
-      const site_id = siteLookup[row[columnMap['site']]?.toLowerCase()] ?? ''
-      if (!name || !site_id) return null
+      if (!name) return null
+      const siteVal = row[columnMap['site']]?.toLowerCase() ?? ''
       return {
         name,
-        site_id,
+        code: row[columnMap['jp code']]?.trim() || null,
+        type: row[columnMap['type']]?.trim() || null,
+        site_id: siteLookup[siteVal] ?? '',
         description: row[columnMap['description']]?.trim() || null,
-        frequency: row[columnMap['frequency']]?.trim()?.toLowerCase() || null,
       }
     },
     importAction: importJobPlansAction,
@@ -100,9 +86,14 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
       render: (row) => (row as JobPlanWithSite).sites?.name ?? '—',
     },
     {
-      key: 'frequency',
-      header: 'Frequency',
-      render: (row) => formatFrequency((row as JobPlanWithSite).frequency as Frequency),
+      key: 'code',
+      header: 'Job Code',
+      render: (row) => (row as JobPlanWithSite).code ?? '—',
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      render: (row) => (row as JobPlanWithSite).type ?? '—',
     },
     {
       key: 'item_count',
@@ -130,14 +121,6 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: s.name }))
-  const frequencyFilterOptions = [
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'monthly', label: 'Monthly' },
-    { value: 'quarterly', label: 'Quarterly' },
-    { value: 'biannual', label: 'Bi-annual' },
-    { value: 'annual', label: 'Annual' },
-    { value: 'ad_hoc', label: 'Ad Hoc' },
-  ]
 
   return (
     <>
@@ -146,7 +129,6 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
           placeholder="Search job plans..."
           filters={[
             { key: 'site_id', label: 'All Sites', options: siteFilterOptions },
-            { key: 'frequency', label: 'All Frequencies', options: frequencyFilterOptions },
           ]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">
