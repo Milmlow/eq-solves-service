@@ -44,3 +44,10 @@ next-env.d.ts
 # sprint prompts & release archives (kept local, not committed)
 SPRINT_*_COWORK_PROMPT.md
 eq-solves-release-*.zip
+
+# generated docs & deploy artifacts
+*.pptx
+*.docx
+deploy-*.zip
+/.next-old/
+/tmp/
