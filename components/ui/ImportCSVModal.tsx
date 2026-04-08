@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { Button } from '@/components/ui/Button'
 import { parseCSV, autoMapColumns } from '@/lib/utils/csv-parser'
@@ -68,6 +68,7 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
   const [headers, setHeaders] = useState<string[]>([])
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [columnMap, setColumnMap] = useState<Record<string, string>>({})
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
   const [errors, setErrors] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null)
@@ -87,6 +88,7 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
       setHeaders(h)
       setRows(r)
       setColumnMap(autoMapColumns(h, allColumns))
+      setSelectedRows(new Set(r.map((_, i) => i)))
     }
     reader.readAsText(file)
   }
@@ -103,8 +105,31 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
     return errs
   }
 
+  /* ---- Selection helpers ---- */
+  const allSelected = selectedRows.size === rows.length
+  const noneSelected = selectedRows.size === 0
+
+  function toggleRow(idx: number) {
+    setSelectedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (allSelected) setSelectedRows(new Set())
+    else setSelectedRows(new Set(rows.map((_, i) => i)))
+  }
+
   /* ---- Import ---- */
   async function handleImport() {
+    if (selectedRows.size === 0) {
+      setErrors(['No rows selected for import.'])
+      return
+    }
+
     const validationErrors = runValidation()
     if (validationErrors.length > 0) {
       setErrors(validationErrors)
@@ -114,7 +139,8 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
     setErrors([])
     setImporting(true)
 
-    const mapped = rows
+    const selectedRowData = rows.filter((_, i) => selectedRows.has(i))
+    const mapped = selectedRowData
       .map((row) => mapRow(row, columnMap))
       .filter((r): r is T => r !== null)
 
@@ -124,7 +150,7 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
     if (res.success) {
       setResult({
         imported: res.imported ?? 0,
-        skipped: rows.length - (res.imported ?? 0),
+        skipped: selectedRowData.length - (res.imported ?? 0),
         errors: res.rowErrors ?? [],
       })
     } else {
@@ -139,6 +165,7 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
     setHeaders([])
     setRows([])
     setColumnMap({})
+    setSelectedRows(new Set())
     setErrors([])
     setResult(null)
   }
@@ -203,26 +230,64 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
               ))}
             </div>
 
-            {/* Preview */}
+            {/* Preview with row selection */}
             <div>
-              <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-2">Preview (first 5 rows)</h3>
-              <div className="overflow-x-auto border border-gray-200 rounded-md">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide">
+                  Review Rows ({selectedRows.size} of {rows.length} selected)
+                </h3>
+                <button
+                  type="button"
+                  onClick={toggleAll}
+                  className="text-xs text-eq-sky hover:text-eq-deep font-medium"
+                >
+                  {allSelected ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+              <div className="overflow-auto border border-gray-200 rounded-md max-h-64">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
+                      <th className="px-2 py-2 w-8">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={toggleAll}
+                          className="rounded border-gray-300 text-eq-sky focus:ring-eq-sky"
+                        />
+                      </th>
+                      <th className="px-2 py-2 text-left text-eq-grey font-bold uppercase w-8">#</th>
                       {allColumns.filter((c) => columnMap[c]).map((col) => (
                         <th key={col} className="px-3 py-2 text-left text-eq-grey font-bold uppercase">{col.replace(/_/g, ' ')}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.slice(0, 5).map((row, i) => (
-                      <tr key={i} className="border-t border-gray-100">
-                        {allColumns.filter((c) => columnMap[c]).map((col) => (
-                          <td key={col} className="px-3 py-1.5 text-eq-ink">{row[columnMap[col]] ?? '—'}</td>
-                        ))}
-                      </tr>
-                    ))}
+                    {rows.map((row, i) => {
+                      const isSelected = selectedRows.has(i)
+                      return (
+                        <tr
+                          key={i}
+                          className={`border-t border-gray-100 cursor-pointer transition-colors ${
+                            isSelected ? 'bg-white hover:bg-gray-50' : 'bg-gray-100 opacity-50'
+                          }`}
+                          onClick={() => toggleRow(i)}
+                        >
+                          <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleRow(i)}
+                              className="rounded border-gray-300 text-eq-sky focus:ring-eq-sky"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 text-eq-grey">{i + 1}</td>
+                          {allColumns.filter((c) => columnMap[c]).map((col) => (
+                            <td key={col} className="px-3 py-1.5 text-eq-ink">{row[columnMap[col]] ?? '—'}</td>
+                          ))}
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -240,8 +305,8 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
             )}
 
             <div className="flex items-center gap-3 pt-2">
-              <Button onClick={handleImport} disabled={importing}>
-                {importing ? 'Importing...' : `Import ${rows.length} ${label}`}
+              <Button onClick={handleImport} disabled={importing || noneSelected}>
+                {importing ? 'Importing...' : `Import ${selectedRows.size} ${label}`}
               </Button>
               <Button variant="secondary" onClick={handleClose}>Cancel</Button>
             </div>
