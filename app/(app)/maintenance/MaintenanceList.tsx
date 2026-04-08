@@ -29,7 +29,7 @@ interface MaintenanceListProps {
   checks: CheckRow[]
   itemsMap: Record<string, MaintenanceCheckItem[]>
   attachmentsMap: Record<string, Attachment[]>
-  jobPlans: (Pick<JobPlan, 'id' | 'name' | 'site_id' | 'frequency'> & { sites?: { name: string } | null })[]
+  jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
   sites: Pick<Site, 'id' | 'name'>[]
   technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
   page: number

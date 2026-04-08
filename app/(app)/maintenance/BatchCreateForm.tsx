@@ -6,13 +6,12 @@ import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { batchCreateChecksAction } from './actions'
 import type { JobPlan, Site, Profile } from '@/lib/types'
-import { formatFrequency, formatDate } from '@/lib/utils/format'
-import type { Frequency } from '@/lib/types'
+import { formatDate } from '@/lib/utils/format'
 
 interface BatchCreateFormProps {
   open: boolean
   onClose: () => void
-  jobPlans: (Pick<JobPlan, 'id' | 'name' | 'site_id' | 'frequency'> & { sites?: { name: string } | null })[]
+  jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
   sites: Pick<Site, 'id' | 'name'>[]
   technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
 }
@@ -27,35 +26,11 @@ export function BatchCreateForm({ open, onClose, jobPlans, sites, technicians }:
 
   const jobPlan = jobPlans.find((jp) => jp.id === selectedJobPlan)
 
-  // Generate preview of check dates
+  // Preview dates (batch create is being rebuilt — placeholder)
   const previewDates = useMemo(() => {
     if (!jobPlan || !startDate || !endDate) return []
-
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    const dates: Date[] = []
-    const frequency = jobPlan.frequency as Frequency
-
-    let current = new Date(start)
-    while (current <= end && dates.length < 52) {
-      dates.push(new Date(current))
-
-      if (frequency === 'weekly') {
-        current.setDate(current.getDate() + 7)
-      } else if (frequency === 'monthly') {
-        current.setMonth(current.getMonth() + 1)
-      } else if (frequency === 'quarterly') {
-        current.setMonth(current.getMonth() + 3)
-      } else if (frequency === 'biannual') {
-        current.setMonth(current.getMonth() + 6)
-      } else if (frequency === 'annual') {
-        current.setFullYear(current.getFullYear() + 1)
-      } else {
-        break
-      }
-    }
-
-    return dates
+    // TODO: batch create needs rebuild for new frequency-on-items model
+    return [new Date(startDate)]
   }, [jobPlan, startDate, endDate])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -96,7 +71,7 @@ export function BatchCreateForm({ open, onClose, jobPlans, sites, technicians }:
             <option value="">Select job plan...</option>
             {jobPlans.map((jp) => (
               <option key={jp.id} value={jp.id}>
-                {jp.name} — {jp.sites?.name ?? 'Unknown site'} ({formatFrequency(jp.frequency as Frequency)})
+                {jp.name}{jp.code ? ` (${jp.code})` : ''}
               </option>
             ))}
           </select>
@@ -104,8 +79,8 @@ export function BatchCreateForm({ open, onClose, jobPlans, sites, technicians }:
 
         {jobPlan && (
           <div className="text-xs text-eq-grey bg-eq-ice/50 rounded-md p-3">
-            Site: <span className="font-medium text-eq-ink">{jobPlan.sites?.name}</span> ·
-            Frequency: <span className="font-medium text-eq-ink">{formatFrequency(jobPlan.frequency as Frequency)}</span>
+            Job Plan: <span className="font-medium text-eq-ink">{jobPlan.name}</span>
+            {jobPlan.code && <> · Code: <span className="font-medium text-eq-ink">{jobPlan.code}</span></>}
           </div>
         )}
 

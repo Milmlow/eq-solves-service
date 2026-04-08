@@ -12,83 +12,283 @@ import {
 } from '@/lib/validations/maintenance-check'
 
 /**
- * Create a maintenance check from a job plan.
- * Copies all job_plan_items into maintenance_check_items.
+ * Get the frequency flag column name for a given maintenance frequency.
+ */
+function freqColumn(freq: string): string {
+  const map: Record<string, string> = {
+    monthly: 'freq_monthly',
+    quarterly: 'freq_quarterly',
+    semi_annual: 'freq_semi_annual',
+    annual: 'freq_annual',
+    '2yr': 'freq_2yr',
+    '3yr': 'freq_3yr',
+    '5yr': 'freq_5yr',
+    '8yr': 'freq_8yr',
+    '10yr': 'freq_10yr',
+  }
+  return map[freq] ?? 'freq_monthly'
+}
+
+/**
+ * Preview which assets would be included in a check.
+ * Used by the form to show a preview before creating.
+ */
+export async function previewCheckAssetsAction(
+  siteId: string,
+  frequency: string,
+  isDarkSite: boolean,
+  jobPlanId?: string | null,
+) {
+  try {
+    const { supabase } = await requireUser()
+
+    let query = supabase
+      .from('assets')
+      .select('id, name, maximo_id, location, job_plan_id, job_plans(name, code)')
+      .eq('site_id', siteId)
+      .eq('is_active', true)
+
+    if (isDarkSite) {
+      query = query.eq('dark_site_test', true)
+    }
+
+    if (jobPlanId) {
+      query = query.eq('job_plan_id', jobPlanId)
+    }
+
+    const { data: assets } = await query.order('name')
+
+    if (!assets || assets.length === 0) {
+      return { success: true, assets: [], totalTasks: 0 }
+    }
+
+    // Get job plan IDs from the matched assets
+    const jpIds = [...new Set(assets.map((a) => a.job_plan_id).filter(Boolean))] as string[]
+
+    // Count how many tasks each job plan has for this frequency
+    const col = freqColumn(frequency)
+    let taskCountMap: Record<string, number> = {}
+    if (jpIds.length > 0) {
+      const { data: items } = await supabase
+        .from('job_plan_items')
+        .select('job_plan_id')
+        .in('job_plan_id', jpIds)
+        .eq(col, true)
+
+      taskCountMap = (items ?? []).reduce((acc, item) => {
+        acc[item.job_plan_id] = (acc[item.job_plan_id] || 0) + 1
+        return acc
+      }, {} as Record<string, number>)
+    }
+
+    // Filter to only assets whose job plan has tasks for this frequency
+    const matchedAssets = assets.filter((a) => {
+      if (!a.job_plan_id) return false
+      return (taskCountMap[a.job_plan_id] ?? 0) > 0
+    })
+
+    const totalTasks = matchedAssets.reduce((sum, a) => {
+      return sum + (taskCountMap[a.job_plan_id!] ?? 0)
+    }, 0)
+
+    return {
+      success: true,
+      assets: matchedAssets.map((a) => ({
+        id: a.id,
+        name: a.name,
+        maximo_id: a.maximo_id,
+        location: a.location,
+        job_plan_name: (a.job_plans as unknown as { name: string; code: string | null } | null)?.name ?? null,
+        task_count: taskCountMap[a.job_plan_id!] ?? 0,
+      })),
+      totalTasks,
+    }
+  } catch (e: unknown) {
+    return { success: false, assets: [], totalTasks: 0, error: (e as Error).message }
+  }
+}
+
+/**
+ * Create a maintenance check with assets and per-asset tasks.
+ *
+ * Path A (by frequency): system finds all assets at site matching frequency
+ * Path B (manual): user provides specific asset IDs
  */
 export async function createCheckAction(formData: FormData) {
   try {
     const { supabase, tenantId, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
+    // Parse manual_asset_ids from JSON if present
+    const manualIdsRaw = formData.get('manual_asset_ids') as string | null
+    const manualAssetIds = manualIdsRaw ? JSON.parse(manualIdsRaw) as string[] : undefined
+
     const raw = {
-      job_plan_id: formData.get('job_plan_id'),
       site_id: formData.get('site_id'),
-      assigned_to: formData.get('assigned_to') || null,
+      frequency: formData.get('frequency'),
+      is_dark_site: formData.get('is_dark_site') === 'true',
+      job_plan_id: formData.get('job_plan_id') || null,
+      custom_name: formData.get('custom_name') || null,
+      start_date: formData.get('start_date'),
       due_date: formData.get('due_date'),
+      assigned_to: formData.get('assigned_to') || null,
+      maximo_wo_number: formData.get('maximo_wo_number') || null,
+      maximo_pm_number: formData.get('maximo_pm_number') || null,
       notes: formData.get('notes') || null,
+      manual_asset_ids: manualAssetIds,
     }
 
     const parsed = CreateMaintenanceCheckSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
-    // Insert the check
+    const { manual_asset_ids: parsedManualIds, ...checkData } = parsed.data
+    const freq = parsed.data.frequency
+
+    // 1. Insert the maintenance check
     const { data: check, error: checkError } = await supabase
       .from('maintenance_checks')
-      .insert({ ...parsed.data, tenant_id: tenantId })
+      .insert({ ...checkData, tenant_id: tenantId })
       .select('id')
       .single()
 
     if (checkError || !check) return { success: false, error: checkError?.message ?? 'Failed to create check.' }
 
-    // Copy job plan items into check items
-    const { data: planItems } = await supabase
-      .from('job_plan_items')
-      .select('id, asset_id, description, sort_order, is_required')
-      .eq('job_plan_id', parsed.data.job_plan_id)
-      .order('sort_order')
+    // 2. Find assets to include
+    let assetQuery = supabase
+      .from('assets')
+      .select('id, job_plan_id')
+      .eq('is_active', true)
 
-    if (planItems && planItems.length > 0) {
-      const checkItems = planItems.map((item) => ({
-        tenant_id: tenantId,
-        check_id: check.id,
-        job_plan_item_id: item.id,
-        asset_id: item.asset_id,
-        description: item.description,
-        sort_order: item.sort_order,
-        is_required: item.is_required,
-      }))
+    if (parsedManualIds && parsedManualIds.length > 0) {
+      // Path B: specific assets
+      assetQuery = assetQuery.in('id', parsedManualIds)
+    } else {
+      // Path A: all assets at site matching criteria
+      assetQuery = assetQuery.eq('site_id', parsed.data.site_id)
+      if (parsed.data.is_dark_site) {
+        assetQuery = assetQuery.eq('dark_site_test', true)
+      }
+      if (parsed.data.job_plan_id) {
+        assetQuery = assetQuery.eq('job_plan_id', parsed.data.job_plan_id)
+      }
+    }
 
+    const { data: assets } = await assetQuery
+
+    if (!assets || assets.length === 0) {
+      return { success: true, checkId: check.id, assetCount: 0, taskCount: 0 }
+    }
+
+    // 3. Get job plan items matching the selected frequency
+    const col = freqColumn(freq)
+    const jpIds = [...new Set(assets.map((a) => a.job_plan_id).filter(Boolean))] as string[]
+    let allItems: { id: string; job_plan_id: string; description: string; sort_order: number; is_required: boolean }[] = []
+
+    if (jpIds.length > 0) {
+      const { data: items } = await supabase
+        .from('job_plan_items')
+        .select('id, job_plan_id, description, sort_order, is_required')
+        .in('job_plan_id', jpIds)
+        .eq(col, true)
+        .order('sort_order')
+
+      allItems = items ?? []
+    }
+
+    // Build lookup: job_plan_id → items
+    const itemsByJP: Record<string, typeof allItems> = {}
+    for (const item of allItems) {
+      if (!itemsByJP[item.job_plan_id]) itemsByJP[item.job_plan_id] = []
+      itemsByJP[item.job_plan_id].push(item)
+    }
+
+    // 4. Filter to assets whose job plan has matching tasks
+    const assetsWithTasks = assets.filter((a) => a.job_plan_id && (itemsByJP[a.job_plan_id]?.length ?? 0) > 0)
+
+    if (assetsWithTasks.length === 0) {
+      return { success: true, checkId: check.id, assetCount: 0, taskCount: 0 }
+    }
+
+    // 5. Create check_assets rows
+    const checkAssetRows = assetsWithTasks.map((a) => ({
+      tenant_id: tenantId,
+      check_id: check.id,
+      asset_id: a.id,
+      status: 'pending',
+    }))
+
+    const { data: insertedCA, error: caError } = await supabase
+      .from('check_assets')
+      .insert(checkAssetRows)
+      .select('id, asset_id')
+
+    if (caError || !insertedCA) return { success: false, error: caError?.message ?? 'Failed to create check assets.' }
+
+    // 6. Create check_items for each asset (from its job plan items)
+    const caLookup: Record<string, string> = {}
+    for (const ca of insertedCA) {
+      caLookup[ca.asset_id] = ca.id
+    }
+
+    const checkItems: {
+      tenant_id: string
+      check_id: string
+      check_asset_id: string
+      job_plan_item_id: string
+      asset_id: string
+      description: string
+      sort_order: number
+      is_required: boolean
+    }[] = []
+
+    for (const asset of assetsWithTasks) {
+      const caId = caLookup[asset.id]
+      const jpItems = itemsByJP[asset.job_plan_id!] ?? []
+      for (const item of jpItems) {
+        checkItems.push({
+          tenant_id: tenantId,
+          check_id: check.id,
+          check_asset_id: caId,
+          job_plan_item_id: item.id,
+          asset_id: asset.id,
+          description: item.description,
+          sort_order: item.sort_order,
+          is_required: item.is_required,
+        })
+      }
+    }
+
+    // Insert in batches of 500
+    for (let i = 0; i < checkItems.length; i += 500) {
+      const batch = checkItems.slice(i, i + 500)
       const { error: itemsError } = await supabase
         .from('maintenance_check_items')
-        .insert(checkItems)
-
+        .insert(batch)
       if (itemsError) return { success: false, error: itemsError.message }
     }
 
-    // Create notification if assigned
+    // 7. Notification if assigned
     if (parsed.data.assigned_to) {
-      const { data: jobPlan } = await supabase
-        .from('job_plans')
-        .select('name')
-        .eq('id', parsed.data.job_plan_id)
-        .single()
-
-      const jobPlanName = jobPlan?.name ?? 'Maintenance Check'
+      const siteName = parsed.data.custom_name ?? 'Maintenance Check'
       await createNotification({
         tenantId,
         userId: parsed.data.assigned_to as string,
         type: 'check_assigned',
-        title: `You've been assigned a maintenance check: ${jobPlanName}`,
-        body: `Due date: ${parsed.data.due_date}`,
+        title: `You've been assigned: ${siteName}`,
+        body: `Due date: ${parsed.data.due_date} · ${assetsWithTasks.length} assets · ${checkItems.length} tasks`,
         entityType: 'maintenance_check',
         entityId: check.id,
       })
     }
 
-    await logAuditEvent({ action: 'create', entityType: 'maintenance_check', summary: 'Created maintenance check' })
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'maintenance_check',
+      summary: `Created check: ${assetsWithTasks.length} assets, ${checkItems.length} tasks (${freq})`,
+    })
 
     revalidatePath('/maintenance')
-    return { success: true, checkId: check.id }
+    return { success: true, checkId: check.id, assetCount: assetsWithTasks.length, taskCount: checkItems.length }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }

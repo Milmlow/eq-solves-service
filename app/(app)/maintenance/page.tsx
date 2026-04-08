@@ -43,7 +43,7 @@ export default async function MaintenancePage({
   // Fetch active job plans for create form
   const { data: jobPlans } = await supabase
     .from('job_plans')
-    .select('id, name, site_id, frequency, sites(name)')
+    .select('id, name, code')
     .eq('is_active', true)
     .order('name')
 
