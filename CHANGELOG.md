@@ -4,6 +4,49 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 23] 2026-04-08 — PM Asset Report, Report Designer & UX Improvements
+
+### Added
+- **PM Asset Report DOCX generator** (`lib/reports/pm-asset-report.ts`) — professional per-asset report with cover page, site overview, contents page with internal links, executive summary with KPI grid (pass rates, task breakdown), per-asset sections with colour-coded task checklists, defect/action callouts, confirmation statements, and sign-off page
+- **API route** `/api/pm-asset-report?check_id=xxx` — serves the asset report DOCX, fetches check_assets, items, tenant settings, and logo
+- **Report Settings page** (`/admin/reports`) — full template editor for report customisation:
+  - Section toggles: cover page, site overview, contents, executive summary, sign-off
+  - Company details: name, address, ABN, phone (shown on cover page)
+  - Custom header/footer text overrides
+  - Configurable sign-off fields (add/remove signature lines, e.g. Client Representative)
+- **Logo on reports** — tenant logo automatically embedded on report cover page
+- **Migration `0015_report_settings.sql`** — adds report config columns to `tenant_settings` (section toggles, company details, header/footer text, sign-off fields JSONB)
+- **Complete All Assets button** — on in-progress checks, marks every incomplete task as pass and every check_asset as completed in one action (with confirmation dialog)
+- **`completeAllCheckAssetsAction()`** server action — bulk completes all assets in a check
+- **AI Strategy document** (`AI_STRATEGY.md`) — phased AI feature roadmap from MVP to advanced
+- **Sidebar** — "Report Settings" link under admin section
+
+### Changed
+- **Download Report button** — single "Download Report" button on completed checks (removed old Summary Report, now uses asset report only)
+- **Report generator** — respects all tenant report settings (conditional sections, dynamic sign-off fields, custom header/footer, logo, company details)
+- **`TenantSettings` type** — extended with 12 report config fields
+
+### Fixed
+- **Report download not working** — `maximo_asset_id` → `maximo_id` column name fix in API route (Supabase query was silently failing)
+
+### Files Created
+- `lib/reports/pm-asset-report.ts`
+- `app/api/pm-asset-report/route.ts`
+- `app/(app)/admin/reports/page.tsx`
+- `app/(app)/admin/reports/ReportSettingsForm.tsx`
+- `app/(app)/admin/reports/actions.ts`
+- `supabase/migrations/0015_report_settings.sql`
+- `AI_STRATEGY.md`
+
+### Files Modified
+- `app/(app)/maintenance/[id]/CheckDetailPage.tsx` — download button, complete all assets button
+- `app/(app)/maintenance/actions.ts` — new completeAllCheckAssetsAction
+- `components/ui/Sidebar.tsx` — report settings link
+- `lib/types/index.ts` — TenantSettings report fields
+- `lib/tenant/getTenantSettings.ts` — report field defaults
+
+---
+
 ## [Sprint 22] 2026-04-08 — Maximo Alignment & Maintenance Check Rebuild (Phase 8)
 
 ### Added
