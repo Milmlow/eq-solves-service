@@ -1,19 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
-import { TestRecordList } from './TestRecordList'
+import { AcbTestList } from '@/app/(app)/acb-testing/AcbTestList'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
-import type { Role, TestRecordReading, Attachment } from '@/lib/types'
+import type { Role, AcbTestReading, Attachment } from '@/lib/types'
 
 const PER_PAGE = 25
 
-export default async function TestingPage({
+export default async function AcbTestingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; result?: string; page?: string; show_archived?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; overall_result?: string; page?: string; show_archived?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
-  const result = params.result ?? ''
+  const resultFilter = params.overall_result ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const showArchived = params.show_archived === '1'
 
@@ -65,33 +65,26 @@ export default async function TestingPage({
     technicians = (profiles ?? []) as typeof technicians
   }
 
-  // Build test records query
+  // Build ACB tests query
   let query = supabase
-    .from('test_records')
+    .from('acb_tests')
     .select('*, assets(name, asset_type), sites(name)', { count: 'exact' })
     .order('test_date', { ascending: false })
 
-  if (!showArchived) {
-    query = query.eq('is_active', true)
-  }
-
-  if (siteId) {
-    query = query.eq('site_id', siteId)
-  }
-  if (result) {
-    query = query.eq('result', result)
-  }
+  if (!showArchived) query = query.eq('is_active', true)
+  if (siteId) query = query.eq('site_id', siteId)
+  if (resultFilter) query = query.eq('overall_result', resultFilter)
 
   const from = (page - 1) * PER_PAGE
   const to = from + PER_PAGE - 1
   query = query.range(from, to)
 
-  const { data: recordsRaw, count } = await query
+  const { data: testsRaw, count } = await query
   const total = count ?? 0
   const totalPages = Math.ceil(total / PER_PAGE)
 
   // Resolve tested_by names
-  const testerIds = [...new Set((recordsRaw ?? []).map((r) => r.tested_by).filter(Boolean))]
+  const testerIds = [...new Set((testsRaw ?? []).map((t) => t.tested_by).filter(Boolean))]
   let testerMap: Record<string, string> = {}
   if (testerIds.length > 0) {
     const { data: testerProfiles } = await supabase
@@ -103,36 +96,52 @@ export default async function TestingPage({
     }
   }
 
-  const records = (recordsRaw ?? []).map((r) => ({
-    ...r,
-    tester_name: r.tested_by ? (testerMap[r.tested_by] ?? null) : null,
+  const tests = (testsRaw ?? []).map((t) => ({
+    ...t,
+    tester_name: t.tested_by ? (testerMap[t.tested_by] ?? null) : null,
   }))
 
-  // Filter by search (asset name, test type)
-  const filteredRecords = search
-    ? records.filter((r) => {
-        const assetName = (r.assets as { name: string; asset_type: string } | null)?.name ?? ''
-        const siteName = (r.sites as { name: string } | null)?.name ?? ''
+  // Search filter
+  const filteredTests = search
+    ? tests.filter((t) => {
+        const assetName = (t.assets as { name: string; asset_type: string } | null)?.name ?? ''
+        const siteName = (t.sites as { name: string } | null)?.name ?? ''
         const q = search.toLowerCase()
         return (
           assetName.toLowerCase().includes(q) ||
           siteName.toLowerCase().includes(q) ||
-          (r.test_type as string).toLowerCase().includes(q)
+          (t.cb_make as string || '').toLowerCase().includes(q) ||
+          (t.cb_model as string || '').toLowerCase().includes(q) ||
+          (t.test_type as string).toLowerCase().includes(q)
         )
       })
-    : records
+    : tests
 
-  // Fetch attachments + readings for visible records
-  const recordIds = filteredRecords.map((r) => r.id)
-
+  // Fetch readings + attachments
+  const testIds = filteredTests.map((t) => t.id)
+  let readingsMap: Record<string, AcbTestReading[]> = {}
   let attachmentsMap: Record<string, Attachment[]> = {}
-  if (recordIds.length > 0) {
+  if (testIds.length > 0) {
+    const { data: allReadings } = await supabase
+      .from('acb_test_readings')
+      .select('*')
+      .in('acb_test_id', testIds)
+      .order('sort_order')
+
+    readingsMap = (allReadings ?? []).reduce((acc, rdg) => {
+      const key = rdg.acb_test_id as string
+      if (!acc[key]) acc[key] = []
+      acc[key].push(rdg as AcbTestReading)
+      return acc
+    }, {} as Record<string, AcbTestReading[]>)
+
     const { data: allAttachments } = await supabase
       .from('attachments')
       .select('*')
-      .eq('entity_type', 'test_record')
-      .in('entity_id', recordIds)
+      .eq('entity_type', 'acb_test')
+      .in('entity_id', testIds)
       .order('created_at')
+
     attachmentsMap = (allAttachments ?? []).reduce((acc, att) => {
       const key = att.entity_id as string
       if (!acc[key]) acc[key] = []
@@ -141,26 +150,10 @@ export default async function TestingPage({
     }, {} as Record<string, Attachment[]>)
   }
 
-  let readingsMap: Record<string, TestRecordReading[]> = {}
-  if (recordIds.length > 0) {
-    const { data: allReadings } = await supabase
-      .from('test_record_readings')
-      .select('*')
-      .in('test_record_id', recordIds)
-      .order('sort_order')
-
-    readingsMap = (allReadings ?? []).reduce((acc, rdg) => {
-      const key = rdg.test_record_id as string
-      if (!acc[key]) acc[key] = []
-      acc[key].push(rdg as TestRecordReading)
-      return acc
-    }, {} as Record<string, TestRecordReading[]>)
-  }
-
   return (
     <div className="space-y-4">
-      <TestRecordList
-        records={filteredRecords as never}
+      <AcbTestList
+        tests={filteredTests as never}
         readingsMap={readingsMap}
         attachmentsMap={attachmentsMap}
         assets={(assets ?? []) as never}
