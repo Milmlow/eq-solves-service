@@ -14,7 +14,7 @@ import { importSitesAction } from './actions'
 import type { Site, Customer } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Pencil, Upload } from 'lucide-react'
+import { Upload } from 'lucide-react'
 import Link from 'next/link'
 
 interface SiteWithCustomer extends Site {
@@ -119,19 +119,6 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
       header: 'Status',
       render: (row) => <StatusBadge status={(row as SiteWithCustomer).is_active ? 'active' : 'inactive'} />,
     },
-    {
-      key: 'actions',
-      header: '',
-      className: 'w-12',
-      render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); openEdit(row as SiteWithCustomer) }}
-          className="p-1 rounded hover:bg-gray-100 transition-colors"
-        >
-          <Pencil className="w-4 h-4 text-eq-grey" />
-        </button>
-      ),
-    },
   ]
 
   const customerFilterOptions = customers.map((c) => ({ value: c.id, label: c.name }))
@@ -166,11 +153,12 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
         <>
           <DataTable
             columns={columns}
-            rows={sites.map((s) => ({ ...s, customer_name: '', actions: '' } as SiteRow))}
+            rows={sites.map((s) => ({ ...s, customer_name: '' } as SiteRow))}
             emptyMessage="No sites match your filters."
             selectable={isAdmin}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            onRowClick={(row) => openEdit(row as SiteWithCustomer)}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>

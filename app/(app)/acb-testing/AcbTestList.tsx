@@ -11,7 +11,7 @@ import { AcbTestForm } from './AcbTestForm'
 import { AcbTestDetail } from './AcbTestDetail'
 import { formatDate, formatAcbTestResult } from '@/lib/utils/format'
 import type { AcbTest, AcbTestReading, AcbTestResult, Asset, Site, Profile, Attachment } from '@/lib/types'
-import { Eye, FileText } from 'lucide-react'
+import { FileText } from 'lucide-react'
 
 type TestRow = AcbTest & {
   assets?: { name: string; asset_type: string } | null
@@ -124,19 +124,6 @@ export function AcbTestList({
       header: 'Result',
       render: (row) => <StatusBadge status={resultToBadge(row.overall_result)} label={formatAcbTestResult(row.overall_result)} />,
     },
-    {
-      key: 'actions',
-      header: '',
-      className: 'w-12',
-      render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); setDetailTest(row as TestRow) }}
-          className="p-1 rounded hover:bg-gray-100 transition-colors"
-        >
-          <Eye className="w-4 h-4 text-eq-grey" />
-        </button>
-      ),
-    },
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: s.name }))
@@ -198,8 +185,9 @@ export function AcbTestList({
         <>
           <DataTable
             columns={columns}
-            rows={tests.map((t) => ({ ...t, actions: '' }))}
+            rows={tests}
             emptyMessage="No tests match your filters."
+            onRowClick={(row) => setDetailTest(row as TestRow)}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>

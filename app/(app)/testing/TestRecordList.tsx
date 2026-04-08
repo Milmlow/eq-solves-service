@@ -11,7 +11,7 @@ import { TestRecordForm } from './TestRecordForm'
 import { TestRecordDetail } from './TestRecordDetail'
 import { formatDate, formatTestResult } from '@/lib/utils/format'
 import type { TestRecord, TestRecordReading, Asset, Site, Profile, TestResult, Attachment } from '@/lib/types'
-import { Eye } from 'lucide-react'
+// icons removed — rows are clickable
 
 type RecordRow = TestRecord & {
   assets?: { name: string; asset_type: string } | null
@@ -88,19 +88,6 @@ export function TestRecordList({
       header: 'Result',
       render: (row) => <StatusBadge status={resultToBadge(row.result)} label={formatTestResult(row.result)} />,
     },
-    {
-      key: 'actions',
-      header: '',
-      className: 'w-12',
-      render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); setDetailRecord(row as RecordRow) }}
-          className="p-1 rounded hover:bg-gray-100 transition-colors"
-        >
-          <Eye className="w-4 h-4 text-eq-grey" />
-        </button>
-      ),
-    },
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: s.name }))
@@ -137,8 +124,9 @@ export function TestRecordList({
         <>
           <DataTable
             columns={columns}
-            rows={records.map((r) => ({ ...r, actions: '' }))}
+            rows={records}
             emptyMessage="No records match your filters."
+            onRowClick={(row) => setDetailRecord(row as RecordRow)}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>

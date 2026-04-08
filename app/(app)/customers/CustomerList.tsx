@@ -15,7 +15,7 @@ import type { Customer } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { cn } from '@/lib/utils/cn'
-import { Pencil, Upload } from 'lucide-react'
+import { Upload } from 'lucide-react'
 
 interface CustomerListProps {
   customers: Customer[]
@@ -74,19 +74,6 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
       header: 'Status',
       render: (row) => <StatusBadge status={row.is_active ? 'active' : 'inactive'} />,
     },
-    {
-      key: 'actions',
-      header: '',
-      className: 'w-12',
-      render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); openEdit(row as unknown as Customer) }}
-          className="p-1 rounded hover:bg-gray-100 transition-colors"
-        >
-          <Pencil className="w-4 h-4 text-eq-grey" />
-        </button>
-      ),
-    },
   ]
 
   return (
@@ -118,13 +105,13 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
             columns={columns}
             rows={customers.map((c) => ({
               ...c,
-              actions: '',
               className: cn(!c.is_active && 'opacity-50'),
             } as Customer & Record<string, unknown>))}
             emptyMessage="No customers match your search."
             selectable={isAdmin}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            onRowClick={(row) => openEdit(row as unknown as Customer)}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>

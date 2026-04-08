@@ -14,7 +14,7 @@ import { formatDate } from '@/lib/utils/format'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Eye, Calendar, LayoutGrid, List } from 'lucide-react'
+import { Calendar, LayoutGrid, List } from 'lucide-react'
 import { KanbanBoard } from './KanbanBoard'
 
 type CheckRow = MaintenanceCheck & {
@@ -96,19 +96,6 @@ export function MaintenanceList({
       header: 'Status',
       render: (row) => <StatusBadge status={statusToBadge(row.status as CheckStatus)} />,
     },
-    {
-      key: 'actions',
-      header: '',
-      className: 'w-12',
-      render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); router.push(`/maintenance/${row.id}`) }}
-          className="p-1 rounded hover:bg-gray-100 transition-colors"
-        >
-          <Eye className="w-4 h-4 text-eq-grey" />
-        </button>
-      ),
-    },
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: s.name }))
@@ -182,7 +169,7 @@ export function MaintenanceList({
             <>
               <DataTable
                 columns={columns}
-                rows={checks.map((c) => ({ ...c, actions: '' }))}
+                rows={checks}
                 emptyMessage="No checks match your filters."
                 selectable={canWriteRole}
                 selectedIds={selectedIds}

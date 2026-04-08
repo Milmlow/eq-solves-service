@@ -16,7 +16,7 @@ import { formatDate } from '@/lib/utils/format'
 import type { Instrument, InstrumentStatus, Profile } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Eye, Upload } from 'lucide-react'
+import { Upload } from 'lucide-react'
 
 type InstrumentRow = Instrument & { assignee_name?: string | null } & Record<string, unknown>
 
@@ -129,19 +129,6 @@ export function InstrumentList({
       header: 'Status',
       render: (row) => <StatusBadge status={statusToBadge(row.status)} label={row.status} />,
     },
-    {
-      key: 'actions',
-      header: '',
-      className: 'w-12',
-      render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); setDetailInst(row) }}
-          className="p-1 rounded hover:bg-gray-100 transition-colors"
-        >
-          <Eye className="w-4 h-4 text-eq-grey" />
-        </button>
-      ),
-    },
   ]
 
   const statusOptions = [
@@ -183,7 +170,7 @@ export function InstrumentList({
         </div>
       ) : (
         <>
-          <DataTable columns={columns} rows={instruments.map((i) => ({ ...i, actions: '', make_model: '' }))} emptyMessage="No instruments match your filters." selectable={canWriteRole} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
+          <DataTable columns={columns} rows={instruments.map((i) => ({ ...i, make_model: '' }))} emptyMessage="No instruments match your filters." selectable={canWriteRole} selectedIds={selectedIds} onSelectionChange={setSelectedIds} onRowClick={(row) => setDetailInst(row)} />
           <Pagination page={page} totalPages={totalPages} />
         </>
       )}

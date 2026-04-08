@@ -14,7 +14,7 @@ import { importJobPlansAction } from './actions'
 import type { JobPlan, JobPlanItem, Site } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Pencil, Upload } from 'lucide-react'
+import { Upload } from 'lucide-react'
 
 interface JobPlanWithSite extends JobPlan {
   sites: { name: string } | null
@@ -100,19 +100,6 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
       header: 'Status',
       render: (row) => <StatusBadge status={(row as JobPlanWithSite).is_active ? 'active' : 'inactive'} />,
     },
-    {
-      key: 'actions',
-      header: '',
-      className: 'w-12',
-      render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); openEdit(row as JobPlanWithSite) }}
-          className="p-1 rounded hover:bg-gray-100 transition-colors"
-        >
-          <Pencil className="w-4 h-4 text-eq-grey" />
-        </button>
-      ),
-    },
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: s.name }))
@@ -149,11 +136,12 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
         <>
           <DataTable
             columns={columns}
-            rows={jobPlans.map((jp) => ({ ...jp, site_name: '', actions: '' } as JPRow))}
+            rows={jobPlans.map((jp) => ({ ...jp, site_name: '' } as JPRow))}
             emptyMessage="No job plans match your filters."
             selectable={canWriteRole}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            onRowClick={(row) => openEdit(row as JobPlanWithSite)}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>

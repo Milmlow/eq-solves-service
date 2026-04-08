@@ -12,7 +12,7 @@ import { ImportAssetsModal } from './ImportAssetsModal'
 import type { Asset, Site, JobPlan } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Pencil, Upload } from 'lucide-react'
+import { Upload } from 'lucide-react'
 
 interface AssetWithSite extends Asset {
   sites: { name: string } | null
@@ -71,19 +71,6 @@ export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalP
       header: 'Status',
       render: (row) => <StatusBadge status={(row as AssetWithSite).is_active ? 'active' : 'inactive'} />,
     },
-    {
-      key: 'actions',
-      header: '',
-      className: 'w-12',
-      render: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); openDetail(row as AssetWithSite) }}
-          className="p-1 rounded hover:bg-gray-100 transition-colors"
-        >
-          <Pencil className="w-4 h-4 text-eq-grey" />
-        </button>
-      ),
-    },
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: s.name }))
@@ -122,11 +109,12 @@ export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalP
         <>
           <DataTable
             columns={columns}
-            rows={assets.map((a) => ({ ...a, site_name: '', actions: '' } as AssetRow))}
+            rows={assets.map((a) => ({ ...a, site_name: '' } as AssetRow))}
             emptyMessage="No assets match your filters."
             selectable={canWriteRole}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
+            onRowClick={(row) => openDetail(row as AssetWithSite)}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>
