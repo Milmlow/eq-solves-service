@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -9,9 +10,8 @@ import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { CreateCheckForm } from './CreateCheckForm'
 import { BatchCreateForm } from './BatchCreateForm'
-import { CheckDetail } from './CheckDetail'
 import { formatDate } from '@/lib/utils/format'
-import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, JobPlan, Site, Profile, Attachment } from '@/lib/types'
+import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Eye, Calendar, LayoutGrid, List } from 'lucide-react'
@@ -25,15 +25,9 @@ type CheckRow = MaintenanceCheck & {
   completed_count?: number
 } & Record<string, unknown>
 
-type CheckAssetWithDetails = CheckAsset & {
-  assets?: { name: string; maximo_id: string | null; location: string | null; job_plans?: { name: string } | null } | null
-}
-
 interface MaintenanceListProps {
   checks: CheckRow[]
   itemsMap: Record<string, MaintenanceCheckItem[]>
-  checkAssetsMap: Record<string, CheckAssetWithDetails[]>
-  attachmentsMap: Record<string, Attachment[]>
   jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
   sites: Pick<Site, 'id' | 'name'>[]
   technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
@@ -41,7 +35,6 @@ interface MaintenanceListProps {
   totalPages: number
   isAdmin: boolean
   canWrite: boolean
-  currentUserId: string
 }
 
 function statusToBadge(status: CheckStatus) {
@@ -56,12 +49,12 @@ function statusToBadge(status: CheckStatus) {
 }
 
 export function MaintenanceList({
-  checks, itemsMap, checkAssetsMap, attachmentsMap, jobPlans, sites, technicians,
-  page, totalPages, isAdmin, canWrite: canWriteRole, currentUserId,
+  checks, itemsMap, jobPlans, sites, technicians,
+  page, totalPages, isAdmin, canWrite: canWriteRole,
 }: MaintenanceListProps) {
+  const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
-  const [detailCheck, setDetailCheck] = useState<CheckRow | null>(null)
   const [view, setView] = useState<'table' | 'kanban'>('table')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -109,7 +102,7 @@ export function MaintenanceList({
       className: 'w-12',
       render: (row) => (
         <button
-          onClick={(e) => { e.stopPropagation(); setDetailCheck(row as CheckRow) }}
+          onClick={(e) => { e.stopPropagation(); router.push(`/maintenance/${row.id}`) }}
           className="p-1 rounded hover:bg-gray-100 transition-colors"
         >
           <Eye className="w-4 h-4 text-eq-grey" />
@@ -194,6 +187,7 @@ export function MaintenanceList({
                 selectable={canWriteRole}
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
+                onRowClick={(row) => router.push(`/maintenance/${row.id}`)}
               />
               <Pagination page={page} totalPages={totalPages} />
             </>
@@ -201,7 +195,7 @@ export function MaintenanceList({
             <KanbanBoard
               checks={checks}
               itemsMap={itemsMap}
-              onCheckClick={setDetailCheck}
+              onCheckClick={(c) => router.push(`/maintenance/${c.id}`)}
             />
           )}
         </>
@@ -222,20 +216,6 @@ export function MaintenanceList({
         sites={sites}
         technicians={technicians}
       />
-
-      {detailCheck && (
-        <CheckDetail
-          open={!!detailCheck}
-          onClose={() => setDetailCheck(null)}
-          check={detailCheck}
-          items={itemsMap[detailCheck.id] ?? []}
-          checkAssets={checkAssetsMap[detailCheck.id] ?? []}
-          attachments={attachmentsMap[detailCheck.id] ?? []}
-          isAdmin={isAdmin}
-          canWrite={canWriteRole}
-          isAssigned={detailCheck.assigned_to === currentUserId}
-        />
-      )}
 
       {canWriteRole && (
         <BulkActionBar

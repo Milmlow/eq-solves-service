@@ -9,9 +9,10 @@ interface SlidePanelProps {
   title?: string
   children: React.ReactNode
   className?: string
+  wide?: boolean
 }
 
-export function SlidePanel({ open, onClose, title, children, className }: SlidePanelProps) {
+export function SlidePanel({ open, onClose, title, children, className, wide }: SlidePanelProps) {
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
@@ -34,7 +35,8 @@ export function SlidePanel({ open, onClose, title, children, className }: SlideP
       />
       <aside
         className={cn(
-          'absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl transition-transform duration-200 flex flex-col',
+          'absolute right-0 top-0 h-full w-full bg-white shadow-xl transition-transform duration-200 flex flex-col',
+          wide ? 'max-w-4xl' : 'max-w-md',
           open ? 'translate-x-0' : 'translate-x-full',
           className
         )}

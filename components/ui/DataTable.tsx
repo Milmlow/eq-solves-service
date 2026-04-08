@@ -21,6 +21,8 @@ interface DataTableProps<T> {
   onSelectionChange?: (ids: Set<string>) => void
   /** Function to extract a unique ID from each row. Defaults to row.id */
   getRowId?: (row: T) => string
+  /** Callback when a row is clicked */
+  onRowClick?: (row: T) => void
 }
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -32,6 +34,7 @@ export function DataTable<T extends Record<string, unknown>>({
   selectedIds,
   onSelectionChange,
   getRowId = (row) => row.id as string,
+  onRowClick,
 }: DataTableProps<T>) {
   const allIds = rows.map(getRowId)
   const allSelected = rows.length > 0 && selectedIds ? allIds.every((id) => selectedIds.has(id)) : false
@@ -102,8 +105,10 @@ export function DataTable<T extends Record<string, unknown>>({
                   key={rowId || i}
                   className={cn(
                     'border-t border-gray-100 hover:bg-gray-50',
-                    isSelected && 'bg-eq-ice/40'
+                    isSelected && 'bg-eq-ice/40',
+                    onRowClick && 'cursor-pointer'
                   )}
+                  onClick={() => onRowClick?.(row)}
                 >
                   {selectable && (
                     <td className="w-10 px-3 py-3">

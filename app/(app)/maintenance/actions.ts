@@ -664,3 +664,121 @@ export async function batchCreateChecksAction(formData: FormData) {
     return { success: false, error: (e as Error).message }
   }
 }
+
+/**
+ * Force-complete a check asset — marks the asset as completed and all its check items as 'pass'.
+ */
+export async function forceCompleteCheckAssetAction(checkId: string, checkAssetId: string) {
+  try {
+    const { supabase, role, user } = await requireUser()
+
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('assigned_to')
+      .eq('id', checkId)
+      .single()
+
+    if (!check) return { success: false, error: 'Check not found.' }
+    const isAssigned = check.assigned_to === user.id
+    if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
+
+    const now = new Date().toISOString()
+
+    // Mark all check items for this asset as pass
+    const { error: itemsErr } = await supabase
+      .from('maintenance_check_items')
+      .update({ result: 'pass', completed_at: now, completed_by: user.id })
+      .eq('check_asset_id', checkAssetId)
+      .is('result', null)
+
+    if (itemsErr) return { success: false, error: itemsErr.message }
+
+    // Mark the check_asset as completed
+    const { error: caErr } = await supabase
+      .from('check_assets')
+      .update({ status: 'completed', completed_at: now })
+      .eq('id', checkAssetId)
+
+    if (caErr) return { success: false, error: caErr.message }
+
+    revalidatePath('/maintenance')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Bulk update work order numbers on check_assets.
+ * Accepts an array of { checkAssetId, workOrderNumber } pairs.
+ */
+export async function bulkUpdateWorkOrdersAction(
+  checkId: string,
+  updates: { checkAssetId: string; workOrderNumber: string }[]
+) {
+  try {
+    const { supabase, role, user } = await requireUser()
+
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('assigned_to')
+      .eq('id', checkId)
+      .single()
+
+    if (!check) return { success: false, error: 'Check not found.' }
+    const isAssigned = check.assigned_to === user.id
+    if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
+
+    let updated = 0
+    for (const { checkAssetId, workOrderNumber } of updates) {
+      const { error } = await supabase
+        .from('check_assets')
+        .update({ work_order_number: workOrderNumber || null })
+        .eq('id', checkAssetId)
+        .eq('check_id', checkId)
+
+      if (!error) updated++
+    }
+
+    revalidatePath('/maintenance')
+    return { success: true, updated }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Update a check asset's notes or work order number.
+ */
+export async function updateCheckAssetAction(
+  checkId: string,
+  checkAssetId: string,
+  data: { notes?: string; work_order_number?: string }
+) {
+  try {
+    const { supabase, role, user } = await requireUser()
+
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('assigned_to')
+      .eq('id', checkId)
+      .single()
+
+    if (!check) return { success: false, error: 'Check not found.' }
+    const isAssigned = check.assigned_to === user.id
+    if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
+
+    const { error } = await supabase
+      .from('check_assets')
+      .update(data)
+      .eq('id', checkAssetId)
+      .eq('check_id', checkId)
+
+    if (error) return { success: false, error: error.message }
+
+    revalidatePath('/maintenance')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}

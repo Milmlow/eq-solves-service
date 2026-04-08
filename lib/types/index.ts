@@ -168,6 +168,7 @@ export interface CheckAsset {
   check_id: string
   asset_id: string
   status: CheckAssetStatus
+  work_order_number: string | null
   notes: string | null
   completed_at: string | null
   created_at: string
