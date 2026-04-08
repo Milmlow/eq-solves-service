@@ -89,7 +89,6 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
         </Link>
       ),
     },
-    { key: 'code', header: 'Code' },
     {
       key: 'customer_name',
       header: 'Customer',

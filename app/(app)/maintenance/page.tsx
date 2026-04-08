@@ -134,6 +134,23 @@ export default async function MaintenancePage({
     }, {} as Record<string, Attachment[]>)
   }
 
+  // Fetch check_assets for visible checks (with asset details)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let checkAssetsMap: Record<string, any[]> = {}
+  if (checkIds.length > 0) {
+    const { data: allCheckAssets } = await supabase
+      .from('check_assets')
+      .select('*, assets(name, maximo_id, location, job_plans(name))')
+      .in('check_id', checkIds)
+      .order('created_at')
+
+    for (const ca of allCheckAssets ?? []) {
+      const key = ca.check_id as string
+      if (!checkAssetsMap[key]) checkAssetsMap[key] = []
+      checkAssetsMap[key].push(ca)
+    }
+  }
+
   // Fetch all check items for visible checks (for detail panel + completed counts)
   let itemsMap: Record<string, MaintenanceCheckItem[]> = {}
   if (checkIds.length > 0) {
@@ -176,6 +193,7 @@ export default async function MaintenancePage({
       <MaintenanceList
         checks={filteredChecks as never}
         itemsMap={itemsMap}
+        checkAssetsMap={checkAssetsMap as never}
         attachmentsMap={attachmentsMap}
         jobPlans={(jobPlans ?? []) as never}
         sites={sites ?? []}

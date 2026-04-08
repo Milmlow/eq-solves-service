@@ -144,6 +144,20 @@ export async function createCheckAction(formData: FormData) {
     const { manual_asset_ids: parsedManualIds, ...checkData } = parsed.data
     const freq = parsed.data.frequency
 
+    // Auto-generate name as "Site - Month - Year" if not provided
+    if (!checkData.custom_name) {
+      const { data: site } = await supabase
+        .from('sites')
+        .select('name')
+        .eq('id', checkData.site_id)
+        .single()
+
+      const dateObj = new Date(checkData.start_date)
+      const monthName = dateObj.toLocaleString('en-AU', { month: 'long' })
+      const year = dateObj.getFullYear()
+      checkData.custom_name = `${site?.name ?? 'Unknown'} - ${monthName} - ${year}`
+    }
+
     // 1. Insert the maintenance check
     const { data: check, error: checkError } = await supabase
       .from('maintenance_checks')

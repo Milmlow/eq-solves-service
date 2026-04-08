@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Bell } from 'lucide-react'
 import { formatDate } from '@/lib/utils/format'
 
@@ -20,7 +21,9 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 })
   const panelRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   // Fetch notifications
   const fetchNotifications = async () => {
@@ -41,19 +44,30 @@ export function NotificationBell() {
     fetchNotifications()
   }, [])
 
-  // Close panel when clicking outside
+  // Position panel and close on outside click
+  const updatePosition = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setPanelPos({ top: rect.bottom + 8, left: rect.left })
+    }
+  }, [])
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false)
       }
     }
 
     if (isOpen) {
+      updatePosition()
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [isOpen])
+  }, [isOpen, updatePosition])
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
@@ -100,7 +114,8 @@ export function NotificationBell() {
     <div className="relative">
       {/* Bell Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        ref={buttonRef}
+        onClick={() => { setIsOpen(!isOpen); updatePosition() }}
         className="relative p-2 rounded-lg hover:bg-white/10 transition-colors text-white"
         title="Notifications"
       >
@@ -112,11 +127,12 @@ export function NotificationBell() {
         )}
       </button>
 
-      {/* Dropdown Panel */}
-      {isOpen && (
+      {/* Dropdown Panel — rendered via portal to escape sidebar overflow */}
+      {isOpen && createPortal(
         <div
           ref={panelRef}
-          className="absolute top-full right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50"
+          style={{ top: panelPos.top, left: panelPos.left }}
+          className="fixed w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-[100]"
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
@@ -173,7 +189,8 @@ export function NotificationBell() {
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

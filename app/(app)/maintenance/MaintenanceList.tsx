@@ -11,7 +11,7 @@ import { CreateCheckForm } from './CreateCheckForm'
 import { BatchCreateForm } from './BatchCreateForm'
 import { CheckDetail } from './CheckDetail'
 import { formatDate } from '@/lib/utils/format'
-import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile, Attachment } from '@/lib/types'
+import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, JobPlan, Site, Profile, Attachment } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Eye, Calendar, LayoutGrid, List } from 'lucide-react'
@@ -25,9 +25,14 @@ type CheckRow = MaintenanceCheck & {
   completed_count?: number
 } & Record<string, unknown>
 
+type CheckAssetWithDetails = CheckAsset & {
+  assets?: { name: string; maximo_id: string | null; location: string | null; job_plans?: { name: string } | null } | null
+}
+
 interface MaintenanceListProps {
   checks: CheckRow[]
   itemsMap: Record<string, MaintenanceCheckItem[]>
+  checkAssetsMap: Record<string, CheckAssetWithDetails[]>
   attachmentsMap: Record<string, Attachment[]>
   jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
   sites: Pick<Site, 'id' | 'name'>[]
@@ -51,7 +56,7 @@ function statusToBadge(status: CheckStatus) {
 }
 
 export function MaintenanceList({
-  checks, itemsMap, attachmentsMap, jobPlans, sites, technicians,
+  checks, itemsMap, checkAssetsMap, attachmentsMap, jobPlans, sites, technicians,
   page, totalPages, isAdmin, canWrite: canWriteRole, currentUserId,
 }: MaintenanceListProps) {
   const [createOpen, setCreateOpen] = useState(false)
@@ -62,14 +67,18 @@ export function MaintenanceList({
 
   const columns: DataTableColumn<CheckRow>[] = [
     {
-      key: 'job_plan_name',
-      header: 'Job Plan',
-      render: (row) => row.job_plans?.name ?? '—',
+      key: 'check_name',
+      header: 'ID',
+      render: (row) => (row as CheckRow).custom_name ?? row.job_plans?.name ?? '—',
     },
     {
-      key: 'site_name',
-      header: 'Site',
-      render: (row) => row.sites?.name ?? '—',
+      key: 'frequency',
+      header: 'Frequency',
+      render: (row) => {
+        const f = (row as CheckRow).frequency
+        if (!f) return '—'
+        return f.replace('_', '-').replace(/\b\w/g, (c: string) => c.toUpperCase())
+      },
     },
     {
       key: 'due_date',
@@ -220,6 +229,7 @@ export function MaintenanceList({
           onClose={() => setDetailCheck(null)}
           check={detailCheck}
           items={itemsMap[detailCheck.id] ?? []}
+          checkAssets={checkAssetsMap[detailCheck.id] ?? []}
           attachments={attachmentsMap[detailCheck.id] ?? []}
           isAdmin={isAdmin}
           canWrite={canWriteRole}

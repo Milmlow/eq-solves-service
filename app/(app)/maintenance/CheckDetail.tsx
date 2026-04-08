@@ -12,8 +12,12 @@ import {
 } from './actions'
 import { formatDate, formatCheckStatus } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
-import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
+import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
 import { CheckCircle, XCircle, MinusCircle, Download } from 'lucide-react'
+
+interface CheckAssetWithDetails extends CheckAsset {
+  assets?: { name: string; maximo_id: string | null; location: string | null; job_plans?: { name: string } | null } | null
+}
 
 interface CheckDetailProps {
   open: boolean
@@ -24,6 +28,7 @@ interface CheckDetailProps {
     assignee_name?: string | null
   }
   items: MaintenanceCheckItem[]
+  checkAssets: CheckAssetWithDetails[]
   attachments: Attachment[]
   isAdmin: boolean
   canWrite: boolean
@@ -41,7 +46,7 @@ function statusToBadge(status: CheckStatus) {
   return map[status]
 }
 
-export function CheckDetail({ open, onClose, check, items, attachments, isAdmin, canWrite: canWriteRole, isAssigned }: CheckDetailProps) {
+export function CheckDetail({ open, onClose, check, items, checkAssets, attachments, isAdmin, canWrite: canWriteRole, isAssigned }: CheckDetailProps) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -92,7 +97,7 @@ export function CheckDetail({ open, onClose, check, items, attachments, isAdmin,
   const requiredIncomplete = items.filter((i) => i.is_required && i.result === null).length
 
   return (
-    <SlidePanel open={open} onClose={onClose} title={check.job_plans?.name ?? 'Maintenance Check'}>
+    <SlidePanel open={open} onClose={onClose} title={check.custom_name ?? check.job_plans?.name ?? 'Maintenance Check'}>
       <div className="space-y-4">
         {/* Header info */}
         <div className="flex items-center justify-between">
@@ -114,9 +119,23 @@ export function CheckDetail({ open, onClose, check, items, attachments, isAdmin,
             <dd className="text-eq-ink mt-1">{check.assignee_name ?? 'Unassigned'}</dd>
           </div>
           <div>
-            <dt className="text-xs font-bold text-eq-grey uppercase">Status</dt>
-            <dd className="text-eq-ink mt-1">{formatCheckStatus(check.status)}</dd>
+            <dt className="text-xs font-bold text-eq-grey uppercase">Frequency</dt>
+            <dd className="text-eq-ink mt-1">
+              {check.frequency ? check.frequency.replace('_', '-').replace(/\b\w/g, (c) => c.toUpperCase()) : '—'}
+            </dd>
           </div>
+          {check.maximo_wo_number && (
+            <div>
+              <dt className="text-xs font-bold text-eq-grey uppercase">Maximo WO #</dt>
+              <dd className="text-eq-ink mt-1">{check.maximo_wo_number}</dd>
+            </div>
+          )}
+          {check.maximo_pm_number && (
+            <div>
+              <dt className="text-xs font-bold text-eq-grey uppercase">Maximo PM #</dt>
+              <dd className="text-eq-ink mt-1">{check.maximo_pm_number}</dd>
+            </div>
+          )}
         </div>
 
         {check.notes && (
@@ -159,11 +178,57 @@ export function CheckDetail({ open, onClose, check, items, attachments, isAdmin,
           )}
         </div>
 
-        {/* Check items / tasks */}
+        {/* Maintenance Check Assets — matching Power Apps layout */}
+        {checkAssets.length > 0 && (
+          <div className="pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide">
+                Maintenance Check Assets ({checkAssets.length})
+              </h3>
+              <span className="text-xs text-eq-grey">
+                {checkAssets.filter((ca) => ca.status === 'completed').length}/{checkAssets.length} completed
+              </span>
+            </div>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              {/* Table header */}
+              <div className="grid grid-cols-[80px_1fr_1fr_100px_80px_60px] gap-2 px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs font-bold text-eq-grey uppercase">
+                <span>ID</span>
+                <span>Name</span>
+                <span>Location</span>
+                <span>Job Plan</span>
+                <span>Done</span>
+                <span>Notes</span>
+              </div>
+              {/* Asset rows */}
+              <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+                {checkAssets.map((ca) => {
+                  const asset = ca.assets
+                  const assetItems = items.filter((i) => i.check_asset_id === ca.id)
+                  const assetDone = assetItems.filter((i) => i.result !== null).length
+                  const assetTotal = assetItems.length
+                  return (
+                    <div key={ca.id} className="grid grid-cols-[80px_1fr_1fr_100px_80px_60px] gap-2 px-3 py-2 text-xs items-center hover:bg-gray-50">
+                      <span className="font-mono text-eq-ink">{asset?.maximo_id ?? '—'}</span>
+                      <span className="text-eq-ink truncate">{asset?.name ?? '—'}</span>
+                      <span className="text-eq-grey truncate">{asset?.location ?? '—'}</span>
+                      <span className="text-eq-grey">{(asset?.job_plans as { name: string } | null)?.name ?? '—'}</span>
+                      <span className={assetDone === assetTotal && assetTotal > 0 ? 'text-green-600 font-medium' : 'text-eq-grey'}>
+                        {assetDone}/{assetTotal}
+                      </span>
+                      <span className="text-eq-grey truncate">{ca.notes ?? '—'}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Check items / tasks (grouped by asset) */}
         <div className="pt-4 border-t border-gray-200">
-          <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-3">Tasks</h3>
+          <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-3">Outstanding Tasks</h3>
           <div className="space-y-2">
-            {items.map((item) => (
+            {items.filter((i) => i.result === null).map((item) => (
               <CheckItemRow
                 key={item.id}
                 item={item}
@@ -173,11 +238,32 @@ export function CheckDetail({ open, onClose, check, items, attachments, isAdmin,
                 onNotes={handleItemNotes}
               />
             ))}
-            {items.length === 0 && (
-              <p className="text-sm text-eq-grey">No tasks in this check.</p>
+            {items.filter((i) => i.result === null).length === 0 && (
+              <p className="text-sm text-eq-grey">All tasks complete.</p>
             )}
           </div>
         </div>
+
+        {/* Completed tasks (collapsed) */}
+        {items.filter((i) => i.result !== null).length > 0 && (
+          <details className="pt-2">
+            <summary className="text-xs font-bold text-eq-grey uppercase tracking-wide cursor-pointer hover:text-eq-ink">
+              Completed Tasks ({items.filter((i) => i.result !== null).length})
+            </summary>
+            <div className="space-y-2 mt-3">
+              {items.filter((i) => i.result !== null).map((item) => (
+                <CheckItemRow
+                  key={item.id}
+                  item={item}
+                  checkStatus={check.status}
+                  canAct={canAct}
+                  onResult={handleItemResult}
+                  onNotes={handleItemNotes}
+                />
+              ))}
+            </div>
+          </details>
+        )}
 
         {/* Attachments */}
         <AttachmentList

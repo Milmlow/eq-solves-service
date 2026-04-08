@@ -79,17 +79,12 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
   type JPRow = JobPlanWithSite & Record<string, unknown>
 
   const columns: DataTableColumn<JPRow>[] = [
-    { key: 'name', header: 'Name' },
-    {
-      key: 'site_name',
-      header: 'Site',
-      render: (row) => (row as JobPlanWithSite).sites?.name ?? '—',
-    },
     {
       key: 'code',
       header: 'Job Code',
       render: (row) => (row as JobPlanWithSite).code ?? '—',
     },
+    { key: 'name', header: 'Name' },
     {
       key: 'type',
       header: 'Type',
