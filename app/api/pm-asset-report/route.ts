@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
   // Fetch check_assets with related asset info
   const { data: checkAssets } = await supabase
     .from('check_assets')
-    .select('*, assets(name, maximo_asset_id, location, job_plans(name, code))')
+    .select('*, assets(name, maximo_id, location, job_plans(name, code))')
     .eq('check_id', checkId)
     .order('created_at')
 
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
 
   // Build per-asset sections
   const assetSections: PmAssetSection[] = checkAssets.map(ca => {
-    const asset = ca.assets as { name: string; maximo_asset_id: string | null; location: string | null; job_plans: { name: string; code: string | null } | null } | null
+    const asset = ca.assets as { name: string; maximo_id: string | null; location: string | null; job_plans: { name: string; code: string | null } | null } | null
     const items = itemsByCheckAsset[ca.id] ?? []
 
     // Detect defects: items with result = 'fail'
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
 
     return {
       assetName: asset?.name ?? 'Unknown Asset',
-      assetId: asset?.maximo_asset_id ?? ca.asset_id,
+      assetId: asset?.maximo_id ?? ca.asset_id,
       site: site?.name ?? (check.sites as { name: string } | null)?.name ?? 'Unknown',
       location: asset?.location ?? '—',
       jobPlanName: asset?.job_plans?.name ?? (check.job_plans as { name: string } | null)?.name ?? '—',
