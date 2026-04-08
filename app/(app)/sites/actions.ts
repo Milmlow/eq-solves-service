@@ -77,7 +77,7 @@ export async function importSitesAction(
   sites: {
     name: string
     code: string | null
-    customer_id: string | null
+    customer_name: string | null
     address: string | null
     city: string | null
     state: string | null
@@ -105,10 +105,64 @@ export async function importSitesAction(
       return { success: false, error: 'No valid rows after validation.', imported: 0, rowErrors }
     }
 
+    // --- Auto-create missing customers ---
+    // Collect unique customer names from import data
+    const uniqueCustomerNames = [...new Set(
+      validRows
+        .map((r) => r.customer_name?.trim())
+        .filter((n): n is string => !!n)
+    )]
+
+    // Build customer name → id map from existing records
+    const customerMap: Record<string, string> = {}
+    if (uniqueCustomerNames.length > 0) {
+      const { data: existingCustomers } = await supabase
+        .from('customers')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+
+      for (const c of existingCustomers ?? []) {
+        customerMap[c.name.toLowerCase()] = c.id
+      }
+
+      // Find names that don't exist yet
+      const missingNames = uniqueCustomerNames.filter(
+        (n) => !customerMap[n.toLowerCase()]
+      )
+
+      // Auto-create missing customers
+      if (missingNames.length > 0) {
+        const newCustomers = missingNames.map((name) => ({
+          name,
+          tenant_id: tenantId,
+        }))
+        const { data: created, error: createErr } = await supabase
+          .from('customers')
+          .insert(newCustomers)
+          .select('id, name')
+
+        if (createErr) {
+          rowErrors.push(`Failed to create customers: ${createErr.message}`)
+        } else {
+          for (const c of created ?? []) {
+            customerMap[c.name.toLowerCase()] = c.id
+          }
+          rowErrors.push(`Auto-created ${created?.length ?? 0} new customers: ${missingNames.join(', ')}`)
+        }
+      }
+    }
+
     const insertRows = validRows.map((r) => ({
-      ...r,
-      tenant_id: tenantId,
+      name: r.name,
+      code: r.code,
+      customer_id: r.customer_name ? (customerMap[r.customer_name.trim().toLowerCase()] ?? null) : null,
+      address: r.address,
+      city: r.city,
+      state: r.state,
+      postcode: r.postcode,
       country: r.country || 'Australia',
+      tenant_id: tenantId,
     }))
     const { error } = await supabase.from('sites').insert(insertRows)
 
@@ -116,6 +170,7 @@ export async function importSitesAction(
 
     await logAuditEvent({ action: 'create', entityType: 'site', summary: `Imported ${validRows.length} sites from CSV` })
     revalidatePath('/sites')
+    revalidatePath('/customers')
     return { success: true, imported: validRows.length, rowErrors }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message, imported: 0, rowErrors: [] as string[] }

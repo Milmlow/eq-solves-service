@@ -33,14 +33,10 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
   const [selected, setSelected] = useState<SiteWithCustomer | null>(null)
   const [importOpen, setImportOpen] = useState(false)
 
-  // Build customer name→id lookup for CSV import
-  const customerLookup: Record<string, string> = {}
-  for (const c of customers) customerLookup[c.name.toLowerCase()] = c.id
-
   const siteImportConfig: ImportCSVConfig<{
     name: string
     code: string | null
-    customer_id: string | null
+    customer_name: string | null
     address: string | null
     city: string | null
     state: string | null
@@ -50,28 +46,14 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
     entityName: 'Sites',
     requiredColumns: ['name'],
     optionalColumns: ['code', 'customer', 'address', 'city', 'state', 'postcode', 'country'],
-    validate: (rows, columnMap) => {
-      const errs: string[] = []
-      if (columnMap['customer']) {
-        const customerNames = new Set(customers.map((c) => c.name.toLowerCase()))
-        const unmapped = new Set<string>()
-        for (const row of rows) {
-          const cName = row[columnMap['customer']]?.toLowerCase()
-          if (cName && !customerNames.has(cName)) unmapped.add(row[columnMap['customer']])
-        }
-        if (unmapped.size > 0) {
-          errs.push(`Unknown customer names: ${[...unmapped].slice(0, 5).join(', ')}${unmapped.size > 5 ? ` (+${unmapped.size - 5} more)` : ''}`)
-        }
-      }
-      return errs
-    },
+    // No blocking validation — server action auto-creates missing customers
     mapRow: (row, columnMap) => {
       const name = row[columnMap['name']]?.trim()
       if (!name) return null
       return {
         name,
         code: row[columnMap['code']]?.trim() || null,
-        customer_id: customerLookup[row[columnMap['customer']]?.toLowerCase()] ?? null,
+        customer_name: row[columnMap['customer']]?.trim() || null,
         address: row[columnMap['address']]?.trim() || null,
         city: row[columnMap['city']]?.trim() || null,
         state: row[columnMap['state']]?.trim() || null,
