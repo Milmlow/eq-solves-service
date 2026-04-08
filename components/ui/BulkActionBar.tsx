@@ -36,6 +36,7 @@ export function BulkActionBar({
   }
 
   function executeAction() {
+    setError(null)
     const ids = [...selectedIds]
     startTransition(async () => {
       try {

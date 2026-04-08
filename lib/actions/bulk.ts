@@ -61,6 +61,43 @@ export async function bulkDeleteAction(table: EntityTable, ids: string[]) {
     const config = TABLE_CONFIG[table]
     if (!config) return { success: false, error: 'Invalid entity type.' }
 
+    // Cascade delete child records for entities with dependencies
+    if (table === 'job_plans') {
+      // Delete maintenance_check_items for checks linked to these job plans
+      const { data: checks } = await supabase
+        .from('maintenance_checks')
+        .select('id')
+        .in('job_plan_id', ids)
+      const checkIds = (checks ?? []).map((c) => c.id)
+      if (checkIds.length > 0) {
+        await supabase.from('maintenance_check_items').delete().in('check_id', checkIds)
+        await supabase.from('maintenance_checks').delete().in('id', checkIds)
+      }
+      // Delete job plan items
+      await supabase.from('job_plan_items').delete().in('job_plan_id', ids)
+    } else if (table === 'sites') {
+      // Assets, job plans and their children depend on sites
+      const { data: siteJPs } = await supabase.from('job_plans').select('id').in('site_id', ids)
+      const jpIds = (siteJPs ?? []).map((j) => j.id)
+      if (jpIds.length > 0) {
+        const { data: checks } = await supabase.from('maintenance_checks').select('id').in('job_plan_id', jpIds)
+        const checkIds = (checks ?? []).map((c) => c.id)
+        if (checkIds.length > 0) {
+          await supabase.from('maintenance_check_items').delete().in('check_id', checkIds)
+          await supabase.from('maintenance_checks').delete().in('id', checkIds)
+        }
+        await supabase.from('job_plan_items').delete().in('job_plan_id', jpIds)
+        await supabase.from('job_plans').delete().in('id', jpIds)
+      }
+      await supabase.from('assets').delete().in('site_id', ids)
+    } else if (table === 'customers') {
+      // Unlink sites from these customers (don't delete sites)
+      await supabase.from('sites').update({ customer_id: null }).in('customer_id', ids)
+    } else if (table === 'maintenance_checks') {
+      // Delete check items first
+      await supabase.from('maintenance_check_items').delete().in('check_id', ids)
+    }
+
     const { error } = await supabase.from(table).delete().in('id', ids)
 
     if (error) return { success: false, error: error.message }
