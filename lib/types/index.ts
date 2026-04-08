@@ -25,6 +25,19 @@ export interface TenantSettings {
   logo_url: string | null
   product_name: string
   support_email: string | null
+  // Report template settings
+  report_show_cover_page: boolean
+  report_show_site_overview: boolean
+  report_show_contents: boolean
+  report_show_executive_summary: boolean
+  report_show_sign_off: boolean
+  report_header_text: string | null
+  report_footer_text: string | null
+  report_company_name: string | null
+  report_company_address: string | null
+  report_company_abn: string | null
+  report_company_phone: string | null
+  report_sign_off_fields: string[]
   updated_at: string
 }
 

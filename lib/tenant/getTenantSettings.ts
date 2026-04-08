@@ -11,6 +11,19 @@ const DEFAULTS: TenantSettings = {
   logo_url: null,
   product_name: 'EQ Solves',
   support_email: null,
+  // Report template defaults
+  report_show_cover_page: true,
+  report_show_site_overview: true,
+  report_show_contents: true,
+  report_show_executive_summary: true,
+  report_show_sign_off: true,
+  report_header_text: null,
+  report_footer_text: null,
+  report_company_name: null,
+  report_company_address: null,
+  report_company_abn: null,
+  report_company_phone: null,
+  report_sign_off_fields: ['Technician Signature', 'Supervisor Signature'],
   updated_at: '',
 }
 

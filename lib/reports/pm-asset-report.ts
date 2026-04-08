@@ -74,11 +74,30 @@ export interface PmAssetReportInput {
   // Site photo (optional)
   sitePhoto?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
 
+  // Logo (optional)
+  logoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+
+  // Company details (from report settings)
+  companyName?: string
+  companyAddress?: string
+  companyAbn?: string
+  companyPhone?: string
+
   // Assets
   assets: PmAssetSection[]
 
   // Overall notes
   overallNotes?: string
+
+  // Report template config
+  showCoverPage?: boolean        // default true
+  showSiteOverview?: boolean     // default true
+  showContents?: boolean         // default true
+  showExecutiveSummary?: boolean // default true
+  showSignOff?: boolean          // default true
+  customHeaderText?: string      // overrides default header
+  customFooterText?: string      // overrides default footer
+  signOffFields?: string[]       // default ['Technician Signature', 'Supervisor Signature']
 }
 
 export interface PmAssetSection {
@@ -214,6 +233,19 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   const brand = getBrand(input)
   const children: (Paragraph | Table)[] = []
 
+  // Logo
+  if (input.logoImage) {
+    children.push(new Paragraph({
+      spacing: { after: 200 },
+      children: [new ImageRun({
+        type: input.logoImage.type,
+        data: input.logoImage.data,
+        transformation: { width: input.logoImage.width, height: input.logoImage.height },
+        altText: { title: 'Company Logo', description: 'Company logo', name: 'company-logo' },
+      })],
+    }))
+  }
+
   // Top accent bar
   children.push(new Paragraph({
     spacing: { after: 600 },
@@ -221,7 +253,7 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   }))
 
   // Spacer
-  children.push(spacer(1200))
+  children.push(spacer(input.logoImage ? 400 : 1200))
 
   // Report title
   children.push(new Paragraph({
@@ -269,13 +301,15 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   const c2 = 7238
   const tw = c1 + c2
 
-  const infoRows = [
+  const infoRows: [string, string][] = [
     ['Site', input.siteName],
     ['Customer', input.customerName],
     ['Reporting Period', input.reportingPeriod],
     ['Prepared By', input.technicianName],
     ['Supervisor', input.supervisorName],
   ]
+  if (input.companyName) infoRows.push(['Company', input.companyName])
+  if (input.companyAbn) infoRows.push(['ABN', input.companyAbn])
 
   children.push(new Table({
     width: { size: tw, type: WidthType.DXA },
@@ -803,56 +837,43 @@ function buildSignOff(input: PmAssetReportInput): (Paragraph | Table)[] {
     ),
   }))
 
-  // Signature lines
+  // Signature lines (dynamic from settings)
   children.push(spacer(600))
 
-  const sigC1 = 4819
-  const sigC2 = 4819
-  const sigTw = sigC1 + sigC2
+  const fields = input.signOffFields?.length ? input.signOffFields : ['Technician Signature', 'Supervisor Signature']
+  // Pair fields into rows of 2
+  for (let i = 0; i < fields.length; i += 2) {
+    const pair = fields.slice(i, i + 2)
+    const sigColW = Math.floor(CONTENT_WIDTH / 2)
 
-  children.push(new Table({
-    width: { size: sigTw, type: WidthType.DXA },
-    columnWidths: [sigC1, sigC2],
-    rows: [
-      new TableRow({
-        height: { value: 1200, rule: 'atLeast' as never },
-        children: [
-          new TableCell({
-            borders: BORDERS_NONE,
-            width: { size: sigC1, type: WidthType.DXA },
-            margins: CELL_PAD,
-            children: [
-              spacer(400),
-              new Paragraph({
-                border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: '2C3E50', space: 1 } },
-                children: [],
-              }),
-              new Paragraph({
-                spacing: { before: 40 },
-                children: [new TextRun({ text: 'Technician Signature', size: 16, font: FONT, color: '95A5A6' })],
-              }),
-            ],
-          }),
-          new TableCell({
-            borders: BORDERS_NONE,
-            width: { size: sigC2, type: WidthType.DXA },
-            margins: CELL_PAD,
-            children: [
-              spacer(400),
-              new Paragraph({
-                border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: '2C3E50', space: 1 } },
-                children: [],
-              }),
-              new Paragraph({
-                spacing: { before: 40 },
-                children: [new TextRun({ text: 'Supervisor Signature', size: 16, font: FONT, color: '95A5A6' })],
-              }),
-            ],
-          }),
-        ],
-      }),
-    ],
-  }))
+    children.push(new Table({
+      width: { size: CONTENT_WIDTH, type: WidthType.DXA },
+      columnWidths: pair.length === 2 ? [sigColW, CONTENT_WIDTH - sigColW] : [CONTENT_WIDTH],
+      rows: [
+        new TableRow({
+          height: { value: 1200, rule: 'atLeast' as never },
+          children: pair.map((label, idx) =>
+            new TableCell({
+              borders: BORDERS_NONE,
+              width: { size: pair.length === 2 ? (idx === 0 ? sigColW : CONTENT_WIDTH - sigColW) : CONTENT_WIDTH, type: WidthType.DXA },
+              margins: CELL_PAD,
+              children: [
+                spacer(400),
+                new Paragraph({
+                  border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: '2C3E50', space: 1 } },
+                  children: [],
+                }),
+                new Paragraph({
+                  spacing: { before: 40 },
+                  children: [new TextRun({ text: label, size: 16, font: FONT, color: '95A5A6' })],
+                }),
+              ],
+            })
+          ),
+        }),
+      ],
+    }))
+  }
 
   return children
 }
@@ -862,6 +883,17 @@ function buildSignOff(input: PmAssetReportInput): (Paragraph | Table)[] {
 export async function generatePMAssetReport(input: PmAssetReportInput): Promise<Buffer> {
   const brand = getBrand(input)
 
+  // Resolve section toggles (default all true)
+  const showCover = input.showCoverPage !== false
+  const showOverview = input.showSiteOverview !== false
+  const showContents = input.showContents !== false
+  const showSummary = input.showExecutiveSummary !== false
+  const showSignOff = input.showSignOff !== false
+
+  // Custom header / footer text
+  const headerText = input.customHeaderText || input.reportTitle
+  const footerText = input.customFooterText || input.tenantProductName
+
   // Build all per-asset sections with page breaks
   const assetSectionChildren: (Paragraph | Table)[] = []
   for (let i = 0; i < input.assets.length; i++) {
@@ -870,6 +902,76 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
     }
     assetSectionChildren.push(...buildAssetSection(input.assets[i], brand))
   }
+
+  // Build body content (conditionally include sections)
+  const bodyChildren: (Paragraph | Table)[] = []
+
+  if (showOverview) {
+    bodyChildren.push(...buildSiteOverview(input))
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+  }
+  if (showContents) {
+    bodyChildren.push(...buildContentsPage(input))
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+  }
+  if (showSummary) {
+    bodyChildren.push(...buildExecutiveSummary(input))
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+  }
+
+  bodyChildren.push(...assetSectionChildren)
+
+  if (showSignOff) {
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+    bodyChildren.push(...buildSignOff(input))
+  }
+
+  const sections = []
+
+  // Cover page section (separate — no header/footer)
+  if (showCover) {
+    sections.push({
+      properties: {
+        page: {
+          size: { width: PAGE_WIDTH, height: PAGE_HEIGHT },
+          margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
+        },
+      },
+      children: buildCoverPage(input),
+    })
+  }
+
+  // Body section with header/footer
+  sections.push({
+    properties: {
+      page: {
+        size: { width: PAGE_WIDTH, height: PAGE_HEIGHT },
+        margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
+      },
+    },
+    headers: {
+      default: new Header({
+        children: [new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [
+            new TextRun({ text: headerText, size: 16, font: FONT, color: '95A5A6' }),
+          ],
+        })],
+      }),
+    },
+    footers: {
+      default: new Footer({
+        children: [new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new TextRun({ text: `${footerText}  |  Page `, size: 14, font: FONT, color: '95A5A6' }),
+            new TextRun({ children: [PageNumber.CURRENT], size: 14, font: FONT, color: '95A5A6' }),
+          ],
+        })],
+      }),
+    },
+    children: bodyChildren,
+  })
 
   const doc = new Document({
     styles: {
@@ -889,59 +991,7 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
         },
       ],
     },
-    sections: [
-      // Cover page
-      {
-        properties: {
-          page: {
-            size: { width: PAGE_WIDTH, height: PAGE_HEIGHT },
-            margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
-          },
-        },
-        children: buildCoverPage(input),
-      },
-      // Site Overview
-      {
-        properties: {
-          page: {
-            size: { width: PAGE_WIDTH, height: PAGE_HEIGHT },
-            margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
-          },
-        },
-        headers: {
-          default: new Header({
-            children: [new Paragraph({
-              alignment: AlignmentType.RIGHT,
-              children: [
-                new TextRun({ text: input.reportTitle, size: 16, font: FONT, color: '95A5A6' }),
-              ],
-            })],
-          }),
-        },
-        footers: {
-          default: new Footer({
-            children: [new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [
-                new TextRun({ text: `${input.tenantProductName}  |  Page `, size: 14, font: FONT, color: '95A5A6' }),
-                new TextRun({ children: [PageNumber.CURRENT], size: 14, font: FONT, color: '95A5A6' }),
-              ],
-            })],
-          }),
-        },
-        children: [
-          ...buildSiteOverview(input),
-          new Paragraph({ children: [new PageBreak()] }),
-          ...buildContentsPage(input),
-          new Paragraph({ children: [new PageBreak()] }),
-          ...buildExecutiveSummary(input),
-          new Paragraph({ children: [new PageBreak()] }),
-          ...assetSectionChildren,
-          new Paragraph({ children: [new PageBreak()] }),
-          ...buildSignOff(input),
-        ],
-      },
-    ],
+    sections,
   })
 
   const buffer = await Packer.toBuffer(doc)

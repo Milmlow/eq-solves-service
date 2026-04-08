@@ -93,15 +93,30 @@ export async function GET(request: NextRequest) {
     itemsByCheckAsset[caId].push(item)
   }
 
-  // Fetch tenant settings for branding
+  // Fetch tenant settings for branding + report config
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour')
+    .select('product_name, primary_colour, logo_url, report_show_cover_page, report_show_site_overview, report_show_contents, report_show_executive_summary, report_show_sign_off, report_header_text, report_footer_text, report_company_name, report_company_address, report_company_abn, report_company_phone, report_sign_off_fields')
     .eq('tenant_id', tenantId)
     .single()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
+
+  // Fetch logo image if URL exists
+  let logoImage: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | undefined
+  if (tenantSettings?.logo_url) {
+    try {
+      const logoRes = await fetch(tenantSettings.logo_url)
+      if (logoRes.ok) {
+        const buf = Buffer.from(await logoRes.arrayBuffer())
+        const ct = logoRes.headers.get('content-type') ?? ''
+        const imgType = ct.includes('png') ? 'png' as const : 'jpg' as const
+        // Scale logo to max 180px wide, 60px tall for report header
+        logoImage = { data: buf, type: imgType, width: 180, height: 60 }
+      }
+    } catch { /* skip logo if fetch fails */ }
+  }
 
   // Resolve user names (assigned_to, completed_by, etc.)
   const userIds = new Set<string>()
@@ -191,8 +206,27 @@ export async function GET(request: NextRequest) {
     tenantProductName: productName,
     primaryColour,
 
+    // Logo
+    logoImage,
+
+    // Company details from report settings
+    companyName: tenantSettings?.report_company_name ?? undefined,
+    companyAddress: tenantSettings?.report_company_address ?? undefined,
+    companyAbn: tenantSettings?.report_company_abn ?? undefined,
+    companyPhone: tenantSettings?.report_company_phone ?? undefined,
+
     assets: assetSections,
     overallNotes: check.notes ?? undefined,
+
+    // Report template config
+    showCoverPage: tenantSettings?.report_show_cover_page ?? true,
+    showSiteOverview: tenantSettings?.report_show_site_overview ?? true,
+    showContents: tenantSettings?.report_show_contents ?? true,
+    showExecutiveSummary: tenantSettings?.report_show_executive_summary ?? true,
+    showSignOff: tenantSettings?.report_show_sign_off ?? true,
+    customHeaderText: tenantSettings?.report_header_text ?? undefined,
+    customFooterText: tenantSettings?.report_footer_text ?? undefined,
+    signOffFields: (tenantSettings?.report_sign_off_fields as string[] | null) ?? undefined,
   }
 
   try {

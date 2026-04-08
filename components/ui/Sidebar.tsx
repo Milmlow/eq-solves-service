@@ -115,13 +115,25 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
               href="/admin/settings"
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                pathname.startsWith('/admin/settings')
+                pathname === '/admin/settings'
                   ? 'bg-white/10 text-white'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
               <Settings className="w-4 h-4 flex-shrink-0" />
               {!collapsed && <span>Tenant Settings</span>}
+            </Link>
+            <Link
+              href="/admin/reports"
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                pathname.startsWith('/admin/reports')
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              )}
+            >
+              <FileText className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Report Settings</span>}
             </Link>
           </>
         )}
