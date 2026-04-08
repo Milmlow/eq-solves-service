@@ -65,8 +65,23 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
   }
 
   const columns: DataTableColumn<Customer & Record<string, unknown>>[] = [
-    { key: 'name', header: 'Name' },
-    { key: 'code', header: 'Code' },
+    {
+      key: 'name',
+      header: 'Customer',
+      render: (row) => (
+        <div className="flex items-center gap-3">
+          {row.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={row.logo_url as string} alt="" className="w-8 h-8 rounded object-contain bg-gray-50 border border-gray-100 shrink-0" />
+          ) : (
+            <div className="w-8 h-8 rounded bg-eq-ice flex items-center justify-center text-xs font-bold text-eq-deep shrink-0">
+              {(row.name as string)?.charAt(0)?.toUpperCase()}
+            </div>
+          )}
+          <span className="font-medium text-eq-ink">{row.name as string}</span>
+        </div>
+      ),
+    },
     { key: 'email', header: 'Email' },
     { key: 'phone', header: 'Phone' },
     {

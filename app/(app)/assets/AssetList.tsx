@@ -12,7 +12,9 @@ import { ImportAssetsModal } from './ImportAssetsModal'
 import type { Asset, Site, JobPlan } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Upload } from 'lucide-react'
+import { cn } from '@/lib/utils/cn'
+import { Upload, TableProperties, LayoutList } from 'lucide-react'
+import { AssetGroupedView } from './AssetGroupedView'
 
 interface AssetWithSite extends Asset {
   sites: { name: string } | null
@@ -35,6 +37,7 @@ export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalP
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [viewMode, setViewMode] = useState<'table' | 'grouped'>('table')
 
   function openCreate() {
     setSelected(null)
@@ -49,26 +52,28 @@ export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalP
   type AssetRow = AssetWithSite & Record<string, unknown>
 
   const columns: DataTableColumn<AssetRow>[] = [
-    { key: 'maximo_id', header: 'Maximo ID' },
-    { key: 'name', header: 'Name' },
+    { key: 'maximo_id', header: 'Maximo ID', filterable: 'text' },
+    { key: 'name', header: 'Name', filterable: 'text' },
     {
       key: 'site_name',
       header: 'Site',
-      render: (row) => (row as AssetWithSite).sites?.name ?? '—',
+      filterable: 'select',
     },
-    { key: 'location', header: 'Location' },
+    { key: 'location', header: 'Location', filterable: 'select' },
+    { key: 'asset_type', header: 'Type', filterable: 'select' },
     {
       key: 'job_plan_name',
       header: 'Job Plan',
-      render: (row) => {
-        const a = row as AssetWithSite
-        if (!a.job_plans) return '—'
-        return a.job_plans.name
-      },
+      filterable: 'select',
     },
     {
-      key: 'is_active',
+      key: 'status_label',
       header: 'Status',
+      filterable: 'select',
+      filterOptions: [
+        { value: 'Active', label: 'Active' },
+        { value: 'Inactive', label: 'Inactive' },
+      ],
       render: (row) => <StatusBadge status={(row as AssetWithSite).is_active ? 'active' : 'inactive'} />,
     },
   ]
@@ -87,6 +92,28 @@ export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalP
           ]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">
+          <div className="flex items-center border border-gray-200 rounded-md overflow-hidden mr-1">
+            <button
+              onClick={() => setViewMode('table')}
+              className={cn(
+                'p-1.5 transition-colors',
+                viewMode === 'table' ? 'bg-eq-sky text-white' : 'bg-white text-eq-grey hover:bg-gray-50'
+              )}
+              title="Table view"
+            >
+              <TableProperties className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('grouped')}
+              className={cn(
+                'p-1.5 transition-colors',
+                viewMode === 'grouped' ? 'bg-eq-sky text-white' : 'bg-white text-eq-grey hover:bg-gray-50'
+              )}
+              title="Grouped view"
+            >
+              <LayoutList className="w-4 h-4" />
+            </button>
+          </div>
           {canWriteRole && (
             <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-1" /> Import
@@ -107,16 +134,27 @@ export function AssetList({ assets, sites, assetTypes, allJobPlans, page, totalP
         </div>
       ) : (
         <>
-          <DataTable
-            columns={columns}
-            rows={assets.map((a) => ({ ...a, site_name: '' } as AssetRow))}
-            emptyMessage="No assets match your filters."
-            selectable={canWriteRole}
-            selectedIds={selectedIds}
-            onSelectionChange={setSelectedIds}
-            onRowClick={(row) => openDetail(row as AssetWithSite)}
-          />
-          <Pagination page={page} totalPages={totalPages} />
+          {viewMode === 'table' ? (
+            <>
+              <DataTable
+                columns={columns}
+                rows={assets.map((a) => ({
+                  ...a,
+                  site_name: a.sites?.name ?? '',
+                  job_plan_name: a.job_plans?.name ?? '',
+                  status_label: a.is_active ? 'Active' : 'Inactive',
+                } as AssetRow))}
+                emptyMessage="No assets match your filters."
+                selectable={canWriteRole}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
+                onRowClick={(row) => openDetail(row as AssetWithSite)}
+              />
+              <Pagination page={page} totalPages={totalPages} />
+            </>
+          ) : (
+            <AssetGroupedView assets={assets} onAssetClick={openDetail} />
+          )}
         </>
       )}
 

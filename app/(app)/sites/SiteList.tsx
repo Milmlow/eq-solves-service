@@ -18,7 +18,7 @@ import { Upload } from 'lucide-react'
 import Link from 'next/link'
 
 interface SiteWithCustomer extends Site {
-  customers: { name: string } | null
+  customers: { name: string; logo_url: string | null } | null
   asset_count?: number
 }
 
@@ -92,7 +92,23 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
     {
       key: 'customer_name',
       header: 'Customer',
-      render: (row) => (row as SiteWithCustomer).customers?.name ?? '—',
+      render: (row) => {
+        const site = row as SiteWithCustomer
+        if (!site.customers) return '—'
+        return (
+          <div className="flex items-center gap-2">
+            {site.customers.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={site.customers.logo_url} alt="" className="w-6 h-6 rounded object-contain bg-gray-50 border border-gray-100 shrink-0" />
+            ) : (
+              <div className="w-6 h-6 rounded bg-eq-ice flex items-center justify-center text-[10px] font-bold text-eq-deep shrink-0">
+                {site.customers.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <span>{site.customers.name}</span>
+          </div>
+        )
+      },
     },
     { key: 'city', header: 'City' },
     { key: 'state', header: 'State' },

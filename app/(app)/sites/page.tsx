@@ -43,7 +43,7 @@ export default async function SitesPage({
   // Build sites query with joined customer name + asset count
   let query = supabase
     .from('sites')
-    .select('*, customers(name), assets(count)', { count: 'exact' })
+    .select('*, customers(name, logo_url), assets(count)', { count: 'exact' })
     .order('name')
 
   if (!showArchived) {

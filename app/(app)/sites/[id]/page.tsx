@@ -4,7 +4,9 @@ import { Card } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { DataTable } from '@/components/ui/DataTable'
 import { formatDate, formatCheckStatus, formatTestResult } from '@/lib/utils/format'
-import type { Site, Asset, MaintenanceCheck, TestRecord } from '@/lib/types'
+import { isAdmin as checkIsAdmin } from '@/lib/utils/roles'
+import type { Site, Asset, MaintenanceCheck, TestRecord, SiteContact, Role } from '@/lib/types'
+import { SiteContacts } from './SiteContacts'
 
 export default async function SiteDetailPage({
   params,
@@ -13,6 +15,20 @@ export default async function SiteDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
+
+  // Get current user role
+  const { data: { user } } = await supabase.auth.getUser()
+  let userIsAdmin = false
+  if (user) {
+    const { data: membership } = await supabase
+      .from('tenant_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .limit(1)
+      .single()
+    userIsAdmin = checkIsAdmin((membership?.role as Role) ?? null)
+  }
 
   // Fetch site with customer info
   const { data: siteRaw } = await supabase
@@ -43,6 +59,7 @@ export default async function SiteDetailPage({
     recentAssetsRes,
     recentChecksRes,
     recentTestsRes,
+    contactsRes,
   ] = await Promise.all([
     // Asset count
     supabase
@@ -91,6 +108,13 @@ export default async function SiteDetailPage({
       .eq('is_active', true)
       .order('test_date', { ascending: false })
       .limit(5),
+    // Site contacts
+    supabase
+      .from('site_contacts')
+      .select('*')
+      .eq('site_id', id)
+      .order('is_primary', { ascending: false })
+      .order('name'),
   ])
 
   const assetCount = assetsRes.count ?? 0
@@ -101,6 +125,7 @@ export default async function SiteDetailPage({
   const recentAssets = (recentAssetsRes.data ?? []) as Asset[]
   const recentChecks = (recentChecksRes.data ?? []) as (MaintenanceCheck & { job_plans: { name: string } | null })[]
   const recentTests = (recentTestsRes.data ?? []) as TestRecord[]
+  const contacts = (contactsRes.data ?? []) as SiteContact[]
 
   return (
     <div className="space-y-6">
@@ -148,6 +173,9 @@ export default async function SiteDetailPage({
           </div>
         )}
       </Card>
+
+      {/* Site Contacts */}
+      <SiteContacts siteId={id} contacts={contacts} isAdmin={userIsAdmin} />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

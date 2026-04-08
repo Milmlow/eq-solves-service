@@ -1,4 +1,5 @@
 import { Sidebar } from '@/components/ui/Sidebar'
+import { HelpWidget } from '@/components/ui/HelpWidget'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
 
@@ -34,6 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="flex-1 min-w-0 p-8">
         {children}
       </main>
+      <HelpWidget />
     </div>
   )
 }

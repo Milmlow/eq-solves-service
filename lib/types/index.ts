@@ -70,7 +70,34 @@ export interface Customer {
   email: string | null
   phone: string | null
   address: string | null
+  logo_url: string | null
   is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ContractScope {
+  id: string
+  tenant_id: string
+  customer_id: string
+  site_id: string | null
+  financial_year: string
+  scope_item: string
+  is_included: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SiteContact {
+  id: string
+  tenant_id: string
+  site_id: string
+  name: string
+  role: string | null
+  email: string | null
+  phone: string | null
+  is_primary: boolean
   created_at: string
   updated_at: string
 }

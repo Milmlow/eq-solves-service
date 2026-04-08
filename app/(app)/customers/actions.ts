@@ -22,9 +22,11 @@ export async function createCustomerAction(formData: FormData) {
     const parsed = CreateCustomerSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    const logoUrl = (formData.get('logo_url') as string)?.trim() || null
+
     const { error } = await supabase
       .from('customers')
-      .insert({ ...parsed.data, tenant_id: tenantId })
+      .insert({ ...parsed.data, logo_url: logoUrl, tenant_id: tenantId })
 
     if (error) return { success: false, error: error.message }
 
@@ -52,9 +54,11 @@ export async function updateCustomerAction(id: string, formData: FormData) {
     const parsed = UpdateCustomerSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    const logoUrl = (formData.get('logo_url') as string)?.trim() || null
+
     const { error } = await supabase
       .from('customers')
-      .update(parsed.data)
+      .update({ ...parsed.data, logo_url: logoUrl })
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }

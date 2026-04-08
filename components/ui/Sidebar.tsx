@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  Zap, Shield, CircuitBoard, Wrench, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut
+  Zap, Shield, CircuitBoard, Wrench, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -21,6 +21,7 @@ const navItems = [
   { label: 'ACB Testing', href: '/acb-testing',  icon: Shield },
   { label: 'NSX Testing', href: '/nsx-testing',  icon: CircuitBoard },
   { label: 'Instruments', href: '/instruments',  icon: Wrench },
+  { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
   { label: 'Reports',     href: '/reports',      icon: FileText },
   { label: 'Analytics',   href: '/analytics',    icon: BarChart3 },
   { label: 'Search',      href: '/search',       icon: Search },

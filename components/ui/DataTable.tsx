@@ -1,11 +1,17 @@
+'use client'
+
 import { cn } from '@/lib/utils/cn'
-import { ReactNode } from 'react'
+import { ReactNode, useState, useMemo } from 'react'
 
 export interface DataTableColumn<T> {
   key: string
   header: string
   render?: (row: T) => ReactNode
   className?: string
+  /** Enable a filter input under this column header. 'text' shows a text input, 'select' shows a dropdown of unique values. */
+  filterable?: 'text' | 'select'
+  /** For select filters: provide explicit options instead of auto-detecting from row data */
+  filterOptions?: { value: string; label: string }[]
 }
 
 interface DataTableProps<T> {
@@ -36,8 +42,57 @@ export function DataTable<T extends Record<string, unknown>>({
   getRowId = (row) => row.id as string,
   onRowClick,
 }: DataTableProps<T>) {
-  const allIds = rows.map(getRowId)
-  const allSelected = rows.length > 0 && selectedIds ? allIds.every((id) => selectedIds.has(id)) : false
+  const hasFilters = columns.some(col => col.filterable)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+
+  function setFilter(key: string, value: string) {
+    setFilters(prev => {
+      const next = { ...prev }
+      if (value === '') {
+        delete next[key]
+      } else {
+        next[key] = value
+      }
+      return next
+    })
+  }
+
+  // Auto-detect select options from row data
+  const selectOptions = useMemo(() => {
+    const opts: Record<string, { value: string; label: string }[]> = {}
+    for (const col of columns) {
+      if (col.filterable === 'select' && !col.filterOptions) {
+        const uniqueVals = new Set<string>()
+        for (const row of rows) {
+          const val = String(row[col.key] ?? '').trim()
+          if (val) uniqueVals.add(val)
+        }
+        opts[col.key] = Array.from(uniqueVals).sort().map(v => ({ value: v, label: v }))
+      }
+    }
+    return opts
+  }, [columns, rows])
+
+  // Apply filters
+  const filteredRows = useMemo(() => {
+    if (Object.keys(filters).length === 0) return rows
+    return rows.filter(row => {
+      for (const [key, filterVal] of Object.entries(filters)) {
+        const col = columns.find(c => c.key === key)
+        if (!col) continue
+        const cellVal = String(row[key] ?? '').toLowerCase()
+        if (col.filterable === 'select') {
+          if (cellVal !== filterVal.toLowerCase()) return false
+        } else {
+          if (!cellVal.includes(filterVal.toLowerCase())) return false
+        }
+      }
+      return true
+    })
+  }, [rows, filters, columns])
+
+  const allIds = filteredRows.map(getRowId)
+  const allSelected = filteredRows.length > 0 && selectedIds ? allIds.every((id) => selectedIds.has(id)) : false
   const someSelected = selectedIds ? allIds.some((id) => selectedIds.has(id)) : false
 
   function toggleAll() {
@@ -56,6 +111,8 @@ export function DataTable<T extends Record<string, unknown>>({
     else next.add(id)
     onSelectionChange(next)
   }
+
+  const activeFilterCount = Object.keys(filters).length
 
   return (
     <div className={cn('w-full overflow-x-auto border border-gray-200 rounded-lg', className)}>
@@ -85,19 +142,50 @@ export function DataTable<T extends Record<string, unknown>>({
               </th>
             ))}
           </tr>
+          {/* Filter row */}
+          {hasFilters && (
+            <tr className="bg-white border-t border-gray-100">
+              {selectable && <th className="w-10 px-3 py-1" />}
+              {columns.map((col) => (
+                <th key={`filter-${col.key}`} className="px-4 py-1.5">
+                  {col.filterable === 'text' && (
+                    <input
+                      type="text"
+                      value={filters[col.key] ?? ''}
+                      onChange={e => setFilter(col.key, e.target.value)}
+                      placeholder={`Filter...`}
+                      className="w-full px-2 py-1 text-xs font-normal text-eq-ink bg-gray-50 border border-gray-200 rounded focus:outline-none focus:border-eq-sky"
+                    />
+                  )}
+                  {col.filterable === 'select' && (
+                    <select
+                      value={filters[col.key] ?? ''}
+                      onChange={e => setFilter(col.key, e.target.value)}
+                      className="w-full px-2 py-1 text-xs font-normal text-eq-ink bg-gray-50 border border-gray-200 rounded focus:outline-none focus:border-eq-sky"
+                    >
+                      <option value="">All</option>
+                      {(col.filterOptions ?? selectOptions[col.key] ?? []).map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  )}
+                </th>
+              ))}
+            </tr>
+          )}
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {filteredRows.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length + (selectable ? 1 : 0)}
                 className="px-4 py-6 text-center text-eq-grey text-sm"
               >
-                {emptyMessage}
+                {activeFilterCount > 0 ? `No results match your filters.` : emptyMessage}
               </td>
             </tr>
           ) : (
-            rows.map((row, i) => {
+            filteredRows.map((row, i) => {
               const rowId = getRowId(row)
               const isSelected = selectable && selectedIds?.has(rowId)
               return (

@@ -92,6 +92,13 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
           defaultValue={customer?.address ?? ''}
           placeholder="Full address"
         />
+        <FormInput
+          label="Logo URL"
+          name="logo_url"
+          defaultValue={customer?.logo_url ?? ''}
+          placeholder="https://example.com/logo.png"
+          hint="Optional. PNG, JPEG, or SVG."
+        />
 
         {error && <p className="text-sm text-red-500">{error}</p>}
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
