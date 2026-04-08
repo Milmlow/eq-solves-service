@@ -11,6 +11,7 @@ import {
   forceCompleteCheckAssetAction,
   bulkUpdateWorkOrdersAction,
   updateCheckAssetAction,
+  completeAllCheckAssetsAction,
 } from '../actions'
 import { formatDate } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
@@ -131,6 +132,14 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     if (!result.success) setError(result.error ?? 'Failed to force complete.')
   }
 
+  async function handleCompleteAll() {
+    if (!confirm('Mark ALL assets and their tasks as complete? This cannot be undone.')) return
+    setError(null); setLoading(true)
+    const result = await completeAllCheckAssetsAction(check.id)
+    setLoading(false)
+    if (!result.success) setError(result.error ?? 'Failed to complete all assets.')
+  }
+
   async function handleItemResult(itemId: string, result: CheckItemResult | null) {
     const formData = new FormData()
     formData.set('result', result ?? '')
@@ -216,10 +225,15 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             <Button size="sm" onClick={handleStart} disabled={loading}>Start Check</Button>
           )}
           {check.status === 'in_progress' && canAct && (
-            <Button size="sm" onClick={handleComplete} disabled={loading || requiredIncomplete > 0}
-              title={requiredIncomplete > 0 ? `${requiredIncomplete} required tasks incomplete` : ''}>
-              Complete Check
-            </Button>
+            <>
+              <Button size="sm" onClick={handleCompleteAll} disabled={loading}>
+                <CheckCheck className="w-4 h-4 mr-1" /> Complete All Assets
+              </Button>
+              <Button size="sm" onClick={handleComplete} disabled={loading || requiredIncomplete > 0}
+                title={requiredIncomplete > 0 ? `${requiredIncomplete} required tasks incomplete` : ''}>
+                Complete Check
+              </Button>
+            </>
           )}
           {check.status === 'complete' && (
             <>

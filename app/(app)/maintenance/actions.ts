@@ -782,3 +782,48 @@ export async function updateCheckAssetAction(
     return { success: false, error: (e as Error).message }
   }
 }
+
+/**
+ * Complete ALL assets in a check at once.
+ * Marks every incomplete item as 'pass' and every check_asset as 'completed'.
+ */
+export async function completeAllCheckAssetsAction(checkId: string) {
+  try {
+    const { supabase, role, user } = await requireUser()
+
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('assigned_to')
+      .eq('id', checkId)
+      .single()
+
+    if (!check) return { success: false, error: 'Check not found.' }
+    const isAssigned = check.assigned_to === user.id
+    if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
+
+    const now = new Date().toISOString()
+
+    // Mark all incomplete items as pass
+    const { error: itemsErr } = await supabase
+      .from('maintenance_check_items')
+      .update({ result: 'pass', completed_at: now, completed_by: user.id })
+      .eq('check_id', checkId)
+      .is('result', null)
+
+    if (itemsErr) return { success: false, error: itemsErr.message }
+
+    // Mark all non-completed check_assets as completed
+    const { error: caErr } = await supabase
+      .from('check_assets')
+      .update({ status: 'completed', completed_at: now })
+      .eq('check_id', checkId)
+      .neq('status', 'completed')
+
+    if (caErr) return { success: false, error: caErr.message }
+
+    revalidatePath('/maintenance')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
