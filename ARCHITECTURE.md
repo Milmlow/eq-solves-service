@@ -1,7 +1,7 @@
 # EQ Solves — Architecture Reference
 
 > Living document. Updated when structural decisions change. Cowork appends to the Decisions log when any architectural choice is made or revised.
-> Last updated: Sprint 16 — 06 Apr 2026.
+> Last updated: Sprint 22 — 08 Apr 2026.
 
 ---
 
@@ -18,10 +18,10 @@
 | Database | Supabase (PostgreSQL) | Project ID: `urjhmkhbgaxrofurpbgc` |
 | Auth | Supabase Auth | Email/password + TOTP MFA + bcrypt recovery codes |
 | File Storage | Supabase Storage | `attachments` bucket — private, tenant-prefixed paths |
-| Validation | Zod v3 | Schemas in `lib/validations/` — use `.error.issues[0]` not `.errors[0]` |
+| Validation | Zod v4 | Schemas in `lib/validations/` — use `.error.issues[0]` not `.errors[0]` |
 | Email | Resend | Custom SMTP in Supabase — replaces 2/hr default limit |
 | DOCX Generation | docx (docx-js) | ACB + NSX test reports — per-site DOCX with white-label branding |
-| Hosting | TBD | No live target. No deployment without explicit instruction from Royce. |
+| Hosting | Netlify | Production at eq-solves-service.netlify.app, auto-deploy from main branch |
 
 ---
 
@@ -37,7 +37,8 @@
 │   │   ├── sites/
 │   │   ├── assets/
 │   │   ├── job-plans/
-│   │   ├── maintenance/
+│   │   ├── maintenance/      # Maintenance checks list + create
+│   │   │   └── [id]/         # Full-page check detail (asset table + tasks)
 │   │   ├── testing/
 │   │   ├── acb-testing/     # ACB test records
 │   │   ├── nsx-testing/     # NSX/MCCB test records
@@ -64,7 +65,7 @@
 │   ├── utils/           # cn.ts, format.ts, roles.ts
 │   └── tenant/          # getTenantSettings.ts
 ├── supabase/
-│   ├── migrations/      # 0001–0009 applied
+│   ├── migrations/      # 0001–0014 applied
 │   └── seed/
 └── proxy.ts             # Next.js 16 middleware
 ```
@@ -84,11 +85,12 @@
 | `tenant_members` | User ↔ tenant + role | role enum: super_admin/admin/supervisor/technician/read_only/user |
 | `customers` | Client companies | name, code, ABN, contact fields, is_active |
 | `sites` | Physical locations | customer_id FK, address fields, is_active |
-| `assets` | Equipment register | site_id FK, 40+ fields incl. protection settings, maximo_id (ref only), is_active |
-| `job_plans` | PM templates | site_id FK, frequency, is_active |
-| `job_plan_items` | Template line items | sort_order, is_required — hard delete allowed |
-| `maintenance_checks` | Instantiated checks | Copied from job plan; status: scheduled/in_progress/complete/overdue/cancelled |
-| `maintenance_check_items` | Check line items | Copied from job_plan_items at creation; result: pass/fail/na; completed_at/by |
+| `assets` | Equipment register | site_id FK, job_plan_id FK, dark_site_test bool, 40+ fields incl. protection settings, maximo_id (ref only), is_active |
+| `job_plans` | PM templates | code, type, is_active. Frequency lives on items, not the plan |
+| `job_plan_items` | Template line items | sort_order, is_required, freq_monthly/quarterly/semi_annual/annual/2yr/3yr/5yr/8yr/10yr booleans, is_dark_site — hard delete allowed |
+| `maintenance_checks` | Instantiated checks | site_id, job_plan_id (optional), frequency, is_dark_site, custom_name (auto: "Site - Month - Year"), start_date, maximo_wo_number, maximo_pm_number; status: scheduled/in_progress/complete/overdue/cancelled |
+| `check_assets` | Check ↔ Asset junction | check_id FK, asset_id FK, status (pending/completed/na), work_order_number, notes. RLS tenant-scoped |
+| `maintenance_check_items` | Check line items | check_asset_id FK — per-asset tasks filtered by frequency flags at creation; result: pass/fail/na; completed_at/by |
 | `test_records` | Electrical tests | asset_id FK, result: pending/pass/fail/defect, is_active |
 | `test_record_readings` | Test measurements | label, value, unit, pass bool, sort_order |
 | `attachments` | Files (polymorphic) | entity_type + entity_id; Supabase Storage path; signed URL on download |
@@ -134,9 +136,13 @@ get_user_role(tenant_id) IN ('admin', 'supervisor')  -- varies by table
 | 7 | Password reset via service role | Supabase blocks `updateUser` at AAL1 when MFA is enrolled |
 | 8 | Resend SMTP | Default Supabase SMTP limits at 2 emails/hour |
 | 9 | Server actions for all mutations | Type-safe, co-located with UI; no separate API server needed |
-| 10 | Zod v3 `.issues` not `.errors` | Breaking API change from v2 — corrected Sprint 6 |
+| 10 | Zod v4 `.issues` not `.errors` | Upgraded to v4; enum `error` option replaces `errorMap` |
 | 11 | Tailwind v4 CSS-first config | `create-next-app` installs latest stable; no `tailwind.config.ts` |
 | 12 | Next.js 16 (not 14) | Latest stable via `create-next-app@latest` — App Router unchanged |
+| 13 | IBM Maximo alignment | Job Plans are templates per asset type, frequency on items not plans, check_assets junction for per-asset tracking |
+| 14 | Two-path check creation | Path A: site + frequency auto-finds assets. Path B: manual Maximo asset IDs from customer WO list |
+| 15 | Full-page detail routes | Maintenance check detail is a dedicated `/maintenance/[id]` route, not a SlidePanel |
+| 16 | Clickable table rows | All DataTable instances use `onRowClick` — no icon action columns |
 
 ---
 

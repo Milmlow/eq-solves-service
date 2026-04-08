@@ -1,7 +1,7 @@
 # EQ Solves — Product Specification
 
 > Feature spec in testable form. Maps to UAT, user manual, and handoff documentation.
-> Last updated: Sprint 16 complete — 06 Apr 2026.
+> Last updated: Sprint 22 complete — 08 Apr 2026.
 
 ---
 
@@ -62,26 +62,43 @@ Built by EQ Solutions (CDC Solutions Pty Ltd). First commercial customer: SKS Te
 
 ### Assets
 - Full CRUD with linked site
-- Fields: name, asset type, make, model, serial number, Maximo ID (reference only), install date
+- Fields: name, asset type, make, model, serial number, Maximo ID (reference only), install date, job plan (dropdown), dark site test (boolean)
+- Each asset links to one job plan (1:1 asset type → job plan template)
 - Expandable protection settings section (conditional electrical fields)
 - Filter by site/type; search by name/type/serial/Maximo ID
+- List columns: Maximo ID, Name, Site, Location, Job Plan, Status
 - File attachments (PDF, images, XLSX, DOCX, CSV, TXT — 10MB max)
 - CSV import: upload → auto column mapping (fuzzy match) → 5-row preview → site name resolution → validation → bulk insert with per-row error report (max 500 rows)
 
 ### Job Plans
-- Full CRUD — maintenance checklist templates
-- Fields: name, site, description, frequency (Weekly/Monthly/Quarterly/Bi-annual/Annual/Ad Hoc)
-- Inline item management: add/edit/delete items with description, sort order, required flag
-- Filter by site/frequency; search by name
+- Full CRUD — maintenance checklist templates aligned with IBM Maximo
+- Fields: name, code (job code), type, description
+- Frequency lives on individual items (not the plan) — boolean flags: monthly, quarterly, semi-annual, annual, 2yr, 3yr, 5yr, 8yr, 10yr
+- Dark site flag on items — tasks only performed during black start testing
+- Inline item management: add/edit/delete items with description, sort order, required flag, frequency flags, dark site flag
+- List columns: Job Code, Name, Type, Tasks, Status
+- Filter by site; search by name
 
-### Maintenance Checks
-- Create from job plan — all items copied at creation
+### Maintenance Checks (Maximo-Aligned)
+- **Two creation paths:**
+  - **Path A (auto):** Select site + frequency → system finds all assets at that site whose job plans have items matching that frequency → generates per-asset tasks
+  - **Path B (manual):** Customer provides list of Maximo asset IDs + work orders → paste IDs to create check for specific assets
+- Auto-named: "Site - Month - Year" (e.g. "SY2 - April - 2026")
+- **Check hierarchy:** Maintenance Check → check_assets (junction, per-asset status/WO#/notes) → maintenance_check_items (per-asset tasks)
+- **Full-page detail view** at `/maintenance/[id]`:
+  - Header: status badge, site, due date, assigned to, frequency
+  - Full-width sortable asset table: ID, Name, Location, Work Order #, Job Plan, Done, Notes
+  - Click any asset row → expands to show outstanding tasks with Order, Task, Result (Pass/Fail/NA buttons), Comments
+  - Inline-editable Work Order # and Notes per asset
+  - Paste WO#s from Excel (bulk apply in sort order)
+  - Force-complete per asset (marks all tasks as pass)
+- Fields: site, frequency (monthly through 10yr), is_dark_site, start_date, due_date, custom_name, assigned_to, maximo_wo_number, maximo_pm_number, notes
 - Status lifecycle: Scheduled → In Progress → Complete / Cancelled
-- Technician workflow: Start → mark items Pass/Fail/N/A with optional notes → Complete
 - Complete blocked until all required items have a result (N/A counts)
 - Cancel: admin only
 - Attachments: supervisor+ or assigned technician can upload
-- Filter by site/status; search by job plan/site name
+- Filter by site/status; search by check name/site name
+- All table rows clickable — no icon action columns
 
 ### Test Records
 - Full CRUD for general electrical tests
@@ -236,8 +253,17 @@ Built by EQ Solutions (CDC Solutions Pty Ltd). First commercial customer: SKS Te
 - [ ] Attachments: upload, download (signed URL), delete (admin)
 - [ ] Protection settings conditional display works
 
-### Maintenance Checks
-- [ ] Creation copies all job plan items
+### Maintenance Checks (Maximo-Aligned)
+- [ ] Path A creation: site + frequency auto-finds matching assets and generates per-asset tasks
+- [ ] Path B creation: manual Maximo asset IDs accepted, check created for those specific assets
+- [ ] Auto-naming: check named "Site - Month - Year"
+- [ ] check_assets junction created with correct asset links
+- [ ] Per-asset tasks filtered by frequency boolean flags on job plan items
+- [ ] Full-page detail at `/maintenance/[id]` with sortable asset table
+- [ ] Click asset row → expands to show outstanding tasks with Pass/Fail/NA
+- [ ] Paste WO#s from Excel applies in current sort order
+- [ ] Force-complete marks all asset tasks as pass
+- [ ] Inline-editable WO# and Notes per asset
 - [ ] Items not editable until check is In Progress
 - [ ] Complete blocked with incomplete required items (N/A is valid)
 - [ ] Supervisor and assigned technician can both upload attachments

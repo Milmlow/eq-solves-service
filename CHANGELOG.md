@@ -4,6 +4,70 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 22] 2026-04-08 — Maximo Alignment & Maintenance Check Rebuild (Phase 8)
+
+### Added
+- **IBM Maximo data model alignment** — full restructure of maintenance checks to match Maximo PM/WO concepts
+- **Migration `0012_job_plan_restructure.sql`** — job plans restructured with `code` and `type` columns, per-item frequency boolean flags (`freq_monthly`, `freq_quarterly`, `freq_semi_annual`, `freq_annual`, `freq_2yr`, `freq_3yr`, `freq_5yr`, `freq_8yr`, `freq_10yr`), `is_dark_site` flag on items
+- **Migration `0013_maximo_aligned_schema.sql`** — `job_plan_id` FK and `dark_site_test` on assets, `frequency`/`is_dark_site`/`custom_name`/`start_date`/`maximo_wo_number`/`maximo_pm_number` on maintenance_checks, `check_assets` junction table with RLS, `check_asset_id` on maintenance_check_items
+- **Migration `0014_check_assets_work_order.sql`** — `work_order_number` column on `check_assets`
+- **Full-page maintenance check detail** (`app/(app)/maintenance/[id]/`) — replaces SlidePanel with dedicated route. Full-width sortable asset table (ID, Name, Location, WO#, Job Plan, Done, Notes). Click any asset row to expand outstanding tasks with Pass/Fail/NA buttons and inline comments
+- **Two-path check creation** — Path A: site + frequency auto-finds matching assets by job plan item frequency flags. Path B: paste Maximo asset IDs from customer work order list
+- **Auto-naming** — maintenance checks auto-named as "Site - Month - Year" (e.g. "SY2 - April - 2026")
+- **Paste WO# from Excel** — bulk paste work order numbers from Excel column, matched to assets in current sort order
+- **Force-complete per asset** — marks all job plan items as 'pass' and asset status as 'completed'
+- **Preview check assets** — `previewCheckAssetsAction()` shows matching assets before committing to check creation
+- **`check_assets` junction table** — links maintenance checks to specific assets with status tracking (pending/completed/na), work_order_number, and notes per asset
+- **Frequency-aware task generation** — check items filtered by boolean frequency flags on job_plan_items, not a single frequency enum
+- **Dark site test support** — `is_dark_site` flag for items only performed during black start testing
+- **`CheckAsset` type** — new TypeScript interface with `work_order_number` field
+- **`MaintenanceFrequency` type** — `'monthly' | 'quarterly' | 'semi_annual' | 'annual' | '2yr' | '3yr' | '5yr' | '8yr' | '10yr'`
+- **DataTable `onRowClick` prop** — enables clickable rows across all list tables
+- **SlidePanel `wide` prop** — `max-w-4xl` when true (retained for other panels)
+- **4,802 assets imported** via Supabase REST API with auto-creation of 10 missing sites
+
+### Changed
+- **All 9 list components** — removed Pencil/Eye icon action columns; rows are now fully clickable via `onRowClick`
+  - CustomerList, AssetList, JobPlanList, SiteList, InstrumentList, TestRecordList, AcbTestList, NsxTestList, MaintenanceList
+- **Job Plans list** — removed Site column, Job Code moved to first column
+- **Sites list** — removed Code column
+- **Asset form** — added job plan dropdown and dark site toggle
+- **Asset list** — columns: Maximo ID, Name, Site, Location, Job Plan, Status
+- **Maintenance list page** — no longer fetches check_assets/attachments/items for all checks (detail data loads on demand per check)
+- **CreateCheckForm** — complete rewrite: site, frequency, dark site toggle, JP filter dropdown, preview, manual mode, start/due dates, owner, Maximo WO/PM numbers
+- **Maintenance check validation** — `CreateMaintenanceCheckSchema` now requires site_id, frequency, is_dark_site, start_date, due_date; optional job_plan_id, manual_asset_ids array
+- **NotificationBell** — fixed with React portal pattern (dropdown no longer clipped by sidebar overflow)
+
+### Server Actions (New/Rebuilt)
+- `previewCheckAssetsAction()` — previews matching assets before creating a check
+- `createCheckAction()` — completely rebuilt for Path A/B, auto-naming, check_assets junction, per-asset items filtered by frequency flags, batched inserts (500)
+- `forceCompleteCheckAssetAction(checkId, checkAssetId)` — marks all items pass + asset completed
+- `bulkUpdateWorkOrdersAction(checkId, updates)` — bulk paste WO numbers
+- `updateCheckAssetAction(checkId, checkAssetId, data)` — update notes/WO on a single check_asset
+
+### Files Created
+- `app/(app)/maintenance/[id]/page.tsx`
+- `app/(app)/maintenance/[id]/CheckDetailPage.tsx`
+- `supabase/migrations/0012_job_plan_restructure.sql`
+- `supabase/migrations/0013_maximo_aligned_schema.sql`
+- `supabase/migrations/0014_check_assets_work_order.sql`
+
+### Files Modified
+- `app/(app)/maintenance/{actions,page,MaintenanceList,CreateCheckForm,CheckDetail}.tsx`
+- `app/(app)/job-plans/JobPlanList.tsx` — removed site column
+- `app/(app)/sites/SiteList.tsx` — removed code column
+- `app/(app)/assets/{AssetForm,AssetList,page,actions}.tsx` — job plan + dark site
+- `components/ui/{DataTable,SlidePanel,NotificationBell}.tsx`
+- `lib/types/index.ts` — CheckAsset, MaintenanceFrequency, updated Asset/MaintenanceCheck/MaintenanceCheckItem
+- `lib/validations/{maintenance-check,asset}.ts`
+- All 9 `*List.tsx` components — clickable rows
+
+### Verified
+- `tsc --noEmit` → 0 non-test TypeScript errors
+- Netlify deploy successful (commit `87fc2a5`, production ready)
+
+---
+
 ## [Sprint 17] 2026-04-06 — Deploy & Analytics (Phase 5 Complete)
 
 ### Added

@@ -1,6 +1,6 @@
 # USER MANUAL NOTES — EQ Solves PM Platform
 
-Last updated: 2026-04-06 · After Sprint 17 (Phase 5 Complete)
+Last updated: 2026-04-08 · After Sprint 22 (Phase 8 Complete)
 Purpose: Raw material for the user manual. Compiled during development — assembly only at the end.
 Maintained by: Cowork (append notes each sprint when new features ship)
 
@@ -142,11 +142,13 @@ If you have an existing asset list in Excel or CSV format:
 
 ## Job Plans
 
-Job plans are reusable checklists that define what tasks need to be done during a maintenance visit.
+Job plans are reusable checklists that define what tasks need to be done during a maintenance visit. Aligned with IBM Maximo — each plan has a Job Code and Type.
 
-**Example:** A "Monthly ACB Inspection" job plan might include items like "Check bus bar connections", "Test trip unit operation", "Record thermal readings".
+**Example:** Job plan "E1.18" might include items like "Check bus bar connections", "Test trip unit operation", "Record thermal readings".
 
-**Frequency options:** Weekly / Monthly / Quarterly / Bi-annual / Annual / Ad Hoc
+**Frequency is per item, not per plan.** Each item in a job plan has frequency flags (monthly, quarterly, semi-annual, annual, 2yr, 3yr, 5yr, 8yr, 10yr). When a maintenance check is created for a specific frequency, only the items matching that frequency are included.
+
+**Dark site items:** Some items are flagged as "dark site" — these are tasks only performed during black start testing and are excluded from normal frequency-based checks.
 
 **Required items:** Individual checklist items can be marked as required. A maintenance check cannot be marked complete until all required items have a result.
 
@@ -156,7 +158,7 @@ Job plans are reusable checklists that define what tasks need to be done during 
 
 ## Maintenance Checks
 
-Maintenance checks are the scheduled instances of a job plan being executed at a site.
+Maintenance checks are the scheduled instances of job plan tasks being executed across assets at a site. Aligned with IBM Maximo PM/WO workflow.
 
 ### Check statuses
 
@@ -170,24 +172,48 @@ Maintenance checks are the scheduled instances of a job plan being executed at a
 
 ### Creating a check
 
-1. Maintenance → New Check
-2. Select a job plan (the checklist to use)
-3. Set the due date
-4. Assign a technician
-5. Add any notes
+There are two ways to create a maintenance check:
+
+**Path A — By frequency (automatic):**
+1. Maintenance → Create Check
+2. Select a site and frequency (e.g., Annual)
+3. The system finds all assets at that site whose job plans have items matching that frequency
+4. Preview the matching assets and task counts
+5. Set start date, due date, assign a technician
 6. Click Create
 
-The check is created with all items from the selected job plan copied in.
+**Path B — By Maximo work order list (manual):**
+1. Maintenance → Create Check
+2. Switch to Manual mode
+3. Paste Maximo asset IDs from the customer's work order list
+4. Set frequency, start date, due date, assign a technician
+5. Click Create
 
-### Executing a check (Technician)
+The check is auto-named as "Site - Month - Year" (e.g. "SY2 - April - 2026"). Tasks are generated per asset, filtered by the frequency flags on the job plan items.
 
-1. Open the maintenance check assigned to you
+### Working a check (Technician)
+
+1. Click on the maintenance check from the list — this opens a full-page detail view
 2. Click **Start Check**
-3. Work through each item — tap Pass ✓, Fail ✗, or N/A — for each one
-4. Add notes to any item that needs explanation
-5. Once all required items have a result, click **Complete Check**
+3. The asset table shows all assets in the check: ID, Name, Location, Work Order #, Job Plan, Done, Notes
+4. Click any asset row to expand and see its outstanding tasks
+5. Mark each task Pass ✓, Fail ✗, or N/A
+6. Add comments to any task that needs explanation
+7. Once all required tasks have a result, click **Complete Check**
 
-**Attachments:** You can upload photos, PDFs, or other documents to a check while it is in progress. Useful for attaching thermal images, sign-off sheets, or photos of defects found.
+### Work Order Numbers
+
+When the customer provides a list of Maximo work order numbers:
+1. Click **Paste WO #s**
+2. Paste the column from Excel (one WO per line)
+3. Numbers are matched to assets in the current sort order
+4. You can also click any individual WO# cell to edit it directly
+
+### Force Complete
+
+If an asset's work has been completed externally (e.g. by the customer's team), click the green checkmark icon on that asset row. This marks all tasks for that asset as "Pass" automatically.
+
+**Attachments:** You can upload photos, PDFs, or other documents to a check while it is in progress.
 
 ### Completing a check
 
@@ -667,3 +693,23 @@ The instruments list highlights overdue calibrations in red. If an instrument's 
 - JSZip dependency added for bulk report ZIP generation
 - TypeScript fix: search page cast for Supabase foreign key joins
 - `tsc --noEmit` → 0 errors. All phases complete.
+
+### Sprint 22 (Maximo Alignment & Maintenance Check Rebuild — Phase 8)
+- IBM Maximo data model alignment: job plans restructured with code/type, per-item frequency boolean flags, dark site flag
+- Assets now link to a job plan (1:1 asset type → job plan template) with dark site test toggle
+- Maintenance checks completely rebuilt with two creation paths:
+  - Path A: select site + frequency → auto-finds matching assets → generates per-asset tasks filtered by frequency flags
+  - Path B: customer provides Maximo asset IDs → paste into manual mode → check created for those specific assets
+- Checks auto-named as "Site - Month - Year" (e.g. "SY2 - April - 2026")
+- New check_assets junction table: tracks per-asset status (pending/completed/na), work order number, and notes
+- Full-page maintenance check detail replaces slide panel: `/maintenance/[id]` route with header info, full-width sortable asset table, expandable task rows
+- Asset table columns: ID, Name, Location, Work Order #, Job Plan, Done, Notes — all sortable
+- Click any asset row to expand outstanding tasks with Pass/Fail/NA buttons and inline comments
+- Paste Work Order #s from Excel: bulk paste a column, matched to assets in current sort order
+- Force-complete per asset: marks all tasks as pass automatically
+- Inline-editable Work Order # and Notes fields per asset
+- All 9 list components updated: icon action columns removed, entire rows are now clickable
+- 4,802 assets imported via Supabase REST API with auto-creation of 10 missing sites
+- 3 new migrations applied: 0012 (job plan restructure), 0013 (Maximo-aligned schema), 0014 (check_assets work_order)
+- Notification bell fixed with React portal pattern (no longer clipped by sidebar)
+- `tsc --noEmit` → 0 non-test errors. Deployed to Netlify.

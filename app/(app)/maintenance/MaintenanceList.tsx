@@ -65,6 +65,11 @@ export function MaintenanceList({
       render: (row) => (row as CheckRow).custom_name ?? row.job_plans?.name ?? '—',
     },
     {
+      key: 'site_name',
+      header: 'Site',
+      render: (row) => (row as CheckRow).sites?.name ?? '—',
+    },
+    {
       key: 'frequency',
       header: 'Frequency',
       render: (row) => {
