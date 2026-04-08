@@ -13,6 +13,8 @@ import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importJobPlansAction } from './actions'
 import { formatFrequency } from '@/lib/utils/format'
 import type { JobPlan, JobPlanItem, Site, Frequency } from '@/lib/types'
+import { BulkActionBar } from '@/components/ui/BulkActionBar'
+import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Pencil, Upload } from 'lucide-react'
 
 interface JobPlanWithSite extends JobPlan {
@@ -34,6 +36,7 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<JobPlanWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Build site name→id lookup for CSV import
   const siteLookup: Record<string, string> = {}
@@ -171,6 +174,9 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
             columns={columns}
             rows={jobPlans.map((jp) => ({ ...jp, site_name: '', actions: '' } as JPRow))}
             emptyMessage="No job plans match your filters."
+            selectable={canWriteRole}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>
@@ -191,6 +197,17 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
         onClose={() => setImportOpen(false)}
         config={jobPlanImportConfig}
       />
+
+      {canWriteRole && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          entityName="Job Plans"
+          selectedIds={selectedIds}
+          onClear={() => setSelectedIds(new Set())}
+          onDeactivate={(ids) => bulkDeactivateAction('job_plans', ids)}
+          onDelete={(ids) => bulkDeleteAction('job_plans', ids)}
+        />
+      )}
     </>
   )
 }

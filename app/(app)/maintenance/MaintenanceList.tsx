@@ -12,6 +12,8 @@ import { BatchCreateForm } from './BatchCreateForm'
 import { CheckDetail } from './CheckDetail'
 import { formatDate } from '@/lib/utils/format'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile, Attachment } from '@/lib/types'
+import { BulkActionBar } from '@/components/ui/BulkActionBar'
+import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Eye, Calendar, LayoutGrid, List } from 'lucide-react'
 import { KanbanBoard } from './KanbanBoard'
 
@@ -56,6 +58,7 @@ export function MaintenanceList({
   const [batchOpen, setBatchOpen] = useState(false)
   const [detailCheck, setDetailCheck] = useState<CheckRow | null>(null)
   const [view, setView] = useState<'table' | 'kanban'>('table')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const columns: DataTableColumn<CheckRow>[] = [
     {
@@ -179,6 +182,9 @@ export function MaintenanceList({
                 columns={columns}
                 rows={checks.map((c) => ({ ...c, actions: '' }))}
                 emptyMessage="No checks match your filters."
+                selectable={canWriteRole}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
               />
               <Pagination page={page} totalPages={totalPages} />
             </>
@@ -218,6 +224,17 @@ export function MaintenanceList({
           isAdmin={isAdmin}
           canWrite={canWriteRole}
           isAssigned={detailCheck.assigned_to === currentUserId}
+        />
+      )}
+
+      {canWriteRole && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          entityName="Checks"
+          selectedIds={selectedIds}
+          onClear={() => setSelectedIds(new Set())}
+          onDeactivate={(ids) => bulkDeactivateAction('maintenance_checks', ids)}
+          onDelete={(ids) => bulkDeleteAction('maintenance_checks', ids)}
         />
       )}
     </>

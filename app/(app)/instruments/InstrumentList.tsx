@@ -14,6 +14,8 @@ import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importInstrumentsAction } from './actions'
 import { formatDate } from '@/lib/utils/format'
 import type { Instrument, InstrumentStatus, Profile } from '@/lib/types'
+import { BulkActionBar } from '@/components/ui/BulkActionBar'
+import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Eye, Upload } from 'lucide-react'
 
 type InstrumentRow = Instrument & { assignee_name?: string | null } & Record<string, unknown>
@@ -45,6 +47,7 @@ export function InstrumentList({
   const [editInst, setEditInst] = useState<InstrumentRow | null>(null)
   const [detailInst, setDetailInst] = useState<InstrumentRow | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const instrumentImportConfig: ImportCSVConfig<{
     name: string
@@ -180,7 +183,7 @@ export function InstrumentList({
         </div>
       ) : (
         <>
-          <DataTable columns={columns} rows={instruments.map((i) => ({ ...i, actions: '', make_model: '' }))} emptyMessage="No instruments match your filters." />
+          <DataTable columns={columns} rows={instruments.map((i) => ({ ...i, actions: '', make_model: '' }))} emptyMessage="No instruments match your filters." selectable={canWriteRole} selectedIds={selectedIds} onSelectionChange={setSelectedIds} />
           <Pagination page={page} totalPages={totalPages} />
         </>
       )}
@@ -216,6 +219,17 @@ export function InstrumentList({
         onClose={() => setImportOpen(false)}
         config={instrumentImportConfig}
       />
+
+      {canWriteRole && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          entityName="Instruments"
+          selectedIds={selectedIds}
+          onClear={() => setSelectedIds(new Set())}
+          onDeactivate={(ids) => bulkDeactivateAction('instruments', ids)}
+          onDelete={(ids) => bulkDeleteAction('instruments', ids)}
+        />
+      )}
     </>
   )
 }

@@ -12,6 +12,8 @@ import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importSitesAction } from './actions'
 import type { Site, Customer } from '@/lib/types'
+import { BulkActionBar } from '@/components/ui/BulkActionBar'
+import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Pencil, Upload } from 'lucide-react'
 import Link from 'next/link'
 
@@ -32,6 +34,7 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<SiteWithCustomer | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const siteImportConfig: ImportCSVConfig<{
     name: string
@@ -166,6 +169,9 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
             columns={columns}
             rows={sites.map((s) => ({ ...s, customer_name: '', actions: '' } as SiteRow))}
             emptyMessage="No sites match your filters."
+            selectable={isAdmin}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>
@@ -184,6 +190,17 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
         onClose={() => setImportOpen(false)}
         config={siteImportConfig}
       />
+
+      {isAdmin && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          entityName="Sites"
+          selectedIds={selectedIds}
+          onClear={() => setSelectedIds(new Set())}
+          onDeactivate={(ids) => bulkDeactivateAction('sites', ids)}
+          onDelete={(ids) => bulkDeleteAction('sites', ids)}
+        />
+      )}
     </>
   )
 }

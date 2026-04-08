@@ -12,6 +12,8 @@ import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importCustomersAction } from './actions'
 import type { Customer } from '@/lib/types'
+import { BulkActionBar } from '@/components/ui/BulkActionBar'
+import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { cn } from '@/lib/utils/cn'
 import { Pencil, Upload } from 'lucide-react'
 
@@ -50,6 +52,7 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<Customer | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   function openCreate() {
     setSelected(null)
@@ -119,6 +122,9 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
               className: cn(!c.is_active && 'opacity-50'),
             } as Customer & Record<string, unknown>))}
             emptyMessage="No customers match your search."
+            selectable={isAdmin}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>
@@ -136,6 +142,17 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
         onClose={() => setImportOpen(false)}
         config={customerImportConfig}
       />
+
+      {isAdmin && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          entityName="Customers"
+          selectedIds={selectedIds}
+          onClear={() => setSelectedIds(new Set())}
+          onDeactivate={(ids) => bulkDeactivateAction('customers', ids)}
+          onDelete={(ids) => bulkDeleteAction('customers', ids)}
+        />
+      )}
     </>
   )
 }

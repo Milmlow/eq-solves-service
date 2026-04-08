@@ -10,6 +10,8 @@ import { SearchFilter } from '@/components/ui/SearchFilter'
 import { AssetForm } from './AssetForm'
 import { ImportAssetsModal } from './ImportAssetsModal'
 import type { Asset, Site, JobPlan } from '@/lib/types'
+import { BulkActionBar } from '@/components/ui/BulkActionBar'
+import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Pencil, Upload } from 'lucide-react'
 
 interface AssetWithSite extends Asset {
@@ -31,6 +33,7 @@ export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalP
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   function openCreate() {
     setSelected(null)
@@ -114,6 +117,9 @@ export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalP
             columns={columns}
             rows={assets.map((a) => ({ ...a, site_name: '', actions: '' } as AssetRow))}
             emptyMessage="No assets match your filters."
+            selectable={canWriteRole}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
           />
           <Pagination page={page} totalPages={totalPages} />
         </>
@@ -134,6 +140,17 @@ export function AssetList({ assets, sites, assetTypes, jobPlansMap, page, totalP
         onClose={() => setImportOpen(false)}
         sites={sites}
       />
+
+      {canWriteRole && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          entityName="Assets"
+          selectedIds={selectedIds}
+          onClear={() => setSelectedIds(new Set())}
+          onDeactivate={(ids) => bulkDeactivateAction('assets', ids)}
+          onDelete={(ids) => bulkDeleteAction('assets', ids)}
+        />
+      )}
     </>
   )
 }
