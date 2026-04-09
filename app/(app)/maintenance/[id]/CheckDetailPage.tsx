@@ -18,7 +18,7 @@ import {
 import { formatDate } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
-import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft } from 'lucide-react'
+import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Printer } from 'lucide-react'
 import Link from 'next/link'
 
 interface CheckAssetWithDetails extends CheckAsset {
@@ -298,6 +298,12 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             <a href={`/api/pm-asset-report?check_id=${check.id}`} download
               className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors">
               <Download className="w-4 h-4" /> Download Report
+            </a>
+          )}
+          {(check.status === 'scheduled' || check.status === 'in_progress' || check.status === 'overdue') && canWriteRole && (
+            <a href={`/api/maintenance-checklist?check_id=${check.id}`} target="_blank"
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
+              <Printer className="w-4 h-4" /> Print Checklist
             </a>
           )}
           {check.status !== 'complete' && check.status !== 'cancelled' && isAdmin && (
