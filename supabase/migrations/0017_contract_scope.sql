@@ -27,4 +27,4 @@ create policy "Tenant isolation" on contract_scopes
 
 -- Updated at trigger
 create trigger set_updated_at before update on contract_scopes
-  for each row execute function update_updated_at_column();
+  for each row execute function set_updated_at();

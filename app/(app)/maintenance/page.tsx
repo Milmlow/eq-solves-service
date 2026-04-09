@@ -33,10 +33,10 @@ export default async function MaintenancePage({
     userRole = (membership?.role as Role) ?? null
   }
 
-  // Fetch sites for filter
+  // Fetch sites for filter (include customer_id for scope lookup)
   const { data: sites } = await supabase
     .from('sites')
-    .select('id, name')
+    .select('id, name, customer_id')
     .eq('is_active', true)
     .order('name')
 
@@ -65,6 +65,15 @@ export default async function MaintenancePage({
       .order('full_name')
     technicians = (profiles ?? []) as typeof technicians
   }
+
+  // Fetch contract scope items for current FY (for scope indicator on check creation)
+  const now = new Date()
+  const fyYear = now.getMonth() + 1 < 7 ? now.getFullYear() - 1 : now.getFullYear()
+  const currentFY = `${fyYear}-${fyYear + 1}`
+  const { data: scopeItems } = await supabase
+    .from('contract_scopes')
+    .select('id, customer_id, site_id, scope_item, is_included, notes, financial_year')
+    .eq('financial_year', currentFY)
 
   // Build checks query
   let query = supabase
@@ -162,6 +171,7 @@ export default async function MaintenancePage({
         jobPlans={(jobPlans ?? []) as never}
         sites={sites ?? []}
         technicians={technicians}
+        scopeItems={(scopeItems ?? []) as never}
         page={page}
         totalPages={totalPages}
         isAdmin={isAdmin(userRole)}

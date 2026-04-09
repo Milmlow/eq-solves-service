@@ -7,7 +7,7 @@ import { requireUser } from '@/lib/actions/auth'
 interface CreateNotificationParams {
   tenantId: string
   userId: string
-  type: 'check_assigned' | 'check_overdue' | 'check_completed'
+  type: 'check_assigned' | 'check_overdue' | 'check_completed' | 'defect_raised'
   title: string
   body?: string
   entityType?: string

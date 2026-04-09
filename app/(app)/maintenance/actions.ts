@@ -787,6 +787,81 @@ export async function updateCheckAssetAction(
  * Complete ALL assets in a check at once.
  * Marks every incomplete item as 'pass' and every check_asset as 'completed'.
  */
+export async function raiseDefectAction(data: {
+  check_id: string
+  check_asset_id?: string
+  asset_id?: string
+  site_id?: string
+  title: string
+  description?: string
+  severity: string
+}) {
+  try {
+    const { supabase, tenantId, role, user } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    if (!data.title?.trim()) return { success: false, error: 'Title is required.' }
+
+    const { error } = await supabase
+      .from('defects')
+      .insert({
+        tenant_id: tenantId,
+        check_id: data.check_id,
+        check_asset_id: data.check_asset_id || null,
+        asset_id: data.asset_id || null,
+        site_id: data.site_id || null,
+        title: data.title.trim(),
+        description: data.description?.trim() || null,
+        severity: data.severity || 'medium',
+        status: 'open',
+        raised_by: user.id,
+      })
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${data.title}"` })
+    revalidatePath('/maintenance')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+export async function updateDefectAction(defectId: string, updates: {
+  status?: string
+  severity?: string
+  assigned_to?: string | null
+  resolution_notes?: string
+}) {
+  try {
+    const { supabase, role, user } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const updateData: Record<string, unknown> = {}
+    if (updates.status) updateData.status = updates.status
+    if (updates.severity) updateData.severity = updates.severity
+    if (updates.assigned_to !== undefined) updateData.assigned_to = updates.assigned_to
+    if (updates.resolution_notes !== undefined) updateData.resolution_notes = updates.resolution_notes
+
+    if (updates.status === 'resolved' || updates.status === 'closed') {
+      updateData.resolved_at = new Date().toISOString()
+      updateData.resolved_by = user.id
+    }
+
+    const { error } = await supabase
+      .from('defects')
+      .update(updateData)
+      .eq('id', defectId)
+
+    if (error) return { success: false, error: error.message }
+
+    revalidatePath('/maintenance')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
 export async function completeAllCheckAssetsAction(checkId: string) {
   try {
     const { supabase, role, user } = await requireUser()

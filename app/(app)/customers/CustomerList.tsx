@@ -16,6 +16,8 @@ import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { cn } from '@/lib/utils/cn'
 import { Upload } from 'lucide-react'
+import { ExportButton } from '@/components/ui/ExportButton'
+import { exportToCsv } from '@/lib/utils/csv-export'
 
 interface CustomerListProps {
   customers: Customer[]
@@ -96,6 +98,14 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
       <div className="flex items-center justify-between mb-4">
         <SearchFilter placeholder="Search customers..." />
         <div className="flex items-center gap-2 ml-4 shrink-0">
+          <ExportButton onClick={() => exportToCsv(
+            customers,
+            [
+              { key: 'name', header: 'Name' },
+              { key: 'is_active', header: 'Active', format: (r) => r.is_active ? 'Yes' : 'No' },
+            ],
+            `customers-export-${new Date().toISOString().slice(0, 10)}`
+          )} />
           {isAdmin && (
             <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-1" /> Import

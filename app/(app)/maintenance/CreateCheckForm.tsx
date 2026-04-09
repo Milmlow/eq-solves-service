@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { createCheckAction, previewCheckAssetsAction } from './actions'
 import type { JobPlan, Site, Profile } from '@/lib/types'
+import { CheckCircle2, XCircle, Scale } from 'lucide-react'
 
 const FREQUENCIES = [
   { value: 'monthly', label: 'Monthly' },
@@ -28,15 +29,26 @@ interface PreviewAsset {
   task_count: number
 }
 
+interface ScopeItem {
+  id: string
+  customer_id: string
+  site_id: string | null
+  scope_item: string
+  is_included: boolean
+  notes: string | null
+  financial_year: string
+}
+
 interface CreateCheckFormProps {
   open: boolean
   onClose: () => void
   jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
-  sites: Pick<Site, 'id' | 'name'>[]
+  sites: Pick<Site, 'id' | 'name' | 'customer_id'>[]
   technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
+  scopeItems: ScopeItem[]
 }
 
-export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians }: CreateCheckFormProps) {
+export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, scopeItems }: CreateCheckFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -54,6 +66,19 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians }:
   const [previewAssets, setPreviewAssets] = useState<PreviewAsset[]>([])
   const [previewTotal, setPreviewTotal] = useState(0)
   const [hasPreview, setHasPreview] = useState(false)
+
+  // Scope items filtered by selected site's customer
+  const relevantScope = useMemo(() => {
+    if (!siteId) return []
+    const site = sites.find((s) => s.id === siteId)
+    if (!site?.customer_id) return []
+    return scopeItems.filter(
+      (s) => s.customer_id === site.customer_id && (s.site_id === null || s.site_id === siteId)
+    )
+  }, [siteId, sites, scopeItems])
+
+  const includedScope = relevantScope.filter((s) => s.is_included)
+  const excludedScope = relevantScope.filter((s) => !s.is_included)
 
   const resetForm = useCallback(() => {
     setSiteId('')
@@ -174,6 +199,35 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians }:
           />
           Dark Site Test
         </label>
+
+        {/* Contract Scope Info */}
+        {siteId && relevantScope.length > 0 && (
+          <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+            <div className="px-3 py-2 bg-eq-ice/50 border-b border-gray-200 flex items-center gap-2">
+              <Scale className="w-3.5 h-3.5 text-eq-deep" />
+              <span className="text-xs font-bold text-eq-deep uppercase tracking-wide">
+                Contract Scope — {relevantScope[0]?.financial_year}
+              </span>
+            </div>
+            <div className="max-h-36 overflow-y-auto divide-y divide-gray-50">
+              {includedScope.map((s) => (
+                <div key={s.id} className="flex items-start gap-2 px-3 py-1.5 text-xs">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
+                  <span className="text-eq-ink">{s.scope_item}</span>
+                </div>
+              ))}
+              {excludedScope.map((s) => (
+                <div key={s.id} className="flex items-start gap-2 px-3 py-1.5 text-xs">
+                  <XCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
+                  <span className="text-eq-grey">{s.scope_item}</span>
+                </div>
+              ))}
+            </div>
+            <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-100 text-[10px] text-eq-grey">
+              {includedScope.length} included · {excludedScope.length} excluded
+            </div>
+          </div>
+        )}
 
         {/* Job Plan Filter (optional) */}
         <div className="flex flex-col gap-1">

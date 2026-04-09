@@ -15,6 +15,8 @@ import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { cn } from '@/lib/utils/cn'
 import { Upload, TableProperties, LayoutList } from 'lucide-react'
 import { AssetGroupedView } from './AssetGroupedView'
+import { ExportButton } from '@/components/ui/ExportButton'
+import { exportToCsv } from '@/lib/utils/csv-export'
 
 interface AssetWithSite extends Asset {
   sites: { name: string } | null
@@ -115,6 +117,22 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
               <LayoutList className="w-4 h-4" />
             </button>
           </div>
+          <ExportButton onClick={() => exportToCsv(
+            allAssets.map(a => ({ ...a, site_name: a.sites?.name ?? '', job_plan_name: a.job_plans?.name ?? '' })),
+            [
+              { key: 'maximo_id', header: 'Maximo ID' },
+              { key: 'name', header: 'Name' },
+              { key: 'site_name', header: 'Site' },
+              { key: 'location', header: 'Location' },
+              { key: 'asset_type', header: 'Type' },
+              { key: 'job_plan_name', header: 'Job Plan' },
+              { key: 'manufacturer', header: 'Manufacturer' },
+              { key: 'model', header: 'Model' },
+              { key: 'serial_number', header: 'Serial Number' },
+              { key: 'is_active', header: 'Active', format: (r) => r.is_active ? 'Yes' : 'No' },
+            ],
+            `assets-export-${new Date().toISOString().slice(0, 10)}`
+          )} />
           {canWriteRole && (
             <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-1" /> Import

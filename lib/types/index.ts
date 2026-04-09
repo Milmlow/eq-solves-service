@@ -76,6 +76,29 @@ export interface Customer {
   updated_at: string
 }
 
+export type DefectSeverity = 'low' | 'medium' | 'high' | 'critical'
+export type DefectStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
+
+export interface Defect {
+  id: string
+  tenant_id: string
+  check_id: string | null
+  check_asset_id: string | null
+  asset_id: string | null
+  site_id: string | null
+  title: string
+  description: string | null
+  severity: DefectSeverity
+  status: DefectStatus
+  raised_by: string | null
+  assigned_to: string | null
+  resolved_at: string | null
+  resolved_by: string | null
+  resolution_notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ContractScope {
   id: string
   tenant_id: string

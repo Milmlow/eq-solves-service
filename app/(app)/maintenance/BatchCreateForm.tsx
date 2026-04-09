@@ -12,7 +12,7 @@ interface BatchCreateFormProps {
   open: boolean
   onClose: () => void
   jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
-  sites: Pick<Site, 'id' | 'name'>[]
+  sites: Pick<Site, 'id' | 'name' | 'customer_id'>[]
   technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
 }
 

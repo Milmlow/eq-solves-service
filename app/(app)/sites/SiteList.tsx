@@ -16,6 +16,8 @@ import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Upload } from 'lucide-react'
 import Link from 'next/link'
+import { ExportButton } from '@/components/ui/ExportButton'
+import { exportToCsv } from '@/lib/utils/csv-export'
 
 interface SiteWithCustomer extends Site {
   customers: { name: string; logo_url: string | null } | null
@@ -147,6 +149,21 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
           filters={[{ key: 'customer_id', label: 'All Customers', options: customerFilterOptions }]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">
+          <ExportButton onClick={() => exportToCsv(
+            sites.map(s => ({ ...s, customer_name: s.customers?.name ?? '' })),
+            [
+              { key: 'name', header: 'Name' },
+              { key: 'code', header: 'Code' },
+              { key: 'customer_name', header: 'Customer' },
+              { key: 'address', header: 'Address' },
+              { key: 'city', header: 'City' },
+              { key: 'state', header: 'State' },
+              { key: 'postcode', header: 'Postcode' },
+              { key: 'asset_count', header: 'Assets' },
+              { key: 'is_active', header: 'Active', format: (r) => r.is_active ? 'Yes' : 'No' },
+            ],
+            `sites-export-${new Date().toISOString().slice(0, 10)}`
+          )} />
           {isAdmin && (
             <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-1" /> Import

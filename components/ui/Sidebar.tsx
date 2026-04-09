@@ -2,11 +2,11 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  Zap, Wrench, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale
+  Zap, Wrench, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NotificationBell } from '@/components/ui/NotificationBell'
 import type { TenantSettings } from '@/lib/types'
 
@@ -33,16 +33,29 @@ interface SidebarProps {
 
 export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
 
   const productName = settings?.product_name || 'EQ Solves'
   const logoUrl = settings?.logo_url
 
-  return (
-    <aside className={cn(
-      'flex flex-col h-screen bg-eq-ink text-white transition-all duration-200 sticky top-0',
-      collapsed ? 'w-16' : 'w-56'
-    )}>
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
+  // Prevent body scroll when mobile drawer open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [mobileOpen])
+
+  const sidebarContent = (
+    <>
       <div className="flex items-center justify-between px-4 h-14 border-b border-white/10">
         {!collapsed && (
           logoUrl ? (
@@ -54,11 +67,19 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
         )}
         <div className="flex items-center gap-2 ml-auto">
           <NotificationBell />
+          {/* Desktop collapse toggle */}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1 rounded hover:bg-white/10 transition-colors"
+            className="hidden lg:block p-1 rounded hover:bg-white/10 transition-colors"
           >
             <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} />
+          </button>
+          {/* Mobile close */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden p-1 rounded hover:bg-white/10 transition-colors"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -148,6 +169,51 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
           </button>
         </form>
       </div>
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      {/* Mobile top bar */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-eq-ink flex items-center justify-between px-4">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 -ml-2 rounded-md text-white hover:bg-white/10 transition-colors"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt={productName} className="h-5 w-auto object-contain" />
+        ) : (
+          <span className="font-bold text-sm text-eq-sky">{productName}</span>
+        )}
+        <NotificationBell />
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile drawer */}
+      <aside className={cn(
+        'lg:hidden fixed top-0 left-0 z-50 h-screen w-64 bg-eq-ink text-white transition-transform duration-300 flex flex-col',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        {sidebarContent}
+      </aside>
+
+      {/* Desktop sidebar */}
+      <aside className={cn(
+        'hidden lg:flex flex-col h-screen bg-eq-ink text-white transition-all duration-200 sticky top-0',
+        collapsed ? 'w-16' : 'w-56'
+      )}>
+        {sidebarContent}
+      </aside>
+    </>
   )
 }

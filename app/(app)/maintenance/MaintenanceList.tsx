@@ -25,12 +25,23 @@ type CheckRow = MaintenanceCheck & {
   completed_count?: number
 } & Record<string, unknown>
 
+interface ScopeItem {
+  id: string
+  customer_id: string
+  site_id: string | null
+  scope_item: string
+  is_included: boolean
+  notes: string | null
+  financial_year: string
+}
+
 interface MaintenanceListProps {
   checks: CheckRow[]
   itemsMap: Record<string, MaintenanceCheckItem[]>
   jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
-  sites: Pick<Site, 'id' | 'name'>[]
+  sites: Pick<Site, 'id' | 'name' | 'customer_id'>[]
   technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
+  scopeItems: ScopeItem[]
   page: number
   totalPages: number
   isAdmin: boolean
@@ -49,7 +60,7 @@ function statusToBadge(status: CheckStatus) {
 }
 
 export function MaintenanceList({
-  checks, itemsMap, jobPlans, sites, technicians,
+  checks, itemsMap, jobPlans, sites, technicians, scopeItems,
   page, totalPages, isAdmin, canWrite: canWriteRole,
 }: MaintenanceListProps) {
   const router = useRouter()
@@ -199,6 +210,7 @@ export function MaintenanceList({
         jobPlans={jobPlans}
         sites={sites}
         technicians={technicians}
+        scopeItems={scopeItems}
       />
 
       <BatchCreateForm

@@ -4,6 +4,79 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 25] 2026-04-09 — Mobile, Defects, Export, Scope Integration & Onboarding
+
+### Added
+- **Mobile responsive sidebar** — hidden on mobile with hamburger menu, slide-in drawer with backdrop overlay, auto-close on route change, body scroll lock
+- **Defects table** (`supabase/migrations/0018_defects.sql`) — severity levels (low/medium/high/critical), status workflow (open → in_progress → resolved → closed), linked to checks, assets, and sites with RLS
+- **Raise/update defect actions** — `raiseDefectAction()` and `updateDefectAction()` in maintenance actions, auto-sets `resolved_at` timestamp
+- **CSV data export** — client-side blob download on Assets, Sites, and Customers tables via reusable `ExportButton` component and `exportToCsv()` utility
+- **Contract scope integration into check creation** — when creating a maintenance check and selecting a site, a scope info panel shows included/excluded contract items for that customer's current FY
+- **User onboarding wizard** — 3-step first-login setup (company details → first site → ready) shown as modal overlay for admin users when `setup_completed_at` is null. Skip option available. Migration `0019_onboarding.sql` adds flag to tenants table
+- **Onboarding server actions** — `updateCompanyDetailsAction`, `createFirstSiteAction`, `completeOnboardingAction`, `skipOnboardingAction`
+- **Notification type** — added `defect_raised` to notification type union
+
+### Changed
+- **Sidebar navigation** — removed separate ACB/NSX Testing links (consolidated under Testing in Sprint 24)
+- **Maintenance page** — sites query now includes `customer_id` for scope lookup
+- **BatchCreateForm** — updated site type to include `customer_id`
+- **Contract scope migration** — fixed trigger function name to `set_updated_at()` (matches production)
+
+### Files Created
+- `app/(app)/onboarding/OnboardingWizard.tsx`
+- `app/(app)/onboarding/actions.ts`
+- `components/ui/ExportButton.tsx`
+- `lib/utils/csv-export.ts`
+- `supabase/migrations/0018_defects.sql`
+- `supabase/migrations/0019_onboarding.sql`
+
+### Files Modified
+- `app/(app)/layout.tsx` — onboarding wizard integration, mobile padding
+- `app/(app)/maintenance/page.tsx` — scope items fetch
+- `app/(app)/maintenance/MaintenanceList.tsx` — scopeItems prop passthrough
+- `app/(app)/maintenance/CreateCheckForm.tsx` — scope info panel
+- `app/(app)/maintenance/BatchCreateForm.tsx` — site type update
+- `app/(app)/maintenance/actions.ts` — defect actions
+- `app/(app)/assets/AssetList.tsx` — CSV export button
+- `app/(app)/sites/SiteList.tsx` — CSV export button
+- `app/(app)/customers/CustomerList.tsx` — CSV export button
+- `components/ui/Sidebar.tsx` — mobile responsive rewrite
+- `lib/types/index.ts` — Defect, ContractScope types
+- `lib/actions/notifications.ts` — defect_raised type
+
+---
+
+## [Sprint 24] 2026-04-08 — Customer Logos, Asset Filters, Grouped View, Site Contacts, Contract Scope, Help Widget
+
+### Added
+- **Customer logos** — `logo_url` column on customers, displayed in site list customer column with fallback initial avatar
+- **Site contacts** — full CRUD for site contacts with primary contact flag, star icon, inline add/edit form (`SiteContacts.tsx`, `contact-actions.ts`)
+- **Migration `0016_customer_logos_and_site_contacts.sql`** — customer `logo_url`, `site_contacts` table with RLS
+- **DataTable column filters** — `filterable` prop on columns ('text' for search, 'select' for dropdown), client-side filtering built into DataTable
+- **Asset grouped view** — collapsible tree layout (Site → Location → Job Plan) with all assets (unpaginated), toggle between table and grouped views
+- **Contract scope reference page** (`/contract-scope`) — per-customer, per-FY scope management with included/excluded items, grouped list view
+- **Migration `0017_contract_scope.sql`** — `contract_scopes` table with customer/site/FY/scope_item/is_included
+- **Help widget** — floating command palette with 15+ help items, search, keyboard shortcut (?), route-change auto-close
+- **Consolidated testing menu** — unified `/testing` route with tab navigation (General/ACB/NSX) replacing separate sidebar items
+- **AU site map improvements** — proper Australia outline SVG, state borders, calibrated pin positions, pulse animation, legend
+
+### Files Created
+- `app/(app)/sites/[id]/SiteContacts.tsx`
+- `app/(app)/sites/[id]/contact-actions.ts`
+- `app/(app)/contract-scope/page.tsx`
+- `app/(app)/contract-scope/ContractScopeList.tsx`
+- `app/(app)/contract-scope/actions.ts`
+- `app/(app)/testing/layout.tsx`
+- `app/(app)/testing/TestingNav.tsx`
+- `app/(app)/testing/acb/page.tsx`
+- `app/(app)/testing/nsx/page.tsx`
+- `app/(app)/assets/AssetGroupedView.tsx`
+- `components/ui/HelpWidget.tsx`
+- `supabase/migrations/0016_customer_logos_and_site_contacts.sql`
+- `supabase/migrations/0017_contract_scope.sql`
+
+---
+
 ## [Sprint 23] 2026-04-08 — PM Asset Report, Report Designer & UX Improvements
 
 ### Added
