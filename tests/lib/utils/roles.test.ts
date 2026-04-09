@@ -16,16 +16,16 @@ describe('Role Utilities', () => {
       expect(isAdmin('supervisor')).toBe(false)
     })
 
-    it('returns false for analyst role', () => {
-      expect(isAdmin('analyst')).toBe(false)
+    it('returns false for technician role', () => {
+      expect(isAdmin('technician')).toBe(false)
     })
 
     it('returns false for null role', () => {
       expect(isAdmin(null)).toBe(false)
     })
 
-    it('returns false for viewer role', () => {
-      expect(isAdmin('viewer')).toBe(false)
+    it('returns false for read_only role', () => {
+      expect(isAdmin('read_only')).toBe(false)
     })
   })
 
@@ -42,12 +42,12 @@ describe('Role Utilities', () => {
       expect(canWrite('supervisor')).toBe(true)
     })
 
-    it('returns false for analyst role', () => {
-      expect(canWrite('analyst')).toBe(false)
+    it('returns false for technician role', () => {
+      expect(canWrite('technician')).toBe(false)
     })
 
-    it('returns false for viewer role', () => {
-      expect(canWrite('viewer')).toBe(false)
+    it('returns false for read_only role', () => {
+      expect(canWrite('read_only')).toBe(false)
     })
 
     it('returns false for null role', () => {
@@ -68,16 +68,16 @@ describe('Role Utilities', () => {
       expect(isSuperAdmin('supervisor')).toBe(false)
     })
 
-    it('returns false for analyst role', () => {
-      expect(isSuperAdmin('analyst')).toBe(false)
+    it('returns false for technician role', () => {
+      expect(isSuperAdmin('technician')).toBe(false)
     })
 
     it('returns false for null role', () => {
       expect(isSuperAdmin(null)).toBe(false)
     })
 
-    it('returns false for viewer role', () => {
-      expect(isSuperAdmin('viewer')).toBe(false)
+    it('returns false for read_only role', () => {
+      expect(isSuperAdmin('read_only')).toBe(false)
     })
   })
 })

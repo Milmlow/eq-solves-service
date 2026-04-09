@@ -20,7 +20,7 @@ export function createMockSupabase() {
   }
 
   return {
-    from: vi.fn(() => builder),
+    from: vi.fn((_table: string) => builder),
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user-id' } }, error: null }),
     },

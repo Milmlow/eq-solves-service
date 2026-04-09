@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/Button'
 import { AcbWorkflow } from './AcbWorkflow'
 import { AcbSiteCollection } from './AcbSiteCollection'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight } from 'lucide-react'
+import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight, Download, Upload } from 'lucide-react'
 import type { AcbTest, AcbTestReading, Asset } from '@/lib/types'
-import { createAcbTestAction } from '@/app/(app)/acb-testing/actions'
+import { createAcbTestAction, updateAcbDetailsAction } from '@/app/(app)/acb-testing/actions'
+import { exportAcbCollectionXlsx, parseAcbCollectionXlsx } from '@/lib/utils/acb-excel'
 
 type SitePick = { id: string; name: string }
 
@@ -23,6 +24,8 @@ export default function AcbTestingPage() {
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState<string | null>(null)
   const [noAssets, setNoAssets] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ success: number; errors: number } | null>(null)
 
   const supabase = createClient()
 
@@ -151,6 +154,38 @@ export default function AcbTestingPage() {
     }
   }
 
+  // Excel export
+  function handleExport() {
+    const siteName = sites.find(s => s.id === selectedSite)?.name ?? 'Site'
+    exportAcbCollectionXlsx(siteName, assets)
+  }
+
+  // Excel import
+  async function handleImport(file: File) {
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const rows = await parseAcbCollectionXlsx(file)
+      let success = 0
+      let errors = 0
+      for (const row of rows) {
+        if (!row.test_id) { errors++; continue }
+        const { asset_id: _a, test_id: _t, ...data } = row
+        const result = await updateAcbDetailsAction(row.test_id, {
+          ...data,
+          step1_status: 'complete',
+        } as Parameters<typeof updateAcbDetailsAction>[1])
+        if (result.success) success++
+        else errors++
+      }
+      setImportResult({ success, errors })
+      await loadSiteData()
+    } catch {
+      setImportResult({ success: 0, errors: 1 })
+    }
+    setImporting(false)
+  }
+
   const selectedAssetData = selectedAsset ? assets.find(a => a.id === selectedAsset) : null
   const selectedTest = selectedAssetData?.acb_test
 
@@ -272,16 +307,50 @@ export default function AcbTestingPage() {
             ))}
           </select>
           {selectedSite && assets.length > 0 && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setShowSiteCollection(true)}
-            >
-              <ClipboardList className="w-4 h-4 mr-1" />
-              Asset Collection
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setShowSiteCollection(true)}
+              >
+                <ClipboardList className="w-4 h-4 mr-1" />
+                Asset Collection
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleExport}
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Export Excel
+              </Button>
+              <label className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-gray-200 bg-white text-eq-ink hover:bg-gray-50 cursor-pointer transition-colors">
+                <Upload className="w-4 h-4" />
+                {importing ? 'Importing...' : 'Import Excel'}
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleImport(file)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            </>
           )}
         </div>
+        {importResult && (
+          <div className={`mt-2 p-2 rounded-md text-sm ${
+            importResult.errors > 0
+              ? 'bg-amber-50 border border-amber-200 text-amber-700'
+              : 'bg-green-50 border border-green-200 text-green-700'
+          }`}>
+            Import complete: {importResult.success} updated{importResult.errors > 0 ? `, ${importResult.errors} failed` : ''}
+          </div>
+        )}
       </Card>
 
       {/* No E1.25 assets message */}
