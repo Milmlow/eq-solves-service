@@ -306,6 +306,9 @@ export type AcbTestType = 'Initial' | 'Routine' | 'Special'
 
 export type AcbTestResult = 'Pending' | 'Pass' | 'Fail' | 'Defect'
 
+export type AcbPerformanceLevel = 'N1' | 'H1' | 'H2' | 'H3' | 'L1'
+export type AcbFixedWithdrawable = 'Fixed' | 'Withdrawable'
+
 export interface AcbTest {
   id: string
   tenant_id: string
@@ -332,6 +335,31 @@ export interface AcbTest {
   is_active: boolean
   created_at: string
   updated_at: string
+  // Asset Collection fields (migration 0023)
+  brand: string | null
+  breaker_type: string | null
+  name_location: string | null
+  performance_level: AcbPerformanceLevel | null
+  protection_unit_fitted: boolean | null
+  trip_unit_model: string | null
+  current_in: string | null
+  fixed_withdrawable: AcbFixedWithdrawable | null
+  // Protection Settings
+  long_time_ir: string | null
+  long_time_delay_tr: string | null
+  short_time_pickup_isd: string | null
+  short_time_delay_tsd: string | null
+  instantaneous_pickup: string | null
+  earth_fault_pickup: string | null
+  earth_fault_delay: string | null
+  earth_leakage_pickup: string | null
+  earth_leakage_delay: string | null
+  // Accessories
+  motor_charge: string | null
+  shunt_trip_mx1: string | null
+  shunt_close_xf: string | null
+  undervoltage_mn: string | null
+  second_shunt_trip: string | null
 }
 
 export interface AcbTestReading {

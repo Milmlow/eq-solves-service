@@ -173,6 +173,31 @@ export async function updateAcbDetailsAction(testId: string, data: {
   trip_settings_ii?: string | null
   trip_settings_ig?: string | null
   step1_status?: string
+  // Asset Collection fields
+  brand?: string | null
+  breaker_type?: string | null
+  name_location?: string | null
+  performance_level?: string | null
+  protection_unit_fitted?: boolean | null
+  trip_unit_model?: string | null
+  current_in?: string | null
+  fixed_withdrawable?: string | null
+  // Protection Settings
+  long_time_ir?: string | null
+  long_time_delay_tr?: string | null
+  short_time_pickup_isd?: string | null
+  short_time_delay_tsd?: string | null
+  instantaneous_pickup?: string | null
+  earth_fault_pickup?: string | null
+  earth_fault_delay?: string | null
+  earth_leakage_pickup?: string | null
+  earth_leakage_delay?: string | null
+  // Accessories
+  motor_charge?: string | null
+  shunt_trip_mx1?: string | null
+  shunt_close_xf?: string | null
+  undervoltage_mn?: string | null
+  second_shunt_trip?: string | null
 }) {
   try {
     const { supabase, role } = await requireUser()
