@@ -50,31 +50,13 @@ export default async function CustomerDetailPage({
 
   const customer = customerRaw as Customer
 
-  // Fetch counts and data in parallel
-  const [
-    sitesRes,
-    assetsRes,
-    contactsRes,
-  ] = await Promise.all([
-    // Sites count and data
+  // Fetch sites first (needed for asset count lookup)
+  const [sitesRes, contactsRes] = await Promise.all([
     supabase
       .from('sites')
       .select('*', { count: 'exact' })
       .eq('customer_id', id)
       .eq('is_active', true),
-    // Assets count
-    supabase
-      .from('assets')
-      .select('*', { count: 'exact', head: true })
-      .in('site_id', (await supabase
-        .from('sites')
-        .select('id')
-        .eq('customer_id', id)
-        .eq('is_active', true)
-        .then(r => (r.data || []).map((s: { id: string }) => s.id))),
-      )
-      .eq('is_active', true),
-    // Customer contacts
     supabase
       .from('customer_contacts')
       .select('*')
@@ -82,6 +64,17 @@ export default async function CustomerDetailPage({
       .order('is_primary', { ascending: false })
       .order('name'),
   ])
+
+  // Get asset count using the site IDs we already have
+  const siteIds = (sitesRes.data ?? []).map((s: { id: string }) => s.id)
+  let assetsRes: { count: number | null } = { count: 0 }
+  if (siteIds.length > 0) {
+    assetsRes = await supabase
+      .from('assets')
+      .select('*', { count: 'exact', head: true })
+      .in('site_id', siteIds)
+      .eq('is_active', true)
+  }
 
   const sitesData = (sitesRes.data ?? []) as Site[]
   const sitesCount = sitesRes.count ?? 0
