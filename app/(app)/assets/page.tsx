@@ -9,12 +9,13 @@ const PER_PAGE = 25
 export default async function AssetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; asset_type?: string; page?: string; show_archived?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; asset_type?: string; job_plan_id?: string; page?: string; show_archived?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
   const assetType = params.asset_type ?? ''
+  const jobPlanId = params.job_plan_id ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const showArchived = params.show_archived === '1'
 
@@ -68,6 +69,9 @@ export default async function AssetsPage({
   if (assetType) {
     query = query.eq('asset_type', assetType)
   }
+  if (jobPlanId) {
+    query = query.eq('job_plan_id', jobPlanId)
+  }
 
   const from = (page - 1) * PER_PAGE
   const to = from + PER_PAGE - 1
@@ -88,6 +92,7 @@ export default async function AssetsPage({
   if (search) allQuery = allQuery.or(`name.ilike.%${search}%,asset_type.ilike.%${search}%,serial_number.ilike.%${search}%,maximo_id.ilike.%${search}%,location.ilike.%${search}%`)
   if (siteId) allQuery = allQuery.eq('site_id', siteId)
   if (assetType) allQuery = allQuery.eq('asset_type', assetType)
+  if (jobPlanId) allQuery = allQuery.eq('job_plan_id', jobPlanId)
 
   const { data: allAssets } = await allQuery
 

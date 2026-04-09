@@ -84,10 +84,10 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
       header: 'Job Code',
       render: (row) => (row as JobPlanWithSite).code ?? '—',
     },
-    { key: 'name', header: 'Name' },
+    { key: 'name', header: 'Job Plan' },
     {
       key: 'type',
-      header: 'Type',
+      header: 'Name',
       render: (row) => (row as JobPlanWithSite).type ?? '—',
     },
     {

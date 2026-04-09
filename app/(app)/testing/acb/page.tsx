@@ -12,19 +12,17 @@ import type { AcbTest, AcbTestReading, Asset } from '@/lib/types'
 import { createAcbTestAction } from '@/app/(app)/acb-testing/actions'
 
 type SitePick = { id: string; name: string }
-type JobPlanPick = { id: string; name: string; code: string | null; type: string | null }
 
 export default function AcbTestingPage() {
   const [sites, setSites] = useState<SitePick[]>([])
   const [selectedSite, setSelectedSite] = useState<string>('')
-  const [jobPlans, setJobPlans] = useState<JobPlanPick[]>([])
-  const [selectedJobPlan, setSelectedJobPlan] = useState<string>('')
   const [assets, setAssets] = useState<(Asset & { acb_test?: AcbTest })[]>([])
   const [readings, setReadings] = useState<Record<string, AcbTestReading[]>>({})
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
   const [showSiteCollection, setShowSiteCollection] = useState(false)
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState<string | null>(null)
+  const [noAssets, setNoAssets] = useState(false)
 
   const supabase = createClient()
 
@@ -42,99 +40,99 @@ export default function AcbTestingPage() {
     loadSites()
   }, [])
 
-  // Load job plans when site changes
-  useEffect(() => {
+  // Load E1.25 assets when site changes
+  const loadSiteData = useCallback(async () => {
     if (!selectedSite) {
-      setJobPlans([])
-      setSelectedJobPlan('')
       setAssets([])
       setReadings({})
       setSelectedAsset(null)
-      return
-    }
-
-    async function loadJobPlans() {
-      const { data } = await supabase
-        .from('job_plans')
-        .select('id, name, code, type')
-        .eq('site_id', selectedSite)
-        .eq('is_active', true)
-        .order('name')
-
-      setJobPlans(data ?? [])
-      setSelectedJobPlan('')
-      setAssets([])
-      setReadings({})
-      setSelectedAsset(null)
-    }
-    loadJobPlans()
-  }, [selectedSite])
-
-  // Load assets when job plan changes
-  const loadAssets = useCallback(async () => {
-    if (!selectedSite || !selectedJobPlan) {
-      setAssets([])
-      setReadings({})
-      setSelectedAsset(null)
+      setNoAssets(false)
       return
     }
 
     setLoading(true)
 
-    // Fetch assets assigned to selected job plan
+    // Find the E1.25 / LVACB job plan (global — site_id may be null)
+    const { data: jobPlans } = await supabase
+      .from('job_plans')
+      .select('id, name, code')
+      .eq('is_active', true)
+
+    const e125Plan = (jobPlans ?? []).find(
+      (jp) => jp.name === 'E1.25' || jp.code === 'LVACB'
+    )
+
+    if (!e125Plan) {
+      setNoAssets(true)
+      setAssets([])
+      setReadings({})
+      setLoading(false)
+      return
+    }
+
+    // Fetch assets for this site assigned to E1.25
     const { data: assetsData } = await supabase
       .from('assets')
       .select('*')
       .eq('site_id', selectedSite)
-      .eq('job_plan_id', selectedJobPlan)
+      .eq('job_plan_id', e125Plan.id)
       .eq('is_active', true)
       .order('name')
 
-    const assetIds = (assetsData ?? []).map(a => a.id)
+    if (!assetsData || assetsData.length === 0) {
+      setNoAssets(true)
+      setAssets([])
+      setReadings({})
+      setLoading(false)
+      return
+    }
+
+    setNoAssets(false)
+    const assetIds = assetsData.map(a => a.id)
     const testsWithAssets: (Asset & { acb_test?: AcbTest })[] = []
 
-    if (assetIds.length > 0) {
-      const { data: testsData } = await supabase
-        .from('acb_tests')
+    const { data: testsData } = await supabase
+      .from('acb_tests')
+      .select('*')
+      .in('asset_id', assetIds)
+      .eq('is_active', true)
+
+    const testMap = new Map((testsData ?? []).map(t => [t.asset_id, t]))
+
+    for (const asset of assetsData) {
+      testsWithAssets.push({
+        ...asset,
+        acb_test: testMap.get(asset.id),
+      })
+    }
+
+    // Fetch readings
+    const testIds = (testsData ?? []).map(t => t.id)
+    if (testIds.length > 0) {
+      const { data: readingsData } = await supabase
+        .from('acb_test_readings')
         .select('*')
-        .in('asset_id', assetIds)
-        .eq('is_active', true)
+        .in('acb_test_id', testIds)
+        .order('sort_order')
 
-      const testMap = new Map((testsData ?? []).map(t => [t.asset_id, t]))
-
-      for (const asset of assetsData ?? []) {
-        testsWithAssets.push({
-          ...asset,
-          acb_test: testMap.get(asset.id),
-        })
+      const readingsMap: Record<string, AcbTestReading[]> = {}
+      for (const rdg of readingsData ?? []) {
+        const key = rdg.acb_test_id as string
+        if (!readingsMap[key]) readingsMap[key] = []
+        readingsMap[key].push(rdg as AcbTestReading)
       }
-
-      // Fetch readings
-      const testIds = (testsData ?? []).map(t => t.id)
-      if (testIds.length > 0) {
-        const { data: readingsData } = await supabase
-          .from('acb_test_readings')
-          .select('*')
-          .in('acb_test_id', testIds)
-          .order('sort_order')
-
-        const readingsMap: Record<string, AcbTestReading[]> = {}
-        for (const rdg of readingsData ?? []) {
-          const key = rdg.acb_test_id as string
-          if (!readingsMap[key]) readingsMap[key] = []
-          readingsMap[key].push(rdg as AcbTestReading)
-        }
-        setReadings(readingsMap)
-      }
+      setReadings(readingsMap)
+    } else {
+      setReadings({})
     }
 
     setAssets(testsWithAssets)
     setLoading(false)
-  }, [selectedSite, selectedJobPlan, supabase])
+  }, [selectedSite, supabase])
 
   useEffect(() => {
-    loadAssets()
-  }, [selectedJobPlan])
+    loadSiteData()
+  }, [selectedSite])
 
   // Create test and open workflow
   async function handleStartTest(asset: Asset) {
@@ -148,14 +146,13 @@ export default function AcbTestingPage() {
     const result = await createAcbTestAction(fd)
     setCreating(null)
     if (result.success) {
-      await loadAssets()
+      await loadSiteData()
       setSelectedAsset(asset.id)
     }
   }
 
   const selectedAssetData = selectedAsset ? assets.find(a => a.id === selectedAsset) : null
   const selectedTest = selectedAssetData?.acb_test
-  const selectedPlanData = jobPlans.find(jp => jp.id === selectedJobPlan)
 
   // Progress helpers
   const getStepStatus = (test: AcbTest | undefined, step: 'step1' | 'step2' | 'step3') => {
@@ -207,16 +204,14 @@ export default function AcbTestingPage() {
             ]}
           />
           <h1 className="text-3xl font-bold text-eq-sky mt-2">ACB Asset Collection</h1>
-          <p className="text-eq-grey text-sm mt-1">
-            {selectedPlanData ? `${selectedPlanData.name}${selectedPlanData.code ? ` (${selectedPlanData.code})` : ''}` : 'Site-level'} — breaker identification and settings
-          </p>
+          <p className="text-eq-grey text-sm mt-1">Site-level breaker identification and settings</p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => setShowSiteCollection(false)}>
           Back to Asset List
         </Button>
         <AcbSiteCollection
           assets={assets}
-          onUpdate={loadAssets}
+          onUpdate={loadSiteData}
         />
       </div>
     )
@@ -243,7 +238,7 @@ export default function AcbTestingPage() {
         <AcbWorkflow
           test={selectedTest}
           readings={readings[selectedTest.id] ?? []}
-          onUpdate={loadAssets}
+          onUpdate={loadSiteData}
         />
       </div>
     )
@@ -255,13 +250,13 @@ export default function AcbTestingPage() {
       <div>
         <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'ACB Testing' }]} />
         <h1 className="text-3xl font-bold text-eq-sky mt-2">ACB Testing Workflow</h1>
-        <p className="text-eq-grey text-sm mt-1">Site-based circuit breaker testing</p>
+        <p className="text-eq-grey text-sm mt-1">Site-based circuit breaker testing — E1.25 (LVACB) assets</p>
       </div>
 
-      {/* Site + Job Plan Selectors */}
-      <Card className="p-4 space-y-3">
-        <div>
-          <label className="block text-xs font-bold text-eq-grey uppercase mb-2">Select Site</label>
+      {/* Site Selector */}
+      <Card className="p-4">
+        <label className="block text-xs font-bold text-eq-grey uppercase mb-2">Select Site</label>
+        <div className="flex gap-2">
           <select
             value={selectedSite}
             onChange={(e) => {
@@ -269,62 +264,41 @@ export default function AcbTestingPage() {
               setSelectedAsset(null)
               setShowSiteCollection(false)
             }}
-            className="w-full h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            className="flex-1 h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
             <option value="">Choose a site...</option>
             {sites.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
+          {selectedSite && assets.length > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setShowSiteCollection(true)}
+            >
+              <ClipboardList className="w-4 h-4 mr-1" />
+              Asset Collection
+            </Button>
+          )}
         </div>
-
-        {selectedSite && (
-          <div>
-            <label className="block text-xs font-bold text-eq-grey uppercase mb-2">Job Plan</label>
-            <div className="flex gap-2">
-              <select
-                value={selectedJobPlan}
-                onChange={(e) => {
-                  setSelectedJobPlan(e.target.value)
-                  setSelectedAsset(null)
-                  setShowSiteCollection(false)
-                }}
-                className="flex-1 h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
-              >
-                <option value="">Choose a job plan...</option>
-                {jobPlans.map(jp => (
-                  <option key={jp.id} value={jp.id}>
-                    {jp.name}{jp.code ? ` (${jp.code})` : ''}{jp.type ? ` — ${jp.type}` : ''}
-                  </option>
-                ))}
-              </select>
-              {selectedJobPlan && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setShowSiteCollection(true)}
-                >
-                  <ClipboardList className="w-4 h-4 mr-1" />
-                  Asset Collection
-                </Button>
-              )}
-            </div>
-            {selectedSite && jobPlans.length === 0 && (
-              <p className="text-xs text-eq-grey mt-1">No job plans found for this site.</p>
-            )}
-          </div>
-        )}
       </Card>
 
+      {/* No E1.25 assets message */}
+      {selectedSite && !loading && noAssets && (
+        <Card className="p-8 text-center">
+          <p className="text-eq-grey">No E1.25 (LVACB) assets found for this site.</p>
+          <p className="text-xs text-eq-grey mt-1">
+            Ensure assets are assigned to the E1.25 job plan.
+          </p>
+        </Card>
+      )}
+
       {/* Asset Table */}
-      {selectedJobPlan && (
+      {selectedSite && !noAssets && (
         <div className="space-y-2">
           {loading ? (
             <Card className="p-8 text-center text-eq-grey">Loading...</Card>
-          ) : assets.length === 0 ? (
-            <Card className="p-8 text-center text-eq-grey">
-              No assets assigned to this job plan
-            </Card>
           ) : (
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">

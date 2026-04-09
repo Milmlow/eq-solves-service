@@ -39,12 +39,12 @@ export async function uploadLogoAction(formData: FormData) {
     const storagePath = `${tenantId}/logo.${ext}`
 
     const { error: uploadError } = await supabase.storage
-      .from('attachments')
+      .from('logos')
       .upload(storagePath, file, { upsert: true, contentType: file.type })
 
     if (uploadError) return { success: false, error: uploadError.message, url: null }
 
-    const { data: urlData } = supabase.storage.from('attachments').getPublicUrl(storagePath)
+    const { data: urlData } = supabase.storage.from('logos').getPublicUrl(storagePath)
 
     // Update tenant settings with logo URL
     const { error: updateError } = await supabase

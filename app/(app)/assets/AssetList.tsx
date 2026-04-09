@@ -82,7 +82,7 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: s.name }))
-  const typeFilterOptions = assetTypes.map((t) => ({ value: t, label: t }))
+  const jobPlanFilterOptions = allJobPlans.map((jp) => ({ value: jp.id, label: `${jp.name}${jp.code ? ` (${jp.code})` : ''}` }))
 
   return (
     <>
@@ -91,7 +91,7 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
           placeholder="Search assets..."
           filters={[
             { key: 'site_id', label: 'All Sites', options: siteFilterOptions },
-            { key: 'asset_type', label: 'All Types', options: typeFilterOptions },
+            { key: 'job_plan_id', label: 'All Job Plans', options: jobPlanFilterOptions },
           ]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">
