@@ -28,7 +28,7 @@ interface AssetListProps {
   allAssets: AssetWithSite[]
   sites: Pick<Site, 'id' | 'name'>[]
   assetTypes: string[]
-  allJobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
+  allJobPlans: Pick<JobPlan, 'id' | 'name' | 'code' | 'type'>[]
   page: number
   totalPages: number
   isAdmin: boolean
@@ -82,7 +82,7 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: s.name }))
-  const jobPlanFilterOptions = allJobPlans.map((jp) => ({ value: jp.id, label: `${jp.name}${jp.code ? ` (${jp.code})` : ''}` }))
+  const jobPlanFilterOptions = allJobPlans.map((jp) => ({ value: jp.id, label: `${jp.name}${jp.type ? ` - ${jp.type}` : ''}` }))
 
   return (
     <>

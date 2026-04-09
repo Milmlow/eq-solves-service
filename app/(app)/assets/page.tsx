@@ -99,7 +99,7 @@ export default async function AssetsPage({
   // Fetch all job plans for the form dropdown
   const { data: allJobPlans } = await supabase
     .from('job_plans')
-    .select('id, name, code')
+    .select('id, name, code, type')
     .eq('is_active', true)
     .order('name')
 
@@ -114,7 +114,7 @@ export default async function AssetsPage({
         allAssets={(allAssets ?? []) as never}
         sites={sites ?? []}
         assetTypes={assetTypes}
-        allJobPlans={(allJobPlans ?? []) as { id: string; name: string; code: string | null }[]}
+        allJobPlans={(allJobPlans ?? []) as { id: string; name: string; code: string | null; type: string | null }[]}
         page={page}
         totalPages={totalPages}
         isAdmin={isAdmin(userRole)}
