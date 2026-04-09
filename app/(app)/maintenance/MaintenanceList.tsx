@@ -66,7 +66,7 @@ export function MaintenanceList({
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
-  const [view, setView] = useState<'table' | 'kanban'>('table')
+  const [view, setView] = useState<'table' | 'kanban'>('kanban')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const columns: DataTableColumn<CheckRow>[] = [

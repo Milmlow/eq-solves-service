@@ -71,7 +71,7 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
       key: 'name',
       header: 'Customer',
       render: (row) => (
-        <div className="flex items-center gap-3">
+        <a href={`/customers/${row.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           {row.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={row.logo_url as string} alt="" className="w-8 h-8 rounded object-contain bg-gray-50 border border-gray-100 shrink-0" />
@@ -80,8 +80,8 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
               {(row.name as string)?.charAt(0)?.toUpperCase()}
             </div>
           )}
-          <span className="font-medium text-eq-ink">{row.name as string}</span>
-        </div>
+          <span className="font-medium text-eq-sky">{row.name as string}</span>
+        </a>
       ),
     },
     { key: 'email', header: 'Email' },

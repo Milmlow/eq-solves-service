@@ -120,8 +120,8 @@ export function SiteMapLeaflet({ sites }: SiteMapLeafletProps) {
   const sitesWithoutCoords = sites.length - sitesWithCoords.length
 
   return (
-    <div className="relative">
-      <div ref={mapRef} className="w-full h-[380px] rounded-xl overflow-hidden border border-gray-200" />
+    <div className="relative z-0">
+      <div ref={mapRef} className="w-full h-[380px] rounded-xl overflow-hidden border border-gray-200 z-0" />
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-50 rounded-xl">
           <p className="text-sm text-eq-grey">Loading map...</p>
@@ -145,6 +145,11 @@ export function SiteMapLeaflet({ sites }: SiteMapLeafletProps) {
         }
         .leaflet-container {
           font-family: system-ui, -apple-system, sans-serif;
+          z-index: 0 !important;
+        }
+        .leaflet-pane,
+        .leaflet-control-container {
+          z-index: 0 !important;
         }
       ` }} />
     </div>

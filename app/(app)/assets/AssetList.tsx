@@ -40,7 +40,7 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<'table' | 'grouped'>('table')
+  const [viewMode, setViewMode] = useState<'table' | 'grouped'>('grouped')
 
   function openCreate() {
     setSelected(null)

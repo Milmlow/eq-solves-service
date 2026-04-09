@@ -6,6 +6,9 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin } from '@/lib/utils/roles'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '@/lib/validations/customer'
 
+const LOGO_MAX_SIZE = 500 * 1024 // 500 KB
+const LOGO_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml']
+
 export async function createCustomerAction(formData: FormData) {
   try {
     const { supabase, tenantId, role } = await requireUser()
@@ -126,6 +129,53 @@ export async function toggleCustomerActiveAction(id: string, isActive: boolean) 
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'customer', entityId: id, summary: isActive ? 'Reactivated customer' : 'Deactivated customer' })
+    revalidatePath('/customers')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+export async function uploadCustomerLogoAction(customerId: string, formData: FormData) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const file = formData.get('file') as File | null
+    if (!file || file.size === 0) return { success: false, error: 'No file provided.' }
+    if (file.size > LOGO_MAX_SIZE) return { success: false, error: 'Logo exceeds 500 KB limit.' }
+    if (!LOGO_ALLOWED_TYPES.includes(file.type)) {
+      return { success: false, error: 'File type not allowed. Use PNG, JPG, or SVG.' }
+    }
+
+    // Ensure 'logos' bucket exists by attempting upload
+    // Build storage path: {tenant_id}/customers/{customer_id}/{timestamp}_{filename}
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const storagePath = `${tenantId}/customers/${customerId}/${Date.now()}_${safeName}`
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from('logos')
+      .upload(storagePath, file, { contentType: file.type, upsert: true })
+
+    if (uploadError) return { success: false, error: uploadError.message }
+
+    // Get public URL
+    const { data } = supabase.storage
+      .from('logos')
+      .getPublicUrl(storagePath)
+
+    const logoUrl = data?.publicUrl
+
+    // Update customer with logo URL
+    const { error: updateError } = await supabase
+      .from('customers')
+      .update({ logo_url: logoUrl })
+      .eq('id', customerId)
+
+    if (updateError) return { success: false, error: updateError.message }
+
+    await logAuditEvent({ action: 'update', entityType: 'customer', entityId: customerId, summary: 'Uploaded customer logo' })
     revalidatePath('/customers')
     return { success: true }
   } catch (e: unknown) {

@@ -125,6 +125,19 @@ export interface SiteContact {
   updated_at: string
 }
 
+export interface CustomerContact {
+  id: string
+  tenant_id: string
+  customer_id: string
+  name: string
+  role: string | null
+  email: string | null
+  phone: string | null
+  is_primary: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface Site {
   id: string
   tenant_id: string
@@ -304,8 +317,18 @@ export interface AcbTest {
   cb_make: string | null
   cb_model: string | null
   cb_serial: string | null
+  cb_rating: string | null
+  cb_poles: string | null
+  trip_unit: string | null
+  trip_settings_ir: string | null
+  trip_settings_isd: string | null
+  trip_settings_ii: string | null
+  trip_settings_ig: string | null
   overall_result: AcbTestResult
   notes: string | null
+  step1_status: 'pending' | 'in_progress' | 'complete'
+  step2_status: 'pending' | 'in_progress' | 'complete'
+  step3_status: 'pending' | 'in_progress' | 'complete'
   is_active: boolean
   created_at: string
   updated_at: string

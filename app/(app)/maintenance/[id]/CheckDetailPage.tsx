@@ -12,6 +12,8 @@ import {
   bulkUpdateWorkOrdersAction,
   updateCheckAssetAction,
   completeAllCheckAssetsAction,
+  batchForceCompleteAssetsAction,
+  updateCheckItemResultAction,
 } from '../actions'
 import { formatDate } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
@@ -59,6 +61,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [showPasteModal, setShowPasteModal] = useState(false)
   const [pasteText, setPasteText] = useState('')
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
 
   const canAct = canWriteRole || isAssigned
 
@@ -104,6 +107,24 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     return sortDir === 'asc' ? ' ▲' : ' ▼'
   }
 
+  function toggleAssetSelection(assetId: string) {
+    const newSelected = new Set(selectedAssetIds)
+    if (newSelected.has(assetId)) {
+      newSelected.delete(assetId)
+    } else {
+      newSelected.add(assetId)
+    }
+    setSelectedAssetIds(newSelected)
+  }
+
+  function toggleAllAssets(checked: boolean) {
+    if (checked) {
+      setSelectedAssetIds(new Set(sortedAssets.map(a => a.id)))
+    } else {
+      setSelectedAssetIds(new Set())
+    }
+  }
+
   // Actions
   async function handleStart() {
     setError(null); setLoading(true)
@@ -140,18 +161,56 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     if (!result.success) setError(result.error ?? 'Failed to complete all assets.')
   }
 
+  async function handleBatchComplete() {
+    const selectedIds = Array.from(selectedAssetIds)
+    if (selectedIds.length === 0) return
+    if (!confirm(`Mark ${selectedIds.length} selected asset(s) and their tasks as complete? This cannot be undone.`)) return
+    setError(null); setLoading(true)
+    const result = await batchForceCompleteAssetsAction(check.id, selectedIds)
+    setLoading(false)
+    if (result.success) {
+      setSelectedAssetIds(new Set())
+    } else {
+      setError(result.error ?? 'Failed to complete selected assets.')
+    }
+  }
+
   async function handleItemResult(itemId: string, result: CheckItemResult | null) {
-    const formData = new FormData()
-    formData.set('result', result ?? '')
-    await updateCheckItemAction(check.id, itemId, formData)
+    setError(null)
+    const item = items.find(i => i.id === itemId)
+    if (!item) return
+
+    // If the check is still in_progress, use old behavior for compatibility
+    if (check.status === 'in_progress') {
+      const formData = new FormData()
+      formData.set('result', result ?? '')
+      await updateCheckItemAction(check.id, itemId, formData)
+    } else {
+      // For completed assets (after force-complete), allow result changes
+      const resultValue = await updateCheckItemResultAction(check.id, itemId, result)
+      if (!resultValue.success) {
+        setError(resultValue.error ?? 'Failed to update task result.')
+      }
+    }
   }
 
   async function handleItemNotes(itemId: string, notes: string) {
-    const formData = new FormData()
+    setError(null)
     const item = items.find(i => i.id === itemId)
-    formData.set('result', item?.result ?? '')
-    formData.set('notes', notes)
-    await updateCheckItemAction(check.id, itemId, formData)
+    if (!item) return
+
+    if (check.status === 'in_progress') {
+      const formData = new FormData()
+      formData.set('result', item.result ?? '')
+      formData.set('notes', notes)
+      await updateCheckItemAction(check.id, itemId, formData)
+    } else {
+      // For completed assets, use new action
+      const resultValue = await updateCheckItemResultAction(check.id, itemId, item.result ?? null, notes)
+      if (!resultValue.success) {
+        setError(resultValue.error ?? 'Failed to update task comments.')
+      }
+    }
   }
 
   const handleAssetNote = useCallback(async (checkAssetId: string, notes: string) => {
@@ -273,28 +332,53 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 
       {/* Asset Table — full width */}
       {checkAssets.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-            <span className="text-sm font-bold text-eq-ink">
-              Maintenance Check Assets ({checkAssets.length})
-            </span>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-eq-grey">
-                {completedAssets}/{checkAssets.length} completed
+        <>
+          {selectedAssetIds.size > 0 && canAct && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+              <span className="text-sm font-medium text-eq-ink flex-1">
+                {selectedAssetIds.size} asset(s) selected
               </span>
-              {canAct && (
-                <Button size="sm" variant="secondary" onClick={() => setShowPasteModal(true)}>
-                  <ClipboardPaste className="w-4 h-4 mr-1" /> Paste WO #s
-                </Button>
-              )}
+              <Button size="sm" onClick={handleBatchComplete} disabled={loading}>
+                <CheckCheck className="w-4 h-4 mr-1" /> Complete {selectedAssetIds.size} Selected
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setSelectedAssetIds(new Set())}>
+                Clear
+              </Button>
             </div>
-          </div>
+          )}
+
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <span className="text-sm font-bold text-eq-ink">
+                Maintenance Check Assets ({checkAssets.length})
+              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-eq-grey">
+                  {completedAssets}/{checkAssets.length} completed
+                </span>
+                {canAct && (
+                  <Button size="sm" variant="secondary" onClick={() => setShowPasteModal(true)}>
+                    <ClipboardPaste className="w-4 h-4 mr-1" /> Paste WO #s
+                  </Button>
+                )}
+              </div>
+            </div>
 
           {/* Full-width table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
+                  {canAct && (
+                    <th className="w-10 px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={selectedAssetIds.size === sortedAssets.length && sortedAssets.length > 0}
+                        onChange={(e) => toggleAllAssets(e.target.checked)}
+                        className="cursor-pointer"
+                      />
+                    </th>
+                  )}
                   {([
                     ['maximo_id', 'ID', 'w-24'],
                     ['name', 'Name', ''],
@@ -324,6 +408,8 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                     onToggle={() => setExpandedAssetId(expandedAssetId === ca.id ? null : ca.id)}
                     canAct={canAct}
                     checkStatus={check.status}
+                    isSelected={selectedAssetIds.has(ca.id)}
+                    onToggleSelect={() => toggleAssetSelection(ca.id)}
                     onForceComplete={() => handleForceComplete(ca.id)}
                     onItemResult={handleItemResult}
                     onItemNotes={handleItemNotes}
@@ -335,6 +421,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             </table>
           </div>
         </div>
+        </>
       )}
 
       {checkAssets.length === 0 && (
@@ -360,8 +447,8 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 /* ──────── Asset Row ──────── */
 
 function AssetRow({
-  ca, items, isExpanded, onToggle, canAct, checkStatus, onForceComplete,
-  onItemResult, onItemNotes, onAssetNote, onAssetWO,
+  ca, items, isExpanded, onToggle, canAct, checkStatus, isSelected, onToggleSelect,
+  onForceComplete, onItemResult, onItemNotes, onAssetNote, onAssetWO,
 }: {
   ca: CheckAssetWithDetails
   items: MaintenanceCheckItem[]
@@ -369,6 +456,8 @@ function AssetRow({
   onToggle: () => void
   canAct: boolean
   checkStatus: CheckStatus
+  isSelected: boolean
+  onToggleSelect: () => void
   onForceComplete: () => void
   onItemResult: (itemId: string, result: CheckItemResult | null) => void
   onItemNotes: (itemId: string, notes: string) => void
@@ -388,19 +477,28 @@ function AssetRow({
     <>
       {/* Main row */}
       <tr
-        className={`cursor-pointer transition-colors ${
+        className={`transition-colors ${
           isExpanded ? 'bg-eq-ice/40' : 'hover:bg-gray-50'
-        } ${allDone ? 'opacity-60' : ''}`}
-        onClick={onToggle}
+        } ${allDone ? 'opacity-60' : ''} ${isSelected ? 'bg-blue-50' : ''}`}
       >
-        <td className="px-4 py-2.5 font-mono text-eq-ink whitespace-nowrap">
+        {canAct && (
+          <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={onToggleSelect}
+              className="cursor-pointer"
+            />
+          </td>
+        )}
+        <td className="px-4 py-2.5 font-mono text-eq-ink whitespace-nowrap cursor-pointer" onClick={onToggle}>
           <span className="flex items-center gap-1">
             {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-eq-grey shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-eq-grey shrink-0" />}
             {asset?.maximo_id ?? '—'}
           </span>
         </td>
-        <td className="px-4 py-2.5 text-eq-ink">{asset?.name ?? '—'}</td>
-        <td className="px-4 py-2.5 text-eq-grey">{asset?.location ?? '—'}</td>
+        <td className="px-4 py-2.5 text-eq-ink cursor-pointer" onClick={onToggle}>{asset?.name ?? '—'}</td>
+        <td className="px-4 py-2.5 text-eq-grey cursor-pointer" onClick={onToggle}>{asset?.location ?? '—'}</td>
 
         {/* WO # — editable */}
         <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
@@ -467,7 +565,7 @@ function AssetRow({
       {/* Expanded: Outstanding tasks for this asset */}
       {isExpanded && (
         <tr>
-          <td colSpan={8} className="bg-gray-50 px-0 py-0">
+          <td colSpan={canAct ? 9 : 8} className="bg-gray-50 px-0 py-0">
             <div className="px-6 py-4">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-bold text-eq-ink">
@@ -529,7 +627,7 @@ function TaskRow({
   onNotes: (itemId: string, notes: string) => void
 }) {
   const [editingNotes, setEditingNotes] = useState(false)
-  const isActive = checkStatus === 'in_progress' && canAct
+  const isActive = canAct
 
   const resultColors: Record<string, string> = {
     pass: 'text-green-600',

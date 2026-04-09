@@ -112,6 +112,20 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
         )
       },
     },
+    {
+      key: 'address',
+      header: 'Address',
+      render: (row) => {
+        const site = row as SiteWithCustomer
+        const address = site.address?.trim()
+        if (address) {
+          return <span title={address}>{address.length > 40 ? `${address.substring(0, 40)}…` : address}</span>
+        }
+        const fallback = [site.city, site.state].filter(Boolean).join(', ')
+        if (fallback) return fallback
+        return '—'
+      },
+    },
     { key: 'city', header: 'City' },
     { key: 'state', header: 'State' },
     {

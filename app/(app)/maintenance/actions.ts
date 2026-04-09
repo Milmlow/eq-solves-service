@@ -902,3 +902,136 @@ export async function completeAllCheckAssetsAction(checkId: string) {
     return { success: false, error: (e as Error).message }
   }
 }
+
+/**
+ * Batch force-complete multiple assets at once.
+ * Marks each asset as completed and all its incomplete items as 'pass'.
+ */
+export async function batchForceCompleteAssetsAction(checkId: string, checkAssetIds: string[]) {
+  try {
+    const { supabase, role, user } = await requireUser()
+
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('assigned_to')
+      .eq('id', checkId)
+      .single()
+
+    if (!check) return { success: false, error: 'Check not found.' }
+    const isAssigned = check.assigned_to === user.id
+    if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
+
+    if (!checkAssetIds || checkAssetIds.length === 0) {
+      return { success: false, error: 'No assets selected.' }
+    }
+
+    const now = new Date().toISOString()
+
+    // Mark all incomplete items for selected assets as pass
+    const { error: itemsErr } = await supabase
+      .from('maintenance_check_items')
+      .update({ result: 'pass', completed_at: now, completed_by: user.id })
+      .in('check_asset_id', checkAssetIds)
+      .is('result', null)
+
+    if (itemsErr) return { success: false, error: itemsErr.message }
+
+    // Mark all selected check_assets as completed
+    const { error: caErr } = await supabase
+      .from('check_assets')
+      .update({ status: 'completed', completed_at: now })
+      .in('id', checkAssetIds)
+
+    if (caErr) return { success: false, error: caErr.message }
+
+    revalidatePath('/maintenance')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Update a check item result (pass/fail/na/null + comments).
+ */
+export async function updateCheckItemResultAction(
+  checkId: string,
+  itemId: string,
+  result: 'pass' | 'fail' | 'na' | null,
+  comment?: string
+) {
+  try {
+    const { supabase, role, user } = await requireUser()
+
+    // Verify check ownership/assignment
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('assigned_to, status')
+      .eq('id', checkId)
+      .single()
+
+    if (!check) return { success: false, error: 'Check not found.' }
+
+    const isAssigned = check.assigned_to === user.id
+    if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
+
+    // Build the update payload
+    const updateData: Record<string, unknown> = {}
+
+    if (result === null) {
+      updateData.result = null
+      updateData.completed_at = null
+      updateData.completed_by = null
+    } else {
+      updateData.result = result
+      updateData.completed_at = new Date().toISOString()
+      updateData.completed_by = user.id
+    }
+
+    if (comment !== undefined) {
+      updateData.notes = comment || null
+    }
+
+    // Get the current item to check its asset
+    const { data: item } = await supabase
+      .from('maintenance_check_items')
+      .select('check_asset_id, result')
+      .eq('id', itemId)
+      .eq('check_id', checkId)
+      .single()
+
+    if (!item) return { success: false, error: 'Item not found.' }
+
+    // Update the item
+    const { error: itemErr } = await supabase
+      .from('maintenance_check_items')
+      .update(updateData)
+      .eq('id', itemId)
+      .eq('check_id', checkId)
+
+    if (itemErr) return { success: false, error: itemErr.message }
+
+    // If changing a task to 'fail', revert the asset status from 'completed' to 'pending'
+    if (result === 'fail' && item.check_asset_id) {
+      const { data: asset } = await supabase
+        .from('check_assets')
+        .select('status')
+        .eq('id', item.check_asset_id)
+        .single()
+
+      if (asset && asset.status === 'completed') {
+        const { error: assetErr } = await supabase
+          .from('check_assets')
+          .update({ status: 'pending', completed_at: null })
+          .eq('id', item.check_asset_id)
+
+        if (assetErr) return { success: false, error: assetErr.message }
+      }
+    }
+
+    revalidatePath('/maintenance')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}

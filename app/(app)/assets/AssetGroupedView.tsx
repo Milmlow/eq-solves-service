@@ -149,11 +149,12 @@ function JobPlanGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: (
               <button
                 key={asset.id}
                 onClick={() => onAssetClick(asset)}
-                className="flex items-center gap-3 px-3 py-2 rounded bg-gray-50 hover:bg-eq-ice/50 transition-colors text-left text-sm"
+                className="flex items-start gap-3 px-3 py-2 rounded bg-gray-50 hover:bg-eq-ice/50 transition-colors text-left text-sm"
               >
-                <span className="font-mono text-xs text-eq-grey w-24 shrink-0">{asset.maximo_id ?? '—'}</span>
-                <span className="font-medium text-eq-ink truncate flex-1">{asset.name}</span>
-                <span className="text-xs text-eq-grey shrink-0">{asset.asset_type}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-eq-ink truncate">{asset.name} — {asset.asset_type || ''}</p>
+                  <p className="font-mono text-xs text-eq-grey mt-0.5">{asset.maximo_id ?? '—'}</p>
+                </div>
                 <StatusBadge status={asset.is_active ? 'active' : 'inactive'} />
               </button>
             ))}

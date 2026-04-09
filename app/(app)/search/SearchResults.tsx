@@ -46,6 +46,10 @@ export function SearchResults({ query, results }: SearchResultsProps) {
     }
   }
 
+  function handlePromptClick(prompt: string) {
+    router.push(`/search?q=${encodeURIComponent(prompt)}`)
+  }
+
   return (
     <>
       <form onSubmit={handleSearch} className="flex items-center gap-3">
@@ -55,7 +59,7 @@ export function SearchResults({ query, results }: SearchResultsProps) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Search assets, sites, customers, tests, instruments..."
+            placeholder="Search sites, assets, customers, tests..."
             className="w-full h-12 pl-11 pr-4 border border-gray-200 rounded-lg text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
             autoFocus
           />
@@ -67,6 +71,24 @@ export function SearchResults({ query, results }: SearchResultsProps) {
           Search
         </button>
       </form>
+
+      {!query && (
+        <div className="mt-8 p-6 border border-gray-200 rounded-lg bg-gray-50">
+          <p className="text-sm font-medium text-eq-ink mb-3">Try searching for:</p>
+          <div className="flex flex-wrap gap-2">
+            {['SY4', 'ACB', 'UPS', 'INSTR001'].map((prompt) => (
+              <button
+                key={prompt}
+                onClick={() => handlePromptClick(prompt)}
+                className="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm text-eq-ink hover:border-eq-sky hover:bg-eq-ice/30 transition-colors font-medium"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-eq-grey mt-3">Examples: site codes, test types, asset types, Maximo IDs</p>
+        </div>
+      )}
 
       {query && (
         <div>

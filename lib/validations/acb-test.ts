@@ -9,6 +9,13 @@ export const CreateAcbTestSchema = z.object({
   cb_make: z.string().max(100).nullable().optional(),
   cb_model: z.string().max(100).nullable().optional(),
   cb_serial: z.string().max(100).nullable().optional(),
+  cb_rating: z.string().max(50).nullable().optional(),
+  cb_poles: z.string().max(10).nullable().optional(),
+  trip_unit: z.string().max(100).nullable().optional(),
+  trip_settings_ir: z.string().max(50).nullable().optional(),
+  trip_settings_isd: z.string().max(50).nullable().optional(),
+  trip_settings_ii: z.string().max(50).nullable().optional(),
+  trip_settings_ig: z.string().max(50).nullable().optional(),
   overall_result: z.enum(['Pending', 'Pass', 'Fail', 'Defect']).default('Pending'),
   notes: z.string().nullable().optional(),
 })

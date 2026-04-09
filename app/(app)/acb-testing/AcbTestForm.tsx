@@ -126,9 +126,23 @@ export function AcbTestForm({ open, onClose, test, assets, sites, technicians }:
 
         <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide pt-4">Circuit Breaker Details</h3>
 
-        <FormInput label="CB Make" name="cb_make" defaultValue={test?.cb_make ?? ''} placeholder="e.g. ABB, Schneider" />
-        <FormInput label="CB Model" name="cb_model" defaultValue={test?.cb_model ?? ''} placeholder="e.g. Emax E2" />
-        <FormInput label="CB Serial" name="cb_serial" defaultValue={test?.cb_serial ?? ''} placeholder="Serial number" />
+        <div className="grid grid-cols-2 gap-4">
+          <FormInput label="CB Make" name="cb_make" defaultValue={test?.cb_make ?? ''} placeholder="e.g. ABB, Schneider" />
+          <FormInput label="CB Model" name="cb_model" defaultValue={test?.cb_model ?? ''} placeholder="e.g. Emax E2" />
+          <FormInput label="CB Serial" name="cb_serial" defaultValue={test?.cb_serial ?? ''} placeholder="Serial number" />
+          <FormInput label="CB Rating" name="cb_rating" defaultValue={(test as any)?.cb_rating ?? ''} placeholder="e.g. 630A" />
+          <FormInput label="CB Poles" name="cb_poles" defaultValue={(test as any)?.cb_poles ?? ''} placeholder="e.g. 3P" />
+          <FormInput label="Trip Unit" name="trip_unit" defaultValue={(test as any)?.trip_unit ?? ''} placeholder="e.g. Electronic" />
+        </div>
+
+        <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide pt-4">Trip Settings (Optional)</h3>
+
+        <div className="grid grid-cols-4 gap-4">
+          <FormInput label="Ir (A)" name="trip_settings_ir" defaultValue={(test as any)?.trip_settings_ir ?? ''} placeholder="Rated current" />
+          <FormInput label="Isd (A)" name="trip_settings_isd" defaultValue={(test as any)?.trip_settings_isd ?? ''} placeholder="Short delay" />
+          <FormInput label="Ii (A)" name="trip_settings_ii" defaultValue={(test as any)?.trip_settings_ii ?? ''} placeholder="Instantaneous" />
+          <FormInput label="Ig (A)" name="trip_settings_ig" defaultValue={(test as any)?.trip_settings_ig ?? ''} placeholder="Ground" />
+        </div>
 
         <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide pt-4">Test Details</h3>
 
