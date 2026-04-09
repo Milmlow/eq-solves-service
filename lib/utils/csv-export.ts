@@ -10,7 +10,7 @@ export interface CsvColumn<T> {
   format?: (row: T) => string
 }
 
-export function exportToCsv<T extends Record<string, unknown>>(
+export function exportToCsv<T>(
   rows: T[],
   columns: CsvColumn<T>[],
   filename: string
@@ -24,7 +24,7 @@ export function exportToCsv<T extends Record<string, unknown>>(
       if (col.format) {
         return escapeCell(col.format(row))
       }
-      const val = row[col.key]
+      const val = (row as Record<string, unknown>)[col.key]
       if (val === null || val === undefined) return ''
       if (typeof val === 'boolean') return val ? 'Yes' : 'No'
       return escapeCell(String(val))
