@@ -136,6 +136,8 @@ export interface Site {
   state: string | null
   postcode: string | null
   country: string
+  latitude: number | null
+  longitude: number | null
   is_active: boolean
   created_at: string
   updated_at: string
