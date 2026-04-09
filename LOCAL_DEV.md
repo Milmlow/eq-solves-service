@@ -117,7 +117,7 @@ npx tsc --noEmit   # TypeScript check without emitting files
 
 ## 7. Database
 
-Migrations are in `supabase/migrations/` (0001–0010). They've already been applied to your Supabase project. If you need to reset or apply to a new project, run them in order via the Supabase SQL Editor or the Supabase CLI.
+Migrations are in `supabase/migrations/` (0001–0023). They've already been applied to your Supabase project. If you need to reset or apply to a new project, run them in order via the Supabase SQL Editor or the Supabase CLI.
 
 ---
 

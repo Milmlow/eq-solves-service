@@ -1,6 +1,6 @@
 # USER MANUAL NOTES — EQ Solves PM Platform
 
-Last updated: 2026-04-08 · After Sprint 22 (Phase 8 Complete)
+Last updated: 2026-04-09 · After Sprint 27 (Phase 10 Complete)
 Purpose: Raw material for the user manual. Compiled during development — assembly only at the end.
 Maintained by: Cowork (append notes each sprint when new features ship)
 
@@ -610,7 +610,7 @@ The instruments list highlights overdue calibrations in red. If an instrument's 
 | Dark mode | Not supported in v1 |
 | M365 / Azure AD SSO | Email/password + MFA is the only login method in v1 |
 | Offline mode | Not supported — internet connection required |
-| Logo upload | Currently URL input only — file upload coming in a later sprint |
+| Logo upload | Tenant logos upload to `logos` storage bucket; customer logos via URL |
 | CSV import limit | 500 assets maximum per import file |
 | Attachment download links | Expire after 1 hour — click the file again to generate a fresh link |
 
@@ -713,3 +713,36 @@ The instruments list highlights overdue calibrations in red. If an instrument's 
 - 3 new migrations applied: 0012 (job plan restructure), 0013 (Maximo-aligned schema), 0014 (check_assets work_order)
 - Notification bell fixed with React portal pattern (no longer clipped by sidebar)
 - `tsc --noEmit` → 0 non-test errors. Deployed to Netlify.
+
+### Sprint 23 (PM Asset Reports & Report Designer)
+- PM asset report: download a detailed DOCX report from any completed maintenance check. Includes cover page, executive summary with KPI grid, per-asset task checklists with colour-coded results, and a sign-off page
+- Report settings (Admin → Report Settings): customise which sections appear in reports, set company details (name, address, ABN, phone), add or remove sign-off fields, override header/footer text
+- Complete All Assets button: on in-progress checks, marks every incomplete task as pass in one click (with confirmation)
+- Tenant logo now embedded on report cover pages
+
+### Sprint 24 (Customer Logos, Site Contacts, Contract Scope, Help Widget)
+- Customer logos display in the sites list next to the customer name (fallback: initial avatar)
+- Site contacts: manage contacts per site with name, email, phone, role, and primary contact flag. Add/edit inline on the site detail page
+- Contract scope: Admin → Contract Scope to manage included/excluded items per customer per financial year. Shown as a reference panel during maintenance check creation
+- Asset grouped view: toggle between table view and a collapsible tree layout (Site → Location → Job Plan)
+- DataTable column filters: text search and dropdown filters built into table columns
+- Help widget: press ? anywhere to open a searchable command palette with 15+ help items
+- Testing menu consolidated: General, ACB, and NSX testing are now tabs under a single /testing route
+
+### Sprint 25 (Mobile, Defects, CSV Export, Onboarding)
+- Mobile responsive sidebar: collapses to a hamburger menu on small screens, slides in as a drawer with backdrop
+- Defect tracking: raise defects from failed maintenance check items with severity (low/medium/high/critical) and status tracking (open → in progress → resolved → closed)
+- CSV export: download Assets, Sites, or Customers as CSV files using the Export button on each list page
+- User onboarding wizard: new admin users see a 3-step setup on first login (company details → first site → ready). Can be skipped
+
+### Sprint 27 (ACB Testing Rebuild & Excel Batch Fill)
+- ACB testing page completely rebuilt: auto-filters assets by E1.25/LVACB job plan per site, shows a table with Asset Collection, Visual & Functional, and Electrical Testing status columns
+- 3-step ACB workflow:
+  - Asset Collection (Step 1): breaker identification, trip unit & ratings, protection settings (only shown when protection unit is fitted), accessories with voltage dropdowns
+  - Visual & Functional (Step 2, default tab): 23 inspection items across 5 sections (Visual Inspection, Service Operations, Functional Tests Chassis incl. op counter, Functional Tests Device, Auxiliaries). Each item: OK / Not OK / N/A with comment on failure
+  - Electrical Testing (Step 3): contact resistance R/W/B with 30% variance warning, insulation resistance closed (7 combos) and open (4 combos), temperature, secondary injection, maintenance completion
+- Site-level asset collection view: expandable cards per CB — fill in all collection fields for an entire site at once
+- Excel batch fill: export a pre-populated .xlsx per site with all asset collection fields, fill it offline, then import it back to batch-update all data
+- Job plan filter on assets page: "All Job Plans" dropdown shows plan name + type (e.g. "E1.25 - Low Voltage Air Circuit Breaker")
+- Job Plans table column labels corrected: "Name" → "Job Plan", "Type" → "Name"
+- Logo upload action fixed to use `logos` storage bucket

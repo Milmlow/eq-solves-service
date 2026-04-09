@@ -4,6 +4,43 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 27] 2026-04-09 — ACB Testing Rebuild, Asset Collection, Excel Batch Fill
+
+### Added
+- **ACB Asset Collection fields** — 22 new columns on `acb_tests` table: breaker identification (brand, breaker_type, name_location, performance_level N1/H1/H2/H3/L1, protection_unit_fitted, trip_unit_model, current_in, fixed_withdrawable), protection settings (long_time_ir/delay, short_time_pickup/delay, instantaneous, earth_fault_pickup/delay, earth_leakage_pickup/delay), accessories (motor_charge, shunt_trip_mx1, shunt_close_xf, undervoltage_mn, second_shunt_trip). Migration `0023_acb_full_asset_collection.sql` (already applied to production)
+- **AcbSiteCollection component** — site-level asset collection with expandable cards per CB, conditional protection settings (shown only when protection unit fitted), voltage dropdowns for all accessories
+- **AcbWorkflow 3-tab rewrite** — Tab 1 (Asset Collection), Tab 2 (Visual & Functional — 23 items in 5 sections: Visual Inspection, Service Operations, Functional Tests Chassis incl. numeric op counter, Functional Tests Device, Auxiliaries), Tab 3 (Electrical Testing — contact resistance R/W/B with 30% variance warning, IR Closed 7 combos, IR Open 4 combos, temperature, secondary injection, maintenance completion). Default tab is Visual & Functional
+- **Excel batch fill** — export pre-populated .xlsx per site with all asset collection fields, import filled spreadsheet to batch-update all CB data. Uses SheetJS (`xlsx` package)
+- **Job plan filter on Assets page** — replaced "All Types" dropdown with "All Job Plans" dropdown showing `name - type` (e.g. "E1.25 - Low Voltage Air Circuit Breaker"). Server-side filtering by `job_plan_id`
+- **Logos storage bucket** — created in Supabase production with public read, authenticated write/update/delete RLS policies
+
+### Changed
+- **ACB testing page** — full rewrite: auto-filters E1.25/LVACB assets per site (global job plan lookup, `site_id` may be null), shows Asset/Type/Collection/V&F/Electrical/Progress/Action columns, "Start Test" creates record and opens workflow, "Continue" resumes existing test
+- **Job Plans table** — column labels corrected: "Name" → "Job Plan", "Type" → "Name"
+- **Logo upload action** — fixed to use `logos` storage bucket instead of `attachments` bucket
+- **updateAcbDetailsAction** — expanded to accept all 22 new asset collection fields
+- **AcbTest interface** — added all new fields plus `AcbPerformanceLevel` and `AcbFixedWithdrawable` type aliases
+- **CLAUDE.md** — comprehensive project context documentation
+
+### Files Created
+- `supabase/migrations/0023_acb_full_asset_collection.sql`
+- `app/(app)/testing/acb/AcbSiteCollection.tsx`
+- `lib/utils/acb-excel.ts`
+
+### Files Modified
+- `lib/types/index.ts` — AcbTest interface + new type aliases
+- `app/(app)/acb-testing/actions.ts` — expanded updateAcbDetailsAction
+- `app/(app)/testing/acb/page.tsx` — full rewrite
+- `app/(app)/testing/acb/AcbWorkflow.tsx` — full rewrite with 3 tabs
+- `app/(app)/assets/page.tsx` — job_plan_id filter param + query
+- `app/(app)/assets/AssetList.tsx` — job plan dropdown filter
+- `app/(app)/job-plans/JobPlanList.tsx` — column label fix
+- `app/(app)/admin/settings/actions.ts` — logos bucket fix
+- `package.json` — added xlsx dependency
+- `CLAUDE.md`, `ARCHITECTURE.md`, `CHANGELOG.md`, `ROADMAP.md`, `SPEC.md`
+
+---
+
 ## [Sprint 25] 2026-04-09 — Mobile, Defects, Export, Scope Integration & Onboarding
 
 ### Added

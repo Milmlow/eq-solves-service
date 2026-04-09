@@ -1,7 +1,7 @@
 # EQ Solves — Product Specification
 
 > Feature spec in testable form. Maps to UAT, user manual, and handoff documentation.
-> Last updated: Sprint 22 complete — 08 Apr 2026.
+> Last updated: Sprint 27 complete — 09 Apr 2026.
 
 ---
 
@@ -131,11 +131,19 @@ Built by EQ Solutions (CDC Solutions Pty Ltd). First commercial customer: SKS Te
 - Full CRUD for Air Circuit Breaker tests
 - Fields: asset (auto-fills site), test date, tested by, test type (Initial/Routine/Special), overall result (Pending/Pass/Fail/Defect), notes
 - Circuit breaker details: CB make, CB model, CB serial number
+- **22 asset collection fields** on `acb_tests`: breaker identification (brand, breaker_type, name_location, performance_level N1/H1/H2/H3/L1, protection_unit_fitted, trip_unit_model, current_in, fixed_withdrawable), protection settings (long_time_ir/delay, short_time_pickup/delay, instantaneous, earth_fault_pickup/delay, earth_leakage_pickup/delay), accessories (motor_charge, shunt_trip_mx1, shunt_close_xf, undervoltage_mn, second_shunt_trip)
+- **3-step workflow** (AcbWorkflow component):
+  - Step 1 (Asset Collection): breaker identification, trip unit & ratings, protection settings (conditional on protection_unit_fitted), accessories with voltage dropdowns
+  - Step 2 (Visual & Functional — default tab): 23 items in 5 sections (Visual Inspection 4, Service Operations 3, Functional Tests Chassis 3 incl. numeric op counter, Functional Tests Device 11, Auxiliaries 2). OK/Not OK/N/A with comment on failure
+  - Step 3 (Electrical Testing): contact resistance R/W/B µΩ with 30% variance warning, IR Closed (7 combos MΩ), IR Open (4 MΩ), temperature °C, secondary injection, maintenance completion
+- **Site-level asset collection** (AcbSiteCollection): expandable cards per CB with all collection fields
+- **E1.25 auto-filter**: ACB testing page auto-finds global E1.25/LVACB job plan, shows table of matching assets per site with status columns
+- **Excel batch fill**: export pre-populated .xlsx per site, fill offline, import back to batch-update all CB data (SheetJS)
 - Inline readings: add/delete (label, value (required), unit, pass/fail)
 - Attachments: supervisor+ upload, admin delete. Entity type: `acb_test`
 - Filter by site/result; search by asset name, CB make, CB model, test type
 - Dashboard: ACB Test stats row (Total/Passed/Failed/Defects)
-- Sidebar: ACB Testing nav link with Shield icon
+- Consolidated under Testing tab navigation (General/ACB/NSX)
 
 ### ACB Reports (DOCX) ✅
 - Per-site report covering all active ACB tests — generated on demand from ACB Testing page
@@ -212,6 +220,63 @@ Built by EQ Solutions (CDC Solutions Pty Ltd). First commercial customer: SKS Te
 - Self-demotion check updated: admins and super_admins cannot demote themselves below admin
 - Role hierarchy enforced consistently across invite, role change, and active toggle actions
 
+### PM Asset Reports (DOCX) ✅
+- Per-asset maintenance report generated from completed checks
+- Report structure: cover page (logo, site, tenant branding), site overview, contents page with internal links, executive summary with KPI grid (pass rates, task breakdown), per-asset sections with colour-coded task checklists, defect/action callouts, confirmation statements, sign-off page
+- Configurable via tenant report settings: section toggles, company details, custom header/footer, sign-off fields (JSONB)
+- Download: API route `GET /api/pm-asset-report?check_id=xxx`
+- Permissions: supervisor+
+
+### Report Settings (Admin) ✅
+- Tenant-level report template customisation at `/admin/reports`
+- Section toggles: cover page, site overview, contents, executive summary, sign-off
+- Company details: name, address, ABN, phone
+- Custom header/footer text overrides
+- Configurable sign-off fields (add/remove signature lines)
+- Migration `0015_report_settings.sql`
+
+### Customer Logos & Site Contacts ✅
+- Customer `logo_url` displayed in site list with fallback initial avatar
+- Site contacts: full CRUD per site with primary contact flag, star icon, inline form
+- Migration `0016_customer_logos_and_site_contacts.sql`
+
+### Contract Scope ✅
+- Per-customer, per-FY scope management at `/contract-scope`
+- Included/excluded items, grouped list view
+- Integrated into check creation: scope info panel shown when selecting a site
+- Migration `0017_contract_scope.sql`
+
+### Defect Tracking ✅
+- Defect table with severity (low/medium/high/critical) and status workflow (open→in_progress→resolved→closed)
+- Linked to checks, assets, and sites with RLS
+- Raise/update defect actions from maintenance checks
+- Migration `0018_defects.sql`
+
+### CSV Data Export ✅
+- Client-side blob download on Assets, Sites, and Customers tables
+- Reusable `ExportButton` component and `exportToCsv()` utility
+
+### Mobile Responsive Sidebar ✅
+- Hidden on mobile with hamburger menu
+- Slide-in drawer with backdrop overlay, auto-close on route change, body scroll lock
+
+### User Onboarding Wizard ✅
+- 3-step first-login setup (company details → first site → ready) for admin users
+- Modal overlay when `setup_completed_at` is null, skip option available
+- Migration `0019_onboarding.sql`
+
+### Help Widget ✅
+- Floating command palette with 15+ help items
+- Search, keyboard shortcut (?), route-change auto-close
+
+### Asset Grouped View ✅
+- Collapsible tree layout: Site → Location → Job Plan with all assets (unpaginated)
+- Toggle between table view and grouped view
+
+### Consolidated Testing Menu ✅
+- Unified `/testing` route with tab navigation (General/ACB/NSX)
+- Replaces separate sidebar items
+
 ---
 
 ## Modules (Planned)
@@ -247,7 +312,7 @@ Built by EQ Solutions (CDC Solutions Pty Ltd). First commercial customer: SKS Te
 - [ ] Admin cannot self-deactivate or self-demote
 
 ### Assets
-- [ ] List renders with site/type filters functional
+- [ ] List renders with site/job plan filters functional (job plan dropdown shows `name - type`)
 - [ ] Create/edit validates required fields
 - [ ] CSV import: column mapping, preview, site validation, per-row error report
 - [ ] Attachments: upload, download (signed URL), delete (admin)
@@ -275,15 +340,19 @@ Built by EQ Solutions (CDC Solutions Pty Ltd). First commercial customer: SKS Te
 - [ ] Result badge correct colour per result
 
 ### ACB Test Records
-- [ ] List renders with site/result filters functional
-- [ ] Create/edit validates required fields (asset, test date)
-- [ ] Asset selection auto-fills site (read-only)
-- [ ] CB details section (make, model, serial) displayed in detail view
+- [ ] ACB testing page auto-filters E1.25/LVACB assets (global job plan, `site_id` null)
+- [ ] Table shows Asset/Type/Collection/V&F/Electrical/Progress/Action columns per site
+- [ ] "Start Test" creates acb_test record and opens 3-tab workflow
+- [ ] Tab 1 (Asset Collection): all 22 fields render, protection settings conditional on protection_unit_fitted
+- [ ] Tab 2 (Visual & Functional — default): 23 items in 5 sections, OK/Not OK/N/A with comment on failure
+- [ ] Tab 3 (Electrical Testing): contact resistance with 30% variance warning, IR Closed/Open, temperature, secondary injection
+- [ ] Site-level asset collection: expandable cards per CB, saves step1_status = complete
+- [ ] Excel export generates .xlsx with all collection fields pre-populated
+- [ ] Excel import parses uploaded .xlsx and batch-updates all CB data
 - [ ] Readings add/delete inline; value is required
 - [ ] Result badge correct colour per result (Pending/Pass/Fail/Defect)
 - [ ] Attachments: upload (supervisor+), download (signed URL), delete (admin)
 - [ ] Dashboard ACB stats row shows correct counts
-- [ ] Sidebar link to ACB Testing present
 
 ### ACB Reports
 - [ ] Generate Report button visible to supervisor+ only
@@ -378,6 +447,23 @@ Built by EQ Solutions (CDC Solutions Pty Ltd). First commercial customer: SKS Te
 - Global search: one search box covers assets, sites, customers, ACB tests, NSX tests, and instruments. Results are clickable links.
 - Instrument register: track test instruments with calibration dates. Overdue calibrations flagged in red. Statuses: Active, Out for Cal, Retired, Lost.
 - User management now supports super_admin role alongside admin for user administration.
+
+### ACB Testing Rebuild (Sprint 27)
+- ACB testing now uses a 3-step workflow: Asset Collection → Visual & Functional → Electrical Testing. Default tab opens on Visual & Functional.
+- Assets are auto-filtered by the E1.25 (LVACB) job plan — no manual selection needed.
+- Site-level asset collection lets you expand each CB card and fill in all identification, protection, and accessory fields.
+- Excel batch fill: export a pre-populated spreadsheet, fill it offline, then import it back to update all CBs at once.
+- Voltage dropdowns on accessories: Not installed, 24V, 48V, 110V, 120V, 240V, Other.
+- Visual & Functional tab has 23 inspection items across 5 sections. Each item is OK / Not OK / N/A with a comment field on failure.
+- Electrical Testing tab includes contact resistance with 30% variance warnings, insulation resistance (closed and open), temperature, secondary injection, and maintenance completion fields.
+
+### Reports, Scope & Onboarding (Sprints 23–25)
+- PM asset reports can be downloaded from completed maintenance checks as DOCX. Report sections, company details, and sign-off fields are configurable in Admin → Report Settings.
+- Contract scope: Admin → Contract Scope to manage included/excluded items per customer per financial year. Shown during check creation for reference.
+- Customer logos display in the sites list. Site contacts can be managed on the site detail page.
+- CSV export buttons on Assets, Sites, and Customers pages for quick data download.
+- First-login onboarding wizard guides new admins through company details and first site creation.
+- Help widget: press ? anywhere to open a searchable command palette.
 
 ### Workflows (Sprints 7–11)
 - Maintenance checks are created by supervisors or admins and assigned to a technician.

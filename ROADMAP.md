@@ -1,7 +1,7 @@
 # EQ Solves — Project Roadmap
 
 > Source of truth for sprint progress. Updated by Cowork at the end of every sprint alongside CHANGELOG.md.
-> Last updated: Sprint 22 complete — 08 Apr 2026.
+> Last updated: Sprint 27 complete — 09 Apr 2026.
 
 ---
 
@@ -17,6 +17,8 @@
 | Phase 6: Data Onboarding | Universal CSV import for all entity types | ✅ Complete |
 | Phase 7: Operational Maturity | Site detail, batch checks, PM reports, Kanban, notifications, tests | ✅ Complete |
 | Phase 8: Maximo Integration | IBM Maximo data model alignment, check-to-asset junction, full-page check detail | ✅ Complete |
+| Phase 9: Reports & UX | PM asset reports, report designer, customer logos, contract scope, help widget, onboarding | ✅ Complete |
+| Phase 10: ACB Rebuild | Full ACB testing workflow, asset collection, Excel batch fill, E1.25 auto-filter | ✅ Complete |
 
 ---
 
@@ -82,6 +84,20 @@
 |--------|-------|-----------------|--------|
 | 22 | Maximo Alignment & Check Rebuild | IBM Maximo data model alignment (job plan restructure, per-item frequency flags, check_assets junction table), two-path check creation (auto-frequency + manual Maximo IDs), full-page maintenance check detail with sortable asset table and expandable task rows, paste WO#s from Excel, force-complete per asset, 4,802 asset import, clickable rows across all tables, dark site test support | ✅ Done |
 
+### Phase 9 — Reports & UX
+
+| Sprint | Focus | Key Deliverables | Status |
+|--------|-------|-----------------|--------|
+| 23 | PM Asset Reports & Report Designer | PM asset report DOCX generator (cover page, executive summary, per-asset task checklists, sign-off page), report settings page (section toggles, company details, sign-off fields), Complete All Assets button, AI Strategy document | ✅ Done |
+| 24 | Customer Logos, Contract Scope, Help Widget | Customer logos, site contacts CRUD, contract scope per customer/FY, DataTable column filters, asset grouped view, help widget command palette, consolidated testing menu (/testing tabs), AU site map improvements | ✅ Done |
+| 25 | Mobile, Defects, Export, Onboarding | Mobile responsive sidebar, defects table + actions, CSV data export (Assets/Sites/Customers), contract scope in check creation, user onboarding wizard (3-step), notifications for defects | ✅ Done |
+
+### Phase 10 — ACB Rebuild
+
+| Sprint | Focus | Key Deliverables | Status |
+|--------|-------|-----------------|--------|
+| 27 | ACB Testing Rebuild & Excel Batch Fill | ACB 3-step workflow rewrite (Asset Collection/V&F 23 items/Electrical Testing), 22 asset collection columns on acb_tests (migration 0023), AcbSiteCollection expandable cards, E1.25 auto-filter, Excel batch fill (export/import via SheetJS), job plan filter on assets page, logo upload bucket fix | ✅ Done |
+
 ---
 
 ## Migrations Applied
@@ -102,6 +118,12 @@
 | 0012_job_plan_restructure.sql | Job plan code/type columns, per-item frequency boolean flags, is_dark_site | ✅ Applied |
 | 0013_maximo_aligned_schema.sql | Asset job_plan_id FK, check_assets junction, maintenance check frequency/custom_name/maximo fields | ✅ Applied |
 | 0014_check_assets_work_order.sql | work_order_number on check_assets | ✅ Applied |
+| 0015_report_settings.sql | Report config columns on tenant_settings (section toggles, company details, sign-off fields) | ✅ Applied |
+| 0016_customer_logos_and_site_contacts.sql | Customer logo_url, site_contacts table with RLS | ✅ Applied |
+| 0017_contract_scope.sql | contract_scopes table (customer/site/FY/scope_item/is_included) | ✅ Applied |
+| 0018_defects.sql | Defects table with severity/status workflow, linked to checks/assets/sites | ✅ Applied |
+| 0019_onboarding.sql | setup_completed_at flag on tenants table | ✅ Applied |
+| 0023_acb_full_asset_collection.sql | 22 asset collection columns on acb_tests (breaker ID, protection settings, accessories) | ✅ Applied |
 
 ---
 
