@@ -8,7 +8,7 @@ import { AcbWorkflow } from './AcbWorkflow'
 import { AcbSiteCollection } from './AcbSiteCollection'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight } from 'lucide-react'
-import type { AcbTest, AcbTestReading, Asset, JobPlan } from '@/lib/types'
+import type { AcbTest, AcbTestReading, Asset } from '@/lib/types'
 import { createAcbTestAction } from '@/app/(app)/acb-testing/actions'
 
 type SitePick = { id: string; name: string }
@@ -60,7 +60,7 @@ export default function AcbTestingPage() {
       .eq('is_active', true)
 
     const e125Plan = (jobPlans ?? []).find(
-      (jp: JobPlan) => jp.name === 'E1.25' || jp.code === 'LVACB'
+      (jp) => jp.name === 'E1.25' || jp.code === 'LVACB'
     )
 
     if (!e125Plan) {
