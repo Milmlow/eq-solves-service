@@ -17,6 +17,7 @@ import { canWrite } from '@/lib/utils/roles'
 
 export async function GET(request: NextRequest) {
   const checkId = request.nextUrl.searchParams.get('check_id')
+  const format = (request.nextUrl.searchParams.get('format') ?? 'detailed') as 'simple' | 'detailed'
   if (!checkId) {
     return NextResponse.json({ error: 'check_id is required' }, { status: 400 })
   }
@@ -147,12 +148,13 @@ export async function GET(request: NextRequest) {
     printedDate: printedDateStr,
     assets: checklistAssets,
     tenantProductName: productName,
+    format,
   }
 
   try {
     const buffer = await generateMaintenanceChecklist(checklistInput)
     const checkName = check.custom_name ?? 'Checklist'
-    const filename = `${checkName}-checklist.docx`
+    const filename = `${checkName}-checklist-${format}.docx`
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

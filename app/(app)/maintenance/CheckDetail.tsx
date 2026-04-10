@@ -43,11 +43,11 @@ type SortKey = 'maximo_id' | 'name' | 'location' | 'work_order' | 'job_plan' | '
 type SortDir = 'asc' | 'desc'
 
 function statusToBadge(status: CheckStatus) {
-  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'blocked' | 'overdue'> = {
+  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
     scheduled: 'not-started',
     in_progress: 'in-progress',
     complete: 'complete',
-    cancelled: 'blocked',
+    cancelled: 'cancelled',
     overdue: 'overdue',
   }
   return map[status]

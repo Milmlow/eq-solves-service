@@ -257,8 +257,8 @@ export default async function SiteDetailPage({
               key: 'status',
               header: 'Status',
               render: (row) => {
-                const statusMap: Record<string, 'not-started' | 'in-progress' | 'complete' | 'blocked' | 'overdue'> = {
-                  scheduled: 'not-started', in_progress: 'in-progress', complete: 'complete', cancelled: 'blocked', overdue: 'overdue',
+                const statusMap: Record<string, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
+                  scheduled: 'not-started', in_progress: 'in-progress', complete: 'complete', cancelled: 'cancelled', overdue: 'overdue',
                 }
                 return (
                   <StatusBadge

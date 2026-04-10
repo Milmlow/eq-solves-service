@@ -324,21 +324,27 @@ export default function AcbTestingPage() {
                 <Download className="w-4 h-4 mr-1" />
                 Export Excel
               </Button>
-              <label className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-gray-200 bg-white text-eq-ink hover:bg-gray-50 cursor-pointer transition-colors">
-                <Upload className="w-4 h-4" />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => document.getElementById('acb-import-file')?.click()}
+                disabled={importing}
+              >
+                <Upload className="w-4 h-4 mr-1" />
                 {importing ? 'Importing...' : 'Import Excel'}
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  disabled={importing}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleImport(file)
-                    e.target.value = ''
-                  }}
-                />
-              </label>
+              </Button>
+              <input
+                id="acb-import-file"
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                disabled={importing}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleImport(file)
+                  e.target.value = ''
+                }}
+              />
             </>
           )}
         </div>

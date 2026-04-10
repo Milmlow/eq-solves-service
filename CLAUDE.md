@@ -45,6 +45,18 @@ Excel batch fill: export pre-populated .xlsx per site, fill offline, import back
 
 Site-level Asset Collection view: expandable cards per CB with all collection fields.
 
+## NSX Testing Module
+
+3-step workflow framework at `/testing/nsx` mirroring ACB. Site-based asset loading filtered by NSX / MCCB job plan (name containing 'NSX' or code `LVNSX`/`MCCB`), falls back to all site assets if no matching plan. Step 1 Asset Collection is a full form (brand, breaker type, serial, current In, trip unit model, poles, fixed/withdrawable/plug_in, protection settings); Steps 2 & 3 are scaffolded placeholders pending field-set finalisation. State via `step1/2/3_status` columns on `nsx_tests` (migration 0026).
+
+## Testing Summary
+
+`/testing/summary` — combined register of ACB, NSX and General test records with site / kind / status / date filters, KPI cards and progress bars. Used for tracking work-in-progress tests across all three modules.
+
+## Reports
+
+`/reports` — compliance dashboard with maintenance compliance rate, overdue checks, test pass rate, ACB & NSX workflow progress, defects register summary (status + severity), maintenance compliance by site (top 10) and a 6-month trend chart (tests run vs maintenance checks due).
+
 ## Job Plans
 - Job plans may be global (`site_id = null`) or site-specific
 - Columns: code (Job Code), name (Job Plan e.g. E1.25), type (descriptive Name e.g. "Low Voltage Air Circuit Breaker")
@@ -53,5 +65,18 @@ Site-level Asset Collection view: expandable cards per CB with all collection fi
 ## Assets Page
 - Filterable by site and job plan (dropdown shows `name - type` e.g. "E1.25 - Low Voltage Air Circuit Breaker")
 - Grouped view and table view with site-based grouping
+
+## Conventions
+- `requireUser()` at the top of every server action — resolves user, tenant, role
+- `tsc --noEmit` at 0 errors before any sprint is closed
+- No credentials hardcoded — `.env.local` only, never committed
+- No deployment without explicit Royce instruction in chat
+- Working before refactoring
+- Auth changes → flag to chat before acting
+- All mutations use Next.js server actions: `requireUser()` → role check → Zod validation → Supabase mutation → audit log → `revalidatePath()`
+- Zod v4: use `.error.issues[0]` not `.errors[0]`; use `error:` option not `errorMap:`
+- Client components use `createClient()` from `lib/supabase/client`; server components/actions use `lib/supabase/server`
+- Soft deletes via `is_active` everywhere — no hard deletes (except consumed MFA codes and removed job plan items)
+- All DataTable instances use `onRowClick` — no icon action columns
 
 @AGENTS.md

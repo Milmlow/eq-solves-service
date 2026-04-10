@@ -4,6 +4,45 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 28] 2026-04-10 — NSX Workflow, Testing Summary, Reports Expansion, Maintenance UX
+
+### Added
+- **NSX 3-step workflow** — mirrors ACB pattern. Migration `0026_nsx_workflow.sql` adds `step1_status`/`step2_status`/`step3_status` plus extended asset-collection columns (brand, breaker_type, name_location, current_in, fixed_withdrawable (fixed/withdrawable/plug_in), protection_unit_fitted, trip_unit_model, long/short-time protection, instantaneous, earth fault, and accessory voltages). New `NsxWorkflow.tsx` component with Step 1 Asset Collection form and Step 2/3 placeholders. `/testing/nsx` page rewritten as a site-based workflow (job-plan lookup by name 'NSX' or code 'LVNSX'/'MCCB')
+- **Testing Summary register** at `/testing/summary` — combined view of ACB, NSX and General test records with site / kind / status / date filters, 4 KPI cards, progress bars, and direct links into each workflow
+- **Maintenance checklist print — Simple vs Detailed** — Simple format outputs a single asset register table (asset ID, name, location, WO #, done, notes); Detailed format retains the current per-asset breakdown. `/api/maintenance-checklist` accepts a `format` query param
+- **Maintenance kanban archive / delete** — hover-visible Archive and Cancel buttons on each kanban card (admins only), wired into `archiveCheckAction` and `cancelCheckAction`
+- **Cancelled status badge** — distinct variant replacing the misleading 'blocked' label previously shown for cancelled maintenance checks
+- **Reports expansion** — ACB & NSX workflow progress cards, defects register summary (totals by status + severity), maintenance compliance by site (top 10), and a 6-month tests/maintenance trend chart
+- **Job Plans detail** — clicking a row now opens a wider slide panel (`wide`) with a full items table (columns #, Description, Required, Actions) for easier editing
+- **ACB Import Excel button** — visual parity with Export Excel / Asset Collection buttons (hidden `<input>` triggered by a `<Button>`)
+- **Testing nav reorder** — "General Testing (under development)" moved to the right of the nav
+
+### Files Created
+- `supabase/migrations/0026_nsx_workflow.sql`
+- `app/(app)/testing/nsx/NsxWorkflow.tsx`
+- `app/(app)/testing/summary/page.tsx`
+
+### Files Modified
+- `lib/types/index.ts` — extended `NsxTest` interface
+- `app/(app)/nsx-testing/actions.ts` — added `updateNsxDetailsAction`
+- `app/(app)/testing/nsx/page.tsx` — rewritten as site-based workflow page
+- `app/(app)/testing/TestingNav.tsx` — tab reorder + Summary entry
+- `app/(app)/testing/acb/page.tsx` — import button consistency
+- `app/(app)/reports/page.tsx` — workflow progress, defects, site compliance, trend chart
+- `app/(app)/job-plans/JobPlanForm.tsx` — wide panel + items table
+- `app/(app)/maintenance/KanbanBoard.tsx` — archive/delete buttons per card
+- `app/(app)/maintenance/MaintenanceList.tsx` — pass isAdmin to kanban
+- `app/(app)/maintenance/[id]/CheckDetailPage.tsx` — simple/detailed print links
+- `app/api/maintenance-checklist/route.ts` — format param
+- `lib/reports/maintenance-checklist.ts` — asset register (simple) branch
+- `components/ui/StatusBadge.tsx` — cancelled variant
+- Five call sites updated from `'blocked'` → `'cancelled'`
+
+### Verification
+- `tsc --noEmit`: 0 errors
+
+---
+
 ## [Sprint 27] 2026-04-09 — ACB Testing Rebuild, Asset Collection, Excel Batch Fill
 
 ### Added

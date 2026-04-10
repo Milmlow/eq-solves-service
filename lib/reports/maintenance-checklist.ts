@@ -49,6 +49,9 @@ export interface MaintenanceChecklistInput {
 
   // Company branding
   tenantProductName: string
+
+  // Format: 'simple' = asset register only, 'detailed' = full task breakdown per asset
+  format?: 'simple' | 'detailed'
 }
 
 export interface ChecklistAsset {
@@ -333,6 +336,77 @@ function buildAssetSection(asset: ChecklistAsset): (Paragraph | Table)[] {
   return children
 }
 
+// ─────────── Simple Asset Register ───────────
+
+function buildAssetRegister(assets: ChecklistAsset[]): (Paragraph | Table)[] {
+  const children: (Paragraph | Table)[] = []
+
+  children.push(new Paragraph({
+    spacing: { before: 160, after: 120 },
+    children: [new TextRun({
+      text: 'Asset Register',
+      size: 28,
+      font: FONT_HEADING,
+      bold: true,
+    })]
+  }))
+
+  children.push(new Paragraph({
+    spacing: { after: 200 },
+    children: [new TextRun({
+      text: `Total assets: ${assets.length}. Tick each asset when complete.`,
+      size: 18,
+      font: FONT,
+    })]
+  }))
+
+  // Register table: # | Asset ID | Name | Location | WO # | Complete | Notes
+  const col1 = 500   // #
+  const col2 = 1400  // ID
+  const col3 = 3200  // Name
+  const col4 = 2400  // Location
+  const col5 = 1600  // WO #
+  const col6 = 900   // Complete checkbox
+  const col7 = 3300  // Notes
+
+  children.push(new Table({
+    width: { size: col1 + col2 + col3 + col4 + col5 + col6 + col7, type: WidthType.DXA },
+    columnWidths: [col1, col2, col3, col4, col5, col6, col7],
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          makeCell('#', col1, { bold: true, size: 18 }),
+          makeCell('Asset ID', col2, { bold: true, size: 18 }),
+          makeCell('Name', col3, { bold: true, size: 18 }),
+          makeCell('Location', col4, { bold: true, size: 18 }),
+          makeCell('WO #', col5, { bold: true, size: 18 }),
+          makeCell('Done', col6, { bold: true, size: 16 }),
+          makeCell('Notes', col7, { bold: true, size: 18 }),
+        ],
+      }),
+      ...assets.map((asset, idx) =>
+        new TableRow({
+          children: [
+            makeCell(String(idx + 1), col1, { size: 18 }),
+            makeCell(asset.assetId ?? '—', col2, { size: 18 }),
+            makeCell(asset.assetName, col3, { size: 18 }),
+            makeCell(asset.location ?? '—', col4, { size: 18 }),
+            makeCell(asset.workOrderNumber ?? '', col5, { size: 18 }),
+            makeCheckboxCell(col6),
+            makeCell('', col7, { size: 18 }),
+          ],
+        })
+      ),
+    ],
+  }))
+
+  children.push(spacer(200))
+  children.push(divider())
+
+  return children
+}
+
 // ─────────── Sign-off Block ───────────
 
 function buildSignOffBlock(): (Paragraph | Table)[] {
@@ -427,13 +501,19 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
   // Header info
   bodyChildren.push(...buildInfoBlock(input))
 
-  // Asset sections with page breaks
-  for (let i = 0; i < input.assets.length; i++) {
-    // Page break before asset (except first)
-    if (i > 0) {
-      bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+  const format = input.format ?? 'detailed'
+
+  if (format === 'simple') {
+    // Simple: single asset register table only
+    bodyChildren.push(...buildAssetRegister(input.assets))
+  } else {
+    // Detailed: per-asset task breakdown with page breaks
+    for (let i = 0; i < input.assets.length; i++) {
+      if (i > 0) {
+        bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+      }
+      bodyChildren.push(...buildAssetSection(input.assets[i]))
     }
-    bodyChildren.push(...buildAssetSection(input.assets[i]))
   }
 
   // Sign-off block at the end

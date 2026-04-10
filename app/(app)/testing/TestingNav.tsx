@@ -4,13 +4,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils/cn'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { Zap, Shield, CircuitBoard, Gauge } from 'lucide-react'
+import { Zap, Shield, CircuitBoard, Gauge, ClipboardList } from 'lucide-react'
 
 const tabs = [
-  { label: 'General Testing', href: '/testing', icon: Zap },
+  { label: 'Summary', href: '/testing/summary', icon: ClipboardList },
   { label: 'ACB Testing', href: '/testing/acb', icon: Shield },
   { label: 'NSX Testing', href: '/testing/nsx', icon: CircuitBoard },
   { label: 'Instruments', href: '/instruments', icon: Gauge },
+  { label: 'General Testing (under development)', href: '/testing', icon: Zap },
 ]
 
 export function TestingNav() {

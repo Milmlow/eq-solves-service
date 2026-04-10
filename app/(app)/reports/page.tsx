@@ -85,6 +85,120 @@ export default async function ReportsPage({
     failedTestDetails = (data ?? []) as unknown as typeof failedTestDetails
   }
 
+  // ────────── ACB / NSX workflow progress ──────────
+  let acbQuery = supabase
+    .from('acb_tests')
+    .select('id, step1_status, step2_status, step3_status, overall_result, test_date, site_id')
+    .eq('is_active', true)
+  if (siteId) acbQuery = acbQuery.eq('site_id', siteId)
+  if (fromDate) acbQuery = acbQuery.gte('test_date', fromDate)
+  if (toDate) acbQuery = acbQuery.lte('test_date', toDate)
+  const { data: acbTests } = await acbQuery
+
+  let nsxQuery = supabase
+    .from('nsx_tests')
+    .select('id, step1_status, step2_status, step3_status, overall_result, test_date, site_id')
+    .eq('is_active', true)
+  if (siteId) nsxQuery = nsxQuery.eq('site_id', siteId)
+  if (fromDate) nsxQuery = nsxQuery.gte('test_date', fromDate)
+  if (toDate) nsxQuery = nsxQuery.lte('test_date', toDate)
+  const { data: nsxTests } = await nsxQuery
+
+  const countWorkflowProgress = (
+    rows: { step1_status: string; step2_status: string; step3_status: string }[] | null,
+  ) => {
+    const out = { total: 0, notStarted: 0, inProgress: 0, complete: 0 }
+    for (const r of rows ?? []) {
+      out.total++
+      const done =
+        (r.step1_status === 'complete' ? 1 : 0) +
+        (r.step2_status === 'complete' ? 1 : 0) +
+        (r.step3_status === 'complete' ? 1 : 0)
+      if (done === 3) out.complete++
+      else if (done === 0) out.notStarted++
+      else out.inProgress++
+    }
+    return out
+  }
+
+  const acbProgress = countWorkflowProgress(acbTests)
+  const nsxProgress = countWorkflowProgress(nsxTests)
+
+  // ────────── Defects register summary ──────────
+  let defectQuery = supabase
+    .from('defects')
+    .select('id, severity, status, site_id, created_at')
+  if (siteId) defectQuery = defectQuery.eq('site_id', siteId)
+  if (fromDate) defectQuery = defectQuery.gte('created_at', fromDate)
+  if (toDate) defectQuery = defectQuery.lte('created_at', toDate)
+  const { data: defects } = await defectQuery
+
+  const defectsTotal = defects?.length ?? 0
+  const defectsOpen = defects?.filter((d) => d.status === 'open').length ?? 0
+  const defectsInProgress = defects?.filter((d) => d.status === 'in_progress').length ?? 0
+  const defectsResolved = defects?.filter((d) => d.status === 'resolved' || d.status === 'closed').length ?? 0
+  const defectsCritical = defects?.filter((d) => d.severity === 'critical').length ?? 0
+  const defectsHigh = defects?.filter((d) => d.severity === 'high').length ?? 0
+  const defectsMedium = defects?.filter((d) => d.severity === 'medium').length ?? 0
+  const defectsLow = defects?.filter((d) => d.severity === 'low').length ?? 0
+
+  // ────────── Compliance by site (top 10 by maintenance volume) ──────────
+  const complianceBySiteMap: Record<string, { total: number; complete: number; overdue: number }> = {}
+  for (const c of checks ?? []) {
+    if (!c.site_id) continue
+    const agg = (complianceBySiteMap[c.site_id] ??= { total: 0, complete: 0, overdue: 0 })
+    agg.total++
+    if (c.status === 'complete') agg.complete++
+    if (c.status === 'overdue') agg.overdue++
+  }
+  const complianceBySite = Object.entries(complianceBySiteMap)
+    .map(([id, agg]) => ({
+      site: siteMap[id] ?? id,
+      total: agg.total,
+      complete: agg.complete,
+      overdue: agg.overdue,
+      rate: agg.total > 0 ? Math.round((agg.complete / agg.total) * 100) : 0,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10)
+
+  // ────────── Monthly trend (last 6 months) ──────────
+  const now = new Date()
+  const months: { key: string; label: string; tests: number; pass: number; checks: number; complete: number }[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    months.push({
+      key,
+      label: d.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }),
+      tests: 0,
+      pass: 0,
+      checks: 0,
+      complete: 0,
+    })
+  }
+  const monthIdx = (date: string) => {
+    const d = new Date(date)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    return months.findIndex((m) => m.key === key)
+  }
+  for (const t of tests ?? []) {
+    const idx = monthIdx(t.test_date)
+    if (idx >= 0) {
+      months[idx].tests++
+      if (t.result === 'pass') months[idx].pass++
+    }
+  }
+  for (const c of checks ?? []) {
+    if (!c.due_date) continue
+    const idx = monthIdx(c.due_date)
+    if (idx >= 0) {
+      months[idx].checks++
+      if (c.status === 'complete') months[idx].complete++
+    }
+  }
+  const maxTrendValue = Math.max(1, ...months.flatMap((m) => [m.tests, m.checks]))
+
   return (
     <div className="space-y-6">
       <div>
@@ -200,6 +314,154 @@ export default async function ReportsPage({
           )}
         </Card>
       </div>
+
+      {/* Breaker workflow progress */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <h2 className="text-sm font-bold text-eq-ink mb-4">ACB Workflow Progress</h2>
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            <WorkflowStat label="Total" value={acbProgress.total} color="text-eq-ink" />
+            <WorkflowStat label="Complete" value={acbProgress.complete} color="text-green-600" />
+            <WorkflowStat label="In Progress" value={acbProgress.inProgress} color="text-eq-sky" />
+            <WorkflowStat label="Not Started" value={acbProgress.notStarted} color="text-eq-grey" />
+          </div>
+          <div className="space-y-2">
+            <StatBar label="Complete" value={acbProgress.complete} total={acbProgress.total} color="bg-green-500" />
+            <StatBar label="In Progress" value={acbProgress.inProgress} total={acbProgress.total} color="bg-eq-sky" />
+            <StatBar label="Not Started" value={acbProgress.notStarted} total={acbProgress.total} color="bg-gray-300" />
+          </div>
+        </Card>
+
+        <Card>
+          <h2 className="text-sm font-bold text-eq-ink mb-4">NSX Workflow Progress</h2>
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            <WorkflowStat label="Total" value={nsxProgress.total} color="text-eq-ink" />
+            <WorkflowStat label="Complete" value={nsxProgress.complete} color="text-green-600" />
+            <WorkflowStat label="In Progress" value={nsxProgress.inProgress} color="text-eq-sky" />
+            <WorkflowStat label="Not Started" value={nsxProgress.notStarted} color="text-eq-grey" />
+          </div>
+          <div className="space-y-2">
+            <StatBar label="Complete" value={nsxProgress.complete} total={nsxProgress.total} color="bg-green-500" />
+            <StatBar label="In Progress" value={nsxProgress.inProgress} total={nsxProgress.total} color="bg-eq-sky" />
+            <StatBar label="Not Started" value={nsxProgress.notStarted} total={nsxProgress.total} color="bg-gray-300" />
+          </div>
+        </Card>
+      </div>
+
+      {/* Defects register summary */}
+      <Card>
+        <h2 className="text-sm font-bold text-eq-ink mb-4">Defects Register Summary</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <p className="text-xs font-bold text-eq-grey uppercase mb-1">Total Defects</p>
+            <p className="text-2xl font-bold text-eq-ink">{defectsTotal}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-eq-grey uppercase mb-1">Open</p>
+            <p className="text-2xl font-bold text-red-600">{defectsOpen}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-eq-grey uppercase mb-1">In Progress</p>
+            <p className="text-2xl font-bold text-amber-600">{defectsInProgress}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-eq-grey uppercase mb-1">Resolved</p>
+            <p className="text-2xl font-bold text-green-600">{defectsResolved}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-eq-grey uppercase">By Severity</p>
+            <StatBar label="Critical" value={defectsCritical} total={defectsTotal} color="bg-red-600" />
+            <StatBar label="High" value={defectsHigh} total={defectsTotal} color="bg-red-400" />
+            <StatBar label="Medium" value={defectsMedium} total={defectsTotal} color="bg-amber-500" />
+            <StatBar label="Low" value={defectsLow} total={defectsTotal} color="bg-gray-400" />
+          </div>
+          <div className="text-xs text-eq-grey space-y-1">
+            <p>Critical defects require immediate attention and escalation.</p>
+            <p>High severity defects should be actioned within 7 days.</p>
+            <p>Medium &amp; low may be scheduled in the next maintenance window.</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Compliance by site */}
+      <Card>
+        <h2 className="text-sm font-bold text-eq-ink mb-4">Maintenance Compliance by Site</h2>
+        {complianceBySite.length === 0 ? (
+          <p className="text-sm text-eq-grey">No maintenance data for this period.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left text-xs font-bold text-eq-grey uppercase">
+                  <th className="py-2 px-2">Site</th>
+                  <th className="py-2 px-2 text-right">Total</th>
+                  <th className="py-2 px-2 text-right">Complete</th>
+                  <th className="py-2 px-2 text-right">Overdue</th>
+                  <th className="py-2 px-2 text-right">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {complianceBySite.map((row) => (
+                  <tr key={row.site} className="border-b border-gray-100">
+                    <td className="py-2 px-2 text-eq-ink">{row.site}</td>
+                    <td className="py-2 px-2 text-right text-eq-grey">{row.total}</td>
+                    <td className="py-2 px-2 text-right text-green-600 font-medium">{row.complete}</td>
+                    <td className="py-2 px-2 text-right text-amber-600 font-medium">{row.overdue}</td>
+                    <td className={`py-2 px-2 text-right font-bold ${row.rate >= 80 ? 'text-green-600' : row.rate >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+                      {row.rate}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Monthly trend (last 6 months) */}
+      <Card>
+        <h2 className="text-sm font-bold text-eq-ink mb-1">6-Month Trend</h2>
+        <p className="text-xs text-eq-grey mb-4">Tests run and maintenance checks due per month.</p>
+        <div className="flex items-end gap-4 h-40">
+          {months.map((m) => (
+            <div key={m.key} className="flex-1 flex flex-col items-center gap-1">
+              <div className="w-full flex items-end justify-center gap-1 h-32">
+                <div
+                  className="w-4 bg-eq-sky rounded-t"
+                  style={{ height: `${(m.tests / maxTrendValue) * 100}%` }}
+                  title={`${m.tests} tests (${m.pass} pass)`}
+                />
+                <div
+                  className="w-4 bg-green-500 rounded-t"
+                  style={{ height: `${(m.checks / maxTrendValue) * 100}%` }}
+                  title={`${m.checks} checks (${m.complete} complete)`}
+                />
+              </div>
+              <p className="text-xs text-eq-grey">{m.label}</p>
+              <p className="text-[10px] text-eq-grey">{m.tests}/{m.checks}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-4 mt-4 text-xs text-eq-grey">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-eq-sky rounded-sm" /> Tests run
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-green-500 rounded-sm" /> Maintenance checks
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function WorkflowStat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="text-center p-2 rounded-md bg-gray-50 border border-gray-100">
+      <p className="text-xs font-bold text-eq-grey uppercase">{label}</p>
+      <p className={`text-2xl font-bold ${color}`}>{value}</p>
     </div>
   )
 }

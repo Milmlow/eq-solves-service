@@ -133,6 +133,67 @@ export async function createNsxReadingAction(nsxTestId: string, formData: FormDa
   }
 }
 
+/**
+ * Update NSX test extended details (asset collection + step statuses).
+ * Used by the 3-step workflow page at /testing/nsx (mirrors updateAcbDetailsAction).
+ */
+export async function updateNsxDetailsAction(
+  testId: string,
+  data: Partial<{
+    step1_status: 'pending' | 'in_progress' | 'complete'
+    step2_status: 'pending' | 'in_progress' | 'complete'
+    step3_status: 'pending' | 'in_progress' | 'complete'
+    brand: string | null
+    breaker_type: string | null
+    name_location: string | null
+    current_in: string | null
+    fixed_withdrawable: 'fixed' | 'withdrawable' | 'plug_in' | null
+    protection_unit_fitted: boolean | null
+    trip_unit_model: string | null
+    long_time_ir: string | null
+    long_time_delay_tr: string | null
+    short_time_pickup_isd: string | null
+    short_time_delay_tsd: string | null
+    instantaneous_pickup: string | null
+    earth_fault_pickup: string | null
+    earth_fault_delay: string | null
+    motor_charge: string | null
+    shunt_trip_mx1: string | null
+    shunt_close_xf: string | null
+    undervoltage_mn: string | null
+    cb_make: string | null
+    cb_model: string | null
+    cb_serial: string | null
+    cb_rating: string | null
+    cb_poles: string | null
+    trip_unit: string | null
+    notes: string | null
+  }>,
+) {
+  try {
+    const { supabase, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const { error } = await supabase
+      .from('nsx_tests')
+      .update(data)
+      .eq('id', testId)
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'nsx_test',
+      entityId: testId,
+      summary: 'Updated NSX workflow details',
+    })
+    revalidatePath('/testing/nsx')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
 export async function deleteNsxReadingAction(readingId: string) {
   try {
     const { supabase, role } = await requireUser()

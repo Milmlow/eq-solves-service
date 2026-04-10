@@ -410,6 +410,29 @@ export interface NsxTest {
   is_active: boolean
   created_at: string
   updated_at: string
+  // 3-step workflow (migration 0026) — mirrors ACB
+  step1_status: 'pending' | 'in_progress' | 'complete'
+  step2_status: 'pending' | 'in_progress' | 'complete'
+  step3_status: 'pending' | 'in_progress' | 'complete'
+  // Extended asset collection fields (migration 0026)
+  brand: string | null
+  breaker_type: string | null
+  name_location: string | null
+  current_in: string | null
+  fixed_withdrawable: 'fixed' | 'withdrawable' | 'plug_in' | null
+  protection_unit_fitted: boolean | null
+  trip_unit_model: string | null
+  long_time_ir: string | null
+  long_time_delay_tr: string | null
+  short_time_pickup_isd: string | null
+  short_time_delay_tsd: string | null
+  instantaneous_pickup: string | null
+  earth_fault_pickup: string | null
+  earth_fault_delay: string | null
+  motor_charge: string | null
+  shunt_trip_mx1: string | null
+  shunt_close_xf: string | null
+  undervoltage_mn: string | null
 }
 
 export interface NsxTestReading {

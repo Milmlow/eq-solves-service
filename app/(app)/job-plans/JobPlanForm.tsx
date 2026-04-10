@@ -105,7 +105,7 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
   }
 
   return (
-    <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Job Plan' : 'Add Job Plan'}>
+    <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Job Plan' : 'Add Job Plan'} wide={isEdit}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="Name" name="name" required defaultValue={jobPlan?.name ?? ''} placeholder="e.g. E1.12" />
@@ -184,35 +184,51 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
       {isEdit && (
         <div className="mt-6 pt-4 border-t border-gray-200">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide">Tasks</h3>
+            <div>
+              <h3 className="text-sm font-bold text-eq-ink">Job Plan Items</h3>
+              <p className="text-xs text-eq-grey mt-0.5">{items.length} task{items.length !== 1 ? 's' : ''}</p>
+            </div>
             {canWriteRole && (
-              <button
-                onClick={() => setShowAddItem(true)}
-                className="flex items-center gap-1 text-xs text-eq-sky hover:text-eq-deep transition-colors font-medium"
-              >
-                <Plus className="w-3 h-3" /> Add Task
-              </button>
+              <Button size="sm" onClick={() => setShowAddItem(true)} type="button">
+                <Plus className="w-3 h-3 mr-1" /> Add Task
+              </Button>
             )}
           </div>
 
           {itemError && <p className="text-xs text-red-500 mb-2">{itemError}</p>}
 
-          {items.length === 0 && !showAddItem && (
-            <p className="text-sm text-eq-grey">No tasks yet.</p>
+          {items.length === 0 && !showAddItem ? (
+            <div className="text-center py-8 border border-dashed border-gray-200 rounded-md">
+              <p className="text-sm text-eq-grey">No tasks yet.</p>
+            </div>
+          ) : (
+            <div className="border border-gray-200 rounded-md overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-bold text-eq-grey uppercase w-16">#</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold text-eq-grey uppercase">Description</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold text-eq-grey uppercase w-24">Required</th>
+                    {canWriteRole && (
+                      <th className="px-3 py-2 text-right text-xs font-bold text-eq-grey uppercase w-28">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {items.map((item) => (
+                    <JobPlanItemRow
+                      key={item.id}
+                      item={item}
+                      jobPlanId={jobPlan!.id}
+                      canWrite={canWriteRole}
+                      onUpdate={handleUpdateItem}
+                      onDelete={handleDeleteItem}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-
-          <div className="space-y-2">
-            {items.map((item) => (
-              <JobPlanItemRow
-                key={item.id}
-                item={item}
-                jobPlanId={jobPlan!.id}
-                canWrite={canWriteRole}
-                onUpdate={handleUpdateItem}
-                onDelete={handleDeleteItem}
-              />
-            ))}
-          </div>
 
           {showAddItem && (
             <form onSubmit={handleAddItem} className="mt-3 p-3 border border-gray-200 rounded-md space-y-2">
@@ -239,10 +255,10 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
   )
 }
 
-// Inline editable item row
+// Inline editable item row (table row)
 function JobPlanItemRow({
   item,
-  jobPlanId,
+  jobPlanId: _jobPlanId,
   canWrite: canWriteRole,
   onUpdate,
   onDelete,
@@ -254,54 +270,104 @@ function JobPlanItemRow({
   onDelete: (itemId: string) => void
 }) {
   const [editing, setEditing] = useState(false)
+  const [desc, setDesc] = useState(item.description)
+  const [sortOrder, setSortOrder] = useState(String(item.sort_order))
+  const [required, setRequired] = useState(String(item.is_required))
 
-  function handleSave(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
+  function handleSave() {
+    const formData = new FormData()
+    formData.set('description', desc)
+    formData.set('sort_order', sortOrder)
+    formData.set('is_required', required)
     onUpdate(item.id, formData)
     setEditing(false)
   }
 
   if (editing) {
     return (
-      <form onSubmit={handleSave} className="p-3 border border-eq-sky/30 rounded-md bg-eq-ice/30 space-y-2">
-        <FormInput label="Description" name="description" required defaultValue={item.description} />
-        <div className="grid grid-cols-2 gap-2">
-          <FormInput label="Sort Order" name="sort_order" type="number" defaultValue={String(item.sort_order)} />
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Required</label>
-            <select name="is_required" defaultValue={String(item.is_required)} className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white">
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button type="submit" size="sm">Save</Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-        </div>
-      </form>
+      <tr className="bg-eq-ice/30">
+        <td className="px-3 py-2">
+          <input
+            type="number"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+            className="w-12 h-8 px-2 border border-gray-200 rounded text-xs"
+          />
+        </td>
+        <td className="px-3 py-2">
+          <input
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            className="w-full h-8 px-2 border border-eq-sky rounded text-sm"
+            autoFocus
+          />
+        </td>
+        <td className="px-3 py-2">
+          <select
+            value={required}
+            onChange={(e) => setRequired(e.target.value)}
+            className="h-8 px-2 border border-gray-200 rounded text-xs bg-white"
+          >
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </td>
+        {canWriteRole && (
+          <td className="px-3 py-2 text-right">
+            <div className="flex items-center justify-end gap-1">
+              <button
+                type="button"
+                onClick={handleSave}
+                className="px-2 py-1 text-xs font-medium bg-eq-sky text-white rounded hover:bg-eq-deep"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEditing(false); setDesc(item.description); setSortOrder(String(item.sort_order)); setRequired(String(item.is_required)) }}
+                className="px-2 py-1 text-xs text-eq-grey hover:text-eq-ink"
+              >
+                Cancel
+              </button>
+            </div>
+          </td>
+        )}
+      </tr>
     )
   }
 
   return (
-    <div className="flex items-center justify-between p-3 border border-gray-200 rounded-md">
-      <div className="flex-1">
-        <p className="text-sm text-eq-ink">{item.description}</p>
-        <p className="text-xs text-eq-grey mt-0.5">
-          Order: {item.sort_order} {item.is_required && <span className="text-eq-sky font-medium ml-2">Required</span>}
-        </p>
-      </div>
+    <tr className="hover:bg-gray-50">
+      <td className="px-3 py-2 text-xs text-eq-grey font-mono">{item.sort_order}</td>
+      <td className="px-3 py-2 text-sm text-eq-ink">{item.description}</td>
+      <td className="px-3 py-2">
+        {item.is_required ? (
+          <span className="text-xs font-medium text-eq-sky">Yes</span>
+        ) : (
+          <span className="text-xs text-eq-grey">No</span>
+        )}
+      </td>
       {canWriteRole && (
-        <div className="flex items-center gap-1 ml-2">
-          <button onClick={() => setEditing(true)} className="p-1 rounded hover:bg-gray-100 text-eq-grey text-xs">
-            Edit
-          </button>
-          <button onClick={() => onDelete(item.id)} className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600">
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
+        <td className="px-3 py-2 text-right">
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="px-2 py-1 text-xs text-eq-grey hover:text-eq-ink hover:bg-gray-100 rounded"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(item.id)}
+              className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600"
+              title="Delete task"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </td>
       )}
-    </div>
+    </tr>
   )
 }

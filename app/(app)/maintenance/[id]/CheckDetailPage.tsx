@@ -43,11 +43,11 @@ type SortKey = 'maximo_id' | 'name' | 'location' | 'work_order' | 'job_plan' | '
 type SortDir = 'asc' | 'desc'
 
 function statusToBadge(status: CheckStatus) {
-  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'blocked' | 'overdue'> = {
+  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
     scheduled: 'not-started',
     in_progress: 'in-progress',
     complete: 'complete',
-    cancelled: 'blocked',
+    cancelled: 'cancelled',
     overdue: 'overdue',
   }
   return map[status]
@@ -301,10 +301,18 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             </a>
           )}
           {(check.status === 'scheduled' || check.status === 'in_progress' || check.status === 'overdue') && canWriteRole && (
-            <a href={`/api/maintenance-checklist?check_id=${check.id}`} target="_blank"
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
-              <Printer className="w-4 h-4" /> Print Checklist
-            </a>
+            <>
+              <a href={`/api/maintenance-checklist?check_id=${check.id}&format=simple`} target="_blank"
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                title="Simple: asset register only">
+                <Printer className="w-4 h-4" /> Print — Simple
+              </a>
+              <a href={`/api/maintenance-checklist?check_id=${check.id}&format=detailed`} target="_blank"
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                title="Detailed: full task breakdown per asset">
+                <Printer className="w-4 h-4" /> Print — Detailed
+              </a>
+            </>
           )}
           {check.status !== 'complete' && check.status !== 'cancelled' && isAdmin && (
             <Button size="sm" variant="danger" onClick={handleCancel} disabled={loading}>Cancel</Button>

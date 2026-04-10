@@ -49,11 +49,11 @@ interface MaintenanceListProps {
 }
 
 function statusToBadge(status: CheckStatus) {
-  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'blocked' | 'overdue'> = {
+  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
     scheduled: 'not-started',
     in_progress: 'in-progress',
     complete: 'complete',
-    cancelled: 'blocked',
+    cancelled: 'cancelled',
     overdue: 'overdue',
   }
   return map[status]
@@ -199,6 +199,7 @@ export function MaintenanceList({
               checks={checks}
               itemsMap={itemsMap}
               onCheckClick={(c) => router.push(`/maintenance/${c.id}`)}
+              isAdmin={isAdmin}
             />
           )}
         </>

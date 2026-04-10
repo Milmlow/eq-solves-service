@@ -1,9 +1,11 @@
 'use client'
 
+import { useTransition } from 'react'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatDate } from '@/lib/utils/format'
-import { Eye } from 'lucide-react'
+import { Eye, Archive, Trash2 } from 'lucide-react'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus } from '@/lib/types'
+import { archiveCheckAction, cancelCheckAction } from './actions'
 
 type CheckRow = MaintenanceCheck & {
   job_plans?: { name: string } | null
@@ -17,14 +19,15 @@ interface KanbanBoardProps {
   checks: CheckRow[]
   itemsMap: Record<string, MaintenanceCheckItem[]>
   onCheckClick: (check: CheckRow) => void
+  isAdmin?: boolean
 }
 
 function statusToBadge(status: CheckStatus) {
-  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'blocked' | 'overdue'> = {
+  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
     scheduled: 'not-started',
     in_progress: 'in-progress',
     complete: 'complete',
-    cancelled: 'blocked',
+    cancelled: 'cancelled',
     overdue: 'overdue',
   }
   return map[status]
@@ -50,7 +53,24 @@ function getColumnBg(column: 'scheduled' | 'in_progress' | 'overdue' | 'complete
   return bgMap[column]
 }
 
-export function KanbanBoard({ checks, itemsMap, onCheckClick }: KanbanBoardProps) {
+export function KanbanBoard({ checks, itemsMap, onCheckClick, isAdmin = false }: KanbanBoardProps) {
+  const [pending, startTransition] = useTransition()
+
+  function handleArchive(e: React.MouseEvent, checkId: string) {
+    e.stopPropagation()
+    if (!confirm('Archive this check? It will be hidden from list views.')) return
+    startTransition(async () => {
+      await archiveCheckAction(checkId, false)
+    })
+  }
+
+  function handleCancel(e: React.MouseEvent, checkId: string) {
+    e.stopPropagation()
+    if (!confirm('Cancel (delete) this check? This marks it as cancelled.')) return
+    startTransition(async () => {
+      await cancelCheckAction(checkId)
+    })
+  }
   // Group checks by status
   const columns = ['scheduled', 'in_progress', 'overdue', 'complete'] as const
 
@@ -109,13 +129,39 @@ export function KanbanBoard({ checks, itemsMap, onCheckClick }: KanbanBoardProps
                   const completedCount = items.filter((i) => i.result !== null).length
 
                   return (
-                    <button
+                    <div
                       key={check.id}
                       onClick={() => onCheckClick(check)}
-                      className="text-left p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200 hover:border-eq-sky group"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') onCheckClick(check) }}
+                      className="relative text-left p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200 hover:border-eq-sky group cursor-pointer"
                     >
+                      {isAdmin && (
+                        <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => handleArchive(e, check.id)}
+                            disabled={pending}
+                            className="p-1 rounded hover:bg-gray-100 text-eq-grey hover:text-eq-ink"
+                            title="Archive check"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleCancel(e, check.id)}
+                            disabled={pending}
+                            className="p-1 rounded hover:bg-red-50 text-eq-grey hover:text-red-600"
+                            title="Cancel / delete check"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+
                       {/* Job Plan Name */}
-                      <p className="font-semibold text-sm text-eq-ink mb-2 line-clamp-2 group-hover:text-eq-sky">
+                      <p className="font-semibold text-sm text-eq-ink mb-2 line-clamp-2 group-hover:text-eq-sky pr-12">
                         {check.job_plans?.name ?? '—'}
                       </p>
 
@@ -157,7 +203,7 @@ export function KanbanBoard({ checks, itemsMap, onCheckClick }: KanbanBoardProps
                         <StatusBadge status={statusToBadge(check.status as CheckStatus)} />
                         <Eye className="w-4 h-4 text-eq-grey opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
-                    </button>
+                    </div>
                   )
                 })
               )}
