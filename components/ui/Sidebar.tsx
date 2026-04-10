@@ -17,7 +17,7 @@ const navItems = [
   { label: 'Assets',      href: '/assets',       icon: Package },
   { label: 'Job Plans',   href: '/job-plans',    icon: FileCheck },
   { label: 'Maintenance', href: '/maintenance',  icon: ClipboardCheck },
-  { label: 'PM Calendar', href: '/pm-calendar',  icon: CalendarDays },
+  { label: 'Calendar',    href: '/calendar',     icon: CalendarDays },
   { label: 'Testing',     href: '/testing',      icon: Zap },
   { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
   { label: 'Reports',     href: '/reports',      icon: FileText },

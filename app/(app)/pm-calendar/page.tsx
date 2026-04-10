@@ -1,161 +1,17 @@
-import { createClient } from '@/lib/supabase/server'
-import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { PmCalendarView } from './PmCalendarView'
-import { isAdmin, canWrite } from '@/lib/utils/roles'
-import type { Role, PmCalendarEntry, Site } from '@/lib/types'
+import { redirect } from 'next/navigation'
 
-const PER_PAGE = 25
-
-export default async function PmCalendarPage({
+// Legacy route — PM Calendar was renamed to Calendar. Preserve any search params.
+export default async function PmCalendarRedirectPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    search?: string
-    site?: string
-    category?: string
-    quarter?: string
-    fy?: string
-    status?: string
-    page?: string
-    show_archived?: string
-    view?: string
-  }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const params = await searchParams
-  const search = params.search ?? ''
-  const siteFilter = params.site ?? ''
-  const categoryFilter = params.category ?? ''
-  const quarterFilter = params.quarter ?? ''
-  const fyFilter = params.fy ?? ''
-  const statusFilter = params.status ?? ''
-  const page = Math.max(1, parseInt(params.page ?? '1', 10))
-  const showArchived = params.show_archived === '1'
-  const viewMode = (params.view ?? 'list') as 'list' | 'calendar' | 'quarterly'
-
-  const supabase = await createClient()
-
-  // Get current user role
-  const { data: { user } } = await supabase.auth.getUser()
-  let userRole: Role | null = null
-  if (user) {
-    const { data: membership } = await supabase
-      .from('tenant_members')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .limit(1)
-      .single()
-    userRole = (membership?.role as Role) ?? null
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (typeof v === 'string') qs.set(k, v)
+    else if (Array.isArray(v)) v.forEach((x) => qs.append(k, x))
   }
-
-  // Fetch sites for filter dropdown
-  const { data: sitesRaw } = await supabase
-    .from('sites')
-    .select('id, name, code, address')
-    .eq('is_active', true)
-    .order('name')
-  const sites = (sitesRaw ?? []) as Pick<Site, 'id' | 'name' | 'code' | 'address'>[]
-
-  // Build query
-  let query = supabase
-    .from('pm_calendar')
-    .select('*', { count: 'exact' })
-    .order('start_time', { ascending: true })
-
-  if (!showArchived) query = query.eq('is_active', true)
-  if (siteFilter) query = query.eq('site_id', siteFilter)
-  if (categoryFilter) query = query.eq('category', categoryFilter)
-  if (quarterFilter) query = query.eq('quarter', quarterFilter)
-  if (fyFilter) query = query.eq('financial_year', fyFilter)
-  if (statusFilter) query = query.eq('status', statusFilter)
-
-  // For calendar/quarterly views, fetch all; for list view, paginate
-  if (viewMode === 'list') {
-    const from = (page - 1) * PER_PAGE
-    const to = from + PER_PAGE - 1
-    query = query.range(from, to)
-  } else {
-    query = query.limit(500)
-  }
-
-  const { data: entriesRaw, count } = await query
-  const total = count ?? 0
-  const totalPages = viewMode === 'list' ? Math.ceil(total / PER_PAGE) : 1
-
-  // Build site name map for display
-  const siteMap: Record<string, string> = {}
-  for (const s of sites) {
-    siteMap[s.id] = s.code ? `${s.code} — ${s.name}` : s.name
-  }
-
-  const entries = (entriesRaw ?? []).map((e) => ({
-    ...(e as PmCalendarEntry),
-    site_name: e.site_id ? (siteMap[e.site_id as string] ?? 'Unknown') : '—',
-  }))
-
-  // Client-side search filter
-  const filtered = search
-    ? entries.filter((e) => {
-        const q = search.toLowerCase()
-        return (
-          e.title.toLowerCase().includes(q) ||
-          (e.location ?? '').toLowerCase().includes(q) ||
-          (e.description ?? '').toLowerCase().includes(q) ||
-          e.category.toLowerCase().includes(q) ||
-          (e.site_name ?? '').toLowerCase().includes(q)
-        )
-      })
-    : entries
-
-  // Get distinct categories and FYs for filters
-  const { data: catsRaw } = await supabase
-    .from('pm_calendar')
-    .select('category')
-    .eq('is_active', true)
-    .limit(200)
-  const uniqueCategories = [...new Set((catsRaw ?? []).map((c) => c.category as string))].sort()
-
-  const { data: fysRaw } = await supabase
-    .from('pm_calendar')
-    .select('financial_year')
-    .eq('is_active', true)
-    .not('financial_year', 'is', null)
-    .limit(200)
-  const uniqueFYs = [...new Set((fysRaw ?? []).map((f) => f.financial_year as string))].sort()
-
-  // Fetch technicians for the form assigned_to dropdown
-  const { data: members } = await supabase.from('tenant_members').select('user_id').eq('is_active', true)
-  const memberIds = (members ?? []).map((m) => m.user_id)
-  let technicians: { id: string; email: string; full_name: string | null }[] = []
-  if (memberIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, email, full_name')
-      .in('id', memberIds)
-      .eq('is_active', true)
-      .order('full_name')
-    technicians = (profiles ?? []) as typeof technicians
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'PM Calendar' }]} />
-        <h1 className="text-3xl font-bold text-eq-sky mt-2">PM Calendar</h1>
-        <p className="text-sm text-eq-grey mt-1">Preventative maintenance planning and scheduling across all sites</p>
-      </div>
-      <PmCalendarView
-        entries={filtered}
-        sites={sites}
-        categories={uniqueCategories}
-        financialYears={uniqueFYs}
-        technicians={technicians}
-        page={page}
-        totalPages={totalPages}
-        viewMode={viewMode}
-        isAdmin={isAdmin(userRole)}
-        canWrite={canWrite(userRole)}
-      />
-    </div>
-  )
+  const suffix = qs.toString()
+  redirect(`/calendar${suffix ? `?${suffix}` : ''}`)
 }

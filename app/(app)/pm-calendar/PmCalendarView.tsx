@@ -10,8 +10,10 @@ import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { PmCalendarForm } from './PmCalendarForm'
 import { PmCalendarDetail } from './PmCalendarDetail'
-import { seedPmCalendarAction } from './actions'
-import { CalendarDays, List, LayoutGrid, Loader2 } from 'lucide-react'
+import { seedPmCalendarAction, togglePmCalendarActiveAction, importPmCalendarCsvAction } from './actions'
+import { CalendarDays, List, LayoutGrid, Loader2, Archive, Upload } from 'lucide-react'
+import { CsvExportButton } from '@/components/ui/CsvExportButton'
+import { parseCsv } from '@/lib/utils/csv'
 import type { PmCalendarEntry, Site, PmCalendarCategory, AuFyQuarter } from '@/lib/types'
 
 type EntryRow = PmCalendarEntry & { site_name: string } & Record<string, unknown>
@@ -92,7 +94,40 @@ export function PmCalendarView({
     const params = new URLSearchParams(searchParams.toString())
     params.set('view', v)
     params.delete('page')
-    router.push(`/pm-calendar?${params.toString()}`)
+    router.push(`/calendar?${params.toString()}`)
+  }
+
+  // Archive a single row (soft-delete via is_active=false)
+  async function handleArchiveRow(id: string, title: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm(`Archive "${title}"? It will be hidden from the list (use the Show Archived toggle to restore).`)) return
+    const result = await togglePmCalendarActiveAction(id, false)
+    if (result.success) router.refresh()
+    else alert(`Error: ${result.error}`)
+  }
+
+  // CSV import handler
+  const [importing, setImporting] = useState(false)
+  async function handleCsvImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const parsed = parseCsv(text)
+      const result = await importPmCalendarCsvAction(parsed)
+      if (result.success) {
+        alert(`Imported ${(result as { success: true; count: number }).count} entries.${(result as { success: true; skipped: number }).skipped ? ` Skipped ${(result as { success: true; skipped: number }).skipped} invalid rows.` : ''}`)
+        router.refresh()
+      } else {
+        alert(`Import failed: ${result.error}`)
+      }
+    } catch (err) {
+      alert(`Import failed: ${(err as Error).message}`)
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
   }
 
   // Seed data handler
@@ -158,7 +193,7 @@ export function PmCalendarView({
     { value: 'cancelled', label: 'Cancelled' },
   ]
 
-  // ===== TABLE COLUMNS =====
+  // ===== TABLE COLUMNS (all sortable by default) =====
   const columns: DataTableColumn<EntryRow>[] = [
     {
       key: 'site_name',
@@ -179,16 +214,19 @@ export function PmCalendarView({
       key: 'start_time',
       header: 'Start',
       render: (row) => <span className="text-xs">{formatDate(row.start_time)}</span>,
+      sortAccessor: (row) => new Date(row.start_time).getTime(),
     },
     {
       key: 'hours',
       header: 'Hours',
       render: (row) => <span className="text-xs tabular-nums">{Number(row.hours) || 0}</span>,
+      sortAccessor: (row) => Number(row.hours) || 0,
     },
     {
       key: 'contractor_materials_cost',
       header: 'Cost',
       render: (row) => <span className="text-xs tabular-nums">{formatCurrency(Number(row.contractor_materials_cost) || 0)}</span>,
+      sortAccessor: (row) => Number(row.contractor_materials_cost) || 0,
     },
     {
       key: 'quarter',
@@ -200,6 +238,54 @@ export function PmCalendarView({
       header: 'Status',
       render: (row) => <StatusBadge status={statusToBadge(row.status)} label={row.status.replace('_', ' ')} />,
     },
+    ...(canWriteRole
+      ? [{
+          key: '__actions',
+          header: 'Actions',
+          sortable: false as const,
+          className: 'w-20',
+          render: (row: EntryRow) => (
+            <button
+              onClick={(e) => handleArchiveRow(row.id, row.title, e)}
+              className="inline-flex items-center gap-1 text-xs text-eq-grey hover:text-red-600"
+              title="Archive (soft-delete)"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              Archive
+            </button>
+          ),
+        }]
+      : []),
+  ]
+
+  // CSV export rows
+  const csvRows = entries.map((e) => ({
+    site: e.site_name,
+    title: e.title,
+    location: e.location ?? '',
+    description: e.description ?? '',
+    category: e.category,
+    start_time: e.start_time,
+    end_time: e.end_time ?? '',
+    hours: Number(e.hours) || 0,
+    cost: Number(e.contractor_materials_cost) || 0,
+    quarter: e.quarter ?? '',
+    financial_year: e.financial_year ?? '',
+    status: e.status,
+  }))
+  const csvHeaders = [
+    { key: 'site' as const, label: 'Site' },
+    { key: 'title' as const, label: 'Title' },
+    { key: 'location' as const, label: 'Location' },
+    { key: 'description' as const, label: 'Description' },
+    { key: 'category' as const, label: 'Category' },
+    { key: 'start_time' as const, label: 'Start' },
+    { key: 'end_time' as const, label: 'End' },
+    { key: 'hours' as const, label: 'Hours' },
+    { key: 'cost' as const, label: 'Cost' },
+    { key: 'quarter' as const, label: 'Quarter' },
+    { key: 'financial_year' as const, label: 'FY' },
+    { key: 'status' as const, label: 'Status' },
   ]
 
   // ===== TOTALS =====
@@ -251,8 +337,28 @@ export function PmCalendarView({
                 {seeding ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Seeding...</> : 'Seed Data'}
               </Button>
             )}
+            <CsvExportButton
+              filename={`calendar-${new Date().toISOString().slice(0, 10)}`}
+              rows={csvRows}
+              headers={csvHeaders}
+            />
             {canWriteRole && (
-              <Button onClick={() => setCreateOpen(true)}>Add Entry</Button>
+              <>
+                <label className="inline-flex items-center">
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={handleCsvImport}
+                    disabled={importing}
+                  />
+                  <span className="inline-flex items-center h-8 px-3 text-xs font-medium rounded-md border border-gray-200 bg-white text-eq-ink hover:bg-gray-50 cursor-pointer">
+                    {importing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />}
+                    Import CSV
+                  </span>
+                </label>
+                <Button onClick={() => setCreateOpen(true)}>Add Entry</Button>
+              </>
             )}
           </div>
         </div>

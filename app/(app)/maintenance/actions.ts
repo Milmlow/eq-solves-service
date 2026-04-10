@@ -490,6 +490,35 @@ export async function cancelCheckAction(id: string) {
 }
 
 /**
+ * Archive (soft-delete) a maintenance check — admin only.
+ * Hides the check from default list views. Set `active` = true to restore.
+ */
+export async function archiveCheckAction(id: string, active = false) {
+  try {
+    const { supabase, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
+
+    const { error } = await supabase
+      .from('maintenance_checks')
+      .update({ is_active: active })
+      .eq('id', id)
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: active ? 'reactivate' : 'deactivate',
+      entityType: 'maintenance_check',
+      entityId: id,
+      summary: `${active ? 'Restored' : 'Archived'} maintenance check`,
+    })
+    revalidatePath('/maintenance')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
  * Update a check item result (pass/fail/na + notes).
  */
 export async function updateCheckItemAction(checkId: string, itemId: string, formData: FormData) {

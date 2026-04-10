@@ -12,6 +12,10 @@ export interface DataTableColumn<T> {
   filterable?: 'text' | 'select'
   /** For select filters: provide explicit options instead of auto-detecting from row data */
   filterOptions?: { value: string; label: string }[]
+  /** Disable sorting on this column. Sorting is enabled by default for all columns. */
+  sortable?: false
+  /** Optional sort accessor — override which value to sort by (e.g. for computed/derived columns) */
+  sortAccessor?: (row: T) => string | number | null | undefined
 }
 
 interface DataTableProps<T> {
@@ -44,6 +48,15 @@ export function DataTable<T extends Record<string, unknown>>({
 }: DataTableProps<T>) {
   const hasFilters = columns.some(col => col.filterable)
   const [filters, setFilters] = useState<Record<string, string>>({})
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null)
+
+  function toggleSort(key: string) {
+    setSort(prev => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' }
+      if (prev.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+  }
 
   function setFilter(key: string, value: string) {
     setFilters(prev => {
@@ -91,8 +104,33 @@ export function DataTable<T extends Record<string, unknown>>({
     })
   }, [rows, filters, columns])
 
-  const allIds = filteredRows.map(getRowId)
-  const allSelected = filteredRows.length > 0 && selectedIds ? allIds.every((id) => selectedIds.has(id)) : false
+  // Apply sorting
+  const sortedRows = useMemo(() => {
+    if (!sort) return filteredRows
+    const col = columns.find(c => c.key === sort.key)
+    if (!col) return filteredRows
+    const accessor = col.sortAccessor ?? ((row: T) => row[sort.key] as string | number | null | undefined)
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const copy = [...filteredRows]
+    copy.sort((a, b) => {
+      const av = accessor(a)
+      const bv = accessor(b)
+      // null/undefined sort last
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
+      const as = String(av).toLowerCase()
+      const bs = String(bv).toLowerCase()
+      if (as < bs) return -1 * dir
+      if (as > bs) return 1 * dir
+      return 0
+    })
+    return copy
+  }, [filteredRows, sort, columns])
+
+  const allIds = sortedRows.map(getRowId)
+  const allSelected = sortedRows.length > 0 && selectedIds ? allIds.every((id) => selectedIds.has(id)) : false
   const someSelected = selectedIds ? allIds.some((id) => selectedIds.has(id)) : false
 
   function toggleAll() {
@@ -130,17 +168,30 @@ export function DataTable<T extends Record<string, unknown>>({
                 />
               </th>
             )}
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={cn(
-                  'text-left px-4 py-2 text-xs font-bold text-eq-deep uppercase tracking-wide',
-                  col.className
-                )}
-              >
-                {col.header}
-              </th>
-            ))}
+            {columns.map((col) => {
+              const canSort = col.sortable !== false
+              const isSorted = sort?.key === col.key
+              return (
+                <th
+                  key={col.key}
+                  className={cn(
+                    'text-left px-4 py-2 text-xs font-bold text-eq-deep uppercase tracking-wide',
+                    canSort && 'cursor-pointer select-none hover:bg-eq-ice/70',
+                    col.className
+                  )}
+                  onClick={canSort ? () => toggleSort(col.key) : undefined}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {col.header}
+                    {canSort && (
+                      <span className="text-[10px] text-eq-grey/60 leading-none">
+                        {isSorted ? (sort!.dir === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
+                    )}
+                  </span>
+                </th>
+              )
+            })}
           </tr>
           {/* Filter row */}
           {hasFilters && (
@@ -175,7 +226,7 @@ export function DataTable<T extends Record<string, unknown>>({
           )}
         </thead>
         <tbody>
-          {filteredRows.length === 0 ? (
+          {sortedRows.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length + (selectable ? 1 : 0)}
@@ -185,7 +236,7 @@ export function DataTable<T extends Record<string, unknown>>({
               </td>
             </tr>
           ) : (
-            filteredRows.map((row, i) => {
+            sortedRows.map((row, i) => {
               const rowId = getRowId(row)
               const isSelected = selectable && selectedIds?.has(rowId)
               return (

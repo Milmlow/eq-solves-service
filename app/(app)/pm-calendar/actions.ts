@@ -74,7 +74,7 @@ export async function createPmCalendarAction(formData: FormData) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'create', entityType: 'pm_calendar', summary: `Created PM calendar entry "${parsed.data.title}"` })
-    revalidatePath('/pm-calendar')
+    revalidatePath('/calendar')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -119,7 +119,7 @@ export async function updatePmCalendarAction(id: string, formData: FormData) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'update', entityType: 'pm_calendar', entityId: id, summary: 'Updated PM calendar entry' })
-    revalidatePath('/pm-calendar')
+    revalidatePath('/calendar')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -145,7 +145,7 @@ export async function togglePmCalendarActiveAction(id: string, active: boolean) 
       entityId: id,
       summary: `${active ? 'Reactivated' : 'Deactivated'} PM calendar entry`,
     })
-    revalidatePath('/pm-calendar')
+    revalidatePath('/calendar')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -369,8 +369,85 @@ export async function seedPmCalendarAction() {
     const msg = `Seeded ${rows.length} PM calendar entries.${uniqueSkipped.length > 0 ? ` Skipped sites not found: ${uniqueSkipped.join(', ')}` : ''}`
 
     await logAuditEvent({ action: 'create', entityType: 'pm_calendar', summary: msg })
-    revalidatePath('/pm-calendar')
+    revalidatePath('/calendar')
     return { success: true, message: msg }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+// ===== CSV IMPORT =====
+// Accepts rows shaped like the CSV export. Matches sites by site code or name (case-insensitive).
+// Required columns: title, category, start_time, site (code or name)
+export async function importPmCalendarCsvAction(
+  rows: Record<string, string>[],
+): Promise<{ success: true; count: number; skipped: number } | { success: false; error: string }> {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!Array.isArray(rows) || rows.length === 0) return { success: false, error: 'No rows to import.' }
+
+    const { data: sites } = await supabase
+      .from('sites')
+      .select('id, name, code')
+      .eq('is_active', true)
+    const siteLookup: Record<string, string> = {}
+    for (const s of sites ?? []) {
+      if (s.code) siteLookup[(s.code as string).toLowerCase()] = s.id as string
+      siteLookup[(s.name as string).toLowerCase()] = s.id as string
+    }
+
+    const inserts: Record<string, unknown>[] = []
+    let skipped = 0
+
+    for (const r of rows) {
+      const row: Record<string, string> = {}
+      for (const [k, v] of Object.entries(r)) row[k.toLowerCase().trim()] = v
+
+      const title = row.title
+      const category = row.category
+      const start_time = row.start_time ?? row.start
+      const siteKey = (row.site ?? row.site_code ?? '').toLowerCase().trim()
+
+      if (!title || !category || !start_time || !siteKey) { skipped++; continue }
+      const site_id = siteLookup[siteKey]
+      if (!site_id) { skipped++; continue }
+
+      const { quarter, financial_year } = computeAuFyQuarter(start_time)
+      inserts.push({
+        tenant_id: tenantId,
+        site_id,
+        title,
+        location: row.location || null,
+        description: row.description || null,
+        category,
+        start_time,
+        end_time: row.end_time || row.end || null,
+        hours: Number(row.hours) || 0,
+        contractor_materials_cost: Number(row.cost ?? row.contractor_materials_cost) || 0,
+        quarter,
+        financial_year: row.financial_year || row.fy || financial_year,
+        status: (row.status || 'scheduled'),
+      })
+    }
+
+    if (inserts.length === 0) {
+      return { success: false, error: `No valid rows. Skipped ${skipped}. Required columns: title, category, start_time, site.` }
+    }
+
+    for (let i = 0; i < inserts.length; i += 50) {
+      const batch = inserts.slice(i, i + 50)
+      const { error } = await supabase.from('pm_calendar').insert(batch)
+      if (error) return { success: false, error: `Batch insert failed: ${error.message}` }
+    }
+
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'pm_calendar',
+      summary: `Imported ${inserts.length} calendar entries from CSV (${skipped} skipped)`,
+    })
+    revalidatePath('/calendar')
+    return { success: true, count: inserts.length, skipped }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }

@@ -8,6 +8,7 @@ import {
   startCheckAction,
   completeCheckAction,
   cancelCheckAction,
+  archiveCheckAction,
   updateCheckItemAction,
   forceCompleteCheckAssetAction,
   bulkUpdateWorkOrdersAction,
@@ -128,6 +129,15 @@ export function CheckDetail({ open, onClose, check, items, checkAssets, attachme
     else onClose()
   }
 
+  async function handleArchive() {
+    if (!confirm('Archive this entire maintenance check? It will be hidden from all list views. You can restore it later from the audit log.')) return
+    setError(null); setLoading(true)
+    const result = await archiveCheckAction(check.id, false)
+    setLoading(false)
+    if (!result.success) setError(result.error ?? 'Failed to archive.')
+    else onClose()
+  }
+
   async function handleForceComplete(checkAssetId: string) {
     setError(null)
     const result = await forceCompleteCheckAssetAction(check.id, checkAssetId)
@@ -238,6 +248,9 @@ export function CheckDetail({ open, onClose, check, items, checkAssets, attachme
           )}
           {check.status !== 'complete' && check.status !== 'cancelled' && isAdmin && (
             <Button size="sm" variant="danger" onClick={handleCancel} disabled={loading}>Cancel</Button>
+          )}
+          {isAdmin && (
+            <Button size="sm" variant="danger" onClick={handleArchive} disabled={loading}>Archive</Button>
           )}
         </div>
 

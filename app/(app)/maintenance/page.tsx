@@ -75,10 +75,11 @@ export default async function MaintenancePage({
     .select('id, customer_id, site_id, scope_item, is_included, notes, financial_year')
     .eq('financial_year', currentFY)
 
-  // Build checks query
+  // Build checks query — hide archived (is_active=false) by default
   let query = supabase
     .from('maintenance_checks')
     .select('*, job_plans(name), sites(name), maintenance_check_items(count)', { count: 'exact' })
+    .eq('is_active', true)
     .order('due_date', { ascending: true })
 
   if (search) {
