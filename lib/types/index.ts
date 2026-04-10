@@ -458,6 +458,48 @@ export interface Instrument {
   updated_at: string
 }
 
+// PM Calendar
+export type PmCalendarStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+export type AuFyQuarter = 'Q1' | 'Q2' | 'Q3' | 'Q4'
+
+export type PmCalendarCategory =
+  | 'Thermal scanning'
+  | 'Dark site test'
+  | 'Emergency lighting'
+  | 'Lightning protection testing'
+  | 'Management'
+  | 'RCD testing'
+  | 'Test and tagging'
+  | 'Quarterly maintenance'
+  | 'WOs'
+
+export interface PmCalendarEntry {
+  id: string
+  tenant_id: string
+  site_id: string | null
+  title: string
+  location: string | null
+  description: string | null
+  category: string
+  start_time: string
+  end_time: string | null
+  hours: number
+  contractor_materials_cost: number
+  quarter: AuFyQuarter | null
+  financial_year: string | null
+  recurrence_rule: string | null
+  recurrence_parent_id: string | null
+  reminder_days_before: number[]
+  notification_recipients: string[]
+  email_template: string | null
+  last_notified_at: string | null
+  assigned_to: string | null
+  status: PmCalendarStatus
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface ApiResponse<T> {
   data: T | null
   error: string | null
