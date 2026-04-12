@@ -33,8 +33,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Demo accounts bypass MFA entirely.
+  const isDemoUser = user.email === 'demo@eqsolves.com.au'
+
   // Authenticated users on public auth pages -> dashboard.
-  if (isPublic && aal.currentLevel === 'aal2') {
+  if (isPublic && (aal.currentLevel === 'aal2' || isDemoUser)) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
@@ -49,10 +52,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Skip MFA enrollment for demo accounts (no factor enrolled yet).
   if (
     aal.currentLevel === 'aal1' &&
     aal.nextLevel === 'aal1' &&
-    !isAalExempt
+    !isAalExempt &&
+    !isDemoUser
   ) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/enroll-mfa'
