@@ -26,7 +26,7 @@ export default async function CustomerDetailPage({
       .eq('user_id', user.id)
       .eq('is_active', true)
       .limit(1)
-      .single()
+      .maybeSingle()
     userIsAdmin = checkIsAdmin((membership?.role as Role) ?? null)
   }
 
@@ -35,7 +35,7 @@ export default async function CustomerDetailPage({
     .from('customers')
     .select('*')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
   if (!customerRaw) {
     return (

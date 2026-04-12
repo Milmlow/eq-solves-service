@@ -16,6 +16,8 @@ import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Upload, ListChecks } from 'lucide-react'
 import Link from 'next/link'
+import { ExportButton } from '@/components/ui/ExportButton'
+import { exportToCsv } from '@/lib/utils/csv-export'
 
 interface JobPlanWithSite extends JobPlan {
   sites: { name: string } | null
@@ -125,6 +127,18 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
               <Upload className="w-4 h-4 mr-1" /> Import
             </Button>
           )}
+          <ExportButton onClick={() => exportToCsv(
+            jobPlans.map(jp => ({ ...jp, site_name: jp.sites?.name ?? 'Global' })),
+            [
+              { key: 'code', header: 'Job Code' },
+              { key: 'name', header: 'Job Plan' },
+              { key: 'type', header: 'Name' },
+              { key: 'site_name', header: 'Site' },
+              { key: 'item_count', header: 'Tasks' },
+              { key: 'is_active', header: 'Active', format: (r) => r.is_active ? 'Yes' : 'No' },
+            ],
+            `job-plans-export-${new Date().toISOString().slice(0, 10)}`
+          )} />
           {canWriteRole && (
             <Button onClick={openCreate}>Add Job Plan</Button>
           )}

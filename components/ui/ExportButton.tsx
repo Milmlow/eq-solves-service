@@ -8,7 +8,7 @@ interface ExportButtonProps {
   label?: string
 }
 
-export function ExportButton({ onClick, label = 'Export CSV' }: ExportButtonProps) {
+export function ExportButton({ onClick, label = 'Export' }: ExportButtonProps) {
   return (
     <Button variant="secondary" size="sm" onClick={onClick}>
       <Download className="w-4 h-4 mr-1" />

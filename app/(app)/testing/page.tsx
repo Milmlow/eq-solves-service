@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TestRecordList } from './TestRecordList'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
@@ -8,9 +9,15 @@ const PER_PAGE = 25
 export default async function TestingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; result?: string; page?: string; show_archived?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; result?: string; page?: string; show_archived?: string; stay?: string }>
 }) {
   const params = await searchParams
+
+  // Default to summary page unless explicitly staying on general testing
+  if (!params.stay) {
+    redirect('/testing/summary')
+  }
+
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
   const result = params.result ?? ''

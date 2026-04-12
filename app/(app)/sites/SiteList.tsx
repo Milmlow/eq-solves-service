@@ -163,6 +163,11 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
           filters={[{ key: 'customer_id', label: 'All Customers', options: customerFilterOptions }]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">
+          {isAdmin && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
           <ExportButton onClick={() => exportToCsv(
             sites.map(s => ({ ...s, customer_name: s.customers?.name ?? '' })),
             [
@@ -178,11 +183,6 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
             ],
             `sites-export-${new Date().toISOString().slice(0, 10)}`
           )} />
-          {isAdmin && (
-            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
-              <Upload className="w-4 h-4 mr-1" /> Import
-            </Button>
-          )}
           {isAdmin && (
             <Button onClick={openCreate}>Add Site</Button>
           )}

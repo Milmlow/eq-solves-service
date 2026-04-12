@@ -26,6 +26,7 @@ export default function AcbTestingPage() {
   const [noAssets, setNoAssets] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ success: number; errors: number } | null>(null)
+  const [batchCreating, setBatchCreating] = useState(false)
 
   const supabase = createClient()
 
@@ -186,6 +187,26 @@ export default function AcbTestingPage() {
     setImporting(false)
   }
 
+  // Batch-create tests for all assets without a test
+  async function handleStartAllTests() {
+    const untested = assets.filter(a => !a.acb_test)
+    if (untested.length === 0) return
+    if (!confirm(`Create tests for ${untested.length} asset${untested.length > 1 ? 's' : ''} at this site?`)) return
+    setBatchCreating(true)
+    for (const asset of untested) {
+      const fd = new FormData()
+      fd.set('asset_id', asset.id)
+      fd.set('site_id', selectedSite)
+      fd.set('test_date', new Date().toISOString().slice(0, 10))
+      fd.set('test_type', 'Routine')
+      await createAcbTestAction(fd)
+    }
+    await loadSiteData()
+    setBatchCreating(false)
+  }
+
+  const untestedCount = assets.filter(a => !a.acb_test).length
+
   const selectedAssetData = selectedAsset ? assets.find(a => a.id === selectedAsset) : null
   const selectedTest = selectedAssetData?.acb_test
 
@@ -311,10 +332,11 @@ export default function AcbTestingPage() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => setShowSiteCollection(true)}
+                onClick={() => document.getElementById('acb-import-file')?.click()}
+                disabled={importing}
               >
-                <ClipboardList className="w-4 h-4 mr-1" />
-                Asset Collection
+                <Upload className="w-4 h-4 mr-1" />
+                {importing ? 'Importing...' : 'Import'}
               </Button>
               <Button
                 size="sm"
@@ -322,17 +344,26 @@ export default function AcbTestingPage() {
                 onClick={handleExport}
               >
                 <Download className="w-4 h-4 mr-1" />
-                Export Excel
+                Export
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => document.getElementById('acb-import-file')?.click()}
-                disabled={importing}
+                onClick={() => setShowSiteCollection(true)}
               >
-                <Upload className="w-4 h-4 mr-1" />
-                {importing ? 'Importing...' : 'Import Excel'}
+                <ClipboardList className="w-4 h-4 mr-1" />
+                Breaker Details
               </Button>
+              {untestedCount > 0 && (
+                <Button
+                  size="sm"
+                  onClick={handleStartAllTests}
+                  disabled={batchCreating}
+                >
+                  <Play className="w-4 h-4 mr-1" />
+                  {batchCreating ? 'Creating...' : `Start All (${untestedCount})`}
+                </Button>
+              )}
               <input
                 id="acb-import-file"
                 type="file"

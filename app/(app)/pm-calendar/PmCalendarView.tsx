@@ -74,7 +74,7 @@ const QUARTER_LABELS: Record<AuFyQuarter, string> = {
   Q4: 'Q4 (Apr–Jun)',
 }
 
-const MONTH_NAMES = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export function PmCalendarView({
   entries, sites, categories, financialYears, technicians,
@@ -93,6 +93,19 @@ export function PmCalendarView({
   function setView(v: 'list' | 'calendar' | 'quarterly') {
     const params = new URLSearchParams(searchParams.toString())
     params.set('view', v)
+    params.delete('page')
+    router.push(`/calendar?${params.toString()}`)
+  }
+
+  // Show deactivated toggle
+  const showArchived = searchParams.get('show_archived') === '1'
+  function toggleArchived() {
+    const params = new URLSearchParams(searchParams.toString())
+    if (showArchived) {
+      params.delete('show_archived')
+    } else {
+      params.set('show_archived', '1')
+    }
     params.delete('page')
     router.push(`/calendar?${params.toString()}`)
   }
@@ -162,16 +175,14 @@ export function PmCalendarView({
 
   // ===== CALENDAR VIEW DATA =====
   const calendarData = useMemo(() => {
-    // Group entries by month (AU FY: Jul=0, Aug=1, ..., Jun=11)
+    // Group entries by calendar month (Jan=0, Feb=1, ..., Dec=11)
     const months: Record<number, EntryRow[]> = {}
     for (let i = 0; i < 12; i++) months[i] = []
 
     for (const e of entries) {
       const d = new Date(e.start_time)
-      const m = d.getMonth()
-      // Map calendar month to FY month index: Jul(6)=0, Aug(7)=1, ..., Jun(5)=11
-      const fyMonthIndex = m >= 6 ? m - 6 : m + 6
-      if (months[fyMonthIndex]) months[fyMonthIndex].push(e)
+      const m = d.getMonth() // 0=Jan, 1=Feb, ..., 11=Dec
+      if (months[m]) months[m].push(e)
     }
     return months
   }, [entries])
@@ -185,7 +196,8 @@ export function PmCalendarView({
     { value: 'Q3', label: 'Q3 (Jan–Mar)' },
     { value: 'Q4', label: 'Q4 (Apr–Jun)' },
   ]
-  const fyOptions = financialYears.map((fy) => ({ value: fy, label: `FY ${fy}` }))
+  // FY options kept for data but removed from UI filters per Item 8
+  const _fyOptions = financialYears.map((fy) => ({ value: fy, label: `FY ${fy}` }))
   const statusOptions = [
     { value: 'scheduled', label: 'Scheduled' },
     { value: 'in_progress', label: 'In Progress' },
@@ -284,7 +296,6 @@ export function PmCalendarView({
     { key: 'hours' as const, label: 'Hours' },
     { key: 'cost' as const, label: 'Cost' },
     { key: 'quarter' as const, label: 'Quarter' },
-    { key: 'financial_year' as const, label: 'FY' },
     { key: 'status' as const, label: 'Status' },
   ]
 
@@ -303,7 +314,6 @@ export function PmCalendarView({
               { key: 'site', label: 'All Sites', options: siteOptions },
               { key: 'category', label: 'All Categories', options: categoryOptions },
               { key: 'quarter', label: 'All Quarters', options: quarterOptions },
-              { key: 'fy', label: 'All FYs', options: fyOptions },
               { key: 'status', label: 'All Statuses', options: statusOptions },
             ]}
           />
@@ -332,10 +342,37 @@ export function PmCalendarView({
                 <LayoutGrid className="w-4 h-4" />
               </button>
             </div>
+            <button
+              onClick={toggleArchived}
+              className={`inline-flex items-center h-8 px-3 text-xs font-medium rounded-md border transition-colors ${
+                showArchived
+                  ? 'border-eq-sky bg-eq-ice text-eq-deep'
+                  : 'border-gray-200 bg-white text-eq-grey hover:bg-gray-50'
+              }`}
+              title={showArchived ? 'Hide deactivated checks' : 'Show deactivated checks'}
+            >
+              <Archive className="w-3.5 h-3.5 mr-1" />
+              {showArchived ? 'Hide Archived' : 'Show Archived'}
+            </button>
             {isAdmin && entries.length === 0 && (
               <Button variant="secondary" size="sm" onClick={handleSeed} disabled={seeding}>
                 {seeding ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Seeding...</> : 'Seed Data'}
               </Button>
+            )}
+            {canWriteRole && (
+              <label className="inline-flex items-center">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={handleCsvImport}
+                  disabled={importing}
+                />
+                <span className="inline-flex items-center h-8 px-3 text-xs font-medium rounded-md border border-gray-200 bg-white text-eq-ink hover:bg-gray-50 cursor-pointer">
+                  {importing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />}
+                  Import
+                </span>
+              </label>
             )}
             <CsvExportButton
               filename={`calendar-${new Date().toISOString().slice(0, 10)}`}
@@ -343,22 +380,7 @@ export function PmCalendarView({
               headers={csvHeaders}
             />
             {canWriteRole && (
-              <>
-                <label className="inline-flex items-center">
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    className="hidden"
-                    onChange={handleCsvImport}
-                    disabled={importing}
-                  />
-                  <span className="inline-flex items-center h-8 px-3 text-xs font-medium rounded-md border border-gray-200 bg-white text-eq-ink hover:bg-gray-50 cursor-pointer">
-                    {importing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />}
-                    Import CSV
-                  </span>
-                </label>
-                <Button onClick={() => setCreateOpen(true)}>Add Entry</Button>
-              </>
+              <Button onClick={() => setCreateOpen(true)}>Add Entry</Button>
             )}
           </div>
         </div>

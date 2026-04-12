@@ -15,7 +15,7 @@ Multi-tenant maintenance management platform for electrical contractors — circ
 ### Database (Supabase)
 - Row-Level Security via `public.get_user_tenant_ids()` and `public.get_user_role(tenant_id)` — all tables enforce tenant isolation
 - Trigger function `public.set_updated_at()` auto-maintains `updated_at` timestamps
-- Migrations in `supabase/migrations/` numbered sequentially (0001–0023+)
+- Migrations in `supabase/migrations/` numbered sequentially (0001–0031+)
 - Storage buckets: `attachments` (general files), `logos` (tenant + customer logos, public bucket with auth RLS)
 
 ### Auth & Roles
@@ -45,22 +45,44 @@ Excel batch fill: export pre-populated .xlsx per site, fill offline, import back
 
 Site-level Asset Collection view: expandable cards per CB with all collection fields.
 
+ACB toolbar button order (left to right): Import, Export, Breaker Details, Start All. "Start All" batch-creates tests for every untested asset at the site.
+
 ## NSX Testing Module
 
 3-step workflow framework at `/testing/nsx` mirroring ACB. Site-based asset loading filtered by NSX / MCCB job plan (name containing 'NSX' or code `LVNSX`/`MCCB`), falls back to all site assets if no matching plan. Step 1 Asset Collection is a full form (brand, breaker type, serial, current In, trip unit model, poles, fixed/withdrawable/plug_in, protection settings); Steps 2 & 3 are scaffolded placeholders pending field-set finalisation. State via `step1/2/3_status` columns on `nsx_tests` (migration 0026).
 
 ## Testing Summary
 
-`/testing/summary` — combined register of ACB, NSX and General test records with site / kind / status / date filters, KPI cards and progress bars. Used for tracking work-in-progress tests across all three modules.
+`/testing/summary` — combined register of ACB, NSX and General test records with site / kind / status / date filters, KPI cards and progress bars. Used for tracking work-in-progress tests across all three modules. **Default landing page** when navigating to `/testing` (redirects automatically).
 
 ## Reports
 
 `/reports` — compliance dashboard with maintenance compliance rate, overdue checks, test pass rate, ACB & NSX workflow progress, defects register summary (status + severity), maintenance compliance by site (top 10) and a 6-month trend chart (tests run vs maintenance checks due).
 
+### Report Settings (`/admin/reports`)
+Configurable report template with section toggles (cover, overview, contents, summary, sign-off), company details, header/footer text, sign-off fields, and:
+- **Report complexity**: summary / standard / detailed — controls level of detail per asset
+- **Logo URL**: custom report logo (falls back to tenant logo)
+- **Customer logo toggle**: show/hide customer logo on cover page
+- **Site photos toggle**: include site photos on cover page
+- DB columns added in migration `0031_report_settings_expansion`
+
 ## Job Plans
 - Job plans may be global (`site_id = null`) or site-specific
 - Columns: code (Job Code), name (Job Plan e.g. E1.25), type (descriptive Name e.g. "Low Voltage Air Circuit Breaker")
 - Assets link via `assets.job_plan_id` → `job_plans.id`
+- Toolbar: Items Register, Import, Export, Add Job Plan
+
+## Contract Scope
+- `/contract-scope` — tracks included/excluded scope items per customer per FY
+- Grouped by customer with included/excluded counts
+- Toolbar: Import, Export, Add Scope Item
+- Import matches customer/site by name lookup
+
+## Calendar
+- `/calendar` — PM calendar with list, calendar (Jan–Dec), and quarterly views
+- Show Archived toggle for deactivated entries
+- Month ordering: January to December (calendar year)
 
 ## Assets Page
 - Filterable by site and job plan (dropdown shows `name - type` e.g. "E1.25 - Low Voltage Air Circuit Breaker")
@@ -78,5 +100,7 @@ Site-level Asset Collection view: expandable cards per CB with all collection fi
 - Client components use `createClient()` from `lib/supabase/client`; server components/actions use `lib/supabase/server`
 - Soft deletes via `is_active` everywhere — no hard deletes (except consumed MFA codes and removed job plan items)
 - All DataTable instances use `onRowClick` — no icon action columns
+- Toolbar button order convention: Import (left), Export, then action buttons (right)
+- Button labels: "Import" and "Export" — never "Import CSV" or "Export CSV"
 
 @AGENTS.md

@@ -6,7 +6,10 @@ import { FormInput } from '@/components/ui/FormInput'
 import { Card } from '@/components/ui/Card'
 import { createScopeItemAction, updateScopeItemAction, deleteScopeItemAction } from './actions'
 import type { ContractScope, Customer, Site } from '@/lib/types'
-import { Plus, Pencil, Trash2, X, CheckCircle2, XCircle, Filter } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, CheckCircle2, XCircle, Filter, Upload, Download } from 'lucide-react'
+import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
+import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
+import { importScopeItemsAction } from './actions'
 
 // Australian FY options
 const FY_OPTIONS = [
@@ -33,6 +36,56 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
   const [editing, setEditing] = useState<ContractScope | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+
+  // CSV export helper
+  function handleExport() {
+    const csvRows = filtered.map(item => ({
+      customer: item.customers?.name ?? '',
+      site: item.sites?.name ?? '',
+      financial_year: item.financial_year,
+      scope_item: item.scope_item,
+      included: item.is_included ? 'Yes' : 'No',
+      notes: item.notes ?? '',
+    }))
+    const headers = ['customer', 'site', 'financial_year', 'scope_item', 'included', 'notes']
+    const csv = [headers.join(','), ...csvRows.map(r => headers.map(h => `"${(r[h as keyof typeof r] ?? '').toString().replace(/"/g, '""')}"`).join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `contract-scope-export-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const scopeImportConfig: ImportCSVConfig<{
+    customer_name: string
+    site_name: string | null
+    financial_year: string
+    scope_item: string
+    is_included: boolean
+    notes: string | null
+  }> = {
+    entityName: 'Contract Scope Items',
+    requiredColumns: ['customer', 'scope_item'],
+    optionalColumns: ['site', 'financial_year', 'included', 'notes'],
+    mapRow: (row, columnMap) => {
+      const customer_name = row[columnMap['customer']]?.trim()
+      const scope_item = row[columnMap['scope_item']]?.trim()
+      if (!customer_name || !scope_item) return null
+      const includedVal = row[columnMap['included']]?.trim()?.toLowerCase()
+      return {
+        customer_name,
+        site_name: row[columnMap['site']]?.trim() || null,
+        financial_year: row[columnMap['financial_year']]?.trim() || filterFY || currentFY(),
+        scope_item,
+        is_included: includedVal === 'no' ? false : true,
+        notes: row[columnMap['notes']]?.trim() || null,
+      }
+    },
+    importAction: importScopeItemsAction,
+  }
 
   // Filters
   const [filterCustomer, setFilterCustomer] = useState('')
@@ -157,7 +210,15 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
             <option value="no">Excluded Only</option>
           </select>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {canWriteRole && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
+          <Button variant="secondary" size="sm" onClick={handleExport} disabled={filtered.length === 0}>
+            <Download className="w-4 h-4 mr-1" /> Export
+          </Button>
           {canWriteRole && !showForm && (
             <Button size="sm" onClick={() => { setShowForm(true); setEditing(null); setError(null) }}>
               <Plus className="w-3.5 h-3.5 mr-1" /> Add Scope Item
@@ -251,6 +312,12 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
           </form>
         </Card>
       )}
+
+      <ImportCSVModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        config={scopeImportConfig}
+      />
 
       {/* Grouped list */}
       {grouped.length === 0 ? (

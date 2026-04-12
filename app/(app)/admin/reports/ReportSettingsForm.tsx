@@ -5,7 +5,7 @@ import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { updateReportSettingsAction } from './actions'
 import type { TenantSettings } from '@/lib/types'
-import { Eye, EyeOff, Plus, Trash2, GripVertical } from 'lucide-react'
+import { Eye, EyeOff, Plus, Trash2, GripVertical, Image, FileText } from 'lucide-react'
 
 interface Props {
   settings: TenantSettings
@@ -28,6 +28,12 @@ export function ReportSettingsForm({ settings }: Props) {
   const [showContents, setShowContents] = useState(settings.report_show_contents ?? true)
   const [showSummary, setShowSummary] = useState(settings.report_show_executive_summary ?? true)
   const [showSignOff, setShowSignOff] = useState(settings.report_show_sign_off ?? true)
+
+  // Logo & photos
+  const [logoUrl, setLogoUrl] = useState(settings.report_logo_url ?? '')
+  const [showCustomerLogo, setShowCustomerLogo] = useState(settings.report_customer_logo ?? true)
+  const [showSitePhotos, setShowSitePhotos] = useState(settings.report_site_photos ?? false)
+  const [complexity, setComplexity] = useState<'summary' | 'standard' | 'detailed'>(settings.report_complexity ?? 'standard')
 
   // Custom text
   const [headerText, setHeaderText] = useState(settings.report_header_text ?? '')
@@ -87,6 +93,10 @@ export function ReportSettingsForm({ settings }: Props) {
       report_company_abn: companyAbn || null,
       report_company_phone: companyPhone || null,
       report_sign_off_fields: signOffFields.filter(f => f.trim().length > 0),
+      report_logo_url: logoUrl || null,
+      report_customer_logo: showCustomerLogo,
+      report_site_photos: showSitePhotos,
+      report_complexity: complexity,
     })
 
     setLoading(false)
@@ -174,6 +184,83 @@ export function ReportSettingsForm({ settings }: Props) {
           </div>
         </div>
 
+        {/* Report Complexity */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 className="text-sm font-bold text-eq-ink mb-1">Report Style</h2>
+          <p className="text-xs text-eq-grey mb-4">Choose how detailed generated reports should be. This controls the level of information included per asset.</p>
+          <div className="grid grid-cols-3 gap-3">
+            {([
+              { value: 'summary' as const, label: 'Summary', desc: 'KPIs, pass/fail counts, and high-level overview only' },
+              { value: 'standard' as const, label: 'Standard', desc: 'Asset details, test results, and recommendations' },
+              { value: 'detailed' as const, label: 'Detailed', desc: 'Full data including all readings, photos, and commentary' },
+            ]).map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setComplexity(opt.value)}
+                className="flex flex-col items-start p-4 rounded-lg border transition-colors text-left hover:bg-gray-50"
+                style={{ borderColor: complexity === opt.value ? 'var(--eq-sky, #3DA8D8)' : '#e5e7eb' }}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <FileText className={`w-4 h-4 ${complexity === opt.value ? 'text-eq-sky' : 'text-gray-300'}`} />
+                  <p className="text-sm font-medium text-eq-ink">{opt.label}</p>
+                </div>
+                <p className="text-xs text-eq-grey">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Logos & Photos */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 className="text-sm font-bold text-eq-ink mb-1">Logos & Photos</h2>
+          <p className="text-xs text-eq-grey mb-4">Configure logo display and site photography for report cover pages.</p>
+          <div className="space-y-4">
+            <FormInput
+              label="Report Logo URL"
+              name="report_logo_url"
+              value={logoUrl}
+              onChange={e => setLogoUrl(e.target.value)}
+              placeholder="https://... or leave blank to use tenant logo"
+            />
+            {logoUrl && (
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-16 border border-gray-200 rounded bg-gray-50 flex items-center justify-center overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={logoUrl} alt="Report logo preview" className="max-w-full max-h-full object-contain" />
+                </div>
+                <span className="text-xs text-eq-grey">Logo preview</span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setShowCustomerLogo(!showCustomerLogo)}
+                className="flex items-center justify-between px-4 py-3 rounded-lg border transition-colors text-left hover:bg-gray-50"
+                style={{ borderColor: showCustomerLogo ? 'var(--eq-sky, #3DA8D8)' : '#e5e7eb' }}
+              >
+                <div>
+                  <p className="text-sm font-medium text-eq-ink">Customer Logo</p>
+                  <p className="text-xs text-eq-grey">Show customer logo on cover page</p>
+                </div>
+                {showCustomerLogo ? <Image className="w-5 h-5 text-eq-sky" /> : <Image className="w-5 h-5 text-gray-300" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSitePhotos(!showSitePhotos)}
+                className="flex items-center justify-between px-4 py-3 rounded-lg border transition-colors text-left hover:bg-gray-50"
+                style={{ borderColor: showSitePhotos ? 'var(--eq-sky, #3DA8D8)' : '#e5e7eb' }}
+              >
+                <div>
+                  <p className="text-sm font-medium text-eq-ink">Site Photos</p>
+                  <p className="text-xs text-eq-grey">Include site photos on cover page</p>
+                </div>
+                {showSitePhotos ? <Image className="w-5 h-5 text-eq-sky" /> : <Image className="w-5 h-5 text-gray-300" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Header / Footer */}
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <h2 className="text-sm font-bold text-eq-ink mb-1">Header & Footer Text</h2>
@@ -245,10 +332,19 @@ export function ReportSettingsForm({ settings }: Props) {
           {/* A4-ratio preview container */}
           <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200" style={{ aspectRatio: '210/297' }}>
             <div className="p-3 h-full overflow-y-auto space-y-2 text-[10px]">
+              {/* Report style indicator */}
+              <div className="bg-eq-ice/50 border border-eq-sky/20 p-2 rounded text-center">
+                <p className="text-[9px] text-eq-deep font-semibold uppercase">{complexity} report</p>
+              </div>
+
               {/* Cover Page */}
               {showCover && (
                 <div className="bg-white border border-gray-300 p-3 rounded min-h-[60px] flex flex-col items-center justify-center text-center">
                   <p className="font-bold text-gray-800">COVER PAGE</p>
+                  {(logoUrl || showCustomerLogo) && (
+                    <p className="text-gray-500 text-[9px] mt-1">{logoUrl ? '🏢 Company logo' : ''}{showCustomerLogo ? ' + 🏪 Customer logo' : ''}</p>
+                  )}
+                  {showSitePhotos && <p className="text-gray-500 text-[9px]">📷 Site photo</p>}
                   {companyName && <p className="text-gray-600 text-[9px] mt-1">{companyName}</p>}
                   {companyAddress && <p className="text-gray-500 text-[9px]">{companyAddress.substring(0, 30)}...</p>}
                 </div>

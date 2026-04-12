@@ -38,6 +38,11 @@ export interface TenantSettings {
   report_company_abn: string | null
   report_company_phone: string | null
   report_sign_off_fields: string[]
+  // Enhanced report settings
+  report_logo_url: string | null
+  report_customer_logo: boolean
+  report_site_photos: boolean
+  report_complexity: 'summary' | 'standard' | 'detailed'
   updated_at: string
 }
 

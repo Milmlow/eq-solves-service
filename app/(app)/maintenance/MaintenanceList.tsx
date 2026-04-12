@@ -161,13 +161,7 @@ export function MaintenanceList({
           </div>
 
           {canWriteRole && (
-            <>
-              <Button onClick={() => setBatchOpen(true)} variant="secondary">
-                <Calendar className="w-4 h-4 mr-2" />
-                Batch Create
-              </Button>
-              <Button onClick={() => setCreateOpen(true)}>Create Check</Button>
-            </>
+            <Button onClick={() => setCreateOpen(true)}>Create Check</Button>
           )}
         </div>
       </div>

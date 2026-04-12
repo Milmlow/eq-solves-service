@@ -117,6 +117,11 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
               <LayoutList className="w-4 h-4" />
             </button>
           </div>
+          {canWriteRole && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
           <ExportButton onClick={() => exportToCsv(
             allAssets.map(a => ({ ...a, site_name: a.sites?.name ?? '', job_plan_name: a.job_plans?.name ?? '' })),
             [
@@ -133,11 +138,6 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
             ],
             `assets-export-${new Date().toISOString().slice(0, 10)}`
           )} />
-          {canWriteRole && (
-            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
-              <Upload className="w-4 h-4 mr-1" /> Import
-            </Button>
-          )}
           {canWriteRole && (
             <Button onClick={openCreate}>Add Asset</Button>
           )}

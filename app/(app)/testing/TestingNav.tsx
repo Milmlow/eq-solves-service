@@ -11,15 +11,16 @@ const tabs = [
   { label: 'ACB Testing', href: '/testing/acb', icon: Shield },
   { label: 'NSX Testing', href: '/testing/nsx', icon: CircuitBoard },
   { label: 'Instruments', href: '/instruments', icon: Gauge },
-  { label: 'General Testing (under development)', href: '/testing', icon: Zap },
+  { label: 'General Testing (under development)', href: '/testing?stay=1', icon: Zap },
 ]
 
 export function TestingNav() {
   const pathname = usePathname()
 
   function isActive(href: string) {
-    if (href === '/testing') return pathname === '/testing'
-    return pathname.startsWith(href)
+    const hrefPath = href.split('?')[0]
+    if (hrefPath === '/testing') return pathname === '/testing'
+    return pathname.startsWith(hrefPath)
   }
 
   return (

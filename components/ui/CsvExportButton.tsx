@@ -18,7 +18,7 @@ export function CsvExportButton<T extends Record<string, CsvCell>>({
   rows,
   headers,
   size = 'sm',
-  label = 'Export CSV',
+  label = 'Export',
   disabled,
 }: CsvExportButtonProps<T>) {
   function handleClick() {

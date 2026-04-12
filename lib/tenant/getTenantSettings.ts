@@ -24,6 +24,11 @@ const DEFAULTS: TenantSettings = {
   report_company_abn: null,
   report_company_phone: null,
   report_sign_off_fields: ['Technician Signature', 'Supervisor Signature'],
+  // Enhanced report settings
+  report_logo_url: null,
+  report_customer_logo: true,
+  report_site_photos: false,
+  report_complexity: 'standard',
   updated_at: '',
 }
 

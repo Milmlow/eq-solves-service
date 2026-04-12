@@ -98,6 +98,11 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
       <div className="flex items-center justify-between mb-4">
         <SearchFilter placeholder="Search customers..." />
         <div className="flex items-center gap-2 ml-4 shrink-0">
+          {isAdmin && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
           <ExportButton onClick={() => exportToCsv(
             customers,
             [
@@ -106,11 +111,6 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
             ],
             `customers-export-${new Date().toISOString().slice(0, 10)}`
           )} />
-          {isAdmin && (
-            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
-              <Upload className="w-4 h-4 mr-1" /> Import
-            </Button>
-          )}
           {isAdmin && (
             <Button onClick={openCreate}>Add Customer</Button>
           )}
