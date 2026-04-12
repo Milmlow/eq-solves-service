@@ -2,10 +2,13 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Upload } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { CsvExportButton } from '@/components/ui/CsvExportButton'
+import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
+import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { FrequencyBadges, FREQUENCY_DEFS, type FrequencyKey } from '@/components/ui/FrequencyBadges'
-import { updateJobPlanItemAction } from '../actions'
+import { updateJobPlanItemAction, importJobPlanItemsAction } from '../actions'
 import type { JobPlanItem } from '@/lib/types'
 
 type Row = JobPlanItem & {
@@ -55,6 +58,7 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
   const [editingId, setEditingId] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   // Distinct plans for the plan dropdown — derived from current rows.
   const planOptions = useMemo(() => {
@@ -65,6 +69,56 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
     }
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label))
   }, [initialRows])
+
+  // CSV round-trip import config
+  const yToBool = (v: string | undefined) => v?.trim().toUpperCase() === 'Y'
+  const importConfig: ImportCSVConfig<{
+    item_id: string | null
+    plan_id: string | null
+    description: string | null
+    sort_order: number | null
+    is_required: boolean
+    dark_site: boolean
+    freq_monthly: boolean
+    freq_quarterly: boolean
+    freq_semi_annual: boolean
+    freq_annual: boolean
+    freq_2yr: boolean
+    freq_3yr: boolean
+    freq_5yr: boolean
+    freq_8yr: boolean
+    freq_10yr: boolean
+  }> = {
+    entityName: 'Job Plan Items',
+    requiredColumns: ['description'],
+    optionalColumns: [
+      'item_id', 'plan_id', 'sort_order', 'required',
+      'dark_site', 'monthly', 'quarterly', 'semi_annual', 'annual',
+      'yr2', 'yr3', 'yr5', 'yr8', 'yr10',
+    ],
+    mapRow: (row, columnMap) => {
+      const desc = row[columnMap['description']]?.trim()
+      if (!desc) return null
+      return {
+        item_id: row[columnMap['item_id']]?.trim() || null,
+        plan_id: row[columnMap['plan_id']]?.trim() || null,
+        description: desc,
+        sort_order: columnMap['sort_order'] ? parseInt(row[columnMap['sort_order']] ?? '0', 10) || 0 : null,
+        is_required: (row[columnMap['required']]?.trim().toLowerCase() ?? 'yes') !== 'no',
+        dark_site: yToBool(row[columnMap['dark_site']]),
+        freq_monthly: yToBool(row[columnMap['monthly']]),
+        freq_quarterly: yToBool(row[columnMap['quarterly']]),
+        freq_semi_annual: yToBool(row[columnMap['semi_annual']]),
+        freq_annual: yToBool(row[columnMap['annual']]),
+        freq_2yr: yToBool(row[columnMap['yr2']]),
+        freq_3yr: yToBool(row[columnMap['yr3']]),
+        freq_5yr: yToBool(row[columnMap['yr5']]),
+        freq_8yr: yToBool(row[columnMap['yr8']]),
+        freq_10yr: yToBool(row[columnMap['yr10']]),
+      }
+    },
+    importAction: importJobPlanItemsAction,
+  }
 
   // Apply filters then sort.
   const filtered = useMemo(() => {
@@ -107,9 +161,12 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
       : <ArrowDown className="w-3 h-3 inline ml-1" />
   }
 
-  // Build CSV-friendly row shape: expand frequency flags into Y/blank columns.
+  // Build CSV-friendly row shape. item_id and plan_id are included so the
+  // round-trip import can match existing rows (update) or create new ones.
   const csvRows = useMemo(
     () => filtered.map((r) => ({
+      item_id: r.id,
+      plan_id: r.plan_id,
       job_code: r.plan_code ?? '',
       plan: r.plan_name,
       type: r.plan_type ?? '',
@@ -205,10 +262,17 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
 
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-eq-grey">{filtered.length} of {rows.length}</span>
+          {canWrite && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import CSV
+            </Button>
+          )}
           <CsvExportButton
             filename="job-plan-items.csv"
             rows={csvRows}
             headers={[
+              { key: 'item_id',     label: 'Item ID' },
+              { key: 'plan_id',     label: 'Plan ID' },
               { key: 'job_code',    label: 'Job Code' },
               { key: 'plan',        label: 'Plan' },
               { key: 'type',        label: 'Type' },
@@ -308,6 +372,14 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
           </table>
         </div>
       </div>
+
+      {canWrite && (
+        <ImportCSVModal
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          config={importConfig}
+        />
+      )}
     </div>
   )
 }

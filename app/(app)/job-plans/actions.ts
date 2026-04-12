@@ -246,3 +246,128 @@ export async function deleteJobPlanItemAction(jobPlanId: string, itemId: string)
     return { success: false, error: (e as Error).message }
   }
 }
+
+// --- Import / Upsert Job Plan Items (CSV round-trip) ---
+
+interface ImportJobPlanItemRow {
+  /** If present and non-empty → update. If blank → create. */
+  item_id: string | null
+  /** Required for creates. Used for update ownership checks. */
+  plan_id: string | null
+  description: string | null
+  sort_order: number | null
+  is_required: boolean
+  dark_site: boolean
+  freq_monthly: boolean
+  freq_quarterly: boolean
+  freq_semi_annual: boolean
+  freq_annual: boolean
+  freq_2yr: boolean
+  freq_3yr: boolean
+  freq_5yr: boolean
+  freq_8yr: boolean
+  freq_10yr: boolean
+}
+
+/**
+ * Bulk upsert job plan items from a CSV round-trip.
+ *
+ * Rows with a valid `item_id` → update the matching row.
+ * Rows without `item_id` but with `plan_id` → create new.
+ * Rows missing both → row-level error.
+ *
+ * The CSV is produced by the Items Register's "Export CSV" button which
+ * includes `item_id` and `plan_id` as the first two columns.
+ */
+export async function importJobPlanItemsAction(
+  items: ImportJobPlanItemRow[]
+): Promise<{
+  success: boolean
+  imported: number
+  rowErrors: string[]
+  error?: string
+}> {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, imported: 0, rowErrors: [], error: 'Insufficient permissions.' }
+
+    if (items.length === 0) return { success: false, imported: 0, rowErrors: [], error: 'No rows to import.' }
+    if (items.length > 500) return { success: false, imported: 0, rowErrors: [], error: 'Maximum 500 rows per import.' }
+
+    const rowErrors: string[] = []
+    let updated = 0
+    let created = 0
+
+    for (let i = 0; i < items.length; i++) {
+      const row = items[i]
+      const rowNum = i + 1
+
+      if (!row.description?.trim()) {
+        rowErrors.push(`Row ${rowNum}: Description is required.`)
+        continue
+      }
+
+      const payload = {
+        description: row.description.trim(),
+        sort_order: row.sort_order ?? 0,
+        is_required: row.is_required,
+        dark_site: row.dark_site,
+        freq_monthly: row.freq_monthly,
+        freq_quarterly: row.freq_quarterly,
+        freq_semi_annual: row.freq_semi_annual,
+        freq_annual: row.freq_annual,
+        freq_2yr: row.freq_2yr,
+        freq_3yr: row.freq_3yr,
+        freq_5yr: row.freq_5yr,
+        freq_8yr: row.freq_8yr,
+        freq_10yr: row.freq_10yr,
+      }
+
+      if (row.item_id?.trim()) {
+        // UPDATE existing item — RLS ensures tenant isolation.
+        const { error } = await supabase
+          .from('job_plan_items')
+          .update(payload)
+          .eq('id', row.item_id.trim())
+
+        if (error) {
+          rowErrors.push(`Row ${rowNum}: ${error.message}`)
+        } else {
+          updated++
+        }
+      } else if (row.plan_id?.trim()) {
+        // CREATE new item under the specified plan.
+        const { error } = await supabase
+          .from('job_plan_items')
+          .insert({
+            ...payload,
+            job_plan_id: row.plan_id.trim(),
+            tenant_id: tenantId,
+          })
+
+        if (error) {
+          rowErrors.push(`Row ${rowNum}: ${error.message}`)
+        } else {
+          created++
+        }
+      } else {
+        rowErrors.push(`Row ${rowNum}: Needs either Item ID (to update) or Plan ID (to create).`)
+      }
+    }
+
+    const total = updated + created
+    if (total > 0) {
+      await logAuditEvent({
+        action: 'update',
+        entityType: 'job_plan_item',
+        summary: `CSV import: ${updated} updated, ${created} created (${rowErrors.length} errors)`,
+      })
+      revalidatePath('/job-plans')
+      revalidatePath('/job-plans/items')
+    }
+
+    return { success: true, imported: total, rowErrors }
+  } catch (e: unknown) {
+    return { success: false, imported: 0, rowErrors: [], error: (e as Error).message }
+  }
+}
