@@ -51,8 +51,6 @@ export default async function JobPlanItemsRegisterPage() {
       freq_5yr,
       freq_8yr,
       freq_10yr,
-      reference_image_url,
-      reference_image_caption,
       job_plans!inner ( id, name, code, type, site_id, is_active, sites ( id, name ) )
     `)
     .order('job_plan_id', { ascending: true })
@@ -95,8 +93,6 @@ export default async function JobPlanItemsRegisterPage() {
     freq_5yr: boolean
     freq_8yr: boolean
     freq_10yr: boolean
-    reference_image_url: string | null
-    reference_image_caption: string | null
     job_plans: {
       id: string
       name: string
@@ -131,8 +127,6 @@ export default async function JobPlanItemsRegisterPage() {
       freq_5yr: r.freq_5yr,
       freq_8yr: r.freq_8yr,
       freq_10yr: r.freq_10yr,
-      reference_image_url: r.reference_image_url,
-      reference_image_caption: r.reference_image_caption,
       created_at: '',
       updated_at: '',
       // joined fields

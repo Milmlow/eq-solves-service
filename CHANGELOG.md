@@ -4,6 +4,55 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## [Sprint 29] 2026-04-12 — Items Register, Frequency Editing, Idempotency, CheckDetail Refactor
+
+### Added
+- **Job Plan Items Master Register** at `/job-plans/items` — flat table of every task across every active job plan. Columns: Code · Plan · Site · # · Task · Frequency · Required. In-memory filters (search, plan, site, frequency, required), sortable columns, CSV export with one Y/blank column per frequency for clean Excel pivots. Inline frequency editor: click any frequency cell → checkbox grid (DS · M · Q · 6M · A · 2Y · 3Y · 5Y · 8Y · 10Y) → optimistic update with rollback on failure
+- **Frequency column on Job Plan edit panel** — read-mode shows compact `FrequencyBadges`, edit-mode shows checkbox grid. Saves all 10 boolean flags alongside description / sort_order / required
+- **Shared `FrequencyBadges` component** (`components/ui/`) — compact badge strip showing active frequencies. Single source of truth for short labels (M / Q / 6M / A / 2Y–10Y) and dark-site marker (DS). Used by both register and edit panel
+- **Mutation ID idempotency** — `withIdempotency()` wrapper in `lib/actions/idempotency.ts` for replay-safe server actions. Partial unique index `idx_audit_mutation_id_unique` on `audit_logs (tenant_id, mutation_id)`. Foundation for offline sync and AI-suggested actions. Pattern documented in `AGENTS.md`
+- **Shared site-health analytics** at `lib/analytics/site-health.ts` — `computeMaintenanceCompliance`, `computeComplianceBySite`, `computeSiteHealthScore` (green/amber/red tiers). `/reports` now consumes shared primitives
+- **CheckDetail refactor** — 553-line monolith split into `TaskRow.tsx`, `AssetRow.tsx`, `CheckAssetTable.tsx`, `CheckHeader.tsx`. CheckDetail.tsx ~240 lines, thin orchestrator. Zero behaviour changes
+- **Items Register link** on `/job-plans` page header
+- **CRLF/LF normalization** via `.gitattributes` — fixes 1,211-file CRLF drift
+- **GitHub Actions CI** at `.github/workflows/ci.yml` — runs `tsc --noEmit` + `npm audit --audit-level=high` on push and PR to main
+
+### Removed
+- **Per-item reference image feature** — migration 0030 drops `reference_image_url`/`reference_image_caption` from `job_plan_items` and `maintenance_check_items`, removes `job-plan-references` storage bucket. Generic image components (`ImageUpload`, `ImageThumbnail`, `ImageLightbox`) retained in `components/ui/` for future photo-evidence use
+
+### Fixed
+- Bumped `next` from 16.2.2 → 16.2.3 to clear GHSA-q4gf-8mx6-v5v3 (DoS in Server Components)
+- `updateCheckItemAction` was missing audit log — added with `withIdempotency` retrofit
+
+### Files Created
+- `supabase/migrations/0028_mutation_id_idempotency.sql` (applied)
+- `supabase/migrations/0029_job_plan_reference_images.sql` (applied then reverted by 0030)
+- `supabase/migrations/0030_drop_reference_images.sql` (pending user application)
+- `lib/actions/idempotency.ts`
+- `lib/analytics/site-health.ts`
+- `components/ui/FrequencyBadges.tsx`
+- `components/ui/ImageUpload.tsx`, `ImageThumbnail.tsx`, `ImageLightbox.tsx`
+- `app/(app)/job-plans/items/page.tsx`, `JobPlanItemsRegister.tsx`
+- `app/(app)/maintenance/TaskRow.tsx`, `AssetRow.tsx`, `CheckAssetTable.tsx`, `CheckHeader.tsx`
+- `.gitattributes`
+- `.github/workflows/ci.yml`
+
+### Files Modified
+- `app/(app)/job-plans/JobPlanForm.tsx` — frequency column + removed image control
+- `app/(app)/job-plans/JobPlanList.tsx` — Items Register link
+- `app/(app)/job-plans/actions.ts` — partial-update for frequency flags
+- `app/(app)/maintenance/CheckDetail.tsx` — slimmed to orchestrator
+- `app/(app)/maintenance/actions.ts` — removed reference snapshot, added idempotency + audit to `updateCheckItemAction`
+- `app/(app)/reports/page.tsx` — consumes shared analytics
+- `lib/actions/audit.ts` — accepts `mutationId`, exports `isMutationProcessed`
+- `lib/types/index.ts` — removed reference fields from `JobPlanItem` and `MaintenanceCheckItem`
+- `lib/validations/job-plan.ts` — extended with 10 frequency flags + `dark_site`
+- `package.json` / `package-lock.json` — next 16.2.3
+- `AGENTS.md` — `withIdempotency()` pattern
+- `AI_STRATEGY.md` — phasing reset, revised Phase 1a
+
+---
+
 ## [Sprint 28] 2026-04-10 — NSX Workflow, Testing Summary, Reports Expansion, Maintenance UX
 
 ### Added

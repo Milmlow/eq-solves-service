@@ -2,9 +2,8 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Image as ImageIcon } from 'lucide-react'
+import { Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { CsvExportButton } from '@/components/ui/CsvExportButton'
-import { ImageThumbnail } from '@/components/ui/ImageThumbnail'
 import { FrequencyBadges, FREQUENCY_DEFS, type FrequencyKey } from '@/components/ui/FrequencyBadges'
 import { updateJobPlanItemAction } from '../actions'
 import type { JobPlanItem } from '@/lib/types'
@@ -51,7 +50,6 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
   const [planFilter, setPlanFilter] = useState('')
   const [freqFilter, setFreqFilter] = useState<FrequencyKey | ''>('')
   const [requiredFilter, setRequiredFilter] = useState<'' | 'yes' | 'no'>('')
-  const [imageFilter, setImageFilter] = useState<'' | 'yes' | 'no'>('')
   const [sortKey, setSortKey] = useState<SortKey>('plan_code')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -77,8 +75,6 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
       if (freqFilter && !r[freqFilter]) return false
       if (requiredFilter === 'yes' && !r.is_required) return false
       if (requiredFilter === 'no' && r.is_required) return false
-      if (imageFilter === 'yes' && !r.reference_image_url) return false
-      if (imageFilter === 'no' && r.reference_image_url) return false
       if (needle) {
         const hay = [r.description, r.plan_name, r.plan_code, r.plan_type, r.site_name]
           .filter(Boolean)
@@ -97,7 +93,7 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
       return sortDir === 'asc' ? cmp : -cmp
     })
     return out
-  }, [rows, search, siteFilter, planFilter, freqFilter, requiredFilter, imageFilter, sortKey, sortDir])
+  }, [rows, search, siteFilter, planFilter, freqFilter, requiredFilter, sortKey, sortDir])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -131,7 +127,6 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
       yr5: r.freq_5yr ? 'Y' : '',
       yr8: r.freq_8yr ? 'Y' : '',
       yr10: r.freq_10yr ? 'Y' : '',
-      reference_image: r.reference_image_url ?? '',
     })),
     [filtered],
   )
@@ -208,16 +203,6 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
           <option value="no">Optional only</option>
         </select>
 
-        <select
-          value={imageFilter}
-          onChange={(e) => setImageFilter(e.target.value as '' | 'yes' | 'no')}
-          className="h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
-        >
-          <option value="">Image (any)</option>
-          <option value="yes">Has image</option>
-          <option value="no">No image</option>
-        </select>
-
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-eq-grey">{filtered.length} of {rows.length}</span>
           <CsvExportButton
@@ -241,7 +226,6 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
               { key: 'yr5',         label: '5Y' },
               { key: 'yr8',         label: '8Y' },
               { key: 'yr10',        label: '10Y' },
-              { key: 'reference_image', label: 'Reference Image' },
             ]}
           />
         </div>
@@ -274,12 +258,11 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
                 <th className="px-3 py-2 text-left text-xs font-bold text-eq-grey uppercase cursor-pointer w-20" onClick={() => toggleSort('is_required')}>
                   Req{sortIcon('is_required')}
                 </th>
-                <th className="px-3 py-2 text-center text-xs font-bold text-eq-grey uppercase w-12">Img</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-3 py-12 text-center text-sm text-eq-grey">No items match the current filters.</td></tr>
+                <tr><td colSpan={7} className="px-3 py-12 text-center text-sm text-eq-grey">No items match the current filters.</td></tr>
               )}
               {filtered.map((r) => (
                 <tr key={r.id} className="hover:bg-gray-50 align-top">
@@ -318,11 +301,6 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
                     {r.is_required
                       ? <span className="font-medium text-eq-sky">Yes</span>
                       : <span className="text-eq-grey">No</span>}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {r.reference_image_url
-                      ? <ImageThumbnail src={r.reference_image_url} caption={r.reference_image_caption} size="xs" />
-                      : <ImageIcon className="w-3 h-3 text-gray-300 inline" />}
                   </td>
                 </tr>
               ))}

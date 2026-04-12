@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { CheckCircle, XCircle, MinusCircle } from 'lucide-react'
-import { ImageThumbnail } from '@/components/ui/ImageThumbnail'
 import type { MaintenanceCheckItem, CheckStatus, CheckItemResult } from '@/lib/types'
 
 interface TaskRowProps {
@@ -26,20 +25,10 @@ export function TaskRow({ item, checkStatus, canAct, onResult, onNotes }: TaskRo
 
   return (
     <div className="grid grid-cols-[1fr_80px_1fr] gap-2 px-3 py-2 text-xs items-center">
-      {/* Task description + optional reference image */}
-      <span className="text-eq-ink flex items-center gap-2">
-        {item.reference_image_url && (
-          <ImageThumbnail
-            src={item.reference_image_url}
-            alt={item.description}
-            caption={item.reference_image_caption}
-            size="sm"
-          />
-        )}
-        <span>
-          {item.description}
-          {item.is_required && <span className="text-eq-sky font-medium ml-1">*</span>}
-        </span>
+      {/* Task description */}
+      <span className="text-eq-ink">
+        {item.description}
+        {item.is_required && <span className="text-eq-sky font-medium ml-1">*</span>}
       </span>
 
       {/* Result buttons */}

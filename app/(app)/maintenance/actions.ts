@@ -203,14 +203,12 @@ export async function createCheckAction(formData: FormData) {
       description: string
       sort_order: number
       is_required: boolean
-      reference_image_url: string | null
-      reference_image_caption: string | null
     }[] = []
 
     if (jpIds.length > 0) {
       const { data: items } = await supabase
         .from('job_plan_items')
-        .select('id, job_plan_id, description, sort_order, is_required, reference_image_url, reference_image_caption')
+        .select('id, job_plan_id, description, sort_order, is_required')
         .in('job_plan_id', jpIds)
         .eq(col, true)
         .order('sort_order')
@@ -262,8 +260,6 @@ export async function createCheckAction(formData: FormData) {
       description: string
       sort_order: number
       is_required: boolean
-      reference_image_url: string | null
-      reference_image_caption: string | null
     }[] = []
 
     for (const asset of assetsWithTasks) {
@@ -279,8 +275,6 @@ export async function createCheckAction(formData: FormData) {
           description: item.description,
           sort_order: item.sort_order,
           is_required: item.is_required,
-          reference_image_url: item.reference_image_url,
-          reference_image_caption: item.reference_image_caption,
         })
       }
     }
@@ -664,7 +658,7 @@ export async function batchCreateChecksAction(formData: FormData) {
     // Fetch job plan items once
     const { data: planItems } = await supabase
       .from('job_plan_items')
-      .select('id, asset_id, description, sort_order, is_required, reference_image_url, reference_image_caption')
+      .select('id, asset_id, description, sort_order, is_required')
       .eq('job_plan_id', jobPlanId)
       .order('sort_order')
 
@@ -700,8 +694,6 @@ export async function batchCreateChecksAction(formData: FormData) {
           description: item.description,
           sort_order: item.sort_order,
           is_required: item.is_required,
-          reference_image_url: item.reference_image_url,
-          reference_image_caption: item.reference_image_caption,
         }))
 
         await supabase

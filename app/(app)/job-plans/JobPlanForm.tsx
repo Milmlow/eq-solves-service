@@ -14,7 +14,6 @@ import {
 } from './actions'
 import type { JobPlan, JobPlanItem, Site } from '@/lib/types'
 import { Plus, Trash2 } from 'lucide-react'
-import { JobPlanItemImageControl } from './JobPlanItemImageControl'
 import { FrequencyBadges, FREQUENCY_DEFS, type FrequencyKey } from '@/components/ui/FrequencyBadges'
 
 const FREQUENCIES = [
@@ -224,7 +223,6 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
                       item={item}
                       jobPlanId={jobPlan!.id}
                       canWrite={canWriteRole}
-                      isAdmin={isAdmin}
                       onUpdate={handleUpdateItem}
                       onDelete={handleDeleteItem}
                     />
@@ -264,14 +262,12 @@ function JobPlanItemRow({
   item,
   jobPlanId: _jobPlanId,
   canWrite: canWriteRole,
-  isAdmin: isAdminRole,
   onUpdate,
   onDelete,
 }: {
   item: JobPlanItem
   jobPlanId: string
   canWrite: boolean
-  isAdmin: boolean
   onUpdate: (itemId: string, formData: FormData) => void
   onDelete: (itemId: string) => void
 }) {
@@ -378,14 +374,7 @@ function JobPlanItemRow({
     <tr className="hover:bg-gray-50">
       <td className="px-3 py-2 text-xs text-eq-grey font-mono align-top">{item.sort_order}</td>
       <td className="px-3 py-2 text-sm text-eq-ink align-top">
-        <div>{item.description}</div>
-        {isAdminRole && (
-          <JobPlanItemImageControl
-            itemId={item.id}
-            imageUrl={item.reference_image_url}
-            caption={item.reference_image_caption}
-          />
-        )}
+        {item.description}
       </td>
       <td className="px-3 py-2 align-top">
         <FrequencyBadges item={item} size="xs" />

@@ -22,9 +22,8 @@ April — the tables, RLS policies, and action patterns they depend on all exist
 - `CheckDetail.tsx` refactored into four components. AI suggestions in the
   check workflow (pre-job briefing, failure-code hints, photo-to-defect) have
   clean extension points instead of landing in a 550-line god component.
-- Shared `ImageUpload` / `ImageThumbnail` / `ImageLightbox` components and
-  `job-plan-references` storage bucket (migration 0029). Used by the visual
-  guided workflow today; photo-to-defect capture (Phase 3) reuses them.
+- Shared `ImageUpload` / `ImageThumbnail` / `ImageLightbox` components retained
+  in `components/ui/` for future photo-to-defect capture (Phase 3).
 
 ## Revised phasing (from 12 Apr 2026)
 
@@ -73,8 +72,7 @@ ready to blend additional signals.
 ### Phase 3 — Field Technician AI
 
 Unchanged from original doc. Photo-to-defect capture reuses the
-`ImageUpload` / `ImageThumbnail` components shipped for the visual guided
-workflow. Voice-to-notes needs a new `audio_url` column on
+`ImageUpload` / `ImageThumbnail` components in `components/ui/`. Voice-to-notes needs a new `audio_url` column on
 `maintenance_check_items` (migration TODO).
 
 ### Phase 4 — Predictive & Advanced
@@ -85,7 +83,7 @@ practical start is mid-2027 given current check volume.
 ## Decisions log
 
 - **12 Apr 2026** — Foundation pass shipped before any AI features. Idempotency,
-  shared analytics, component split, visual guided workflow plumbing. Rationale:
+  shared analytics, component split, items register, frequency editing. Rationale:
   cheaper to bake these in now than retrofit them across 5 AI features later.
 - **12 Apr 2026** — Asset history summary chosen as first AI feature (was NL
   query bar). Rationale: lower risk, proves infra, builds user trust before
