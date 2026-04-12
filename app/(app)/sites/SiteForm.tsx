@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
+import { MediaPicker } from '@/components/ui/MediaPicker'
 import { createSiteAction, updateSiteAction, toggleSiteActiveAction } from './actions'
 import type { Site, Customer } from '@/lib/types'
 
@@ -19,6 +20,7 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(site?.photo_url ?? null)
 
   const isEdit = !!site
 
@@ -115,6 +117,18 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
             name="country"
             defaultValue={site?.country ?? 'Australia'}
           />
+        </div>
+
+        {/* Site Photo */}
+        <div className="space-y-1">
+          <MediaPicker
+            label="Site Photo"
+            value={photoUrl}
+            onChange={(url) => setPhotoUrl(url)}
+            category="site_photo"
+            placeholder="Select site photo from media library…"
+          />
+          <input type="hidden" name="photo_url" value={photoUrl ?? ''} />
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}

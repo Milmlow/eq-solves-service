@@ -4,10 +4,11 @@ import { useState } from 'react'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
+import { MediaPicker } from '@/components/ui/MediaPicker'
 import { createCustomerAction, updateCustomerAction, toggleCustomerActiveAction, uploadCustomerLogoAction } from './actions'
 import type { Customer } from '@/lib/types'
 import Link from 'next/link'
-import { X } from 'lucide-react'
+import { X, Upload, ImageIcon } from 'lucide-react'
 
 interface CustomerFormProps {
   open: boolean
@@ -23,6 +24,7 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
   const [logoPreview, setLogoPreview] = useState<string | null>(customer?.logo_url ?? null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [logoMode, setLogoMode] = useState<'library' | 'upload'>(customer?.logo_url ? 'library' : 'library')
 
   const isEdit = !!customer
 
@@ -154,50 +156,90 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
           defaultValue={customer?.address ?? ''}
           placeholder="Full address"
         />
-        {/* Logo Upload Section */}
+        {/* Logo Section */}
         <div className="space-y-2">
           <label className="block text-sm font-medium text-eq-ink">Logo</label>
-          {logoPreview ? (
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={logoPreview} alt="Logo preview" className="w-12 h-12 object-contain" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-eq-ink">{logoFile?.name ?? 'Current logo'}</p>
-                <p className="text-xs text-eq-grey">{logoFile ? `${(logoFile.size / 1024).toFixed(1)} KB` : 'Uploaded'}</p>
-              </div>
-              {isEdit && (
-                <button
-                  type="button"
-                  onClick={handleRemoveLogo}
-                  disabled={uploading}
-                  className="p-1.5 text-eq-grey hover:text-red-500 transition-colors"
-                  title="Remove logo"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          ) : null}
-          {!logoPreview ? (
+          {/* Mode toggle */}
+          <div className="flex gap-1 p-0.5 bg-gray-100 rounded-md w-fit">
+            <button
+              type="button"
+              onClick={() => setLogoMode('library')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded transition-colors ${
+                logoMode === 'library' ? 'bg-white text-eq-ink shadow-sm' : 'text-eq-grey hover:text-eq-ink'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5" /> Media Library
+            </button>
+            <button
+              type="button"
+              onClick={() => setLogoMode('upload')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded transition-colors ${
+                logoMode === 'upload' ? 'bg-white text-eq-ink shadow-sm' : 'text-eq-grey hover:text-eq-ink'
+              }`}
+            >
+              <Upload className="w-3.5 h-3.5" /> Direct Upload
+            </button>
+          </div>
+
+          {logoMode === 'library' ? (
             <div className="space-y-2">
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/svg+xml"
-                onChange={handleLogoChange}
-                className="block w-full text-sm text-eq-grey
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded file:border-0
-                  file:text-sm file:font-medium
-                  file:bg-eq-ice file:text-eq-deep
-                  hover:file:bg-gray-100"
+              <MediaPicker
+                value={logoPreview}
+                onChange={(url) => {
+                  setLogoPreview(url)
+                  setLogoFile(null)
+                }}
+                category="customer_logo"
+                placeholder="Select logo from media library…"
               />
-              <p className="text-xs text-eq-grey">Max 500 KB, PNG or JPG recommended</p>
+              {/* Hidden input so logo_url is included in FormData on create */}
+              <input type="hidden" name="logo_url" value={logoPreview ?? ''} />
             </div>
-          ) : null}
-          {logoFile && isEdit && (
-            <Button type="button" variant="secondary" size="sm" onClick={handleUploadLogo} disabled={uploading}>
-              {uploading ? 'Uploading...' : 'Upload Logo'}
-            </Button>
+          ) : (
+            <>
+              {logoPreview ? (
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={logoPreview} alt="Logo preview" className="w-12 h-12 object-contain" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-eq-ink">{logoFile?.name ?? 'Current logo'}</p>
+                    <p className="text-xs text-eq-grey">{logoFile ? `${(logoFile.size / 1024).toFixed(1)} KB` : 'Uploaded'}</p>
+                  </div>
+                  {isEdit && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      disabled={uploading}
+                      className="p-1.5 text-eq-grey hover:text-red-500 transition-colors"
+                      title="Remove logo"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ) : null}
+              {!logoPreview ? (
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml"
+                    onChange={handleLogoChange}
+                    className="block w-full text-sm text-eq-grey
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded file:border-0
+                      file:text-sm file:font-medium
+                      file:bg-eq-ice file:text-eq-deep
+                      hover:file:bg-gray-100"
+                  />
+                  <p className="text-xs text-eq-grey">Max 500 KB, PNG or JPG recommended</p>
+                </div>
+              ) : null}
+              {logoFile && isEdit && (
+                <Button type="button" variant="secondary" size="sm" onClick={handleUploadLogo} disabled={uploading}>
+                  {uploading ? 'Uploading...' : 'Upload Logo'}
+                </Button>
+              )}
+            </>
           )}
         </div>
 

@@ -156,6 +156,7 @@ export interface Site {
   country: string
   latitude: number | null
   longitude: number | null
+  photo_url: string | null
   is_active: boolean
   created_at: string
   updated_at: string

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
+import { MediaPicker } from '@/components/ui/MediaPicker'
 import { updateReportSettingsAction } from './actions'
 import type { TenantSettings } from '@/lib/types'
 import { Eye, EyeOff, Plus, Trash2, GripVertical, Image, FileText } from 'lucide-react'
@@ -216,22 +217,14 @@ export function ReportSettingsForm({ settings }: Props) {
           <h2 className="text-sm font-bold text-eq-ink mb-1">Logos & Photos</h2>
           <p className="text-xs text-eq-grey mb-4">Configure logo display and site photography for report cover pages.</p>
           <div className="space-y-4">
-            <FormInput
-              label="Report Logo URL"
-              name="report_logo_url"
-              value={logoUrl}
-              onChange={e => setLogoUrl(e.target.value)}
-              placeholder="https://... or leave blank to use tenant logo"
+            <MediaPicker
+              label="Report Logo"
+              value={logoUrl || null}
+              onChange={(url) => setLogoUrl(url ?? '')}
+              category="report_image"
+              placeholder="Select logo from media library…"
             />
-            {logoUrl && (
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-16 border border-gray-200 rounded bg-gray-50 flex items-center justify-center overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={logoUrl} alt="Report logo preview" className="max-w-full max-h-full object-contain" />
-                </div>
-                <span className="text-xs text-eq-grey">Logo preview</span>
-              </div>
-            )}
+            <p className="text-xs text-eq-grey">Leave blank to use tenant logo. Upload images via Admin → Media Library.</p>
             <div className="grid grid-cols-2 gap-4">
               <button
                 type="button"

@@ -25,9 +25,11 @@ export async function createSiteAction(formData: FormData) {
     const parsed = CreateSiteSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    const photoUrl = (formData.get('photo_url') as string)?.trim() || null
+
     const { error } = await supabase
       .from('sites')
-      .insert({ ...parsed.data, tenant_id: tenantId })
+      .insert({ ...parsed.data, photo_url: photoUrl, tenant_id: tenantId })
 
     if (error) return { success: false, error: error.message }
 
@@ -58,9 +60,11 @@ export async function updateSiteAction(id: string, formData: FormData) {
     const parsed = UpdateSiteSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    const photoUrl = (formData.get('photo_url') as string)?.trim() || null
+
     const { error } = await supabase
       .from('sites')
-      .update(parsed.data)
+      .update({ ...parsed.data, photo_url: photoUrl })
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
