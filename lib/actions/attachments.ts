@@ -78,7 +78,7 @@ export async function deleteAttachmentAction(attachmentId: string) {
       .from('attachments')
       .select('storage_path, entity_type')
       .eq('id', attachmentId)
-      .single()
+      .maybeSingle()
 
     if (!attachment) return { success: false, error: 'Attachment not found.' }
 

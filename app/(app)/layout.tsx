@@ -20,7 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .eq('user_id', user.id)
       .eq('is_active', true)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (membership) {
       isAdmin = membership.role === 'super_admin' || membership.role === 'admin'
@@ -31,7 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           .from('tenants')
           .select('name, setup_completed_at')
           .eq('id', membership.tenant_id)
-          .single()
+          .maybeSingle()
 
         if (tenant && !tenant.setup_completed_at) {
           showOnboarding = true
@@ -45,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .from('profiles')
       .select('full_name')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
     userName = profile?.full_name ?? null
   }
 

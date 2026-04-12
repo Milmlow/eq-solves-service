@@ -23,7 +23,7 @@ export default async function MaintenanceCheckPage({
       .eq('user_id', user.id)
       .eq('is_active', true)
       .limit(1)
-      .single()
+      .maybeSingle()
     userRole = (membership?.role as Role) ?? null
   }
 
@@ -32,7 +32,7 @@ export default async function MaintenanceCheckPage({
     .from('maintenance_checks')
     .select('*, job_plans(name), sites(name)')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
   if (error || !check) notFound()
 
@@ -43,7 +43,7 @@ export default async function MaintenanceCheckPage({
       .from('profiles')
       .select('full_name, email')
       .eq('id', check.assigned_to)
-      .single()
+      .maybeSingle()
     assigneeName = profile?.full_name ?? profile?.email ?? null
   }
 

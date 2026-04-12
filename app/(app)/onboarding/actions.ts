@@ -17,7 +17,7 @@ export async function updateCompanyDetailsAction(formData: FormData) {
     .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!membership) return { success: false, error: 'No tenant membership' }
 
@@ -76,7 +76,7 @@ export async function createFirstSiteAction(formData: FormData) {
     .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!membership) return { success: false, error: 'No tenant membership' }
 
@@ -96,7 +96,7 @@ export async function createFirstSiteAction(formData: FormData) {
       .eq('tenant_id', membership.tenant_id)
       .ilike('name', customerName)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       customerId = existing.id
@@ -140,7 +140,7 @@ export async function completeOnboardingAction() {
     .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!membership) return { success: false, error: 'No tenant membership' }
 

@@ -28,7 +28,7 @@ export default async function JobPlansPage({
       .eq('user_id', user.id)
       .eq('is_active', true)
       .limit(1)
-      .single()
+      .maybeSingle()
     userRole = (membership?.role as Role) ?? null
   }
 

@@ -13,7 +13,7 @@ export default async function SettingsPage() {
     .from('profiles')
     .select('full_name, email, last_login_at, created_at')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
   return (
     <div className="space-y-6">

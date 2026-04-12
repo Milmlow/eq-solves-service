@@ -319,6 +319,7 @@ export interface AcbTest {
   tenant_id: string
   asset_id: string
   site_id: string
+  testing_check_id: string | null
   test_date: string
   tested_by: string | null
   test_type: AcbTestType
@@ -392,6 +393,25 @@ export interface Attachment {
   created_at: string
 }
 
+export type MediaCategory = 'customer_logo' | 'site_photo' | 'report_image' | 'general'
+
+export interface MediaItem {
+  id: string
+  tenant_id: string
+  name: string
+  category: MediaCategory
+  entity_type: 'customer' | 'site' | null
+  entity_id: string | null
+  file_url: string
+  file_name: string
+  content_type: string | null
+  file_size: number | null
+  uploaded_by: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type NsxTestType = 'Initial' | 'Routine' | 'Special'
 
 export type NsxTestResult = 'Pending' | 'Pass' | 'Fail' | 'Defect'
@@ -401,6 +421,7 @@ export interface NsxTest {
   tenant_id: string
   asset_id: string
   site_id: string
+  testing_check_id: string | null
   test_date: string
   tested_by: string | null
   test_type: NsxTestType
@@ -450,6 +471,28 @@ export interface NsxTestReading {
   is_pass: boolean | null
   sort_order: number
   created_at: string
+}
+
+// Testing Checks — groups multiple ACB/NSX tests under one named check
+export type TestingCheckType = 'acb' | 'nsx' | 'general'
+export type TestingCheckStatus = 'scheduled' | 'in_progress' | 'complete' | 'cancelled'
+
+export interface TestingCheck {
+  id: string
+  tenant_id: string
+  site_id: string
+  job_plan_id: string | null
+  name: string
+  check_type: TestingCheckType
+  frequency: string | null
+  month: number | null
+  year: number | null
+  status: TestingCheckStatus
+  created_by: string | null
+  notes: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface AuditLog {

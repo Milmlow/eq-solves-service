@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!membership || !canWrite(membership.role as Role)) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     .select('*, job_plans(name, code), sites(name, address)')
     .eq('id', checkId)
     .eq('tenant_id', tenantId)
-    .single()
+    .maybeSingle()
 
   if (!check) {
     return NextResponse.json({ error: 'Check not found' }, { status: 404 })
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     .from('sites')
     .select('*, customers(name)')
     .eq('id', check.site_id)
-    .single()
+    .maybeSingle()
 
   // Fetch check_assets with related asset info
   const { data: checkAssets } = await supabase
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     .from('tenant_settings')
     .select('product_name, primary_colour, logo_url, report_show_cover_page, report_show_site_overview, report_show_contents, report_show_executive_summary, report_show_sign_off, report_header_text, report_footer_text, report_company_name, report_company_address, report_company_abn, report_company_phone, report_sign_off_fields')
     .eq('tenant_id', tenantId)
-    .single()
+    .maybeSingle()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'

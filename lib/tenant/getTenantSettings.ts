@@ -51,7 +51,7 @@ export async function getTenantSettings(): Promise<{
     .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!membership) return { settings: DEFAULTS, tenantId: null }
 
@@ -60,7 +60,7 @@ export async function getTenantSettings(): Promise<{
     .from('tenant_settings')
     .select('*')
     .eq('tenant_id', membership.tenant_id)
-    .single()
+    .maybeSingle()
 
   return {
     settings: settings ? (settings as TenantSettings) : { ...DEFAULTS, tenant_id: membership.tenant_id },

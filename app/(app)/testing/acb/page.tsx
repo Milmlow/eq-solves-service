@@ -7,12 +7,19 @@ import { Button } from '@/components/ui/Button'
 import { AcbWorkflow } from './AcbWorkflow'
 import { AcbSiteCollection } from './AcbSiteCollection'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight, Download, Upload } from 'lucide-react'
+import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight, Download, Upload, Plus } from 'lucide-react'
 import type { AcbTest, AcbTestReading, Asset } from '@/lib/types'
 import { createAcbTestAction, updateAcbDetailsAction } from '@/app/(app)/acb-testing/actions'
 import { exportAcbCollectionXlsx, parseAcbCollectionXlsx } from '@/lib/utils/acb-excel'
+import { createTestingCheckAction } from '@/app/(app)/testing/check-actions'
 
 type SitePick = { id: string; name: string }
+
+const FREQUENCIES = ['Annual', 'Semi-Annual', 'Quarterly', 'Monthly'] as const
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+] as const
 
 export default function AcbTestingPage() {
   const [sites, setSites] = useState<SitePick[]>([])
@@ -21,12 +28,20 @@ export default function AcbTestingPage() {
   const [readings, setReadings] = useState<Record<string, AcbTestReading[]>>({})
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
   const [showSiteCollection, setShowSiteCollection] = useState(false)
+  const [showCreateCheck, setShowCreateCheck] = useState(false)
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState<string | null>(null)
   const [noAssets, setNoAssets] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ success: number; errors: number } | null>(null)
-  const [batchCreating, setBatchCreating] = useState(false)
+  // Create Check form state
+  const [checkFrequency, setCheckFrequency] = useState<string>('Annual')
+  const [checkMonth, setCheckMonth] = useState<number>(new Date().getMonth() + 1)
+  const [checkYear, setCheckYear] = useState<number>(new Date().getFullYear())
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
+  const [creatingCheck, setCreatingCheck] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
+  const [jobPlanId, setJobPlanId] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -70,9 +85,12 @@ export default function AcbTestingPage() {
       setNoAssets(true)
       setAssets([])
       setReadings({})
+      setJobPlanId(null)
       setLoading(false)
       return
     }
+
+    setJobPlanId(e125Plan.id)
 
     // Fetch assets for this site assigned to E1.25
     const { data: assetsData } = await supabase
@@ -187,25 +205,52 @@ export default function AcbTestingPage() {
     setImporting(false)
   }
 
-  // Batch-create tests for all assets without a test
-  async function handleStartAllTests() {
-    const untested = assets.filter(a => !a.acb_test)
-    if (untested.length === 0) return
-    if (!confirm(`Create tests for ${untested.length} asset${untested.length > 1 ? 's' : ''} at this site?`)) return
-    setBatchCreating(true)
-    for (const asset of untested) {
-      const fd = new FormData()
-      fd.set('asset_id', asset.id)
-      fd.set('site_id', selectedSite)
-      fd.set('test_date', new Date().toISOString().slice(0, 10))
-      fd.set('test_type', 'Routine')
-      await createAcbTestAction(fd)
+  // Create Check handler
+  async function handleCreateCheck() {
+    setCreatingCheck(true)
+    setCheckError(null)
+    try {
+      const result = await createTestingCheckAction({
+        site_id: selectedSite,
+        job_plan_id: jobPlanId,
+        check_type: 'acb',
+        frequency: checkFrequency,
+        month: checkMonth,
+        year: checkYear,
+        asset_ids: Array.from(selectedAssetIds),
+      })
+      if (result.success) {
+        setShowCreateCheck(false)
+        setSelectedAssetIds(new Set())
+        await loadSiteData()
+      } else {
+        setCheckError(result.error ?? 'Failed to create check.')
+      }
+    } catch {
+      setCheckError('An unexpected error occurred.')
     }
-    await loadSiteData()
-    setBatchCreating(false)
+    setCreatingCheck(false)
   }
 
-  const untestedCount = assets.filter(a => !a.acb_test).length
+  // Toggle asset selection for check
+  function toggleAssetSelection(assetId: string) {
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(assetId)) next.delete(assetId)
+      else next.add(assetId)
+      return next
+    })
+  }
+
+  function selectAllAssets() {
+    // Only select untested assets
+    const untested = assets.filter(a => !a.acb_test).map(a => a.id)
+    setSelectedAssetIds(new Set(untested))
+  }
+
+  function deselectAllAssets() {
+    setSelectedAssetIds(new Set())
+  }
 
   const selectedAssetData = selectedAsset ? assets.find(a => a.id === selectedAsset) : null
   const selectedTest = selectedAssetData?.acb_test
@@ -300,6 +345,166 @@ export default function AcbTestingPage() {
     )
   }
 
+  // ── Create Check view ──
+  if (showCreateCheck && selectedSite) {
+    const untestedAssets = assets.filter(a => !a.acb_test)
+    const testedAssets = assets.filter(a => !!a.acb_test)
+    const siteName = sites.find(s => s.id === selectedSite)?.name ?? 'Site'
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <Breadcrumb
+            items={[
+              { label: 'Home', href: '/dashboard' },
+              { label: 'ACB Testing', href: '#' },
+              { label: 'Create Check' },
+            ]}
+          />
+          <h1 className="text-3xl font-bold text-eq-sky mt-2">Create ACB Check</h1>
+          <p className="text-eq-grey text-sm mt-1">Group assets under a named maintenance check for {siteName}</p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => setShowCreateCheck(false)}>
+          Back to Asset List
+        </Button>
+
+        {/* Check Details */}
+        <Card>
+          <h3 className="text-sm font-bold text-eq-ink mb-4">Check Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Frequency</label>
+              <select
+                value={checkFrequency}
+                onChange={(e) => setCheckFrequency(e.target.value)}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              >
+                {FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Month</label>
+              <select
+                value={checkMonth}
+                onChange={(e) => setCheckMonth(Number(e.target.value))}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              >
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Year</label>
+              <select
+                value={checkYear}
+                onChange={(e) => setCheckYear(Number(e.target.value))}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              >
+                {[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="mt-3 p-3 bg-eq-ice rounded-md">
+            <p className="text-xs text-eq-grey">Check name preview:</p>
+            <p className="text-sm font-semibold text-eq-ink">
+              {siteName} {checkFrequency} {jobPlanId ? 'E1.25' : ''} {MONTHS[checkMonth - 1]} {checkYear}
+            </p>
+          </div>
+        </Card>
+
+        {/* Asset Selection */}
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-eq-ink">Select Assets</h3>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={selectAllAssets}>
+                Select All Untested
+              </Button>
+              <Button size="sm" variant="secondary" onClick={deselectAllAssets}>
+                Deselect All
+              </Button>
+            </div>
+          </div>
+          {untestedAssets.length === 0 && testedAssets.length > 0 && (
+            <p className="text-sm text-eq-grey mb-3">All assets at this site already have active tests.</p>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="text-left py-2 px-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={untestedAssets.length > 0 && untestedAssets.every(a => selectedAssetIds.has(a.id))}
+                      onChange={(e) => e.target.checked ? selectAllAssets() : deselectAllAssets()}
+                      className="rounded border-gray-300"
+                    />
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Asset</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Serial</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Type</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {untestedAssets.map(asset => (
+                  <tr
+                    key={asset.id}
+                    className={`border-b border-gray-100 cursor-pointer transition-colors ${selectedAssetIds.has(asset.id) ? 'bg-eq-ice' : 'hover:bg-gray-50'}`}
+                    onClick={() => toggleAssetSelection(asset.id)}
+                  >
+                    <td className="py-2 px-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedAssetIds.has(asset.id)}
+                        onChange={() => toggleAssetSelection(asset.id)}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
+                    <td className="py-2 px-3 font-medium text-eq-ink">{asset.name}</td>
+                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
+                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">Available</span>
+                    </td>
+                  </tr>
+                ))}
+                {testedAssets.map(asset => (
+                  <tr key={asset.id} className="border-b border-gray-100 opacity-50">
+                    <td className="py-2 px-3">
+                      <input type="checkbox" disabled className="rounded border-gray-300" />
+                    </td>
+                    <td className="py-2 px-3 font-medium text-eq-grey">{asset.name}</td>
+                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
+                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-50 text-amber-600">Test Exists</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {/* Create Button */}
+        {checkError && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">{checkError}</div>
+        )}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleCreateCheck}
+            disabled={creatingCheck || selectedAssetIds.size === 0}
+          >
+            {creatingCheck ? 'Creating...' : `Create Check (${selectedAssetIds.size} assets)`}
+          </Button>
+          <Button variant="secondary" onClick={() => setShowCreateCheck(false)}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   // ── Main asset list view ──
   return (
     <div className="space-y-6">
@@ -354,16 +559,17 @@ export default function AcbTestingPage() {
                 <ClipboardList className="w-4 h-4 mr-1" />
                 Breaker Details
               </Button>
-              {untestedCount > 0 && (
-                <Button
-                  size="sm"
-                  onClick={handleStartAllTests}
-                  disabled={batchCreating}
-                >
-                  <Play className="w-4 h-4 mr-1" />
-                  {batchCreating ? 'Creating...' : `Start All (${untestedCount})`}
-                </Button>
-              )}
+              <Button
+                size="sm"
+                onClick={() => {
+                  setShowCreateCheck(true)
+                  setSelectedAssetIds(new Set())
+                  setCheckError(null)
+                }}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Create Check
+              </Button>
               <input
                 id="acb-import-file"
                 type="file"

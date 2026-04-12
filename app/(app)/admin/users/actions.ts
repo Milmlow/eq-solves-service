@@ -14,7 +14,7 @@ async function requireAdmin() {
     .from('profiles')
     .select('role, is_active')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
   if (!profile || !['super_admin', 'admin'].includes(profile.role) || !profile.is_active) {
     throw new Error('Not authorised.')
   }

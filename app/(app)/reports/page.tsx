@@ -208,6 +208,26 @@ export default async function ReportsPage({
         <BulkExportButton sites={sites ?? []} />
       </div>
 
+      {/* Sample Reports */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-eq-ink">Sample Reports &amp; Style Guide</h2>
+            <p className="text-xs text-eq-grey mt-1">View demo reports with sample data to understand report styles and content.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <a
+              href="/demo-reports.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-eq-sky text-white hover:bg-eq-deep transition-colors"
+            >
+              Report Style Comparison
+            </a>
+          </div>
+        </div>
+      </Card>
+
       {/* Top-level KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>

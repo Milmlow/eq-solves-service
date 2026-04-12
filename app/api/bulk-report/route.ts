@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!membership || !canWrite(membership.role as Role)) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
@@ -45,8 +45,8 @@ export async function GET(request: NextRequest) {
 
   // Fetch site + tenant settings
   const [{ data: site }, { data: tenantSettings }] = await Promise.all([
-    supabase.from('sites').select('id, name, code').eq('id', siteId).single(),
-    supabase.from('tenant_settings').select('product_name, primary_colour').eq('tenant_id', tenantId).single(),
+    supabase.from('sites').select('id, name, code').eq('id', siteId).maybeSingle(),
+    supabase.from('tenant_settings').select('product_name, primary_colour').eq('tenant_id', tenantId).maybeSingle(),
   ])
 
   if (!site) {

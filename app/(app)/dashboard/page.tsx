@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   let userName = 'there'
   if (user) {
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
     userName = profile?.full_name?.split(' ')[0] ?? 'there'
   }
 

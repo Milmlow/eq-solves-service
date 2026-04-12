@@ -18,7 +18,7 @@ export async function requireUser() {
     .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!membership) throw new Error('No tenant membership.')
 

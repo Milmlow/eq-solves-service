@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     .eq('user_id', user.id)
     .eq('is_active', true)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!membership || !canWrite(membership.role as Role)) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     .select('*, job_plans(name), sites(name)')
     .eq('id', checkId)
     .eq('tenant_id', tenantId)
-    .single()
+    .maybeSingle()
 
   if (!check) {
     return NextResponse.json({ error: 'Check not found' }, { status: 404 })
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     .from('tenant_settings')
     .select('product_name, primary_colour')
     .eq('tenant_id', tenantId)
-    .single()
+    .maybeSingle()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
