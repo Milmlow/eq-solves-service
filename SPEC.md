@@ -279,13 +279,17 @@ Built by EQ Solutions (CDC Solutions Pty Ltd). First commercial customer: SKS Te
 
 ---
 
-## Modules (Planned)
+## Modules (Planned / Backlog)
 
-| Module | Sprint | Description |
-|--------|--------|-------------|
-| CI/CD | 17 | Automated build + deploy pipeline |
-| Analytics | 17 | Usage trends, bulk reporting, archive |
-| Offline Mode | Backlog (CR-001) | Tablet offline entry with sync — +4 sprint estimate |
+| Module | Priority | Description |
+|--------|----------|-------------|
+| Email Notifications | P1 — pre-go-live | Wire Resend to notification engine — check assigned, overdue, defect raised, completed |
+| Tenant Provisioning UI | P1 — pre-go-live | super_admin UI to create/manage tenants without seed scripts |
+| Compliance Report PDF Export | P1 — pre-go-live | "Download PDF" on /reports — KPI cards, charts, overdue table, white-labelled |
+| Recurring Check Scheduling | P2 — post go-live | Recurrence field on checks; prompt to create next instance on completion |
+| Mobile/Tablet UX Pass | P2 — post go-live | Touch-optimised /maintenance/[id] — large tap targets, no hover-dependent UI |
+| Client Read-Only Portal | P2 — post go-live | read_only role scoped per customer for Equinix-style client access |
+| Offline Mode | Backlog (CR-001) | Tablet offline entry with sync — +4 sprint estimate; await SKS confirmation |
 
 ---
 

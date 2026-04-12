@@ -207,6 +207,8 @@ export interface JobPlanItem {
   freq_5yr: boolean
   freq_8yr: boolean
   freq_10yr: boolean
+  reference_image_url: string | null
+  reference_image_caption: string | null
   created_at: string
   updated_at: string
 }
@@ -267,6 +269,8 @@ export interface MaintenanceCheckItem {
   notes: string | null
   completed_at: string | null
   completed_by: string | null
+  reference_image_url: string | null
+  reference_image_caption: string | null
   created_at: string
   updated_at: string
 }

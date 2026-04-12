@@ -69,6 +69,6 @@ npx tsc --noEmit   # TypeScript check
 
 ## Migrations
 
-19 migrations applied (0001–0023) covering: profiles, core schema, maintenance checks, test records, attachments, ACB tests, NSX tests, audit logs, instruments, performance indexes, notifications, job plan restructure, Maximo alignment, report settings, customer logos, contract scope, defects, onboarding, and ACB asset collection fields.
+25 migrations applied (0001–0025) covering: profiles, core schema, maintenance checks, test records, attachments, ACB tests, NSX tests, audit logs, instruments, performance indexes, notifications, job plan restructure, Maximo alignment, report settings, customer logos, contract scope, defects, onboarding, ACB asset collection fields, site coordinates, customer contacts, ACB extended fields, PM calendar, and maintenance check archiving.
 
 See [ROADMAP.md](ROADMAP.md) for the full migration table.

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { withIdempotency } from '@/lib/actions/idempotency'
 import { createNotification } from '@/lib/actions/notifications'
 import {
   CreateMaintenanceCheckSchema,
@@ -196,12 +197,20 @@ export async function createCheckAction(formData: FormData) {
     // 3. Get job plan items matching the selected frequency
     const col = freqColumn(freq)
     const jpIds = [...new Set(assets.map((a) => a.job_plan_id).filter(Boolean))] as string[]
-    let allItems: { id: string; job_plan_id: string; description: string; sort_order: number; is_required: boolean }[] = []
+    let allItems: {
+      id: string
+      job_plan_id: string
+      description: string
+      sort_order: number
+      is_required: boolean
+      reference_image_url: string | null
+      reference_image_caption: string | null
+    }[] = []
 
     if (jpIds.length > 0) {
       const { data: items } = await supabase
         .from('job_plan_items')
-        .select('id, job_plan_id, description, sort_order, is_required')
+        .select('id, job_plan_id, description, sort_order, is_required, reference_image_url, reference_image_caption')
         .in('job_plan_id', jpIds)
         .eq(col, true)
         .order('sort_order')
@@ -253,6 +262,8 @@ export async function createCheckAction(formData: FormData) {
       description: string
       sort_order: number
       is_required: boolean
+      reference_image_url: string | null
+      reference_image_caption: string | null
     }[] = []
 
     for (const asset of assetsWithTasks) {
@@ -268,6 +279,8 @@ export async function createCheckAction(formData: FormData) {
           description: item.description,
           sort_order: item.sort_order,
           is_required: item.is_required,
+          reference_image_url: item.reference_image_url,
+          reference_image_caption: item.reference_image_caption,
         })
       }
     }
@@ -520,9 +533,18 @@ export async function archiveCheckAction(id: string, active = false) {
 
 /**
  * Update a check item result (pass/fail/na + notes).
+ *
+ * Idempotent when called with a `mutationId` — safe to replay from offline
+ * queue or retry on transient network failure. The audit row carries the
+ * `mutation_id`, so a second call with the same id is detected and skipped.
  */
-export async function updateCheckItemAction(checkId: string, itemId: string, formData: FormData) {
-  try {
+export async function updateCheckItemAction(
+  checkId: string,
+  itemId: string,
+  formData: FormData,
+  mutationId?: string,
+) {
+  return withIdempotency(mutationId, async () => {
     const { supabase, role, user } = await requireUser()
 
     // Verify check ownership/assignment
@@ -565,11 +587,18 @@ export async function updateCheckItemAction(checkId: string, itemId: string, for
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check_item',
+      entityId: itemId,
+      summary: `Check item ${parsed.data.result ?? 'cleared'}`,
+      metadata: { check_id: checkId, result: parsed.data.result, notes: parsed.data.notes },
+      mutationId,
+    })
+
     revalidatePath('/maintenance')
     return { success: true }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+  })
 }
 
 /**
@@ -635,7 +664,7 @@ export async function batchCreateChecksAction(formData: FormData) {
     // Fetch job plan items once
     const { data: planItems } = await supabase
       .from('job_plan_items')
-      .select('id, asset_id, description, sort_order, is_required')
+      .select('id, asset_id, description, sort_order, is_required, reference_image_url, reference_image_caption')
       .eq('job_plan_id', jobPlanId)
       .order('sort_order')
 
@@ -671,6 +700,8 @@ export async function batchCreateChecksAction(formData: FormData) {
           description: item.description,
           sort_order: item.sort_order,
           is_required: item.is_required,
+          reference_image_url: item.reference_image_url,
+          reference_image_caption: item.reference_image_caption,
         }))
 
         await supabase

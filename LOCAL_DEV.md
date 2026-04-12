@@ -40,6 +40,8 @@ SUPABASE_SERVICE_ROLE_KEY=<your service role key from Supabase dashboard → Set
 
 The app validates these at startup — if anything is missing you'll get a clear error message telling you exactly what's wrong.
 
+> **Note on Resend:** Resend is currently configured as Supabase's custom SMTP provider in the Supabase dashboard (Settings → Auth → SMTP). No `RESEND_API_KEY` is needed in `.env.local` for the current build. When email notifications ship (Priority 1 pre-go-live), a `RESEND_API_KEY` variable will be added here.
+
 ---
 
 ## 3. Run the dev server
@@ -111,6 +113,8 @@ npm run dev        # Start dev server (hot reload)
 npm run build      # Production build (run before deploying)
 npm run lint       # ESLint check
 npx tsc --noEmit   # TypeScript check without emitting files
+npx vitest         # Run the test suite (80 tests — CSV parser, role utils, format utils, auth actions)
+npx vitest run     # Run once (no watch mode)
 ```
 
 ---

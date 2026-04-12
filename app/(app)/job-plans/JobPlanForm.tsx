@@ -14,6 +14,8 @@ import {
 } from './actions'
 import type { JobPlan, JobPlanItem, Site } from '@/lib/types'
 import { Plus, Trash2 } from 'lucide-react'
+import { JobPlanItemImageControl } from './JobPlanItemImageControl'
+import { FrequencyBadges, FREQUENCY_DEFS, type FrequencyKey } from '@/components/ui/FrequencyBadges'
 
 const FREQUENCIES = [
   { value: 'weekly', label: 'Weekly' },
@@ -208,6 +210,7 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-bold text-eq-grey uppercase w-16">#</th>
                     <th className="px-3 py-2 text-left text-xs font-bold text-eq-grey uppercase">Description</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold text-eq-grey uppercase w-64">Frequency</th>
                     <th className="px-3 py-2 text-left text-xs font-bold text-eq-grey uppercase w-24">Required</th>
                     {canWriteRole && (
                       <th className="px-3 py-2 text-right text-xs font-bold text-eq-grey uppercase w-28">Actions</th>
@@ -221,6 +224,7 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
                       item={item}
                       jobPlanId={jobPlan!.id}
                       canWrite={canWriteRole}
+                      isAdmin={isAdmin}
                       onUpdate={handleUpdateItem}
                       onDelete={handleDeleteItem}
                     />
@@ -260,12 +264,14 @@ function JobPlanItemRow({
   item,
   jobPlanId: _jobPlanId,
   canWrite: canWriteRole,
+  isAdmin: isAdminRole,
   onUpdate,
   onDelete,
 }: {
   item: JobPlanItem
   jobPlanId: string
   canWrite: boolean
+  isAdmin: boolean
   onUpdate: (itemId: string, formData: FormData) => void
   onDelete: (itemId: string) => void
 }) {
@@ -273,12 +279,30 @@ function JobPlanItemRow({
   const [desc, setDesc] = useState(item.description)
   const [sortOrder, setSortOrder] = useState(String(item.sort_order))
   const [required, setRequired] = useState(String(item.is_required))
+  const [flags, setFlags] = useState<Pick<JobPlanItem, FrequencyKey | 'dark_site'>>({
+    dark_site: item.dark_site,
+    freq_monthly: item.freq_monthly,
+    freq_quarterly: item.freq_quarterly,
+    freq_semi_annual: item.freq_semi_annual,
+    freq_annual: item.freq_annual,
+    freq_2yr: item.freq_2yr,
+    freq_3yr: item.freq_3yr,
+    freq_5yr: item.freq_5yr,
+    freq_8yr: item.freq_8yr,
+    freq_10yr: item.freq_10yr,
+  })
+
+  function toggleFlag(key: FrequencyKey | 'dark_site') {
+    setFlags((f) => ({ ...f, [key]: !f[key] }))
+  }
 
   function handleSave() {
     const formData = new FormData()
     formData.set('description', desc)
     formData.set('sort_order', sortOrder)
     formData.set('is_required', required)
+    formData.set('dark_site', String(flags.dark_site))
+    for (const f of FREQUENCY_DEFS) formData.set(f.key, String(flags[f.key]))
     onUpdate(item.id, formData)
     setEditing(false)
   }
@@ -301,6 +325,20 @@ function JobPlanItemRow({
             className="w-full h-8 px-2 border border-eq-sky rounded text-sm"
             autoFocus
           />
+        </td>
+        <td className="px-3 py-2">
+          <div className="flex flex-wrap gap-1 text-[10px]">
+            <label className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-white border border-gray-200 rounded cursor-pointer hover:border-eq-sky">
+              <input type="checkbox" checked={flags.dark_site} onChange={() => toggleFlag('dark_site')} className="w-3 h-3" />
+              <span className="font-bold">DS</span>
+            </label>
+            {FREQUENCY_DEFS.map((f) => (
+              <label key={f.key} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-white border border-gray-200 rounded cursor-pointer hover:border-eq-sky">
+                <input type="checkbox" checked={flags[f.key]} onChange={() => toggleFlag(f.key)} className="w-3 h-3" />
+                <span className="font-semibold">{f.short}</span>
+              </label>
+            ))}
+          </div>
         </td>
         <td className="px-3 py-2">
           <select
@@ -338,9 +376,21 @@ function JobPlanItemRow({
 
   return (
     <tr className="hover:bg-gray-50">
-      <td className="px-3 py-2 text-xs text-eq-grey font-mono">{item.sort_order}</td>
-      <td className="px-3 py-2 text-sm text-eq-ink">{item.description}</td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2 text-xs text-eq-grey font-mono align-top">{item.sort_order}</td>
+      <td className="px-3 py-2 text-sm text-eq-ink align-top">
+        <div>{item.description}</div>
+        {isAdminRole && (
+          <JobPlanItemImageControl
+            itemId={item.id}
+            imageUrl={item.reference_image_url}
+            caption={item.reference_image_caption}
+          />
+        )}
+      </td>
+      <td className="px-3 py-2 align-top">
+        <FrequencyBadges item={item} size="xs" />
+      </td>
+      <td className="px-3 py-2 align-top">
         {item.is_required ? (
           <span className="text-xs font-medium text-eq-sky">Yes</span>
         ) : (

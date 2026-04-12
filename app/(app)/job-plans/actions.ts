@@ -155,6 +155,16 @@ export async function createJobPlanItemAction(jobPlanId: string, formData: FormD
       sort_order: Number(formData.get('sort_order') ?? 0),
       is_required: formData.get('is_required') === 'true',
       asset_id: formData.get('asset_id') || null,
+      dark_site: formData.get('dark_site') === 'true',
+      freq_monthly: formData.get('freq_monthly') === 'true',
+      freq_quarterly: formData.get('freq_quarterly') === 'true',
+      freq_semi_annual: formData.get('freq_semi_annual') === 'true',
+      freq_annual: formData.get('freq_annual') === 'true',
+      freq_2yr: formData.get('freq_2yr') === 'true',
+      freq_3yr: formData.get('freq_3yr') === 'true',
+      freq_5yr: formData.get('freq_5yr') === 'true',
+      freq_8yr: formData.get('freq_8yr') === 'true',
+      freq_10yr: formData.get('freq_10yr') === 'true',
     }
 
     const parsed = CreateJobPlanItemSchema.safeParse(raw)
@@ -179,11 +189,23 @@ export async function updateJobPlanItemAction(jobPlanId: string, itemId: string,
     const { supabase, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
-    const raw = {
-      description: formData.get('description'),
-      sort_order: Number(formData.get('sort_order') ?? 0),
-      is_required: formData.get('is_required') === 'true',
-    }
+    // Only include keys that are actually present in the FormData so callers
+    // can do partial updates (e.g. updating just frequency flags from the
+    // master register without touching description / sort_order).
+    const raw: Record<string, unknown> = {}
+    if (formData.has('description')) raw.description = formData.get('description')
+    if (formData.has('sort_order')) raw.sort_order = Number(formData.get('sort_order') ?? 0)
+    if (formData.has('is_required')) raw.is_required = formData.get('is_required') === 'true'
+    if (formData.has('dark_site')) raw.dark_site = formData.get('dark_site') === 'true'
+    if (formData.has('freq_monthly')) raw.freq_monthly = formData.get('freq_monthly') === 'true'
+    if (formData.has('freq_quarterly')) raw.freq_quarterly = formData.get('freq_quarterly') === 'true'
+    if (formData.has('freq_semi_annual')) raw.freq_semi_annual = formData.get('freq_semi_annual') === 'true'
+    if (formData.has('freq_annual')) raw.freq_annual = formData.get('freq_annual') === 'true'
+    if (formData.has('freq_2yr')) raw.freq_2yr = formData.get('freq_2yr') === 'true'
+    if (formData.has('freq_3yr')) raw.freq_3yr = formData.get('freq_3yr') === 'true'
+    if (formData.has('freq_5yr')) raw.freq_5yr = formData.get('freq_5yr') === 'true'
+    if (formData.has('freq_8yr')) raw.freq_8yr = formData.get('freq_8yr') === 'true'
+    if (formData.has('freq_10yr')) raw.freq_10yr = formData.get('freq_10yr') === 'true'
 
     const parsed = UpdateJobPlanItemSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }

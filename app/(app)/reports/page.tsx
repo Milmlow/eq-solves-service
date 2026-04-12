@@ -3,6 +3,10 @@ import { Card } from '@/components/ui/Card'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { ReportFilters } from './ReportFilters'
 import { BulkExportButton } from './BulkExportButton'
+import {
+  computeMaintenanceCompliance,
+  computeComplianceBySite,
+} from '@/lib/analytics/site-health'
 
 export default async function ReportsPage({
   searchParams,
@@ -31,13 +35,15 @@ export default async function ReportsPage({
 
   const { data: checks } = await mCheckQuery
 
-  const mTotal = checks?.length ?? 0
-  const mComplete = checks?.filter((c) => c.status === 'complete').length ?? 0
-  const mOverdue = checks?.filter((c) => c.status === 'overdue').length ?? 0
-  const mInProgress = checks?.filter((c) => c.status === 'in_progress').length ?? 0
-  const mScheduled = checks?.filter((c) => c.status === 'scheduled').length ?? 0
-  const mCancelled = checks?.filter((c) => c.status === 'cancelled').length ?? 0
-  const mComplianceRate = mTotal > 0 ? Math.round((mComplete / mTotal) * 100) : 0
+  // Canonical compliance stats — shared with AI features via lib/analytics/site-health.
+  const maintenance = computeMaintenanceCompliance(checks)
+  const mTotal = maintenance.total
+  const mComplete = maintenance.complete
+  const mOverdue = maintenance.overdue
+  const mInProgress = maintenance.inProgress
+  const mScheduled = maintenance.scheduled
+  const mCancelled = maintenance.cancelled
+  const mComplianceRate = maintenance.complianceRate
 
   // ────────── Testing stats ──────────
   let tRecordQuery = supabase.from('test_records').select('id, result, test_date, site_id').eq('is_active', true)
@@ -143,24 +149,14 @@ export default async function ReportsPage({
   const defectsLow = defects?.filter((d) => d.severity === 'low').length ?? 0
 
   // ────────── Compliance by site (top 10 by maintenance volume) ──────────
-  const complianceBySiteMap: Record<string, { total: number; complete: number; overdue: number }> = {}
-  for (const c of checks ?? []) {
-    if (!c.site_id) continue
-    const agg = (complianceBySiteMap[c.site_id] ??= { total: 0, complete: 0, overdue: 0 })
-    agg.total++
-    if (c.status === 'complete') agg.complete++
-    if (c.status === 'overdue') agg.overdue++
-  }
-  const complianceBySite = Object.entries(complianceBySiteMap)
-    .map(([id, agg]) => ({
-      site: siteMap[id] ?? id,
-      total: agg.total,
-      complete: agg.complete,
-      overdue: agg.overdue,
-      rate: agg.total > 0 ? Math.round((agg.complete / agg.total) * 100) : 0,
-    }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 10)
+  // Shared with AI site-health features via lib/analytics/site-health.
+  const complianceBySite = computeComplianceBySite(checks, siteMap, 10).map((r) => ({
+    site: r.siteName,
+    total: r.total,
+    complete: r.complete,
+    overdue: r.overdue,
+    rate: r.rate,
+  }))
 
   // ────────── Monthly trend (last 6 months) ──────────
   const now = new Date()

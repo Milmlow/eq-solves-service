@@ -96,6 +96,7 @@
 
 | Sprint | Focus | Key Deliverables | Status |
 |--------|-------|-----------------|--------|
+| 26 | _(skipped — sprint number reserved but not used; numbering continues at 27)_ | — | N/A |
 | 27 | ACB Testing Rebuild & Excel Batch Fill | ACB 3-step workflow rewrite (Asset Collection/V&F 23 items/Electrical Testing), 22 asset collection columns on acb_tests (migration 0023), AcbSiteCollection expandable cards, E1.25 auto-filter, Excel batch fill (export/import via SheetJS), job plan filter on assets page, logo upload bucket fix | ✅ Done |
 
 ---
@@ -123,7 +124,12 @@
 | 0017_contract_scope.sql | contract_scopes table (customer/site/FY/scope_item/is_included) | ✅ Applied |
 | 0018_defects.sql | Defects table with severity/status workflow, linked to checks/assets/sites | ✅ Applied |
 | 0019_onboarding.sql | setup_completed_at flag on tenants table | ✅ Applied |
+| 0020_site_coordinates.sql | latitude/longitude columns on sites for interactive map | ✅ Applied |
+| 0021_customer_contacts.sql | customer_contacts table (multiple contacts per customer, primary flag, RLS) | ✅ Applied |
+| 0022_acb_extended_fields.sql | CB rating, poles, trip unit columns on acb_tests | ✅ Applied |
 | 0023_acb_full_asset_collection.sql | 22 asset collection columns on acb_tests (breaker ID, protection settings, accessories) | ✅ Applied |
+| 0024_pm_calendar.sql | pm_calendar table — scheduled PM tasks with cost tracking and notification fields | ✅ Applied |
+| 0025_maintenance_checks_archive.sql | is_active soft-delete on maintenance_checks for archiving without data loss | ✅ Applied |
 
 ---
 

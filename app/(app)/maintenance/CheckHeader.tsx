@@ -1,0 +1,178 @@
+'use client'
+
+import { useState } from 'react'
+import { Button } from '@/components/ui/Button'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { formatDate } from '@/lib/utils/format'
+import { Download, ClipboardPaste } from 'lucide-react'
+import type { MaintenanceCheck, CheckStatus } from '@/lib/types'
+
+function statusToBadge(status: CheckStatus) {
+  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
+    scheduled: 'not-started',
+    in_progress: 'in-progress',
+    complete: 'complete',
+    cancelled: 'cancelled',
+    overdue: 'overdue',
+  }
+  return map[status]
+}
+
+interface CheckHeaderProps {
+  check: MaintenanceCheck & {
+    sites?: { name: string } | null
+    assignee_name?: string | null
+  }
+  completedCount: number
+  totalCount: number
+  requiredIncomplete: number
+  error: string | null
+  loading: boolean
+  canAct: boolean
+  isAdmin: boolean
+  onStart: () => void
+  onComplete: () => void
+  onCancel: () => void
+  onArchive: () => void
+  onPasteWOs: (lines: string) => Promise<void>
+}
+
+/** Check detail header: status, metadata grid, action buttons, paste-WO modal. */
+export function CheckHeader({
+  check,
+  completedCount,
+  totalCount,
+  requiredIncomplete,
+  error,
+  loading,
+  canAct,
+  isAdmin,
+  onStart,
+  onComplete,
+  onCancel,
+  onArchive,
+  onPasteWOs,
+}: CheckHeaderProps) {
+  const [showPasteModal, setShowPasteModal] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+
+  async function handleApplyPaste() {
+    await onPasteWOs(pasteText)
+    setShowPasteModal(false)
+    setPasteText('')
+  }
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <StatusBadge status={statusToBadge(check.status)} />
+        <span className="text-xs text-eq-grey">
+          {completedCount}/{totalCount} tasks done
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div>
+          <dt className="text-xs font-bold text-eq-grey uppercase">Site</dt>
+          <dd className="text-eq-ink mt-1">{check.sites?.name ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-bold text-eq-grey uppercase">Due Date</dt>
+          <dd className="text-eq-ink mt-1">{formatDate(check.due_date)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-bold text-eq-grey uppercase">Assigned To</dt>
+          <dd className="text-eq-ink mt-1">{check.assignee_name ?? 'Unassigned'}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-bold text-eq-grey uppercase">Frequency</dt>
+          <dd className="text-eq-ink mt-1">
+            {check.frequency
+              ? check.frequency.replace('_', '-').replace(/\b\w/g, (c) => c.toUpperCase())
+              : '—'}
+          </dd>
+        </div>
+      </div>
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
+
+      {/* Action buttons */}
+      <div className="flex gap-2 flex-wrap">
+        {(check.status === 'scheduled' || check.status === 'overdue') && canAct && (
+          <Button size="sm" onClick={onStart} disabled={loading}>
+            Start Check
+          </Button>
+        )}
+        {check.status === 'in_progress' && canAct && (
+          <Button
+            size="sm"
+            onClick={onComplete}
+            disabled={loading || requiredIncomplete > 0}
+            title={requiredIncomplete > 0 ? `${requiredIncomplete} required tasks incomplete` : ''}
+          >
+            Complete Check
+          </Button>
+        )}
+        {check.status === 'complete' && (
+          <a
+            href={`/api/pm-report?check_id=${check.id}`}
+            download
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors"
+          >
+            <Download className="w-4 h-4" /> Download Report
+          </a>
+        )}
+        {canAct && (
+          <Button size="sm" variant="secondary" onClick={() => setShowPasteModal(true)}>
+            <ClipboardPaste className="w-4 h-4 mr-1" /> Paste WO #s
+          </Button>
+        )}
+        {check.status !== 'complete' && check.status !== 'cancelled' && isAdmin && (
+          <Button size="sm" variant="danger" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+        )}
+        {isAdmin && (
+          <Button size="sm" variant="danger" onClick={onArchive} disabled={loading}>
+            Archive
+          </Button>
+        )}
+      </div>
+
+      {/* Paste WO Modal */}
+      {showPasteModal && (
+        <div className="border border-eq-sky/30 rounded-lg bg-eq-ice/30 p-4 space-y-3">
+          <h4 className="text-xs font-bold text-eq-grey uppercase">Paste Work Order Numbers</h4>
+          <p className="text-xs text-eq-grey">
+            Paste a column from Excel — one WO per line. Numbers will be matched to assets in the current
+            sort order.
+          </p>
+          <textarea
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            rows={6}
+            placeholder="Paste here..."
+            className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm font-mono text-eq-ink bg-white focus:outline-none focus:border-eq-deep"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleApplyPaste} disabled={loading || !pasteText.trim()}>
+              Apply ({pasteText.split('\n').filter((l) => l.trim()).length} WOs)
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setShowPasteModal(false)
+                setPasteText('')
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

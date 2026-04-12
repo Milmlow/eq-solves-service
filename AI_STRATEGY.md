@@ -2,7 +2,96 @@
 
 > Strategic plan for AI capabilities in EQ Solves PM platform.
 > Grounded in real maintenance workflows, IBM Maximo AI patterns, and the existing data model.
-> Created: 08 Apr 2026.
+> Created: 08 Apr 2026. Phasing reset: 12 Apr 2026 (post-Sprint 28).
+
+## Status as of 12 Apr 2026
+
+The original phasing (Sprint 23–25 for MVP AI) did not land. Sprints 23–28 went
+into non-AI platform work: ACB/NSX testing rebuild, maintenance UX, reports
+dashboard, PM calendar, defects register, site onboarding. All of that work is
+now in production. The data model matured faster than the AI layer did, which
+means Phase 1 features are easier to ship today than they would have been in
+April — the tables, RLS policies, and action patterns they depend on all exist.
+
+**Foundation shipped in the 12 Apr prep pass (ready to build on):**
+- `withIdempotency()` wrapper + `mutation_id` column on `audit_logs` — every
+  AI-suggested action is now replay-safe from day one (migration 0028).
+- `lib/analytics/site-health.ts` — canonical compliance/site-health primitives.
+  Any AI feature touching "site health" or "compliance rate" imports from here
+  so the AI answer and the /reports answer never diverge.
+- `CheckDetail.tsx` refactored into four components. AI suggestions in the
+  check workflow (pre-job briefing, failure-code hints, photo-to-defect) have
+  clean extension points instead of landing in a 550-line god component.
+- Shared `ImageUpload` / `ImageThumbnail` / `ImageLightbox` components and
+  `job-plan-references` storage bucket (migration 0029). Used by the visual
+  guided workflow today; photo-to-defect capture (Phase 3) reuses them.
+
+## Revised phasing (from 12 Apr 2026)
+
+**Build order change.** The original plan opened with the natural-language
+query bar. On reflection, that's the highest-prestige feature but also the
+highest-risk: translating user text into Supabase queries is a security-
+sensitive pipeline, and if the first public AI feature is wrong once, users
+stop trusting the whole layer. Leading with **Asset History Summary** gives us
+a read-only, bounded, cacheable feature that proves the Claude API wiring and
+the audit/idempotency pattern under low blast radius. NL query bar comes after
+we've shipped two or three smaller features and know what the prompt / guard-
+rail patterns should look like.
+
+### Phase 1a — AI Foundation (next sprint)
+
+| # | Feature | Effort | Value | Notes |
+|---|---------|--------|-------|-------|
+| 1 | Asset history summary | Low | High | Single-asset context, read-only, Claude Haiku. Ships the API client + audit + caching infra. |
+| 2 | Check completion notes drafter | Low | Medium | Reuses Phase 1a infra. Draft on complete, tech edits before save. |
+| 3 | Missing data flagging (dashboard card) | Low | High | Batch, scheduled nightly. No LLM needed for v1 — deterministic rules + AI only for the summary sentence. |
+
+**Tech stack:** `@anthropic-ai/sdk`, server actions using the existing
+`requireUser` → Zod → mutation → audit pattern, wrapped in `withIdempotency`
+because AI features are exactly the scenario that benefits from replay safety.
+Response cache keyed on `(entity_type, entity_id, entity_updated_at)` so edits
+invalidate the cache automatically.
+
+**Exit criteria:** 2 of 3 features shipped, tracked acceptance rate ≥ 40%, zero
+audit log discrepancies.
+
+### Phase 1b — NL query bar
+
+Only after Phase 1a. Structured output → parameterised Supabase query → result
+table. Explicit "query ran" display under every result. No free-text SQL —
+the LLM outputs a constrained JSON schema that server-side code turns into a
+supabase-js builder chain. Rate-limited per tenant.
+
+### Phase 2 — Supervisor & Planning AI
+
+Unchanged from original doc (site health scoring, repeat failure detection,
+pre-job briefing, weekly site summary, smart check creation). Site health
+scoring slots into the existing `lib/analytics/site-health.ts` module — the
+composite score function already has a drop-in hook (`computeSiteHealthScore`)
+ready to blend additional signals.
+
+### Phase 3 — Field Technician AI
+
+Unchanged from original doc. Photo-to-defect capture reuses the
+`ImageUpload` / `ImageThumbnail` components shipped for the visual guided
+workflow. Voice-to-notes needs a new `audio_url` column on
+`maintenance_check_items` (migration TODO).
+
+### Phase 4 — Predictive & Advanced
+
+Unchanged from original doc. Requires 12+ months of dense data, so earliest
+practical start is mid-2027 given current check volume.
+
+## Decisions log
+
+- **12 Apr 2026** — Foundation pass shipped before any AI features. Idempotency,
+  shared analytics, component split, visual guided workflow plumbing. Rationale:
+  cheaper to bake these in now than retrofit them across 5 AI features later.
+- **12 Apr 2026** — Asset history summary chosen as first AI feature (was NL
+  query bar). Rationale: lower risk, proves infra, builds user trust before
+  the higher-stakes query translation.
+
+---
 
 ---
 

@@ -14,7 +14,8 @@ import { importJobPlansAction } from './actions'
 import type { JobPlan, JobPlanItem, Site } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Upload } from 'lucide-react'
+import { Upload, ListChecks } from 'lucide-react'
+import Link from 'next/link'
 
 interface JobPlanWithSite extends JobPlan {
   sites: { name: string } | null
@@ -114,6 +115,11 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
           ]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">
+          <Link href="/job-plans/items">
+            <Button variant="secondary" size="sm">
+              <ListChecks className="w-4 h-4 mr-1" /> Items Register
+            </Button>
+          </Link>
           {canWriteRole && (
             <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-1" /> Import
