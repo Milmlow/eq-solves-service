@@ -39,24 +39,18 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
           )}
         </div>
 
-        <div className="space-y-6">
-          <h2 className="text-3xl font-bold text-white leading-tight">
-            Maintenance management,<br />
-            <span style={{ color: settings.primary_colour }}>done right.</span>
+        <div className="space-y-4">
+          <h2 className="text-2xl font-bold text-white leading-tight">
+            Service Platform
           </h2>
-          <p className="text-sm text-white/60 leading-relaxed max-w-sm">
-            Circuit breaker testing, preventive maintenance scheduling,
-            compliance reporting and defect tracking — all in one platform.
+          <p className="text-sm text-white/50 leading-relaxed max-w-sm">
+            Circuit breaker testing, preventive maintenance,
+            compliance reporting and defect tracking.
           </p>
-          <div className="flex items-center gap-6 pt-2">
-            <Stat label="Faster reporting" value="3×" colour={settings.primary_colour} />
-            <Stat label="Compliance rate" value="98%" colour={settings.primary_colour} />
-            <Stat label="Less paperwork" value="70%" colour={settings.primary_colour} />
-          </div>
         </div>
 
         <p className="text-xs text-white/30">
-          © {new Date().getFullYear()} EQ Solutions. All rights reserved.
+          © {new Date().getFullYear()} EQ Solutions
         </p>
       </div>
 
@@ -79,21 +73,8 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
           </div>
 
           {children}
-
-          <p className="text-[11px] text-center mt-8" style={{ color: `${settings.ink_colour}40` }}>
-            Protected by enterprise-grade encryption
-          </p>
         </div>
       </div>
-    </div>
-  )
-}
-
-function Stat({ label, value, colour }: { label: string; value: string; colour: string }) {
-  return (
-    <div>
-      <p className="text-2xl font-bold" style={{ color: colour }}>{value}</p>
-      <p className="text-xs text-white/50">{label}</p>
     </div>
   )
 }
