@@ -1,6 +1,8 @@
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
 import type { TenantSettings } from '@/lib/types'
 
+const WHITE_LOGO_URL = 'https://pub-409bd651f2e549f4907f5a856a9264ae.r2.dev/EQ_logo_white_transparent.svg'
+
 const DEFAULTS: Pick<TenantSettings, 'product_name' | 'logo_url' | 'primary_colour' | 'ink_colour' | 'deep_colour' | 'ice_colour'> = {
   product_name: 'EQ Solves',
   logo_url: null,
@@ -25,21 +27,24 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
     <div className="min-h-screen flex">
       {/* Left panel — branding */}
       <div
-        className="hidden lg:flex lg:w-[480px] xl:w-[540px] flex-col justify-between p-10"
+        className="hidden lg:flex lg:w-[480px] xl:w-[540px] flex-col justify-between p-10 relative overflow-hidden"
         style={{ background: `linear-gradient(135deg, ${settings.ink_colour} 0%, ${settings.deep_colour} 100%)` }}
       >
-        <div>
-          {settings.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={settings.logo_url} alt={productName} className="h-8 w-auto" />
-          ) : (
-            <span className="text-xl font-bold text-white tracking-tight">
-              EQ <span style={{ color: settings.primary_colour }}>Solves</span>
-            </span>
-          )}
+        {/* Subtle watermark — ghost logo behind panel content */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={WHITE_LOGO_URL}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-16 top-1/2 -translate-y-1/2 w-[360px] h-[360px] object-contain opacity-[0.04]"
+        />
+
+        <div className="relative z-10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={WHITE_LOGO_URL} alt={productName} className="h-12 w-auto" />
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 relative z-10">
           <h2 className="text-2xl font-bold text-white leading-tight">
             Service Platform
           </h2>
@@ -49,7 +54,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
           </p>
         </div>
 
-        <p className="text-xs text-white/30">
+        <p className="text-xs text-white/30 relative z-10">
           © {new Date().getFullYear()} EQ Solutions
         </p>
       </div>

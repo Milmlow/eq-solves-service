@@ -38,6 +38,7 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
 
   const productName = settings?.product_name || 'EQ Solves'
   const logoUrl = settings?.logo_url
+  const whiteLogo = 'https://pub-409bd651f2e549f4907f5a856a9264ae.r2.dev/EQ_logo_white_transparent.svg'
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -60,7 +61,7 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
         {!collapsed && (
           logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={productName} className="h-6 w-auto object-contain" />
+            <img src={logoUrl} alt={productName} className="h-8 w-auto object-contain" />
           ) : (
             <span className="font-bold text-sm tracking-wide text-eq-sky">{productName}</span>
           )
@@ -170,6 +171,13 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
           </>
         )}
       </nav>
+      {/* Subtle brand watermark — visible when sidebar is expanded */}
+      {!collapsed && (
+        <div className="flex justify-center py-3 opacity-[0.06]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={whiteLogo} alt="" aria-hidden="true" className="w-16 h-16 object-contain pointer-events-none" />
+        </div>
+      )}
       <div className="border-t border-white/10 p-2">
         <form action="/auth/signout" method="post">
           <button
@@ -196,7 +204,7 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
         </button>
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt={productName} className="h-5 w-auto object-contain" />
+          <img src={logoUrl} alt={productName} className="h-6 w-auto object-contain" />
         ) : (
           <span className="font-bold text-sm text-eq-sky">{productName}</span>
         )}
