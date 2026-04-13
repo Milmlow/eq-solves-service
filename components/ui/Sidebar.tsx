@@ -59,12 +59,8 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
     <>
       <div className="flex items-center justify-between px-4 h-16 border-b border-white/10">
         {!collapsed && (
-          logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={productName} className="h-10 w-auto object-contain" />
-          ) : (
-            <span className="font-bold text-sm tracking-wide text-eq-sky">{productName}</span>
-          )
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={whiteLogo} alt={productName} className="h-10 w-auto object-contain" />
         )}
         <div className="flex items-center gap-2 ml-auto">
           <NotificationBell />
@@ -173,9 +169,9 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
       </nav>
       {/* Subtle brand watermark — visible when sidebar is expanded */}
       {!collapsed && (
-        <div className="flex justify-center py-3 opacity-[0.06]">
+        <div className="flex justify-center py-4 opacity-[0.10]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={whiteLogo} alt="" aria-hidden="true" className="w-16 h-16 object-contain pointer-events-none" />
+          <img src={whiteLogo} alt="" aria-hidden="true" className="w-20 h-20 object-contain pointer-events-none" />
         </div>
       )}
       <div className="border-t border-white/10 p-2">
@@ -202,12 +198,8 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
         >
           <Menu className="w-5 h-5" />
         </button>
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt={productName} className="h-7 w-auto object-contain" />
-        ) : (
-          <span className="font-bold text-sm text-eq-sky">{productName}</span>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={whiteLogo} alt={productName} className="h-7 w-auto object-contain" />
         <NotificationBell />
       </div>
 
