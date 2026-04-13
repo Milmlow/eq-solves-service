@@ -57,11 +57,11 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
 
   const sidebarContent = (
     <>
-      <div className="flex items-center justify-between px-4 h-14 border-b border-white/10">
+      <div className="flex items-center justify-between px-4 h-16 border-b border-white/10">
         {!collapsed && (
           logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={productName} className="h-8 w-auto object-contain" />
+            <img src={logoUrl} alt={productName} className="h-10 w-auto object-contain" />
           ) : (
             <span className="font-bold text-sm tracking-wide text-eq-sky">{productName}</span>
           )
@@ -204,7 +204,7 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
         </button>
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt={productName} className="h-6 w-auto object-contain" />
+          <img src={logoUrl} alt={productName} className="h-7 w-auto object-contain" />
         ) : (
           <span className="font-bold text-sm text-eq-sky">{productName}</span>
         )}
