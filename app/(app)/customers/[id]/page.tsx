@@ -2,11 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Card } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
-import { DataTable } from '@/components/ui/DataTable'
 import { formatDate } from '@/lib/utils/format'
 import { isAdmin as checkIsAdmin } from '@/lib/utils/roles'
 import type { Customer, CustomerContact, Site, Role } from '@/lib/types'
 import { CustomerContacts } from './CustomerContacts'
+import { CustomerSitesTable } from './CustomerSitesTable'
 
 export default async function CustomerDetailPage({
   params,
@@ -157,44 +157,7 @@ export default async function CustomerDetailPage({
       {/* Sites Table */}
       <div>
         <h2 className="text-lg font-bold text-eq-ink mb-3">Sites</h2>
-        <DataTable<Site & Record<string, unknown>>
-          columns={[
-            {
-              key: 'name',
-              header: 'Site Name',
-              render: (row) => (
-                <a href={`/sites/${row.id}`} className="text-eq-sky hover:text-eq-deep font-medium">
-                  {row.name}
-                </a>
-              ),
-            },
-            {
-              key: 'code',
-              header: 'Code',
-              render: (row) => row.code || '-',
-            },
-            {
-              key: 'address',
-              header: 'Address',
-              render: (row) => {
-                const addressParts = [
-                  row.address,
-                  row.city,
-                  row.state,
-                  row.postcode,
-                ].filter(Boolean)
-                return addressParts.length > 0 ? addressParts.join(', ') : '-'
-              },
-            },
-            {
-              key: 'is_active',
-              header: 'Status',
-              render: (row) => <StatusBadge status={row.is_active ? 'active' : 'inactive'} />,
-            },
-          ]}
-          rows={sitesData as (Site & Record<string, unknown>)[]}
-          emptyMessage="No sites found for this customer."
-        />
+        <CustomerSitesTable sites={sitesData} />
       </div>
     </div>
   )

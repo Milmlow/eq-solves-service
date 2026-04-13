@@ -2,11 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Card } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
-import { DataTable } from '@/components/ui/DataTable'
-import { formatDate, formatCheckStatus, formatTestResult } from '@/lib/utils/format'
+import { formatDate } from '@/lib/utils/format'
 import { isAdmin as checkIsAdmin } from '@/lib/utils/roles'
 import type { Site, Asset, MaintenanceCheck, TestRecord, SiteContact, Role } from '@/lib/types'
 import { SiteContacts } from './SiteContacts'
+import { SiteAssetsTable, SiteMaintenanceChecksTable, SiteTestRecordsTable } from './SiteDetailTables'
 
 export default async function SiteDetailPage({
   params,
@@ -200,133 +200,19 @@ export default async function SiteDetailPage({
       {/* Recent Assets Table */}
       <div>
         <h2 className="text-lg font-bold text-eq-ink mb-3">Recent Assets</h2>
-        <DataTable<Asset & Record<string, unknown>>
-          columns={[
-            {
-              key: 'name',
-              header: 'Asset Name',
-              render: (row) => (
-                <a href={`/assets/${row.id}`} className="text-eq-sky hover:text-eq-deep font-medium">
-                  {row.name}
-                </a>
-              ),
-            },
-            {
-              key: 'asset_type',
-              header: 'Type',
-            },
-            {
-              key: 'manufacturer',
-              header: 'Manufacturer',
-              render: (row) => row.manufacturer || '-',
-            },
-            {
-              key: 'model',
-              header: 'Model',
-              render: (row) => row.model || '-',
-            },
-            {
-              key: 'serial_number',
-              header: 'Serial Number',
-              render: (row) => row.serial_number || '-',
-            },
-          ]}
-          rows={recentAssets as (Asset & Record<string, unknown>)[]}
-          emptyMessage="No assets found for this site."
-        />
+        <SiteAssetsTable assets={recentAssets} />
       </div>
 
       {/* Recent Maintenance Checks Table */}
       <div>
         <h2 className="text-lg font-bold text-eq-ink mb-3">Recent Maintenance Checks</h2>
-        <DataTable<MaintenanceCheck & { job_plans: { name: string } | null } & Record<string, unknown>>
-          columns={[
-            {
-              key: 'job_plans',
-              header: 'Job Plan',
-              render: (row) => (
-                <a
-                  href={`/job-plans/${row.job_plans?.name}`}
-                  className="text-eq-sky hover:text-eq-deep font-medium"
-                >
-                  {row.job_plans?.name || '-'}
-                </a>
-              ),
-            },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (row) => {
-                const statusMap: Record<string, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
-                  scheduled: 'not-started', in_progress: 'in-progress', complete: 'complete', cancelled: 'cancelled', overdue: 'overdue',
-                }
-                return (
-                  <StatusBadge
-                    status={statusMap[row.status] ?? 'not-started'}
-                    label={formatCheckStatus(row.status)}
-                  />
-                )
-              },
-            },
-            {
-              key: 'due_date',
-              header: 'Due Date',
-              render: (row) => formatDate(row.due_date),
-            },
-            {
-              key: 'assigned_to',
-              header: 'Assigned To',
-              render: (row) => row.assigned_to || '-',
-            },
-            {
-              key: 'completed_at',
-              header: 'Completed',
-              render: (row) => (row.completed_at ? formatDate(row.completed_at) : '-'),
-            },
-          ]}
-          rows={recentChecks as (MaintenanceCheck & { job_plans: { name: string } | null } & Record<string, unknown>)[]}
-          emptyMessage="No maintenance checks found for this site."
-        />
+        <SiteMaintenanceChecksTable checks={recentChecks} />
       </div>
 
       {/* Recent Test Records Table */}
       <div>
         <h2 className="text-lg font-bold text-eq-ink mb-3">Recent Test Records</h2>
-        <DataTable<TestRecord & Record<string, unknown>>
-          columns={[
-            {
-              key: 'test_type',
-              header: 'Test Type',
-            },
-            {
-              key: 'test_date',
-              header: 'Test Date',
-              render: (row) => formatDate(row.test_date),
-            },
-            {
-              key: 'result',
-              header: 'Result',
-              render: (row) => (
-                <StatusBadge
-                  status={row.result === 'pass' ? 'complete' : row.result === 'fail' ? 'blocked' : 'not-started'}
-                  label={formatTestResult(row.result)}
-                />
-              ),
-            },
-            {
-              key: 'tested_by',
-              header: 'Tested By',
-              render: (row) => row.tested_by || '-',
-            },
-            {
-              key: 'next_test_due',
-              header: 'Next Test Due',
-              render: (row) => (row.next_test_due ? formatDate(row.next_test_due) : '-'),
-            },
-          ]}
-          rows={recentTests as (TestRecord & Record<string, unknown>)[]}
-          emptyMessage="No test records found for this site."
-        />
+        <SiteTestRecordsTable tests={recentTests} />
       </div>
     </div>
   )
