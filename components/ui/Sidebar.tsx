@@ -57,10 +57,14 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
 
   const sidebarContent = (
     <>
-      <div className="flex items-center justify-between px-4 h-16 border-b border-white/10">
+      <div className="flex items-center justify-between px-4 h-24 border-b border-white/10">
         {!collapsed && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={whiteLogo} alt={productName} className="h-10 w-auto object-contain" />
+          logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={productName} className="h-20 w-auto object-contain" />
+          ) : (
+            <span className="font-bold text-sm tracking-wide text-eq-sky">{productName}</span>
+          )
         )}
         <div className="flex items-center gap-2 ml-auto">
           <NotificationBell />
@@ -171,7 +175,7 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
       {!collapsed && (
         <div className="flex justify-center py-4 opacity-[0.10]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={whiteLogo} alt="" aria-hidden="true" className="w-20 h-20 object-contain pointer-events-none" />
+          <img src={whiteLogo} alt="" aria-hidden="true" className="w-40 h-40 object-contain pointer-events-none" />
         </div>
       )}
       <div className="border-t border-white/10 p-2">
@@ -198,8 +202,12 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
         >
           <Menu className="w-5 h-5" />
         </button>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={whiteLogo} alt={productName} className="h-7 w-auto object-contain" />
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt={productName} className="h-7 w-auto object-contain" />
+        ) : (
+          <span className="font-bold text-sm text-eq-sky">{productName}</span>
+        )}
         <NotificationBell />
       </div>
 
