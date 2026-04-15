@@ -53,6 +53,66 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
   // Deleting state
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Edit modal state
+  const [editing, setEditing] = useState<MediaItem | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editCategory, setEditCategory] = useState<MediaCategory>('general')
+  const [editEntityType, setEditEntityType] = useState<string>('')
+  const [editEntityId, setEditEntityId] = useState<string>('')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  function openEdit(item: MediaItem) {
+    setEditing(item)
+    setEditName(item.name)
+    setEditCategory(item.category as MediaCategory)
+    setEditEntityType(item.entity_type ?? '')
+    setEditEntityId(item.entity_id ?? '')
+    setEditError(null)
+  }
+
+  function closeEdit() {
+    setEditing(null)
+    setEditError(null)
+  }
+
+  async function handleSaveEdit() {
+    if (!editing) return
+    const trimmed = editName.trim()
+    if (!trimmed) {
+      setEditError('Name is required.')
+      return
+    }
+    setSavingEdit(true)
+    setEditError(null)
+    const result = await updateMediaAction(editing.id, {
+      name: trimmed,
+      category: editCategory,
+      entity_type: editEntityType || null,
+      entity_id: editEntityId || null,
+    })
+    setSavingEdit(false)
+    if (!result.success) {
+      setEditError(result.error ?? 'Update failed.')
+      return
+    }
+    // Update local state so the grid reflects changes without a full reload
+    setMedia((prev) =>
+      prev.map((m) =>
+        m.id === editing.id
+          ? {
+              ...m,
+              name: trimmed,
+              category: editCategory,
+              entity_type: editEntityType || null,
+              entity_id: editEntityId || null,
+            }
+          : m,
+      ),
+    )
+    closeEdit()
+  }
+
   // Filtered media
   const filtered = media.filter(item => {
     if (filterCategory && item.category !== filterCategory) return false
@@ -269,36 +329,44 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filtered.map(item => (
             <Card key={item.id} className="p-0 overflow-hidden group relative">
-              {/* Image preview */}
-              <div className="aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
-                {item.content_type?.startsWith('image/svg') ? (
-                  <img src={item.file_url} alt={item.name} className="max-w-full max-h-full object-contain p-2" />
-                ) : (
-                  <img src={item.file_url} alt={item.name} className="w-full h-full object-cover" />
-                )}
-              </div>
-
-              {/* Info */}
-              <div className="p-2">
-                <p className="text-xs font-medium text-eq-ink truncate" title={item.name}>{item.name}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-eq-ice text-eq-deep font-medium">
-                    {CATEGORIES.find(c => c.value === item.category)?.label ?? item.category}
-                  </span>
-                  <span className="text-[10px] text-eq-grey">{formatSize(item.file_size)}</span>
+              {/* Clickable area opens edit modal. Delete button stops propagation. */}
+              <button
+                type="button"
+                onClick={() => openEdit(item)}
+                className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-eq-sky rounded-lg"
+                title="Click to edit properties"
+              >
+                {/* Image preview */}
+                <div className="aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
+                  {item.content_type?.startsWith('image/svg') ? (
+                    <img src={item.file_url} alt={item.name} className="max-w-full max-h-full object-contain p-2" />
+                  ) : (
+                    <img src={item.file_url} alt={item.name} className="w-full h-full object-cover" />
+                  )}
                 </div>
-                {item.entity_type && item.entity_id && (
-                  <p className="text-[10px] text-eq-grey mt-1 truncate">
-                    {item.entity_type === 'customer'
-                      ? customers.find(c => c.id === item.entity_id)?.name ?? 'Unknown'
-                      : sites.find(s => s.id === item.entity_id)?.name ?? 'Unknown'}
-                  </p>
-                )}
-              </div>
+
+                {/* Info */}
+                <div className="p-2">
+                  <p className="text-xs font-medium text-eq-ink truncate" title={item.name}>{item.name}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-eq-ice text-eq-deep font-medium">
+                      {CATEGORIES.find(c => c.value === item.category)?.label ?? item.category}
+                    </span>
+                    <span className="text-[10px] text-eq-grey">{formatSize(item.file_size)}</span>
+                  </div>
+                  {item.entity_type && item.entity_id && (
+                    <p className="text-[10px] text-eq-grey mt-1 truncate">
+                      {item.entity_type === 'customer'
+                        ? customers.find(c => c.id === item.entity_id)?.name ?? 'Unknown'
+                        : sites.find(s => s.id === item.entity_id)?.name ?? 'Unknown'}
+                    </p>
+                  )}
+                </div>
+              </button>
 
               {/* Delete overlay */}
               <button
-                onClick={() => handleDelete(item.id)}
+                onClick={(e) => { e.stopPropagation(); handleDelete(item.id) }}
                 disabled={deletingId === item.id}
                 className="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/80 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
                 title="Remove"
@@ -314,6 +382,121 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
       <p className="text-xs text-eq-grey text-right">
         {filtered.length} of {media.length} image{media.length !== 1 ? 's' : ''}
       </p>
+
+      {/* Edit Media Modal */}
+      {editing && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={closeEdit}>
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-eq-ink">Edit Media Properties</h3>
+              <button
+                onClick={closeEdit}
+                className="p-1 rounded-md hover:bg-gray-100 text-eq-grey"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex gap-4 mb-4">
+              <div className="w-28 h-28 bg-gray-50 border border-gray-200 rounded-md flex items-center justify-center overflow-hidden shrink-0">
+                <img src={editing.file_url} alt={editing.name} className="max-w-full max-h-full object-contain" />
+              </div>
+              <div className="text-xs text-eq-grey flex-1 space-y-0.5">
+                <p className="truncate"><span className="font-medium text-eq-ink">File:</span> {editing.file_name}</p>
+                <p><span className="font-medium text-eq-ink">Size:</span> {formatSize(editing.file_size)}</p>
+                <p><span className="font-medium text-eq-ink">Type:</span> {editing.content_type ?? '—'}</p>
+                <a href={editing.file_url} target="_blank" rel="noopener noreferrer" className="text-eq-sky hover:underline block mt-1">Open original ↗</a>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-eq-grey mb-1">Name *</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-eq-grey mb-1">Category</label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => {
+                    const cat = e.target.value as MediaCategory
+                    setEditCategory(cat)
+                    if (cat === 'customer_logo') setEditEntityType('customer')
+                    else if (cat === 'site_photo') setEditEntityType('site')
+                  }}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-eq-grey mb-1">Linked To</label>
+                <div className="flex gap-2">
+                  <select
+                    value={editEntityType}
+                    onChange={(e) => { setEditEntityType(e.target.value); setEditEntityId('') }}
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
+                  >
+                    <option value="">None</option>
+                    <option value="customer">Customer</option>
+                    <option value="site">Site</option>
+                  </select>
+                  {editEntityType === 'customer' && (
+                    <select
+                      value={editEntityId}
+                      onChange={(e) => setEditEntityId(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
+                    >
+                      <option value="">Select customer…</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  {editEntityType === 'site' && (
+                    <select
+                      value={editEntityId}
+                      onChange={(e) => setEditEntityId(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
+                    >
+                      <option value="">Select site…</option>
+                      {sites.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {editError && (
+              <p className="text-xs text-red-500 mt-3 flex items-center gap-1">
+                <X className="w-3 h-3" /> {editError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <Button size="sm" variant="secondary" onClick={closeEdit} disabled={savingEdit}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSaveEdit} disabled={savingEdit || !editName.trim()}>
+                {savingEdit ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

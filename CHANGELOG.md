@@ -4,14 +4,22 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
-## 2026-04-15 — Fix: super_admin ambushed by OnboardingWizard
+## 2026-04-15 — Fix: super_admin ambushed by OnboardingWizard + six screenshot fixes
 
 ### Fixed
 - **`app/(app)/layout.tsx`** — tenant membership lookup was `.limit(1).maybeSingle()` with no ordering, so Postgres could return any membership row. An admin/super_admin whose roulette-pick happened to land on a tenant with `setup_completed_at = NULL` was force-rendered into `<OnboardingWizard>` ("create your own project"). Rewrote to fetch all active memberships joined to their tenant setup state, prefer one that's already onboarded, and fall back deterministically to the earliest-joined membership. The wizard now only shows if *every* tenant the user belongs to is un-onboarded.
 - **Data fix (manual SQL)** — stamped `tenants.setup_completed_at = now()` on Demo Electrical (`a0000000-0000-0000-0000-000000000001`); it was fully seeded but never marked complete. Upgraded `simon.bramall@sks.com.au` from `admin` → `super_admin` on the same tenant.
+- **Dashboard & Sites asset counts** — `app/(app)/dashboard/page.tsx` and `app/(app)/sites/page.tsx` were using PostgREST embedded `assets(count)` which ignores the parent `is_active=true` filter on the nested resource, so archived assets were being counted. Replaced with a separate filtered query keyed on `site_id` and grouped into a Map. Dashboard map-pin counts and `/sites` list counts now reconcile with the true `/assets` register.
+- **Sidebar logo oversized** — `components/ui/Sidebar.tsx` header was `h-24` with an `h-20 w-auto` image. Reduced header to `h-16` and constrained logo to `max-h-10 max-w-[140px]` so custom tenant logos can't blow out the column.
+- **Customer logo placement** — `app/(app)/customers/[id]/page.tsx` now renders the customer logo (or initial-letter fallback) inline next to the h1 in the header. `app/(app)/sites/[id]/page.tsx` selects `customers(name, logo_url)` and shows a 28px logo next to the customer name in the info grid.
+- **Media library click-to-edit** — `app/(app)/admin/media/MediaLibraryClient.tsx` cards are now clickable. Opens an edit modal with Name, Category, and Linked-to (customer/site) fields, wired to the existing `updateMediaAction`. Delete button uses `stopPropagation()` to avoid opening the modal.
+
+### Added
+- **Remove user from tenant** (`app/(app)/admin/users/`) — new `removeUserFromTenantAction` soft-deletes the `tenant_members` row (`is_active=false`) scoped to the current tenant, leaving the auth account and other tenant memberships intact. Follows AGENTS.md soft-delete convention; admin-only via `isAdmin(role)`; cannot remove yourself. `UsersTable.tsx` gains a red "Remove" button with confirm dialog next to Deactivate, plus an inline error banner if the action fails.
+- **NSX "Create Check"** (`app/(app)/testing/nsx/page.tsx`) — mirrors the ACB flow. New toolbar button opens a dedicated view with frequency/month/year dropdowns, asset-selection table (untested selectable, already-tested greyed out), and a Create button that calls the existing `createTestingCheckAction` with `check_type: 'nsx'`. Created checks appear in `/testing/summary` alongside ACB and General.
 
 ### Context
-- Triggered by Simon Bramall logging in 2026-04-15 and being dropped into the onboarding wizard instead of Demo Electrical.
+- Triggered by Simon Bramall logging in 2026-04-15 and being dropped into the onboarding wizard instead of Demo Electrical, plus six follow-up issues Royce flagged from a screenshot.
 
 ---
 

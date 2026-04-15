@@ -11,12 +11,19 @@ import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { CheckCircle2, Clock, Play, ChevronRight } from 'lucide-react'
+import { CheckCircle2, Clock, Play, ChevronRight, Plus } from 'lucide-react'
 import type { Asset, NsxTest } from '@/lib/types'
 import { createNsxTestAction } from '@/app/(app)/nsx-testing/actions'
+import { createTestingCheckAction } from '@/app/(app)/testing/check-actions'
 import { NsxWorkflow } from './NsxWorkflow'
 
 type SitePick = { id: string; name: string }
+
+const FREQUENCIES = ['Annual', 'Semi-Annual', 'Quarterly', 'Monthly'] as const
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+] as const
 
 export default function NsxTestingPage() {
   const [sites, setSites] = useState<SitePick[]>([])
@@ -26,6 +33,16 @@ export default function NsxTestingPage() {
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState<string | null>(null)
   const [noAssets, setNoAssets] = useState(false)
+  const [jobPlanId, setJobPlanId] = useState<string | null>(null)
+
+  // Create Check state (mirrors /testing/acb)
+  const [showCreateCheck, setShowCreateCheck] = useState(false)
+  const [checkFrequency, setCheckFrequency] = useState<string>('Annual')
+  const [checkMonth, setCheckMonth] = useState<number>(new Date().getMonth() + 1)
+  const [checkYear, setCheckYear] = useState<number>(new Date().getFullYear())
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
+  const [creatingCheck, setCreatingCheck] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -76,6 +93,9 @@ export default function NsxTestingPage() {
 
     if (nsxPlan) {
       assetQuery = assetQuery.eq('job_plan_id', nsxPlan.id)
+      setJobPlanId(nsxPlan.id)
+    } else {
+      setJobPlanId(null)
     }
 
     const { data: assetsData } = await assetQuery
@@ -125,6 +145,51 @@ export default function NsxTestingPage() {
       await loadSiteData()
       setSelectedAsset(asset.id)
     }
+  }
+
+  // Create Check handler
+  async function handleCreateCheck() {
+    setCreatingCheck(true)
+    setCheckError(null)
+    try {
+      const result = await createTestingCheckAction({
+        site_id: selectedSite,
+        job_plan_id: jobPlanId,
+        check_type: 'nsx',
+        frequency: checkFrequency,
+        month: checkMonth,
+        year: checkYear,
+        asset_ids: Array.from(selectedAssetIds),
+      })
+      if (result.success) {
+        setShowCreateCheck(false)
+        setSelectedAssetIds(new Set())
+        await loadSiteData()
+      } else {
+        setCheckError(result.error ?? 'Failed to create check.')
+      }
+    } catch {
+      setCheckError('An unexpected error occurred.')
+    }
+    setCreatingCheck(false)
+  }
+
+  function toggleAssetSelection(assetId: string) {
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(assetId)) next.delete(assetId)
+      else next.add(assetId)
+      return next
+    })
+  }
+
+  function selectAllAssets() {
+    const untested = assets.filter((a) => !a.nsx_test).map((a) => a.id)
+    setSelectedAssetIds(new Set(untested))
+  }
+
+  function deselectAllAssets() {
+    setSelectedAssetIds(new Set())
   }
 
   const selectedAssetData = selectedAsset ? assets.find((a) => a.id === selectedAsset) : null
@@ -189,11 +254,178 @@ export default function NsxTestingPage() {
     )
   }
 
+  // ── Create Check view ──
+  if (showCreateCheck && selectedSite) {
+    const untestedAssets = assets.filter((a) => !a.nsx_test)
+    const testedAssets = assets.filter((a) => !!a.nsx_test)
+    const siteName = sites.find((s) => s.id === selectedSite)?.name ?? 'Site'
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <Breadcrumb
+            items={[
+              { label: 'Home', href: '/dashboard' },
+              { label: 'NSX Testing', href: '#' },
+              { label: 'Create Check' },
+            ]}
+          />
+          <h1 className="text-3xl font-bold text-eq-sky mt-2">Create NSX Check</h1>
+          <p className="text-eq-grey text-sm mt-1">Group assets under a named maintenance check for {siteName}</p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => setShowCreateCheck(false)}>
+          Back to Asset List
+        </Button>
+
+        {/* Check Details */}
+        <Card>
+          <h3 className="text-sm font-bold text-eq-ink mb-4">Check Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Frequency</label>
+              <select
+                value={checkFrequency}
+                onChange={(e) => setCheckFrequency(e.target.value)}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              >
+                {FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Month</label>
+              <select
+                value={checkMonth}
+                onChange={(e) => setCheckMonth(Number(e.target.value))}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              >
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Year</label>
+              <select
+                value={checkYear}
+                onChange={(e) => setCheckYear(Number(e.target.value))}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              >
+                {[2024, 2025, 2026, 2027, 2028].map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="mt-3 p-3 bg-eq-ice rounded-md">
+            <p className="text-xs text-eq-grey">Check name preview:</p>
+            <p className="text-sm font-semibold text-eq-ink">
+              {siteName} {checkFrequency} NSX {MONTHS[checkMonth - 1]} {checkYear}
+            </p>
+          </div>
+        </Card>
+
+        {/* Asset Selection */}
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-eq-ink">Select Assets</h3>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={selectAllAssets}>
+                Select All Untested
+              </Button>
+              <Button size="sm" variant="secondary" onClick={deselectAllAssets}>
+                Deselect All
+              </Button>
+            </div>
+          </div>
+          {untestedAssets.length === 0 && testedAssets.length > 0 && (
+            <p className="text-sm text-eq-grey mb-3">All assets at this site already have active tests.</p>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="text-left py-2 px-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={untestedAssets.length > 0 && untestedAssets.every((a) => selectedAssetIds.has(a.id))}
+                      onChange={(e) => e.target.checked ? selectAllAssets() : deselectAllAssets()}
+                      className="rounded border-gray-300"
+                    />
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Asset</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Serial</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Type</th>
+                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {untestedAssets.map((asset) => (
+                  <tr
+                    key={asset.id}
+                    className={`border-b border-gray-100 cursor-pointer transition-colors ${selectedAssetIds.has(asset.id) ? 'bg-eq-ice' : 'hover:bg-gray-50'}`}
+                    onClick={() => toggleAssetSelection(asset.id)}
+                  >
+                    <td className="py-2 px-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedAssetIds.has(asset.id)}
+                        onChange={() => toggleAssetSelection(asset.id)}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
+                    <td className="py-2 px-3 font-medium text-eq-ink">{asset.name}</td>
+                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
+                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">Available</span>
+                    </td>
+                  </tr>
+                ))}
+                {testedAssets.map((asset) => (
+                  <tr key={asset.id} className="border-b border-gray-100 opacity-50">
+                    <td className="py-2 px-3">
+                      <input type="checkbox" disabled className="rounded border-gray-300" />
+                    </td>
+                    <td className="py-2 px-3 font-medium text-eq-grey">{asset.name}</td>
+                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
+                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
+                    <td className="py-2 px-3">
+                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-50 text-amber-600">Test Exists</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {checkError && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">{checkError}</div>
+        )}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleCreateCheck}
+            disabled={creatingCheck || selectedAssetIds.size === 0}
+          >
+            {creatingCheck ? 'Creating...' : `Create Check (${selectedAssetIds.size} assets)`}
+          </Button>
+          <Button variant="secondary" onClick={() => setShowCreateCheck(false)}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-eq-ink">NSX Testing Workflow</h2>
-        <p className="text-eq-grey text-sm mt-1">Site-based NSX / MCCB testing — framework mirroring ACB.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-eq-ink">NSX Testing Workflow</h2>
+          <p className="text-eq-grey text-sm mt-1">Site-based NSX / MCCB testing — framework mirroring ACB.</p>
+        </div>
+        {selectedSite && !noAssets && (
+          <Button size="sm" onClick={() => setShowCreateCheck(true)}>
+            <Plus className="w-3 h-3 mr-1" />
+            Create Check
+          </Button>
+        )}
       </div>
 
       {/* Site Selector */}

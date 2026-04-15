@@ -1,7 +1,7 @@
 'use client'
 
-import { useTransition } from 'react'
-import { setActiveAction, setRoleAction } from './actions'
+import { useState, useTransition } from 'react'
+import { setActiveAction, setRoleAction, removeUserFromTenantAction } from './actions'
 
 interface Profile {
   id: string
@@ -26,6 +26,7 @@ export function UsersTable({
   currentUserId: string
 }) {
   const [pending, startTransition] = useTransition()
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   function toggleActive(userId: string, newVal: boolean) {
     const fd = new FormData()
@@ -41,7 +42,26 @@ export function UsersTable({
     startTransition(() => { setRoleAction(fd) })
   }
 
+  function removeFromTenant(userId: string, label: string) {
+    if (!confirm(`Remove ${label} from this tenant? Their account will remain but they'll lose access. You can re-invite them later.`)) return
+    setRemoveError(null)
+    const fd = new FormData()
+    fd.set('user_id', userId)
+    startTransition(async () => {
+      const result = await removeUserFromTenantAction(fd)
+      if (result && 'error' in result && result.error) {
+        setRemoveError(result.error)
+      }
+    })
+  }
+
   return (
+    <>
+      {removeError && (
+        <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-xs text-red-700">
+          {removeError}
+        </div>
+      )}
     <table className="w-full text-sm">
       <thead className="bg-gray-50 text-xs font-bold text-eq-grey uppercase tracking-wide">
         <tr>
@@ -86,14 +106,25 @@ export function UsersTable({
               </td>
               <td className="px-4 py-3 text-eq-grey text-xs">{fmtDate(u.last_login_at)}</td>
               <td className="px-4 py-3 text-right">
-                <button
-                  type="button"
-                  onClick={() => toggleActive(u.id, !u.is_active)}
-                  disabled={pending || isSelf}
-                  className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  {u.is_active ? 'Deactivate' : 'Reactivate'}
-                </button>
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleActive(u.id, !u.is_active)}
+                    disabled={pending || isSelf}
+                    className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {u.is_active ? 'Deactivate' : 'Reactivate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeFromTenant(u.id, u.full_name || u.email)}
+                    disabled={pending || isSelf}
+                    className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                    title="Remove this user from the current tenant (reversible)"
+                  >
+                    Remove
+                  </button>
+                </div>
               </td>
             </tr>
           )
@@ -107,5 +138,6 @@ export function UsersTable({
         )}
       </tbody>
     </table>
+    </>
   )
 }

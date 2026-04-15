@@ -33,7 +33,7 @@ export default async function SiteDetailPage({
   // Fetch site with customer info
   const { data: siteRaw } = await supabase
     .from('sites')
-    .select('*, customers(name)')
+    .select('*, customers(name, logo_url)')
     .eq('id', id)
     .maybeSingle()
 
@@ -48,7 +48,7 @@ export default async function SiteDetailPage({
     )
   }
 
-  const site = siteRaw as Site & { customers: { name: string } | null }
+  const site = siteRaw as Site & { customers: { name: string; logo_url: string | null } | null }
 
   // Fetch counts and data in parallel
   const [
@@ -147,7 +147,21 @@ export default async function SiteDetailPage({
           </div>
           <div>
             <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Customer</p>
-            <p className="text-sm font-medium text-eq-ink">{site.customers?.name || '-'}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              {site.customers?.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={site.customers.logo_url}
+                  alt=""
+                  className="w-7 h-7 rounded object-contain bg-gray-50 border border-gray-100 shrink-0"
+                />
+              ) : site.customers?.name ? (
+                <div className="w-7 h-7 rounded bg-eq-ice flex items-center justify-center text-[11px] font-bold text-eq-deep shrink-0">
+                  {site.customers.name.charAt(0).toUpperCase()}
+                </div>
+              ) : null}
+              <p className="text-sm font-medium text-eq-ink">{site.customers?.name || '-'}</p>
+            </div>
           </div>
           <div>
             <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Status</p>

@@ -40,10 +40,14 @@ export default async function SitesPage({
     .eq('is_active', true)
     .order('name')
 
-  // Build sites query with joined customer name + asset count
+  // Build sites query with joined customer name.
+  // NOTE: do NOT use the PostgREST embedded `assets(count)` here — it does
+  // not respect `is_active`, so archived assets get counted and the total
+  // diverges from the /assets page and dashboard KPI. We fetch active-only
+  // counts in a separate query below.
   let query = supabase
     .from('sites')
-    .select('*, customers(name, logo_url), assets(count)', { count: 'exact' })
+    .select('*, customers(name, logo_url)', { count: 'exact' })
     .order('name')
 
   if (!showArchived) {
@@ -65,15 +69,27 @@ export default async function SitesPage({
   const total = count ?? 0
   const totalPages = Math.ceil(total / PER_PAGE)
 
-  // Map asset count from the aggregation
-  const sites = (sitesRaw ?? []).map((s) => {
-    const assetAgg = s.assets as unknown as { count: number }[] | null
-    return {
-      ...s,
-      assets: undefined,
-      asset_count: assetAgg?.[0]?.count ?? 0,
+  // Fetch active asset counts per site in a second query so `is_active`
+  // is respected. Scoped to the paginated site IDs to keep payload small.
+  const siteIds = (sitesRaw ?? []).map((s) => s.id as string)
+  const countMap = new Map<string, number>()
+  if (siteIds.length > 0) {
+    const { data: assetRows } = await supabase
+      .from('assets')
+      .select('site_id')
+      .eq('is_active', true)
+      .in('site_id', siteIds)
+    for (const row of assetRows ?? []) {
+      const sid = row.site_id as string | null
+      if (!sid) continue
+      countMap.set(sid, (countMap.get(sid) ?? 0) + 1)
     }
-  })
+  }
+
+  const sites = (sitesRaw ?? []).map((s) => ({
+    ...s,
+    asset_count: countMap.get(s.id as string) ?? 0,
+  }))
 
   return (
     <div className="space-y-6">

@@ -89,7 +89,21 @@ export default async function CustomerDetailPage({
           { label: 'Customers', href: '/customers' },
           { label: customer.name },
         ]} />
-        <h1 className="text-3xl font-bold text-eq-sky mt-2">{customer.name}</h1>
+        <div className="flex items-center gap-4 mt-2">
+          {customer.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={customer.logo_url}
+              alt={`${customer.name} logo`}
+              className="w-14 h-14 rounded-lg object-contain bg-white border border-gray-200 shrink-0"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-lg bg-eq-ice flex items-center justify-center text-xl font-bold text-eq-deep shrink-0">
+              {customer.name?.charAt(0)?.toUpperCase()}
+            </div>
+          )}
+          <h1 className="text-3xl font-bold text-eq-sky">{customer.name}</h1>
+        </div>
       </div>
 
       {/* Customer Info Header */}
@@ -114,13 +128,6 @@ export default async function CustomerDetailPage({
             </div>
           </div>
         </div>
-        {customer.logo_url && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-2">Logo</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={customer.logo_url} alt="Customer logo" className="w-16 h-16 object-contain" />
-          </div>
-        )}
         {customer.address && (
           <div className="mt-4 pt-4 border-t border-gray-200">
             <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Address</p>

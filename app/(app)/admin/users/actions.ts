@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { requireUser } from '@/lib/actions/auth'
+import { isAdmin } from '@/lib/utils/roles'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -72,6 +74,60 @@ export async function setActiveAction(formData: FormData) {
   if (error) return { error: error.message }
 
   await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'user', entityId: userId, summary: isActive ? 'Reactivated user' : 'Deactivated user' })
+  revalidatePath('/admin/users')
+  return { ok: true }
+}
+
+/**
+ * Removes a user from the current tenant by soft-deleting their
+ * tenant_members row (is_active = false). The auth account and any other
+ * tenant memberships are left intact — this is reversible. Matches the
+ * 'soft-delete via is_active' convention in AGENTS.md.
+ */
+export async function removeUserFromTenantAction(formData: FormData) {
+  const userId = String(formData.get('user_id') || '')
+  if (!userId) return { error: 'Missing user.' }
+
+  const { supabase, user, tenantId, role } = await requireUser()
+  if (!isAdmin(role)) return { error: 'Not authorised.' }
+  if (userId === user.id) return { error: 'You cannot remove yourself.' }
+
+  const admin = createAdminClient()
+
+  // Soft-delete the membership for THIS tenant only. Use the admin client
+  // to bypass RLS so we can act on a row we're about to remove ourselves
+  // from visibility for.
+  const { data: target, error: fetchErr } = await admin
+    .from('tenant_members')
+    .select('id, is_active')
+    .eq('tenant_id', tenantId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (fetchErr) return { error: fetchErr.message }
+  if (!target) return { error: 'User is not a member of this tenant.' }
+  if (!target.is_active) return { error: 'User has already been removed from this tenant.' }
+
+  const { error } = await admin
+    .from('tenant_members')
+    .update({ is_active: false })
+    .eq('id', target.id)
+
+  if (error) return { error: error.message }
+
+  // Fetch email for the audit summary (best-effort, non-fatal on failure)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email')
+    .eq('id', userId)
+    .maybeSingle()
+
+  await logAuditEvent({
+    action: 'delete',
+    entityType: 'user',
+    entityId: userId,
+    summary: `Removed user ${profile?.email ?? userId} from tenant`,
+  })
   revalidatePath('/admin/users')
   return { ok: true }
 }

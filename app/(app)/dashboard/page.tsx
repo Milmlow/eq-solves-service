@@ -44,9 +44,12 @@ export default async function DashboardPage() {
       .eq('status', 'complete')
       .order('completed_at', { ascending: false })
       .limit(6),
-    // Sites for map — include coordinates, customer name, and asset count
+    // Sites for map — include coordinates, customer name.
+    // NOTE: active asset counts are fetched in a second query below because
+    // PostgREST's embedded `assets(count)` ignores the `is_active` filter
+    // and inflates the per-pin totals by including archived assets.
     supabase.from('sites')
-      .select('id, name, state, city, latitude, longitude, customer_id, customers(name), assets(count)')
+      .select('id, name, state, city, latitude, longitude, customer_id, customers(name)')
       .eq('is_active', true),
     // Defect counts by severity
     supabase.from('defects').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
@@ -79,10 +82,26 @@ export default async function DashboardPage() {
     low: defectsLow.count ?? 0,
   }
 
+  // Fetch active asset counts per site — separate query so the
+  // `is_active = true` filter is actually applied (unlike embedded
+  // `assets(count)` which ignores it and inflates the totals).
+  const mapSiteIds = (sitesForMap.data ?? []).map((s) => s.id as string)
+  const mapCountMap = new Map<string, number>()
+  if (mapSiteIds.length > 0) {
+    const { data: assetRows } = await supabase
+      .from('assets')
+      .select('site_id')
+      .eq('is_active', true)
+      .in('site_id', mapSiteIds)
+    for (const row of assetRows ?? []) {
+      const sid = row.site_id as string | null
+      if (!sid) continue
+      mapCountMap.set(sid, (mapCountMap.get(sid) ?? 0) + 1)
+    }
+  }
+
   // Build map sites data
   const mapSites: MapSite[] = (sitesForMap.data ?? []).map((site) => {
-    const assetAgg = site.assets as unknown as { count: number }[] | null
-    const assetCount = assetAgg?.[0]?.count ?? 0
     const customerName = (site.customers as unknown as { name: string } | null)?.name ?? null
     return {
       id: site.id,
@@ -92,7 +111,7 @@ export default async function DashboardPage() {
       latitude: site.latitude,
       longitude: site.longitude,
       customer_name: customerName,
-      asset_count: assetCount,
+      asset_count: mapCountMap.get(site.id as string) ?? 0,
     }
   })
 

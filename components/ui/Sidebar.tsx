@@ -57,11 +57,11 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
 
   const sidebarContent = (
     <>
-      <div className="flex items-center justify-between px-4 h-24 border-b border-white/10">
+      <div className="flex items-center justify-between px-4 h-16 border-b border-white/10">
         {!collapsed && (
           logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt={productName} className="h-20 w-auto object-contain" />
+            <img src={logoUrl} alt={productName} className="max-h-10 max-w-[140px] w-auto object-contain" />
           ) : (
             <span className="font-bold text-sm tracking-wide text-eq-sky">{productName}</span>
           )
