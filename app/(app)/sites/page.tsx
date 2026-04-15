@@ -74,17 +74,14 @@ export default async function SitesPage({
   const siteIds = (sitesRaw ?? []).map((s) => s.id as string)
   const countMap = new Map<string, number>()
   if (siteIds.length > 0) {
-    // Explicit range to bypass PostgREST's default 1000-row cap.
-    const { data: assetRows } = await supabase
-      .from('assets')
-      .select('site_id')
-      .eq('is_active', true)
-      .in('site_id', siteIds)
-      .range(0, 49999)
-    for (const row of assetRows ?? []) {
-      const sid = row.site_id as string | null
-      if (!sid) continue
-      countMap.set(sid, (countMap.get(sid) ?? 0) + 1)
+    // Use an RPC because PostgREST has a hard db-max-rows cap (1000)
+    // that .range() cannot override — counting raw rows is broken on
+    // any tenant with >1000 active assets. Aggregating in SQL returns
+    // one row per site instead, well under the cap.
+    const { data: countRows } = await supabase
+      .rpc('get_active_asset_counts_by_site', { p_site_ids: siteIds })
+    for (const row of (countRows ?? []) as Array<{ site_id: string; asset_count: number }>) {
+      countMap.set(row.site_id, Number(row.asset_count))
     }
   }
 
