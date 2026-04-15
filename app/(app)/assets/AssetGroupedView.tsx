@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useTransition } from 'react'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { cn } from '@/lib/utils/cn'
-import { ChevronDown, ChevronRight, MapPin, Layers, FileText } from 'lucide-react'
+import { ChevronDown, ChevronRight, MapPin, Layers, FileText, Archive } from 'lucide-react'
 import type { Asset, JobPlan } from '@/lib/types'
+import { toggleAssetActiveAction } from './actions'
 
 interface AssetWithSite extends Asset {
   sites: { name: string } | null
@@ -14,6 +15,7 @@ interface AssetWithSite extends Asset {
 interface AssetGroupedViewProps {
   assets: AssetWithSite[]
   onAssetClick: (asset: AssetWithSite) => void
+  canWrite?: boolean
 }
 
 interface GroupNode {
@@ -23,7 +25,7 @@ interface GroupNode {
   assets?: AssetWithSite[]
 }
 
-export function AssetGroupedView({ assets, onAssetClick }: AssetGroupedViewProps) {
+export function AssetGroupedView({ assets, onAssetClick, canWrite = false }: AssetGroupedViewProps) {
   const tree = useMemo(() => {
     // Group: Site > Location > Job Plan
     const siteMap = new Map<string, AssetWithSite[]>()
@@ -72,13 +74,13 @@ export function AssetGroupedView({ assets, onAssetClick }: AssetGroupedViewProps
   return (
     <div className="space-y-2">
       {tree.map((site) => (
-        <SiteGroup key={site.label} node={site} onAssetClick={onAssetClick} />
+        <SiteGroup key={site.label} node={site} onAssetClick={onAssetClick} canWrite={canWrite} />
       ))}
     </div>
   )
 }
 
-function SiteGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: (a: AssetWithSite) => void }) {
+function SiteGroup({ node, onAssetClick, canWrite }: { node: GroupNode; onAssetClick: (a: AssetWithSite) => void; canWrite: boolean }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -95,7 +97,7 @@ function SiteGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: (a: 
       {open && node.children && (
         <div className="pl-4">
           {node.children.map((loc) => (
-            <LocationGroup key={loc.label} node={loc} onAssetClick={onAssetClick} />
+            <LocationGroup key={loc.label} node={loc} onAssetClick={onAssetClick} canWrite={canWrite} />
           ))}
         </div>
       )}
@@ -103,7 +105,7 @@ function SiteGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: (a: 
   )
 }
 
-function LocationGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: (a: AssetWithSite) => void }) {
+function LocationGroup({ node, onAssetClick, canWrite }: { node: GroupNode; onAssetClick: (a: AssetWithSite) => void; canWrite: boolean }) {
   const [open, setOpen] = useState(true)
 
   return (
@@ -120,7 +122,7 @@ function LocationGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: 
       {open && node.children && (
         <div className="pl-4">
           {node.children.map((jp) => (
-            <JobPlanGroup key={jp.label} node={jp} onAssetClick={onAssetClick} />
+            <JobPlanGroup key={jp.label} node={jp} onAssetClick={onAssetClick} canWrite={canWrite} />
           ))}
         </div>
       )}
@@ -128,8 +130,20 @@ function LocationGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: 
   )
 }
 
-function JobPlanGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: (a: AssetWithSite) => void }) {
+function JobPlanGroup({ node, onAssetClick, canWrite }: { node: GroupNode; onAssetClick: (a: AssetWithSite) => void; canWrite: boolean }) {
   const [open, setOpen] = useState(false)
+  const [pending, startTransition] = useTransition()
+  const [errorId, setErrorId] = useState<string | null>(null)
+
+  function handleArchive(e: React.MouseEvent, asset: AssetWithSite) {
+    e.stopPropagation()
+    if (!confirm(`Archive asset "${asset.name}"? It will move to /admin/archive and auto-delete after the grace period unless restored.`)) return
+    setErrorId(null)
+    startTransition(async () => {
+      const res = await toggleAssetActiveAction(asset.id, false)
+      if (!res.success) setErrorId(asset.id)
+    })
+  }
 
   return (
     <div className="border-t border-gray-50">
@@ -146,17 +160,33 @@ function JobPlanGroup({ node, onAssetClick }: { node: GroupNode; onAssetClick: (
         <div className="px-4 pb-2">
           <div className="grid gap-1.5">
             {node.assets.map((asset) => (
-              <button
+              <div
                 key={asset.id}
-                onClick={() => onAssetClick(asset)}
-                className="flex items-start gap-3 px-3 py-2 rounded bg-gray-50 hover:bg-eq-ice/50 transition-colors text-left text-sm"
+                className="flex items-start gap-3 px-3 py-2 rounded bg-gray-50 hover:bg-eq-ice/50 transition-colors text-sm"
               >
-                <div className="flex-1 min-w-0">
+                <button
+                  onClick={() => onAssetClick(asset)}
+                  className="flex-1 min-w-0 text-left"
+                >
                   <p className="font-medium text-eq-ink truncate">{asset.name} — {asset.asset_type || ''}</p>
                   <p className="font-mono text-xs text-eq-grey mt-0.5">{asset.maximo_id ?? '—'}</p>
-                </div>
+                  {errorId === asset.id && (
+                    <p className="text-xs text-red-500 mt-1">Failed to archive.</p>
+                  )}
+                </button>
                 <StatusBadge status={asset.is_active ? 'active' : 'inactive'} />
-              </button>
+                {canWrite && asset.is_active && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleArchive(e, asset)}
+                    disabled={pending}
+                    title="Archive asset"
+                    className="p-1 text-eq-grey hover:text-red-600 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </div>

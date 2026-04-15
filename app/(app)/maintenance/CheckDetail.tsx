@@ -11,11 +11,13 @@ import {
   completeCheckAction,
   cancelCheckAction,
   archiveCheckAction,
+  updateCheckAction,
   updateCheckItemAction,
   forceCompleteCheckAssetAction,
   bulkUpdateWorkOrdersAction,
   updateCheckAssetAction,
 } from './actions'
+import type { CheckStatus } from '@/lib/types'
 import type {
   MaintenanceCheck,
   MaintenanceCheckItem,
@@ -97,6 +99,28 @@ export function CheckDetail({
     setLoading(false)
     if (!result.success) setError(result.error ?? 'Failed to cancel.')
     else onClose()
+  }
+
+  // Admin override — flip check status to any state without going through
+  // the scheduled → in_progress → complete guard rails. Useful when a check
+  // is started by mistake, needs to be reopened, or the workflow gates
+  // otherwise block a legitimate correction. updateCheckAction accepts a
+  // raw `status` field on the FormData (maintenance/actions.ts line 337).
+  async function handleForceStatus(newStatus: CheckStatus) {
+    if (!isAdmin) return
+    if (newStatus === check.status) return
+    if (
+      !confirm(
+        `Override check status to "${newStatus.replace('_', ' ')}"? This bypasses the normal workflow — only use it to correct mistakes.`
+      )
+    ) return
+    setError(null)
+    setLoading(true)
+    const fd = new FormData()
+    fd.set('status', newStatus)
+    const result = await updateCheckAction(check.id, fd)
+    setLoading(false)
+    if (!result.success) setError(result.error ?? 'Failed to update status.')
   }
 
   async function handleArchive() {
@@ -239,6 +263,7 @@ export function CheckDetail({
           onCancel={handleCancel}
           onArchive={handleArchive}
           onPasteWOs={handlePasteWOs}
+          onForceStatus={handleForceStatus}
         />
 
         <CheckAssetTable

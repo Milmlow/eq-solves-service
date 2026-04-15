@@ -1,7 +1,7 @@
 'use client'
 import { cn } from '@/lib/utils/cn'
 import { X } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 interface SlidePanelProps {
   open: boolean
@@ -13,6 +13,19 @@ interface SlidePanelProps {
 }
 
 export function SlidePanel({ open, onClose, title, children, className, wide }: SlidePanelProps) {
+  // Defer unmount so the slide-out animation can complete. Without this,
+  // closing the panel would rip the children out instantly and the
+  // transition would look like a snap. 200ms matches duration-200 below.
+  const [mounted, setMounted] = useState(open)
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      return
+    }
+    const t = window.setTimeout(() => setMounted(false), 200)
+    return () => window.clearTimeout(t)
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
@@ -53,7 +66,11 @@ export function SlidePanel({ open, onClose, title, children, className, wide }: 
             </button>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        {/* Unmount children while closed so uncontrolled form inputs
+            (defaultValue) reinitialise the next time the panel opens
+            with a different record. Keeps the fade-out smooth by
+            deferring the unmount by one transition cycle. */}
+        <div className="flex-1 overflow-y-auto p-5">{mounted ? children : null}</div>
       </aside>
     </div>
   )

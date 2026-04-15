@@ -83,22 +83,19 @@ export default async function AssetsPage({
   const total = count ?? 0
   const totalPages = Math.max(1, Math.ceil(total / perPage))
 
-  // Fetch ALL assets for grouped view (no pagination, same filters).
-  // `.range(0, 49999)` bypasses PostgREST's default 1000-row cap;
-  // `.limit()` alone does NOT lift the cap on Supabase.
-  let allQuery = supabase
-    .from('assets')
-    .select('*, sites(name), job_plans(name, code)')
-    .order('name')
-    .range(0, 49999)
-
-  if (!showArchived) allQuery = allQuery.eq('is_active', true)
-  if (search) allQuery = allQuery.or(`name.ilike.%${search}%,asset_type.ilike.%${search}%,serial_number.ilike.%${search}%,maximo_id.ilike.%${search}%,location.ilike.%${search}%`)
-  if (siteId) allQuery = allQuery.eq('site_id', siteId)
-  if (assetType) allQuery = allQuery.eq('asset_type', assetType)
-  if (jobPlanId) allQuery = allQuery.eq('job_plan_id', jobPlanId)
-
-  const { data: allAssets } = await allQuery
+  // Fetch ALL assets for the grouped view via RPC. PostgREST's
+  // db-max-rows cap (1000) is enforced on any row-set response, so
+  // selecting raw rows — even with .range(0, 49999) — silently
+  // truncates. Returning a single scalar jsonb from an RPC bypasses
+  // the cap because the response is one value, not a row set.
+  const { data: allAssetsJson } = await supabase.rpc('get_assets_for_grouping', {
+    p_show_archived: showArchived,
+    p_search: search || null,
+    p_site_id: siteId || null,
+    p_asset_type: assetType || null,
+    p_job_plan_id: jobPlanId || null,
+  })
+  const allAssets = (allAssetsJson ?? []) as unknown[]
 
   // Fetch all job plans for the form dropdown
   const { data: allJobPlans } = await supabase

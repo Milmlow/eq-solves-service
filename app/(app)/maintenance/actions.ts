@@ -309,6 +309,7 @@ export async function createCheckAction(formData: FormData) {
     })
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true, checkId: check.id, assetCount: assetsWithTasks.length, taskCount: checkItems.length }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -368,6 +369,7 @@ export async function updateCheckAction(id: string, formData: FormData) {
     await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Updated maintenance check' })
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -404,6 +406,7 @@ export async function startCheckAction(id: string) {
 
     await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Started maintenance check' })
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -467,6 +470,7 @@ export async function completeCheckAction(id: string) {
 
     await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Completed maintenance check' })
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -490,6 +494,7 @@ export async function cancelCheckAction(id: string) {
 
     await logAuditEvent({ action: 'delete', entityType: 'maintenance_check', entityId: id, summary: 'Cancelled maintenance check' })
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -519,6 +524,7 @@ export async function archiveCheckAction(id: string, active = false) {
       summary: `${active ? 'Restored' : 'Archived'} maintenance check`,
     })
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -591,6 +597,7 @@ export async function updateCheckItemAction(
     })
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   })
 }
@@ -711,6 +718,7 @@ export async function batchCreateChecksAction(formData: FormData) {
     })
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true, created: createdCount }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -754,6 +762,7 @@ export async function forceCompleteCheckAssetAction(checkId: string, checkAssetI
     if (caErr) return { success: false, error: caErr.message }
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -793,6 +802,7 @@ export async function bulkUpdateWorkOrdersAction(
     }
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true, updated }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -829,6 +839,7 @@ export async function updateCheckAssetAction(
     if (error) return { success: false, error: error.message }
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -873,6 +884,7 @@ export async function raiseDefectAction(data: {
 
     await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${data.title}"` })
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -908,6 +920,7 @@ export async function updateDefectAction(defectId: string, updates: {
     if (error) return { success: false, error: error.message }
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -949,6 +962,7 @@ export async function completeAllCheckAssetsAction(checkId: string) {
     if (caErr) return { success: false, error: caErr.message }
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -997,6 +1011,7 @@ export async function batchForceCompleteAssetsAction(checkId: string, checkAsset
     if (caErr) return { success: false, error: caErr.message }
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -1082,6 +1097,7 @@ export async function updateCheckItemResultAction(
     }
 
     revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

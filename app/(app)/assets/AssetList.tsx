@@ -188,7 +188,7 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
               <Pagination page={page} totalPages={totalPages} total={total} perPage={perPage} />
             </>
           ) : (
-            <AssetGroupedView assets={allAssets} onAssetClick={openDetail} />
+            <AssetGroupedView assets={allAssets} onAssetClick={openDetail} canWrite={canWriteRole} />
           )}
         </>
       )}

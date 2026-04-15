@@ -35,7 +35,16 @@ interface CheckHeaderProps {
   onCancel: () => void
   onArchive: () => void
   onPasteWOs: (lines: string) => Promise<void>
+  onForceStatus?: (status: CheckStatus) => void
 }
+
+const STATUS_OPTIONS: { value: CheckStatus; label: string }[] = [
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'complete', label: 'Complete' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'overdue', label: 'Overdue' },
+]
 
 /** Check detail header: status, metadata grid, action buttons, paste-WO modal. */
 export function CheckHeader({
@@ -52,6 +61,7 @@ export function CheckHeader({
   onCancel,
   onArchive,
   onPasteWOs,
+  onForceStatus,
 }: CheckHeaderProps) {
   const [showPasteModal, setShowPasteModal] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -139,6 +149,28 @@ export function CheckHeader({
           </Button>
         )}
       </div>
+
+      {/* Admin status override — bypasses the scheduled → in_progress → complete
+          guard rails so mistakes can be corrected (e.g. started by accident,
+          need to reopen a completed check). */}
+      {isAdmin && onForceStatus && (
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+          <label htmlFor="status-override" className="text-xs font-bold text-eq-grey uppercase">
+            Admin: force status
+          </label>
+          <select
+            id="status-override"
+            value={check.status}
+            onChange={(e) => onForceStatus(e.target.value as CheckStatus)}
+            disabled={loading}
+            className="h-8 px-2 text-xs border border-gray-200 rounded text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-1 focus:ring-eq-sky/20"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Paste WO Modal */}
       {showPasteModal && (
