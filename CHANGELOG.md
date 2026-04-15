@@ -4,6 +4,29 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-16 — SY1 reconciliation against Delta Elcom master file
+
+### Fixed
+- **Migration `0043_sy1_reconciliation.sql`** — reconciled the asset table against the live Delta Elcom master export (`Active Assets 8-04-2026 5-34-22 PM.xlsx`, 4795 rows) via `(name, maximo_id)` composite join. Findings: migration 0038's address-based reassignment sent 377 ex-SY1 assets to active SY3, but the live system has them on active SY1 (639 Gardeners Rd, Mascot). Of those 377, three were day-one seed rows with no master-file entry. Actions:
+  - **Moved 374 assets SY3 → active SY1.** Every id pinned from the master-file match — no address guessing this time.
+  - **Hard-deleted 7 demo/orphan assets** that do not appear in the master file at all: `ACB - SY1` (orphan maximo 1234, SY2), `ACB-SY1-001` (SY2), `ACB-SY4-001`/`ACB-SY4-002` (SY4), `NSX-SY1-001`/`PDU-SY1-001`/`UPS-SY1-001` (SY3). Dependent `acb_tests` (1) and `test_records` (1) also hard-deleted. No readings, defects, check_assets, job_plan_items, maintenance_check_items or nsx_tests touched.
+  - **Left 84 SYD11 + 1 STG rows alone** — they appear as drift in the join but are whitespace-only differences in the master export (trailing space on name / maximo_id). Cosmetic, not real.
+  - Sanity checks raise on any deviation from target: SY1=374, SY2=186, SY3=869, SY4=109, total=4721. All passed on apply.
+- **Post-state matches master file exactly.** Verified independently post-apply:
+
+  | Site | Before | After | Δ |
+  |---|---|---|---|
+  | SY1 | 0 | **374** | +374 |
+  | SY2 | 188 | **186** | −2 demos |
+  | SY3 | 1,246 | **869** | −374 moved, −3 demos |
+  | SY4 | 111 | **109** | −2 demos |
+  | All others | — | unchanged | — |
+  | **Total active assets** | 4,728 | **4,721** | −7 |
+
+- Closes the backlog item flagged in the 2026-04-15 audit report ("10 active assets with null `job_plan_id`") — 7 of those 10 were the demo rows deleted here; the remaining 3 on SYD11/SY6 are real assets pending manual job plan assignment.
+
+---
+
 ## 2026-04-15 (overnight) — Data hygiene pass: orphan reassign, customer consolidation, address correction, FK indexes
 
 ### Fixed
