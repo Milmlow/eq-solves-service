@@ -4,6 +4,17 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-15 — Fix: super_admin ambushed by OnboardingWizard
+
+### Fixed
+- **`app/(app)/layout.tsx`** — tenant membership lookup was `.limit(1).maybeSingle()` with no ordering, so Postgres could return any membership row. An admin/super_admin whose roulette-pick happened to land on a tenant with `setup_completed_at = NULL` was force-rendered into `<OnboardingWizard>` ("create your own project"). Rewrote to fetch all active memberships joined to their tenant setup state, prefer one that's already onboarded, and fall back deterministically to the earliest-joined membership. The wizard now only shows if *every* tenant the user belongs to is un-onboarded.
+- **Data fix (manual SQL)** — stamped `tenants.setup_completed_at = now()` on Demo Electrical (`a0000000-0000-0000-0000-000000000001`); it was fully seeded but never marked complete. Upgraded `simon.bramall@sks.com.au` from `admin` → `super_admin` on the same tenant.
+
+### Context
+- Triggered by Simon Bramall logging in 2026-04-15 and being dropped into the onboarding wizard instead of Demo Electrical.
+
+---
+
 ## [Sprint 29] 2026-04-12 — Items Register, Frequency Editing, Idempotency, CheckDetail Refactor
 
 ### Added

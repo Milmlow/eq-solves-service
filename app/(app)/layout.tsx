@@ -14,29 +14,39 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let tenantName: string | null = null
 
   if (user) {
-    const { data: membership } = await supabase
+    // Fetch ALL active memberships with their tenant's setup state.
+    // Previously this used .limit(1) with no ordering, which made Postgres
+    // return an arbitrary row — any admin with multiple memberships could
+    // land on an un-onboarded tenant and get force-dropped into the
+    // OnboardingWizard ("create your own project" screen).
+    const { data: memberships } = await supabase
       .from('tenant_members')
-      .select('role, tenant_id')
+      .select('role, tenant_id, created_at, tenants!inner(name, setup_completed_at)')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .limit(1)
-      .maybeSingle()
+      .order('created_at', { ascending: true })
 
-    if (membership) {
+    if (memberships && memberships.length > 0) {
+      // Prefer a tenant that is already onboarded; otherwise fall back to
+      // the earliest-joined membership so the choice is at least deterministic.
+      type MembershipRow = {
+        role: string
+        tenant_id: string
+        created_at: string
+        tenants: { name: string; setup_completed_at: string | null } | null
+      }
+      const rows = memberships as unknown as MembershipRow[]
+      const completed = rows.find((m) => m.tenants?.setup_completed_at)
+      const membership = completed ?? rows[0]
+
       isAdmin = membership.role === 'super_admin' || membership.role === 'admin'
 
-      // Check onboarding status
-      if (isAdmin) {
-        const { data: tenant } = await supabase
-          .from('tenants')
-          .select('name, setup_completed_at')
-          .eq('id', membership.tenant_id)
-          .maybeSingle()
-
-        if (tenant && !tenant.setup_completed_at) {
-          showOnboarding = true
-          tenantName = tenant.name
-        }
+      // Only show the onboarding wizard if EVERY tenant this user belongs to
+      // is un-onboarded. A super_admin/admin attached to even one completed
+      // tenant should never see the wizard again.
+      if (isAdmin && !rows.some((m) => m.tenants?.setup_completed_at)) {
+        showOnboarding = true
+        tenantName = membership.tenants?.name ?? null
       }
     }
 
