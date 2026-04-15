@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  Zap, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image
+  Zap, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -167,6 +167,18 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             >
               <FileText className="w-4 h-4 flex-shrink-0" />
               {!collapsed && <span>Report Settings</span>}
+            </Link>
+            <Link
+              href="/admin/archive"
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                pathname.startsWith('/admin/archive')
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              )}
+            >
+              <Archive className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Archive</span>}
             </Link>
           </>
         )}
