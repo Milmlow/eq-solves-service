@@ -31,11 +31,13 @@ interface AssetListProps {
   allJobPlans: Pick<JobPlan, 'id' | 'name' | 'code' | 'type'>[]
   page: number
   totalPages: number
+  total: number
+  perPage: number
   isAdmin: boolean
   canWrite: boolean
 }
 
-export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, page, totalPages, isAdmin, canWrite: canWriteRole }: AssetListProps) {
+export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, page, totalPages, total, perPage, isAdmin, canWrite: canWriteRole }: AssetListProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -169,7 +171,7 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
                 onSelectionChange={setSelectedIds}
                 onRowClick={(row) => openDetail(row as AssetWithSite)}
               />
-              <Pagination page={page} totalPages={totalPages} />
+              <Pagination page={page} totalPages={totalPages} total={total} perPage={perPage} />
             </>
           ) : (
             <AssetGroupedView assets={allAssets} onAssetClick={openDetail} />

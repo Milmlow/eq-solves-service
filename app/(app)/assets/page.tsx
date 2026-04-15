@@ -4,12 +4,13 @@ import { AssetList } from './AssetList'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import type { Role } from '@/lib/types'
 
-const PER_PAGE = 25
+const DEFAULT_PER_PAGE = 25
+const ALLOWED_PER_PAGE = [25, 50, 100, 250]
 
 export default async function AssetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; asset_type?: string; job_plan_id?: string; page?: string; show_archived?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; asset_type?: string; job_plan_id?: string; page?: string; per_page?: string; show_archived?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
@@ -17,6 +18,8 @@ export default async function AssetsPage({
   const assetType = params.asset_type ?? ''
   const jobPlanId = params.job_plan_id ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
+  const requestedPerPage = parseInt(params.per_page ?? String(DEFAULT_PER_PAGE), 10)
+  const perPage = ALLOWED_PER_PAGE.includes(requestedPerPage) ? requestedPerPage : DEFAULT_PER_PAGE
   const showArchived = params.show_archived === '1'
 
   const supabase = await createClient()
@@ -73,20 +76,22 @@ export default async function AssetsPage({
     query = query.eq('job_plan_id', jobPlanId)
   }
 
-  const from = (page - 1) * PER_PAGE
-  const to = from + PER_PAGE - 1
+  const from = (page - 1) * perPage
+  const to = from + perPage - 1
   query = query.range(from, to)
 
   const { data: assets, count } = await query
   const total = count ?? 0
-  const totalPages = Math.ceil(total / PER_PAGE)
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
 
-  // Fetch ALL assets for grouped view (no pagination, same filters)
+  // Fetch ALL assets for grouped view (no pagination, same filters).
+  // `.range(0, 49999)` bypasses PostgREST's default 1000-row cap;
+  // `.limit()` alone does NOT lift the cap on Supabase.
   let allQuery = supabase
     .from('assets')
     .select('*, sites(name), job_plans(name, code)')
     .order('name')
-    .limit(2000)
+    .range(0, 49999)
 
   if (!showArchived) allQuery = allQuery.eq('is_active', true)
   if (search) allQuery = allQuery.or(`name.ilike.%${search}%,asset_type.ilike.%${search}%,serial_number.ilike.%${search}%,maximo_id.ilike.%${search}%,location.ilike.%${search}%`)
@@ -117,6 +122,8 @@ export default async function AssetsPage({
         allJobPlans={(allJobPlans ?? []) as { id: string; name: string; code: string | null; type: string | null }[]}
         page={page}
         totalPages={totalPages}
+        total={total}
+        perPage={perPage}
         isAdmin={isAdmin(userRole)}
         canWrite={canWrite(userRole)}
       />

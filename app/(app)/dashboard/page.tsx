@@ -88,11 +88,15 @@ export default async function DashboardPage() {
   const mapSiteIds = (sitesForMap.data ?? []).map((s) => s.id as string)
   const mapCountMap = new Map<string, number>()
   if (mapSiteIds.length > 0) {
+    // Explicit range to bypass PostgREST's default 1000-row cap —
+    // without this, a tenant with >1000 active assets silently truncates
+    // and per-pin totals disagree with the dashboard KPI.
     const { data: assetRows } = await supabase
       .from('assets')
       .select('site_id')
       .eq('is_active', true)
       .in('site_id', mapSiteIds)
+      .range(0, 49999)
     for (const row of assetRows ?? []) {
       const sid = row.site_id as string | null
       if (!sid) continue

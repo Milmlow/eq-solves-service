@@ -74,11 +74,13 @@ export default async function SitesPage({
   const siteIds = (sitesRaw ?? []).map((s) => s.id as string)
   const countMap = new Map<string, number>()
   if (siteIds.length > 0) {
+    // Explicit range to bypass PostgREST's default 1000-row cap.
     const { data: assetRows } = await supabase
       .from('assets')
       .select('site_id')
       .eq('is_active', true)
       .in('site_id', siteIds)
+      .range(0, 49999)
     for (const row of assetRows ?? []) {
       const sid = row.site_id as string | null
       if (!sid) continue
