@@ -45,13 +45,12 @@ export default async function AssetsPage({
     .eq('is_active', true)
     .order('name')
 
-  // Fetch distinct asset types
-  const { data: typeRows } = await supabase
-    .from('assets')
-    .select('asset_type')
-    .order('asset_type')
-
-  const assetTypes = [...new Set((typeRows ?? []).map((r) => r.asset_type))].filter(Boolean)
+  // Fetch distinct asset types via RPC — selecting raw rows hits PostgREST's
+  // 1000-row cap and would silently drop types that only exist beyond that.
+  const { data: typeRows } = await supabase.rpc('get_distinct_asset_types')
+  const assetTypes = ((typeRows ?? []) as Array<{ asset_type: string }>)
+    .map((r) => r.asset_type)
+    .filter(Boolean)
 
   // Build assets query (join job_plans for display)
   let query = supabase

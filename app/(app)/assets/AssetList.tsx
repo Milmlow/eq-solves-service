@@ -56,6 +56,13 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
 
   type AssetRow = AssetWithSite & Record<string, unknown>
 
+  // Build filter options from the FULL lists, not just current-page rows.
+  // The DataTable's auto-derive only sees `rows` (paginated to ~25), so
+  // without explicit filterOptions the column dropdowns hide most values.
+  const siteNameFilterOptions = sites.map((s) => ({ value: s.name, label: s.name }))
+  const jobPlanNameFilterOptions = allJobPlans.map((jp) => ({ value: jp.name, label: jp.name }))
+  const assetTypeFilterOptions = assetTypes.map((t) => ({ value: t, label: t }))
+
   const columns: DataTableColumn<AssetRow>[] = [
     { key: 'maximo_id', header: 'Maximo ID', filterable: 'text' },
     { key: 'name', header: 'Name', filterable: 'text' },
@@ -63,13 +70,20 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
       key: 'site_name',
       header: 'Site',
       filterable: 'select',
+      filterOptions: siteNameFilterOptions,
     },
-    { key: 'location', header: 'Location', filterable: 'select' },
-    { key: 'asset_type', header: 'Type', filterable: 'select' },
+    { key: 'location', header: 'Location', filterable: 'text' },
+    {
+      key: 'asset_type',
+      header: 'Type',
+      filterable: 'select',
+      filterOptions: assetTypeFilterOptions,
+    },
     {
       key: 'job_plan_name',
       header: 'Job Plan',
       filterable: 'select',
+      filterOptions: jobPlanNameFilterOptions,
     },
     {
       key: 'status_label',

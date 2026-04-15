@@ -136,6 +136,47 @@ export async function createTestingCheckAction(input: {
 }
 
 /**
+ * Archive a testing check (soft delete via is_active=false).
+ * The set_deleted_at trigger from migration 0035 stamps deleted_at,
+ * starting the auto-purge countdown. Restorable from /admin/archive
+ * inside the grace window.
+ */
+export async function archiveTestingCheckAction(checkId: string) {
+  try {
+    const { supabase, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const { data: existing, error: fetchErr } = await supabase
+      .from('testing_checks')
+      .select('id, name')
+      .eq('id', checkId)
+      .maybeSingle()
+    if (fetchErr) return { success: false, error: fetchErr.message }
+    if (!existing) return { success: false, error: 'Check not found.' }
+
+    const { error } = await supabase
+      .from('testing_checks')
+      .update({ is_active: false })
+      .eq('id', checkId)
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'delete',
+      entityType: 'testing_check',
+      entityId: checkId,
+      summary: `Archived testing check "${existing.name}"`,
+    })
+
+    revalidatePath('/testing/summary')
+    revalidatePath('/admin/archive')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
  * Update status of a testing check (e.g. mark complete, cancel)
  */
 export async function updateTestingCheckStatusAction(checkId: string, status: string) {

@@ -26,3 +26,25 @@ comment on function public.get_active_asset_counts_by_site(uuid[]) is
   'Returns active asset counts grouped by site for the given site IDs. Uses caller RLS so tenant scoping is preserved.';
 
 grant execute on function public.get_active_asset_counts_by_site(uuid[]) to authenticated;
+
+-- ------------------------------------------------------------
+-- Distinct asset types — same row-cap problem on the assets
+-- listing page's filter dropdown.
+-- ------------------------------------------------------------
+create or replace function public.get_distinct_asset_types()
+returns table (asset_type text)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select distinct a.asset_type
+    from public.assets a
+   where a.asset_type is not null
+   order by a.asset_type;
+$$;
+
+comment on function public.get_distinct_asset_types() is
+  'Returns the unique set of asset_type values, RLS-scoped. Avoids the PostgREST 1000-row cap.';
+
+grant execute on function public.get_distinct_asset_types() to authenticated;

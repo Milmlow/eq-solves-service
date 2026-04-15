@@ -6,6 +6,7 @@ import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { MediaPicker } from '@/components/ui/MediaPicker'
 import { createCustomerAction, updateCustomerAction, toggleCustomerActiveAction, uploadCustomerLogoAction } from './actions'
+import { cascadeArchiveAction } from '@/app/(app)/admin/archive/actions'
 import type { Customer } from '@/lib/types'
 import Link from 'next/link'
 import { X, Upload, ImageIcon } from 'lucide-react'
@@ -108,13 +109,29 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
 
   async function handleToggleActive() {
     if (!customer) return
+    // Reactivating is simple — flip the flag.
+    if (!customer.is_active) {
+      setLoading(true)
+      const result = await toggleCustomerActiveAction(customer.id, true)
+      setLoading(false)
+      if (result.success) onClose()
+      else setError(result.error ?? 'Something went wrong.')
+      return
+    }
+    // Archiving cascades: customer + sites + assets all flip is_active=false
+    // so the whole tree lands in /admin/archive together. Reversible inside
+    // the grace window via the Archive page.
+    if (!confirm(`Archive "${customer.name}" and all its sites and assets? Everything will move to /admin/archive and auto-delete after the grace period unless restored.`)) return
     setLoading(true)
-    const result = await toggleCustomerActiveAction(customer.id, !customer.is_active)
+    const fd = new FormData()
+    fd.set('entity_type', 'customer')
+    fd.set('entity_id', customer.id)
+    const result = await cascadeArchiveAction(fd)
     setLoading(false)
-    if (result.success) {
-      onClose()
+    if (result && 'error' in result && result.error) {
+      setError(result.error)
     } else {
-      setError(result.error ?? 'Something went wrong.')
+      onClose()
     }
   }
 
@@ -264,8 +281,13 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
               onClick={handleToggleActive}
               disabled={loading}
             >
-              {customer!.is_active ? 'Deactivate Customer' : 'Reactivate Customer'}
+              {customer!.is_active ? 'Archive Customer (cascade)' : 'Reactivate Customer'}
             </Button>
+            {customer!.is_active && (
+              <p className="text-xs text-eq-grey mt-2">
+                Cascades to all sites and assets under this customer. Reversible from /admin/archive inside the grace period.
+              </p>
+            )}
           </div>
         )}
 

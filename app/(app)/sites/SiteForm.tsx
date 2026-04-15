@@ -6,6 +6,7 @@ import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { MediaPicker } from '@/components/ui/MediaPicker'
 import { createSiteAction, updateSiteAction, toggleSiteActiveAction } from './actions'
+import { cascadeArchiveAction } from '@/app/(app)/admin/archive/actions'
 import type { Site, Customer } from '@/lib/types'
 
 interface SiteFormProps {
@@ -46,13 +47,29 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
 
   async function handleToggleActive() {
     if (!site) return
+    // Reactivating is simple — flip the flag.
+    if (!site.is_active) {
+      setLoading(true)
+      const result = await toggleSiteActiveAction(site.id, true)
+      setLoading(false)
+      if (result.success) onClose()
+      else setError(result.error ?? 'Something went wrong.')
+      return
+    }
+    // Archiving cascades: site + assets all flip is_active=false so the
+    // whole subtree lands in /admin/archive together. Reversible inside
+    // the grace window via the Archive page.
+    if (!confirm(`Archive "${site.name}" and all its assets? Everything will move to /admin/archive and auto-delete after the grace period unless restored.`)) return
     setLoading(true)
-    const result = await toggleSiteActiveAction(site.id, !site.is_active)
+    const fd = new FormData()
+    fd.set('entity_type', 'site')
+    fd.set('entity_id', site.id)
+    const result = await cascadeArchiveAction(fd)
     setLoading(false)
-    if (result.success) {
-      onClose()
+    if (result && 'error' in result && result.error) {
+      setError(result.error)
     } else {
-      setError(result.error ?? 'Something went wrong.')
+      onClose()
     }
   }
 
@@ -152,8 +169,13 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
               onClick={handleToggleActive}
               disabled={loading}
             >
-              {site!.is_active ? 'Deactivate Site' : 'Reactivate Site'}
+              {site!.is_active ? 'Archive Site (cascade)' : 'Reactivate Site'}
             </Button>
+            {site!.is_active && (
+              <p className="text-xs text-eq-grey mt-2">
+                Cascades to all assets under this site. Reversible from /admin/archive inside the grace period.
+              </p>
+            )}
           </div>
         )}
       </form>
