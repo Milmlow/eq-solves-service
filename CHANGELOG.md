@@ -4,6 +4,44 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-15 (overnight) — Data hygiene pass: orphan reassign, customer consolidation, address correction, FK indexes
+
+### Fixed
+- **Migration `0038_reassign_orphan_assets_and_harden_grouping.sql`** — Assets page grouped view and Sites page had diverged because 488 live assets were still attached to soft-archived SY1/SY4 parent rows from a 2026-04-08 renumber. Reassigned 377 assets off archived SY1 (47 Bourke Rd) → active SY3, 111 assets off archived SY4 (17 Bourke Rd, data-entry error) → active SY4 (200 Bourke Rd). Hard-deleted 4 orphan assets and the archived MEL1 site row (Royce confirmed not managed; pre-check zero dependents across every FK-referencing table).
+- **Hardened `get_assets_for_grouping` RPC** — added `and (a.site_id is null or s.is_active = true)` so assets on archived parent sites can never silently inflate the grouped-view counts again. Sanity `DO` block fails the migration loudly if any active asset remains on an archived site.
+- **Migration `0039_clean_demo_data_off_real_sy1.sql`** — cleaned seed cruft off the real imported SY1 ahead of live data. Hard-deleted 15 `pm_calendar` rows all created at the identical microsecond `2026-04-10 06:31:00.879416+00` (full FY25-26 PM program seed) and the "Test" `maintenance_check` `955dcf82-...`. Sanity check asserts SY1 is now empty of assets / pm_calendar / maintenance_checks.
+- **Migration `0040_customer_consolidation.sql`** — customer records now match real ABN-registered legal entities per Royce's mapping:
+  - `Equinix Australia Pty Ltd` → SY1, SY2, SY3, SY4, SY5
+  - `Metronode NSW Pty Ltd` → SY6, SY7 (renamed from `Metronode NSW`)
+  - `Equinix Hyperscale` → SY9 *(new)*
+  - `Equinix Australia National` → CA1 *(new)*
+  - `Ramsay Health` → St George Private Hospital *(new; previously null customer_id with 20 orphan assets)*
+  - Legacy catch-all `Equinix Australia` soft-archived once empty (audit trail preserved — no hard delete). Sanity checks assert every expected site sits on its expected customer and zero active sites have null `customer_id`.
+- **Migration `0041_address_corrections.sql`** — populated `code`, `address`, `city`, `state`, `postcode` for all 12 active sites in Royce's tenant. Key corrections: **SY7** city `Sydney` → `Wollongong` (Unanderra is Wollongong, not Sydney); **SY9** added Camellia NSW 2142; **SY3/SY4/SY5** Alexandria NSW 2015; **St George** `STG` / Kogarah NSW 2217; **CA1** Mitchell ACT 2911. Sanity check asserts zero null `code` / `city` / `postcode` after migration.
+
+### Performance
+- **Migration `0042_fk_covering_indexes.sql`** — added covering indexes for every foreign key in `public` flagged by the Supabase `unindexed_foreign_keys` advisor (83 constraints across 28 tables: acb/nsx tests, assets, attachments, audit_logs, check_assets, contract_scopes, customer_contacts, customers, defects, instruments, job_plans/items, maintenance_checks/items, media_library, notifications, pm_calendar, site_contacts, sites, tenant_members, test_records/readings, testing_checks, etc). Verified post-state: zero unindexed FKs remain. Non-concurrent CREATE INDEX is fine — largest referencing table is ~1250 rows.
+
+### Data audit (2026-04-15, tenant `ccca00fc-...`)
+All checks clean except one known backlog item:
+- 0 assets with null site / 0 assets on archived site / 0 assets on archived customer
+- 0 sites with null customer / 0 sites on archived customer
+- 0 defects with null asset / 0 tests on archived asset (acb / nsx / test_records)
+- 0 duplicate customers / sites / assets by natural key
+- 0 `updated_at < created_at` rows across assets/sites/customers/defects/maintenance_checks
+- Security & performance advisors clean of ERROR-level findings; remaining WARN findings (anon INSERT on `briefs`/`estimates`/`estimate_events`, service insert on `notifications`, public bucket listing on `logos`) are all pre-existing documented exceptions in `AGENTS.md`.
+- **Backlog**: 10 active assets still have null `job_plan_id` — 3 on SY3 (NSX/PDU/UPS, ex-SY1 seed leftovers), 2 on SY4 (ACB), 1 on SY6 (SCADA), 4 on SYD11 (MCC NSX250N). Not auto-fixed — Royce to assign correct plan.
+
+### Post-state snapshot
+- 7 active customers, 1 soft-archived (legacy catch-all), 12 active sites, 4728 active assets
+- Asset distribution: CA1 159 · STG 20 · SY1 0 · SY2 188 · SY3 1246 · SY4 111 · SY5 303 · SY6 595 · SY7 303 · SY9 507 · SYD10 279 · SYD11 1017
+- `tsc --noEmit` → 0 errors
+
+### Context
+Royce flagged divergence between Assets page and Sites page asset counts and handed the night to do as much data checking, parsing and audit work as possible ahead of live customer data landing. Push policy: no auto-push — everything staged for Royce to review and push in the morning.
+
+---
+
 ## 2026-04-15 — Fix: super_admin ambushed by OnboardingWizard + six screenshot fixes
 
 ### Fixed
