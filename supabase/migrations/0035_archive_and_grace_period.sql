@@ -58,6 +58,7 @@ comment on column public.tenant_settings.archive_grace_period_days is 'Days betw
 create or replace function public.set_deleted_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   -- Only act when is_active actually changes
