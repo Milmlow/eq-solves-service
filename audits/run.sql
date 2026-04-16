@@ -159,6 +159,32 @@ with checks as (
           where x.tenant_id is distinct from a.tenant_id)
 
   -- ==================================================
+  -- FRESHNESS / TIMELINESS — DAMA timeliness dimension
+  --
+  -- These checks surface records that are "technically valid" but
+  -- have grown stale. Thresholds are deliberately generous to avoid
+  -- nagging on edge cases; tighten once the defect/test volume
+  -- grows. All WARN-level — a stale record is a smell, not a block.
+  -- ==================================================
+  union all
+  select 'freshness.defects.open_over_90_days', 'WARN', 'defect with status=open for more than 90 days',
+         (select count(*) from public.defects
+            where status = 'open'
+              and created_at < now() - interval '90 days')
+  union all
+  select 'freshness.acb_tests.in_progress_over_30_days', 'WARN', 'active ACB test created >30 days ago with incomplete workflow',
+         (select count(*) from public.acb_tests
+            where is_active
+              and created_at < now() - interval '30 days'
+              and not (step1_status = 'complete' and step2_status = 'complete' and step3_status = 'complete'))
+  union all
+  select 'freshness.nsx_tests.in_progress_over_30_days', 'WARN', 'active NSX test created >30 days ago with incomplete workflow',
+         (select count(*) from public.nsx_tests
+            where is_active
+              and created_at < now() - interval '30 days'
+              and not (step1_status = 'complete' and step2_status = 'complete' and step3_status = 'complete'))
+
+  -- ==================================================
   -- STRUCTURAL — Postgres / Supabase invariants
   -- ==================================================
   union all

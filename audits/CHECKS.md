@@ -90,6 +90,23 @@ These are properties of the schema itself, not the data. A failure here means so
 
 ---
 
+## Freshness / timeliness — DAMA timeliness dimension
+
+A valid record can still be stale. These checks surface records that haven't moved in a long time so nobody silently accumulates debt. All WARN-level — a stale record is a smell, not a block. Thresholds are deliberately generous to avoid nagging on edge cases and should be tightened as volume grows.
+
+| Check | Level | Why |
+|---|---|---|
+| `freshness.defects.open_over_90_days` | WARN | A defect raised against an asset that sits in `status='open'` for 90 days is either being ignored or is waiting on someone. Either way it should be visible. 90 days is the quarterly compliance cycle — if it's still open at 90 days it's by definition overdue against a quarterly PM cadence. |
+| `freshness.acb_tests.in_progress_over_30_days` | WARN | An ACB test that was started but never completed is a report-integrity risk — it will sit at partial status and drag down the `/reports` compliance dashboard. 30 days is long enough to cover a normal site visit, short enough to catch actual abandonment. |
+| `freshness.nsx_tests.in_progress_over_30_days` | WARN | Same reasoning as ACB — applies now that NSX Steps 2 & 3 are no longer placeholders and a partial NSX test represents real technician work in flight. |
+
+**Not yet added (on the backlog):**
+
+- `freshness.pm_calendar.overdue` and `freshness.maintenance_checks.overdue_due_date` — waiting to confirm the `next_due_date` / `due_date` column naming on those tables before I wire them in. No point shipping a check against the wrong column name.
+- `freshness.general_tests.in_progress_over_30_days` — requires locating the `general_tests` / `test_records` table and confirming it has equivalent workflow status columns. Not done in this session.
+
+---
+
 ## Not currently checked (known gaps)
 
 Things we'd add if we had more time or the data to check against:
@@ -116,3 +133,29 @@ execute_sql(project_id='urjhmkhbgaxrofurpbgc', query=<contents of audits/run.sql
 ```
 
 Expected output: one row per check, failures first, ERRORs before WARNs. A clean run has zero ERROR failures. WARN failures must be accounted for in the current `audits/baseline-*.md`.
+
+---
+
+## CI behaviour
+
+`audits/run.sql` is executed automatically by `.github/workflows/data-quality.yml` on:
+
+- Every PR that touches `audits/**`, `supabase/migrations/**`, or the workflow file itself.
+- Every push to `main`.
+- Daily at 08:30 UTC (~18:30 AEST).
+- Manual dispatch from the Actions tab.
+
+The workflow hits the Supabase Management API (`POST /v1/projects/{ref}/database/query`) using a read-only `SUPABASE_ACCESS_TOKEN` secret and executes the script in a single statement. No writes are performed at any point.
+
+**Failure rules:**
+
+- **ERROR checks with `fail_count > 0`** fail the build. This is non-negotiable — if a PR introduces an ERROR failure it cannot be merged until the underlying data is fixed or the check is consciously relaxed.
+- **WARN checks with `fail_count > 0`** are tabulated in the job summary and uploaded as an artifact (`audit.json`) but do **not** fail the build. WARN counts should be tracked against `audits/baseline-*.md`.
+
+**Waiving an ERROR check:**
+
+Do not add ad-hoc skips in the workflow. If a specific row needs a temporary carve-out, either (a) fix the data, (b) lower the check to WARN in `run.sql` with a comment explaining why and a linked follow-up, or (c) add a new, tighter check that excludes the known exception. All three options land in a PR that's reviewed by Royce.
+
+**Re-baselining after intentional churn:**
+
+When a migration deliberately changes expected counts (e.g. reconciling a customer split), regenerate `audits/baseline-YYYY-MM-DD.md` in the same PR as the migration so the WARN deltas have a paper trail.
