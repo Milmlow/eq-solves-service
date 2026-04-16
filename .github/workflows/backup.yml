@@ -56,6 +56,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
+          R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
         run: |
           set -euo pipefail
           aws s3 cp \
@@ -63,8 +64,6 @@ jobs:
             "s3://${R2_BUCKET}/${BACKUP_DATE}/db_backup.dump" \
             --endpoint-url "${{ secrets.R2_ENDPOINT }}"
           echo "✅ Database backup uploaded to R2: ${BACKUP_DATE}/db_backup.dump"
-        env:
-          R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
 
       - name: Prune old backups (keep last 8 weeks)
         env:
