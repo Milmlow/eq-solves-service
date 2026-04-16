@@ -14,7 +14,7 @@ name: Weekly Backup
 #   R2_BUCKET_NAME            - e.g. eq-backups
 #   SUPABASE_SERVICE_ROLE_KEY - for Storage API access
 #
-# Note: SUPABASE_DB_URL is no longer needed — the CLI handles auth via access token.
+#   SUPABASE_DB_URL           - session pooler URI (postgresql://postgres.[ref]:[pass]@aws-...-pooler.supabase.com:5432/postgres)
 
 on:
   schedule:
@@ -41,10 +41,12 @@ jobs:
           pip install awscli --quiet
 
       - name: Dump database via Supabase CLI
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
           supabase db dump \
-            --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" \
+            --db-url "$SUPABASE_DB_URL" \
             --file "db_backup_${BACKUP_DATE}.sql"
           ls -lh "db_backup_${BACKUP_DATE}.sql"
           gzip "db_backup_${BACKUP_DATE}.sql"
