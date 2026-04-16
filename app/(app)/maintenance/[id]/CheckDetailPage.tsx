@@ -18,8 +18,9 @@ import {
 import { formatDate } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
-import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Printer } from 'lucide-react'
+import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Printer, Send } from 'lucide-react'
 import Link from 'next/link'
+import { SendReportModal } from './SendReportModal'
 
 interface CheckAssetWithDetails extends CheckAsset {
   assets?: { name: string; maximo_id: string | null; location: string | null; job_plans?: { name: string } | null } | null
@@ -62,6 +63,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   const [showPasteModal, setShowPasteModal] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
+  const [showSendReport, setShowSendReport] = useState(false)
 
   const canAct = canWriteRole || isAssigned
 
@@ -295,10 +297,17 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             </>
           )}
           {check.status === 'complete' && (
-            <a href={`/api/pm-asset-report?check_id=${check.id}`} download
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors">
-              <Download className="w-4 h-4" /> Download Report
-            </a>
+            <>
+              <a href={`/api/pm-asset-report?check_id=${check.id}`} download
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors">
+                <Download className="w-4 h-4" /> Download Report
+              </a>
+              <button
+                onClick={() => setShowSendReport(true)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-deep text-white rounded hover:bg-eq-ink transition-colors">
+                <Send className="w-4 h-4" /> Send Report
+              </button>
+            </>
           )}
           {(check.status === 'scheduled' || check.status === 'in_progress' || check.status === 'overdue') && canWriteRole && (
             <>
@@ -342,6 +351,14 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             <Button size="sm" variant="secondary" onClick={() => { setShowPasteModal(false); setPasteText('') }}>Cancel</Button>
           </div>
         </div>
+      )}
+
+      {/* Send Report modal */}
+      {showSendReport && (
+        <SendReportModal
+          checkId={check.id}
+          onClose={() => setShowSendReport(false)}
+        />
       )}
 
       {/* Asset Table — full width */}
