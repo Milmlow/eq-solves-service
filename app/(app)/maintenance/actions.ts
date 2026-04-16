@@ -896,16 +896,31 @@ export async function updateDefectAction(defectId: string, updates: {
   severity?: string
   assigned_to?: string | null
   resolution_notes?: string
+  work_order_number?: string | null
+  work_order_date?: string | null
 }) {
   try {
     const { supabase, role, user } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    // Technicians can update defects assigned to them; writers can update any
+    if (!canWrite(role)) {
+      const { data: defect } = await supabase
+        .from('defects')
+        .select('assigned_to')
+        .eq('id', defectId)
+        .maybeSingle()
+      if (!defect || defect.assigned_to !== user.id) {
+        return { success: false, error: 'Insufficient permissions.' }
+      }
+    }
 
     const updateData: Record<string, unknown> = {}
     if (updates.status) updateData.status = updates.status
     if (updates.severity) updateData.severity = updates.severity
     if (updates.assigned_to !== undefined) updateData.assigned_to = updates.assigned_to
     if (updates.resolution_notes !== undefined) updateData.resolution_notes = updates.resolution_notes
+    if (updates.work_order_number !== undefined) updateData.work_order_number = updates.work_order_number
+    if (updates.work_order_date !== undefined) updateData.work_order_date = updates.work_order_date
 
     if (updates.status === 'resolved' || updates.status === 'closed') {
       updateData.resolved_at = new Date().toISOString()
@@ -919,8 +934,10 @@ export async function updateDefectAction(defectId: string, updates: {
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({ action: 'update', entityType: 'defect', entityId: defectId, summary: `Updated defect: ${updates.status ? `status → ${updates.status}` : 'fields updated'}` })
     revalidatePath('/maintenance')
     revalidatePath('/testing/summary')
+    revalidatePath('/defects')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

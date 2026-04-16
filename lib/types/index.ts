@@ -100,6 +100,33 @@ export interface Defect {
   resolved_at: string | null
   resolved_by: string | null
   resolution_notes: string | null
+  work_order_number: string | null
+  work_order_date: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ReportDelivery {
+  id: string
+  tenant_id: string
+  customer_id: string
+  maintenance_check_id: string
+  revision: number
+  pdf_file_path: string
+  docx_file_path: string
+  content_hash_sha256: string
+  delivered_to: string[]
+  delivered_at: string
+  delivered_by: string
+  signed_url_expires_at: string
+  delivery_message: string | null
+  revision_reason: string | null
+  download_count: number
+  last_downloaded_at: string | null
+  revoked_at: string | null
+  revoked_by: string | null
+  revoke_reason: string | null
+  mutation_id: string | null
   created_at: string
   updated_at: string
 }

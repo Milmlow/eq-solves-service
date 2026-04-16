@@ -4,19 +4,54 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils/format'
 import { SiteMapDynamic } from './SiteMapDynamic'
 import type { MapSite } from './SiteMapLeaflet'
+import type { Role } from '@/lib/types'
+import { DashboardViewToggle } from './DashboardViewToggle'
 
-export default async function DashboardPage() {
+type View = 'mine' | 'all'
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>
+}) {
+  const params = await searchParams
   const supabase = await createClient()
 
-  // Get current user name
+  // ── Resolve user, role, profile ──
   const { data: { user } } = await supabase.auth.getUser()
   let userName = 'there'
+  let userRole: Role = 'read_only'
+  let userId: string | null = null
+
   if (user) {
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+    userId = user.id
+    const [{ data: profile }, { data: membership }] = await Promise.all([
+      supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
+      supabase
+        .from('tenant_members')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle(),
+    ])
     userName = profile?.full_name?.split(' ')[0] ?? 'there'
+    userRole = (membership?.role as Role) ?? 'read_only'
   }
 
-  // Fetch all data in parallel
+  // ── Determine effective view based on role + param ──
+  const canToggle = userRole !== 'technician' && userRole !== 'read_only'
+  const defaultView: View = userRole === 'super_admin' || userRole === 'admin' ? 'all' : 'mine'
+  const effectiveView: View = canToggle && (params.view === 'mine' || params.view === 'all')
+    ? params.view
+    : canToggle
+      ? defaultView
+      : 'mine'
+
+  const filterByUser = effectiveView === 'mine' && userId
+
+  // ── Fetch all data in parallel ──
+  // Entity stats are always tenant-wide (context, not tasks)
   const [
     customersRes, sitesRes, assetsRes, jobPlansRes,
     scheduledRes, inProgressRes, overdueRes, completeRes,
@@ -28,42 +63,74 @@ export default async function DashboardPage() {
     supabase.from('sites').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('assets').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('job_plans').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'scheduled'),
-    supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
-    supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'overdue'),
-    supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'complete'),
-    // Upcoming: scheduled + in_progress + overdue, ordered by due date
-    supabase.from('maintenance_checks')
-      .select('id, custom_name, status, due_date, sites(name)')
-      .in('status', ['scheduled', 'in_progress', 'overdue'])
-      .order('due_date', { ascending: true })
-      .limit(8),
+    // Maintenance counts — optionally filtered by assigned_to
+    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'scheduled'), filterByUser, userId),
+    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'), filterByUser, userId),
+    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'overdue'), filterByUser, userId),
+    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'complete'), filterByUser, userId),
+    // Upcoming checks
+    buildListQuery(
+      supabase.from('maintenance_checks')
+        .select('id, custom_name, status, due_date, sites(name)')
+        .in('status', ['scheduled', 'in_progress', 'overdue'])
+        .order('due_date', { ascending: true })
+        .limit(8),
+      filterByUser, userId,
+    ),
     // Recently completed
-    supabase.from('maintenance_checks')
-      .select('id, custom_name, status, completed_at, sites(name)')
-      .eq('status', 'complete')
-      .order('completed_at', { ascending: false })
-      .limit(6),
-    // Sites for map — include coordinates, customer name.
-    // NOTE: active asset counts are fetched in a second query below because
-    // PostgREST's embedded `assets(count)` ignores the `is_active` filter
-    // and inflates the per-pin totals by including archived assets.
+    buildListQuery(
+      supabase.from('maintenance_checks')
+        .select('id, custom_name, status, completed_at, sites(name)')
+        .eq('status', 'complete')
+        .order('completed_at', { ascending: false })
+        .limit(6),
+      filterByUser, userId,
+    ),
+    // Sites for map — always tenant-wide
     supabase.from('sites')
       .select('id, name, state, city, latitude, longitude, customer_id, customers(name)')
       .eq('is_active', true),
-    // Defect counts by severity
-    supabase.from('defects').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
-    supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'critical').in('status', ['open', 'in_progress']),
-    supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'high').in('status', ['open', 'in_progress']),
-    supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'medium').in('status', ['open', 'in_progress']),
-    supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'low').in('status', ['open', 'in_progress']),
+    // Defect counts — optionally filtered by raised_by
+    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']), filterByUser, userId),
+    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'critical').in('status', ['open', 'in_progress']), filterByUser, userId),
+    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'high').in('status', ['open', 'in_progress']), filterByUser, userId),
+    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'medium').in('status', ['open', 'in_progress']), filterByUser, userId),
+    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'low').in('status', ['open', 'in_progress']), filterByUser, userId),
   ])
 
+  // ── My in-progress tests (ACB + NSX) — only when view=mine ──
+  type TestRow = { id: string; test_date: string; overall_result: string; assets: { name: string } | { name: string }[] | null; sites: { name: string } | { name: string }[] | null }
+  let myAcbTests: TestRow[] = []
+  let myNsxTests: TestRow[] = []
+
+  if (filterByUser) {
+    const [acbRes, nsxRes] = await Promise.all([
+      supabase
+        .from('acb_tests')
+        .select('id, test_date, overall_result, assets(name), sites(name)')
+        .eq('tested_by', userId!)
+        .eq('is_active', true)
+        .neq('overall_result', 'Pass')
+        .order('test_date', { ascending: false })
+        .limit(6),
+      supabase
+        .from('nsx_tests')
+        .select('id, test_date, overall_result, assets(name), sites(name)')
+        .eq('tested_by', userId!)
+        .eq('is_active', true)
+        .neq('overall_result', 'Pass')
+        .order('test_date', { ascending: false })
+        .limit(6),
+    ])
+    myAcbTests = (acbRes.data ?? []) as unknown as TestRow[]
+    myNsxTests = (nsxRes.data ?? []) as unknown as TestRow[]
+  }
+
   const entityStats = [
-    { label: 'Sites', value: sitesRes.count ?? 0, href: '/sites', colour: 'from-sky-500 to-sky-600', bgLight: 'bg-sky-50', textColour: 'text-sky-700' },
-    { label: 'Assets', value: assetsRes.count ?? 0, href: '/assets', colour: 'from-eq-sky to-eq-deep', bgLight: 'bg-blue-50', textColour: 'text-blue-700' },
-    { label: 'Job Plans', value: jobPlansRes.count ?? 0, href: '/job-plans', colour: 'from-indigo-500 to-indigo-600', bgLight: 'bg-indigo-50', textColour: 'text-indigo-700' },
-    { label: 'Customers', value: customersRes.count ?? 0, href: '/customers', colour: 'from-violet-500 to-violet-600', bgLight: 'bg-violet-50', textColour: 'text-violet-700' },
+    { label: 'Sites', value: sitesRes.count ?? 0, href: '/sites', bgLight: 'bg-sky-50', textColour: 'text-sky-700' },
+    { label: 'Assets', value: assetsRes.count ?? 0, href: '/assets', bgLight: 'bg-blue-50', textColour: 'text-blue-700' },
+    { label: 'Job Plans', value: jobPlansRes.count ?? 0, href: '/job-plans', bgLight: 'bg-indigo-50', textColour: 'text-indigo-700' },
+    { label: 'Customers', value: customersRes.count ?? 0, href: '/customers', bgLight: 'bg-violet-50', textColour: 'text-violet-700' },
   ]
 
   const checkCounts = {
@@ -82,16 +149,10 @@ export default async function DashboardPage() {
     low: defectsLow.count ?? 0,
   }
 
-  // Fetch active asset counts per site — separate query so the
-  // `is_active = true` filter is actually applied (unlike embedded
-  // `assets(count)` which ignores it and inflates the totals).
+  // ── Active asset counts per site (for map pins) ──
   const mapSiteIds = (sitesForMap.data ?? []).map((s) => s.id as string)
   const mapCountMap = new Map<string, number>()
   if (mapSiteIds.length > 0) {
-    // Use an RPC because PostgREST has a hard db-max-rows cap (1000)
-    // that .range() cannot override — counting raw rows is broken on
-    // any tenant with >1000 active assets. Aggregating in SQL returns
-    // one row per site instead.
     const { data: countRows } = await supabase
       .rpc('get_active_asset_counts_by_site', { p_site_ids: mapSiteIds })
     for (const row of (countRows ?? []) as Array<{ site_id: string; asset_count: number }>) {
@@ -99,7 +160,6 @@ export default async function DashboardPage() {
     }
   }
 
-  // Build map sites data
   const mapSites: MapSite[] = (sitesForMap.data ?? []).map((site) => {
     const customerName = (site.customers as unknown as { name: string } | null)?.name ?? null
     return {
@@ -114,17 +174,29 @@ export default async function DashboardPage() {
     }
   })
 
+  const viewLabel = effectiveView === 'mine' ? 'My Work' : 'All Work'
+  const myTestsTotal = myAcbTests.length + myNsxTests.length
+
   return (
     <div className="space-y-6">
-      {/* Welcome header */}
-      <div>
-        <h1 className="text-2xl font-bold text-eq-ink">Good {getGreeting()}, {userName}</h1>
-        <p className="text-sm text-eq-grey mt-1">
-          {totalActive > 0
-            ? `You have ${totalActive} active maintenance ${totalActive === 1 ? 'check' : 'checks'} across your sites.`
-            : 'All maintenance checks are up to date.'
-          }
-        </p>
+      {/* Welcome header + view toggle */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-eq-ink">Good {getGreeting()}, {userName}</h1>
+          <p className="text-sm text-eq-grey mt-1">
+            {effectiveView === 'mine'
+              ? totalActive > 0
+                ? `You have ${totalActive} active ${totalActive === 1 ? 'check' : 'checks'} assigned to you.`
+                : 'You have no active checks assigned.'
+              : totalActive > 0
+                ? `${totalActive} active maintenance ${totalActive === 1 ? 'check' : 'checks'} across all sites.`
+                : 'All maintenance checks are up to date.'
+            }
+          </p>
+        </div>
+        {canToggle && (
+          <DashboardViewToggle currentView={effectiveView} />
+        )}
       </div>
 
       {/* Overdue alert banner */}
@@ -136,7 +208,7 @@ export default async function DashboardPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-amber-800">
-                {checkCounts.overdue} overdue {checkCounts.overdue === 1 ? 'check' : 'checks'} need attention
+                {checkCounts.overdue} overdue {checkCounts.overdue === 1 ? 'check' : 'checks'} need{effectiveView === 'mine' ? ' your' : ''} attention
               </p>
               <p className="text-xs text-amber-600 mt-0.5">Click to view and action overdue maintenance checks</p>
             </div>
@@ -145,7 +217,7 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* Quick KPIs — coloured accent strip */}
+      {/* Quick KPIs — always tenant-wide */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {entityStats.map(({ label, value, href, bgLight, textColour }) => (
           <Link key={label} href={href} className="block group">
@@ -157,10 +229,52 @@ export default async function DashboardPage() {
         ))}
       </div>
 
+      {/* My Tests — shown when view=mine and there are in-progress tests */}
+      {filterByUser && myTestsTotal > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-eq-ink">My In-Progress Tests</h2>
+            <Link href="/testing" className="text-xs text-eq-sky hover:text-eq-deep font-medium">View all →</Link>
+          </div>
+          <div className="space-y-1">
+            {[...myAcbTests.map(t => ({ ...t, kind: 'ACB' })), ...myNsxTests.map(t => ({ ...t, kind: 'NSX' }))].map(test => {
+              const rawAsset = test.assets
+              const assetName = Array.isArray(rawAsset) ? rawAsset[0]?.name ?? '—' : (rawAsset as { name: string } | null)?.name ?? '—'
+              const rawSite = test.sites
+              const siteName = Array.isArray(rawSite) ? rawSite[0]?.name ?? '' : (rawSite as { name: string } | null)?.name ?? ''
+              const isDefect = test.overall_result === 'Defect'
+              const isPending = test.overall_result === 'Pending'
+              return (
+                <Link
+                  key={test.id}
+                  href={`/testing/${test.kind.toLowerCase()}`}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-eq-ink truncate">{assetName}</p>
+                    <p className="text-xs text-eq-grey">{siteName}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-gray-100 text-eq-grey">{test.kind}</span>
+                    {isDefect && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-100 text-red-700">Defect</span>
+                    )}
+                    {isPending && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-sky-100 text-eq-sky">Pending</span>
+                    )}
+                    <span className="text-xs text-eq-grey">{formatDate(test.test_date)}</span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Maintenance status bar */}
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-eq-ink">Maintenance Overview</h2>
+          <h2 className="text-sm font-bold text-eq-ink">Maintenance Overview{effectiveView === 'mine' ? ' — My Checks' : ''}</h2>
           <Link href="/maintenance" className="text-xs text-eq-sky hover:text-eq-deep font-medium">View all →</Link>
         </div>
         <div className="grid grid-cols-4 gap-3">
@@ -188,7 +302,7 @@ export default async function DashboardPage() {
         {/* Defect Summary */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-eq-ink">Open Defects</h2>
+            <h2 className="text-sm font-bold text-eq-ink">{effectiveView === 'mine' ? 'My Open Defects' : 'Open Defects'}</h2>
             <span className="text-xs text-eq-grey">{defectCounts.total} total</span>
           </div>
           {defectCounts.total === 0 ? (
@@ -196,11 +310,10 @@ export default async function DashboardPage() {
               <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-2">
                 <span className="text-green-500 text-lg">✓</span>
               </div>
-              <p className="text-sm text-eq-grey">No open defects</p>
+              <p className="text-sm text-eq-grey">{effectiveView === 'mine' ? 'No defects raised by you' : 'No open defects'}</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Severity bars */}
               {[
                 { label: 'Critical', count: defectCounts.critical, bg: 'bg-red-500', bgLight: 'bg-red-50', text: 'text-red-700' },
                 { label: 'High', count: defectCounts.high, bg: 'bg-orange-500', bgLight: 'bg-orange-50', text: 'text-orange-700' },
@@ -224,7 +337,7 @@ export default async function DashboardPage() {
           )}
         </Card>
 
-        {/* Interactive Map */}
+        {/* Interactive Map — always tenant-wide */}
         <div className="lg:col-span-2">
           <Card>
             <div className="flex items-center justify-between mb-4">
@@ -241,14 +354,14 @@ export default async function DashboardPage() {
         {/* Upcoming Works */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-eq-ink">Upcoming Works</h2>
+            <h2 className="text-sm font-bold text-eq-ink">{effectiveView === 'mine' ? 'My Upcoming Works' : 'Upcoming Works'}</h2>
             <Link href="/maintenance?status=scheduled" className="text-xs text-eq-sky hover:text-eq-deep font-medium">View all →</Link>
           </div>
           {(upcomingChecks.data?.length ?? 0) === 0 ? (
-            <p className="text-sm text-eq-grey py-4 text-center">No upcoming checks</p>
+            <p className="text-sm text-eq-grey py-4 text-center">{effectiveView === 'mine' ? 'No checks assigned to you' : 'No upcoming checks'}</p>
           ) : (
             <div className="space-y-1">
-              {(upcomingChecks.data ?? []).map(check => {
+              {(upcomingChecks.data ?? []).map((check: { id: string; custom_name: string | null; status: string; due_date: string; sites: unknown }) => {
                 const siteName = (check.sites as unknown as { name: string } | null)?.name ?? '—'
                 const isOverdue = check.status === 'overdue'
                 const isActive = check.status === 'in_progress'
@@ -278,14 +391,14 @@ export default async function DashboardPage() {
         {/* Recently Completed */}
         <Card>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-eq-ink">Recently Completed</h2>
+            <h2 className="text-sm font-bold text-eq-ink">{effectiveView === 'mine' ? 'My Recently Completed' : 'Recently Completed'}</h2>
             <Link href="/maintenance?status=complete" className="text-xs text-eq-sky hover:text-eq-deep font-medium">View all →</Link>
           </div>
           {(recentChecks.data?.length ?? 0) === 0 ? (
-            <p className="text-sm text-eq-grey py-4 text-center">No completed checks yet</p>
+            <p className="text-sm text-eq-grey py-4 text-center">{effectiveView === 'mine' ? 'No completed checks yet' : 'No completed checks yet'}</p>
           ) : (
             <div className="space-y-1">
-              {(recentChecks.data ?? []).map(check => {
+              {(recentChecks.data ?? []).map((check: { id: string; custom_name: string | null; status: string; completed_at: string; sites: unknown }) => {
                 const siteName = (check.sites as unknown as { name: string } | null)?.name ?? '—'
                 return (
                   <Link key={check.id} href={`/maintenance/${check.id}`}
@@ -309,9 +422,36 @@ export default async function DashboardPage() {
   )
 }
 
+// ── Helpers ──
+
 function getGreeting(): string {
   const hour = new Date().getUTCHours() + 10 // AEST rough
   if (hour < 12) return 'morning'
   if (hour < 17) return 'afternoon'
   return 'evening'
+}
+
+/**
+ * Conditionally add `assigned_to` filter for maintenance_checks queries.
+ * Works with both count queries and list queries.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildCountQuery(query: any, filterByUser: string | false | null, userId: string | null) {
+  if (filterByUser && userId) return query.eq('assigned_to', userId)
+  return query
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildListQuery(query: any, filterByUser: string | false | null, userId: string | null) {
+  if (filterByUser && userId) return query.eq('assigned_to', userId)
+  return query
+}
+
+/**
+ * Conditionally add `raised_by` filter for defect queries.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildDefectCountQuery(query: any, filterByUser: string | false | null, userId: string | null) {
+  if (filterByUser && userId) return query.eq('raised_by', userId)
+  return query
 }
