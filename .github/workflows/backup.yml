@@ -6,14 +6,15 @@ name: Weekly Backup
 # Manual: workflow_dispatch for on-demand backups
 #
 # Secrets required (GitHub repo -> Settings -> Secrets -> Actions):
-#   SUPABASE_ACCESS_TOKEN   - personal access token (sbp_...)
-#   SUPABASE_PROJECT_REF    - urjhmkhbgaxrofurpbgc
-#   SUPABASE_DB_URL         - postgres://postgres.[ref]:[password]@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres
-#   R2_ACCESS_KEY_ID        - Cloudflare R2 access key
-#   R2_SECRET_ACCESS_KEY    - Cloudflare R2 secret key
-#   R2_ENDPOINT             - https://<account_id>.r2.cloudflarestorage.com
-#   R2_BUCKET_NAME          - e.g. eq-backups
+#   SUPABASE_ACCESS_TOKEN     - personal access token (sbp_...)
+#   SUPABASE_PROJECT_REF      - urjhmkhbgaxrofurpbgc
+#   R2_ACCESS_KEY_ID          - Cloudflare R2 access key
+#   R2_SECRET_ACCESS_KEY      - Cloudflare R2 secret key
+#   R2_ENDPOINT               - https://<account_id>.r2.cloudflarestorage.com
+#   R2_BUCKET_NAME            - e.g. eq-backups
 #   SUPABASE_SERVICE_ROLE_KEY - for Storage API access
+#
+# Note: SUPABASE_DB_URL is no longer needed — the CLI handles auth via access token.
 
 on:
   schedule:
@@ -21,38 +22,33 @@ on:
     - cron: '0 2 * * 0'
   workflow_dispatch:
 
-env:
-  BACKUP_DATE: '' # set in first step
-
 jobs:
   backup-database:
     name: Database dump → R2
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - name: Set backup date
         run: echo "BACKUP_DATE=$(date -u +%Y-%m-%d_%H%M)" >> "$GITHUB_ENV"
 
-      - name: Install tools
+      - name: Install Supabase CLI + AWS CLI
         run: |
-          sudo apt-get update -qq
-          # Supabase runs Postgres 17 — pg_dump must be >= server version
-          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-17
+          # Supabase CLI — handles pg_dump version internally
+          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar xz
+          sudo mv supabase /usr/local/bin/
+          supabase --version
           pip install awscli --quiet
 
-      - name: Dump database
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: Dump database via Supabase CLI
         run: |
           set -euo pipefail
-          pg_dump "$SUPABASE_DB_URL" \
-            --no-owner \
-            --no-privileges \
-            --format=custom \
-            --file="db_backup_${BACKUP_DATE}.dump"
-          ls -lh "db_backup_${BACKUP_DATE}.dump"
+          supabase db dump \
+            --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" \
+            --file "db_backup_${BACKUP_DATE}.sql"
+          ls -lh "db_backup_${BACKUP_DATE}.sql"
+          gzip "db_backup_${BACKUP_DATE}.sql"
+          ls -lh "db_backup_${BACKUP_DATE}.sql.gz"
 
       - name: Upload to R2
         env:
@@ -63,10 +59,10 @@ jobs:
         run: |
           set -euo pipefail
           aws s3 cp \
-            "db_backup_${BACKUP_DATE}.dump" \
-            "s3://${R2_BUCKET}/${BACKUP_DATE}/db_backup.dump" \
+            "db_backup_${BACKUP_DATE}.sql.gz" \
+            "s3://${R2_BUCKET}/${BACKUP_DATE}/db_backup.sql.gz" \
             --endpoint-url "${{ secrets.R2_ENDPOINT }}"
-          echo "✅ Database backup uploaded to R2: ${BACKUP_DATE}/db_backup.dump"
+          echo "✅ Database backup uploaded to R2: ${BACKUP_DATE}/db_backup.sql.gz"
 
       - name: Prune old backups (keep last 8 weeks)
         env:
@@ -100,7 +96,7 @@ jobs:
       - name: Install tools
         run: pip install awscli --quiet
 
-      - name: Sync attachments bucket
+      - name: Sync storage buckets
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -111,10 +107,8 @@ jobs:
           set -euo pipefail
           mkdir -p storage_sync/attachments storage_sync/logos
 
-          # List and download all objects from each bucket via Supabase Storage API
           for BUCKET in attachments logos; do
             echo "--- Syncing bucket: $BUCKET ---"
-            # List all files in bucket
             RESPONSE=$(curl -sS \
               -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
               -H "Content-Type: application/json" \
@@ -122,7 +116,6 @@ jobs:
               "${SUPABASE_URL}/storage/v1/object/list/${BUCKET}" \
               -d '{"prefix":"","limit":10000}')
 
-            # Extract file names and download each
             echo "$RESPONSE" | jq -r '.[] | select(.id != null) | .name' | while read -r FILE; do
               echo "  Downloading: ${BUCKET}/${FILE}"
               curl -sS \
