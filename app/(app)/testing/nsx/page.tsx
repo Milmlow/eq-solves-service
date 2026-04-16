@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CheckCircle2, Clock, Play, ChevronRight, Plus } from 'lucide-react'
-import type { Asset, NsxTest } from '@/lib/types'
+import type { Asset, NsxTest, NsxTestReading } from '@/lib/types'
 import { createNsxTestAction } from '@/app/(app)/nsx-testing/actions'
 import { createTestingCheckAction } from '@/app/(app)/testing/check-actions'
 import { NsxWorkflow } from './NsxWorkflow'
@@ -30,6 +30,7 @@ export default function NsxTestingPage() {
   const [selectedSite, setSelectedSite] = useState<string>('')
   const [assets, setAssets] = useState<(Asset & { nsx_test?: NsxTest })[]>([])
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
+  const [selectedTestReadings, setSelectedTestReadings] = useState<NsxTestReading[]>([])
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState<string | null>(null)
   const [noAssets, setNoAssets] = useState(false)
@@ -126,6 +127,30 @@ export default function NsxTestingPage() {
     setAssets(combined)
     setLoading(false)
   }, [selectedSite, supabase])
+
+  // Load readings for the currently-selected test whenever selection or
+  // test data changes. Mirrors the ACB workflow page.
+  useEffect(() => {
+    async function loadReadings() {
+      if (!selectedAsset) {
+        setSelectedTestReadings([])
+        return
+      }
+      const asset = assets.find((a) => a.id === selectedAsset)
+      const testId = asset?.nsx_test?.id
+      if (!testId) {
+        setSelectedTestReadings([])
+        return
+      }
+      const { data } = await supabase
+        .from('nsx_test_readings')
+        .select('*')
+        .eq('nsx_test_id', testId)
+        .order('sort_order')
+      setSelectedTestReadings((data ?? []) as NsxTestReading[])
+    }
+    loadReadings()
+  }, [selectedAsset, assets, supabase])
 
   useEffect(() => {
     loadSiteData()
@@ -249,7 +274,7 @@ export default function NsxTestingPage() {
         <Button variant="secondary" size="sm" onClick={() => setSelectedAsset(null)}>
           Back to Asset List
         </Button>
-        <NsxWorkflow test={selectedTest} onUpdate={loadSiteData} />
+        <NsxWorkflow test={selectedTest} readings={selectedTestReadings} onUpdate={loadSiteData} />
       </div>
     )
   }

@@ -194,6 +194,166 @@ export async function updateNsxDetailsAction(
   }
 }
 
+/**
+ * Save the NSX Visual & Functional check as a batch of nsx_test_readings rows.
+ * Mirrors saveAcbVisualCheckAction — replaces existing 'Visual Check:%' rows for
+ * the test and marks step2_status = 'complete'.
+ */
+export async function saveNsxVisualCheckAction(testId: string, items: Array<{
+  label: string
+  result: 'pass' | 'fail' | 'na'
+  comment?: string
+}>) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    // Delete existing visual check readings for this test
+    await supabase
+      .from('nsx_test_readings')
+      .delete()
+      .eq('nsx_test_id', testId)
+      .like('label', 'Visual Check:%')
+
+    // Insert new readings
+    const readings = items.map((item, idx) => ({
+      nsx_test_id: testId,
+      tenant_id: tenantId,
+      label: `Visual Check: ${item.label}`,
+      value: item.comment || item.result.toUpperCase(),
+      unit: null,
+      is_pass: item.result === 'pass' ? true : item.result === 'fail' ? false : null,
+      sort_order: idx,
+    }))
+
+    if (readings.length > 0) {
+      const { error } = await supabase
+        .from('nsx_test_readings')
+        .insert(readings)
+
+      if (error) return { success: false, error: error.message }
+    }
+
+    // Update step2 status
+    await supabase
+      .from('nsx_tests')
+      .update({ step2_status: 'complete' })
+      .eq('id', testId)
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'nsx_test',
+      entityId: testId,
+      summary: 'Completed NSX visual & functional test',
+    })
+    revalidatePath('/testing/nsx')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Save the NSX Electrical testing batch as 'Electrical:%' nsx_test_readings rows.
+ * Mirrors saveAcbElectricalReadingAction.
+ */
+export async function saveNsxElectricalReadingAction(testId: string, readings: Array<{
+  label: string
+  value: string
+  unit: string
+  is_pass?: boolean
+}>) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    // Delete existing electrical readings for this test
+    await supabase
+      .from('nsx_test_readings')
+      .delete()
+      .eq('nsx_test_id', testId)
+      .like('label', 'Electrical:%')
+
+    // Insert new readings
+    const insertReadings = readings.map((rdg, idx) => ({
+      nsx_test_id: testId,
+      tenant_id: tenantId,
+      label: `Electrical: ${rdg.label}`,
+      value: rdg.value,
+      unit: rdg.unit,
+      is_pass: rdg.is_pass ?? null,
+      sort_order: 100 + idx,
+    }))
+
+    if (insertReadings.length > 0) {
+      const { error } = await supabase
+        .from('nsx_test_readings')
+        .insert(insertReadings)
+
+      if (error) return { success: false, error: error.message }
+    }
+
+    // Update step3 status
+    await supabase
+      .from('nsx_tests')
+      .update({ step3_status: 'complete' })
+      .eq('id', testId)
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'nsx_test',
+      entityId: testId,
+      summary: 'Completed NSX electrical testing',
+    })
+    revalidatePath('/testing/nsx')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Raise a defect from an NSX test failure. Mirrors raiseTestDefectAction in the
+ * ACB actions file — kept NSX-local so the workflow component has a single
+ * import path.
+ */
+export async function raiseNsxTestDefectAction(data: {
+  asset_id: string
+  site_id: string
+  title: string
+  description?: string
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+}) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const { error } = await supabase
+      .from('defects')
+      .insert({
+        tenant_id: tenantId,
+        asset_id: data.asset_id,
+        site_id: data.site_id,
+        title: data.title,
+        description: data.description || null,
+        severity: data.severity || 'medium',
+        status: 'open',
+      })
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'defect',
+      summary: `Raised defect from NSX test: ${data.title}`,
+    })
+    revalidatePath('/testing/nsx')
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
 export async function deleteNsxReadingAction(readingId: string) {
   try {
     const { supabase, role } = await requireUser()
