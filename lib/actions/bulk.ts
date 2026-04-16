@@ -63,33 +63,49 @@ export async function bulkDeleteAction(table: EntityTable, ids: string[]) {
 
     // Cascade delete child records for entities with dependencies
     if (table === 'job_plans') {
-      // Delete maintenance_check_items for checks linked to these job plans
-      const { data: checks } = await supabase
-        .from('maintenance_checks')
-        .select('id')
+      // Block delete if any assets are linked — user should deactivate or reassign assets first
+      const { count: linkedAssets } = await supabase
+        .from('assets')
+        .select('id', { count: 'exact', head: true })
         .in('job_plan_id', ids)
-      const checkIds = (checks ?? []).map((c) => c.id)
-      if (checkIds.length > 0) {
-        await supabase.from('maintenance_check_items').delete().in('check_id', checkIds)
-        await supabase.from('maintenance_checks').delete().in('id', checkIds)
+      if (linkedAssets && linkedAssets > 0) {
+        return {
+          success: false,
+          error: `Cannot delete — ${linkedAssets} asset${linkedAssets > 1 ? 's are' : ' is'} still linked to ${ids.length > 1 ? 'these job plans' : 'this job plan'}. Reassign the assets or use Deactivate instead.`,
+        }
       }
-      // Delete job plan items
+      // Block delete if maintenance checks exist
+      const { count: linkedChecks } = await supabase
+        .from('maintenance_checks')
+        .select('id', { count: 'exact', head: true })
+        .in('job_plan_id', ids)
+      if (linkedChecks && linkedChecks > 0) {
+        return {
+          success: false,
+          error: `Cannot delete — ${linkedChecks} maintenance check${linkedChecks > 1 ? 's are' : ' is'} linked to ${ids.length > 1 ? 'these job plans' : 'this job plan'}. Use Deactivate instead to preserve history.`,
+        }
+      }
+      // Safe to delete — only job plan items remain as children
       await supabase.from('job_plan_items').delete().in('job_plan_id', ids)
     } else if (table === 'sites') {
-      // Assets, job plans and their children depend on sites
+      // Block delete if sites have assets, job plans, or maintenance history
+      const { count: siteAssets } = await supabase
+        .from('assets')
+        .select('id', { count: 'exact', head: true })
+        .in('site_id', ids)
+      if (siteAssets && siteAssets > 0) {
+        return {
+          success: false,
+          error: `Cannot delete — ${siteAssets} asset${siteAssets > 1 ? 's are' : ' is'} at ${ids.length > 1 ? 'these sites' : 'this site'}. Use Deactivate instead to preserve history.`,
+        }
+      }
+      // Safe — clean up any empty job plans at these sites
       const { data: siteJPs } = await supabase.from('job_plans').select('id').in('site_id', ids)
       const jpIds = (siteJPs ?? []).map((j) => j.id)
       if (jpIds.length > 0) {
-        const { data: checks } = await supabase.from('maintenance_checks').select('id').in('job_plan_id', jpIds)
-        const checkIds = (checks ?? []).map((c) => c.id)
-        if (checkIds.length > 0) {
-          await supabase.from('maintenance_check_items').delete().in('check_id', checkIds)
-          await supabase.from('maintenance_checks').delete().in('id', checkIds)
-        }
         await supabase.from('job_plan_items').delete().in('job_plan_id', jpIds)
         await supabase.from('job_plans').delete().in('id', jpIds)
       }
-      await supabase.from('assets').delete().in('site_id', ids)
     } else if (table === 'customers') {
       // Unlink sites from these customers (don't delete sites)
       await supabase.from('sites').update({ customer_id: null }).in('customer_id', ids)
