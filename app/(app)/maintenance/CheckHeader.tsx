@@ -6,6 +6,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatDate } from '@/lib/utils/format'
 import { Download, ClipboardPaste } from 'lucide-react'
 import type { MaintenanceCheck, CheckStatus } from '@/lib/types'
+import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
+import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
 
 function statusToBadge(status: CheckStatus) {
   const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
@@ -65,6 +67,27 @@ export function CheckHeader({
 }: CheckHeaderProps) {
   const [showPasteModal, setShowPasteModal] = useState(false)
   const [pasteText, setPasteText] = useState('')
+  const [showReportDialog, setShowReportDialog] = useState(false)
+
+  async function handleDownloadReport(complexity: ReportComplexity) {
+    const res = await fetch(`/api/pm-report?check_id=${check.id}&complexity=${complexity}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Download failed' }))
+      alert(err.error ?? 'Report generation failed')
+      throw new Error(err.error)
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const disposition = res.headers.get('Content-Disposition')
+    const match = disposition?.match(/filename="(.+?)"/)
+    a.download = match?.[1] ?? 'PM Check Report.docx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
 
   async function handleApplyPaste() {
     await onPasteWOs(pasteText)
@@ -125,13 +148,12 @@ export function CheckHeader({
           </Button>
         )}
         {check.status === 'complete' && (
-          <a
-            href={`/api/pm-report?check_id=${check.id}`}
-            download
+          <button
+            onClick={() => setShowReportDialog(true)}
             className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors"
           >
             <Download className="w-4 h-4" /> Download Report
-          </a>
+          </button>
         )}
         {canAct && (
           <Button size="sm" variant="secondary" onClick={() => setShowPasteModal(true)}>
@@ -205,6 +227,13 @@ export function CheckHeader({
           </div>
         </div>
       )}
+
+      <ReportDownloadDialog
+        open={showReportDialog}
+        onClose={() => setShowReportDialog(false)}
+        onDownload={handleDownloadReport}
+        title="Maintenance Report"
+      />
     </>
   )
 }

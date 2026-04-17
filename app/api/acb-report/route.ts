@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'site_id is required' }, { status: 400 })
   }
 
+  // Complexity override — falls back to tenant default if not provided
+  const complexityParam = request.nextUrl.searchParams.get('complexity') as 'summary' | 'standard' | 'detailed' | null
+  const validComplexities = ['summary', 'standard', 'detailed'] as const
+  const complexityOverride = complexityParam && validComplexities.includes(complexityParam) ? complexityParam : null
+
   const supabase = await createClient()
 
   // Auth check
@@ -52,15 +57,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Site not found' }, { status: 404 })
   }
 
-  // Fetch tenant settings for branding
+  // Fetch tenant settings for branding + report config
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour')
+    .select('product_name, primary_colour, report_complexity, report_company_name, report_company_abn, report_company_phone, report_company_address, report_header_text, report_footer_text, report_show_cover_page, report_show_contents, report_show_executive_summary, report_show_sign_off, report_sign_off_fields, logo_url, report_logo_url')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
+  const complexity = complexityOverride ?? (tenantSettings?.report_complexity as 'summary' | 'standard' | 'detailed' | null) ?? 'standard'
 
   // Fetch all active ACB tests for this site
   const { data: testsRaw } = await supabase
@@ -129,12 +135,41 @@ export async function GET(request: NextRequest) {
     }
   })
 
+  // Fetch logo image if URL exists
+  const logoUrl = tenantSettings?.report_logo_url || tenantSettings?.logo_url
+  let logoImage: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | undefined
+  if (logoUrl) {
+    try {
+      const logoRes = await fetch(logoUrl)
+      if (logoRes.ok) {
+        const buf = Buffer.from(await logoRes.arrayBuffer())
+        const ct = logoRes.headers.get('content-type') ?? ''
+        const imgType = ct.includes('png') ? 'png' as const : 'jpg' as const
+        logoImage = { data: buf, type: imgType, width: 180, height: 60 }
+      }
+    } catch { /* skip logo if fetch fails */ }
+  }
+
   const input: AcbReportInput = {
     siteName: site.name,
     siteCode: site.code ?? null,
     tenantProductName: productName,
     primaryColour: primaryColour,
+    complexity,
     tests,
+    // Report settings
+    logoImage,
+    companyName: tenantSettings?.report_company_name ?? undefined,
+    companyAbn: tenantSettings?.report_company_abn ?? undefined,
+    companyPhone: tenantSettings?.report_company_phone ?? undefined,
+    companyAddress: tenantSettings?.report_company_address ?? undefined,
+    showCoverPage: tenantSettings?.report_show_cover_page ?? true,
+    showContents: tenantSettings?.report_show_contents ?? true,
+    showExecutiveSummary: tenantSettings?.report_show_executive_summary ?? true,
+    showSignOff: tenantSettings?.report_show_sign_off ?? true,
+    customHeaderText: tenantSettings?.report_header_text ?? undefined,
+    customFooterText: tenantSettings?.report_footer_text ?? undefined,
+    signOffFields: (tenantSettings?.report_sign_off_fields as string[] | null) ?? undefined,
   }
 
   try {

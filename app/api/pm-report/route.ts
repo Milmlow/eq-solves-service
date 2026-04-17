@@ -18,6 +18,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'check_id is required' }, { status: 400 })
   }
 
+  // Complexity param accepted for consistency — pm-check is a simple report
+  // so complexity mainly controls whether notes are included
+  const complexityParam = request.nextUrl.searchParams.get('complexity') as 'summary' | 'standard' | 'detailed' | null
+  const validComplexities = ['summary', 'standard', 'detailed'] as const
+  const _complexity = complexityParam && validComplexities.includes(complexityParam) ? complexityParam : 'standard'
+  void _complexity // reserved for future use
+
   const supabase = await createClient()
 
   // Auth check

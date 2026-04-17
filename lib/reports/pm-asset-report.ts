@@ -42,6 +42,9 @@ import {
 // ─────────── Types ───────────
 
 export interface PmAssetReportInput {
+  // Complexity level
+  complexity?: 'summary' | 'standard' | 'detailed'
+
   // Report metadata
   reportTitle: string               // e.g. "SY2 - Annual - 04/2026 - April PM"
   reportGeneratedDate: string       // ISO date
@@ -591,7 +594,7 @@ function buildExecutiveSummary(input: PmAssetReportInput): (Paragraph | Table)[]
   return children
 }
 
-function buildAssetSection(asset: PmAssetSection, brand: string): (Paragraph | Table)[] {
+function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'summary' | 'standard' | 'detailed' = 'standard'): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = []
   const anchor = anchorId(asset.assetName, asset.assetId)
 
@@ -651,109 +654,146 @@ function buildAssetSection(asset: PmAssetSection, brand: string): (Paragraph | T
     ],
   }))
 
-  // Task checklist table
-  children.push(spacer(200))
-  children.push(new Paragraph({
-    spacing: { after: 80 },
-    children: [new TextRun({ text: 'Maintenance Checklist', bold: true, size: 22, font: FONT, color: '2C3E50' })],
-  }))
+  if (complexity === 'summary') {
+    // Summary: just show pass/fail counts instead of full checklist
+    const passed = asset.tasks.filter(t => t.result === 'pass' || t.result === 'yes').length
+    const failed = asset.tasks.filter(t => t.result === 'fail' || t.result === 'no').length
+    const na = asset.tasks.filter(t => t.result === 'na').length
+    const pending = asset.tasks.length - passed - failed - na
 
-  const tc1 = 700   // Order
-  const tc2 = 6938  // Description
-  const tc3 = 2000  // Result
-  const ttw = tc1 + tc2 + tc3
-
-  const taskRows = asset.tasks.map(task =>
-    new TableRow({
+    children.push(spacer(120))
+    children.push(new Paragraph({
+      spacing: { after: 80 },
       children: [
-        makeCell(String(task.order), tc1, { align: AlignmentType.CENTER, size: 18 }),
-        new TableCell({
-          borders: BORDERS_LIGHT,
-          width: { size: tc2, type: WidthType.DXA },
-          margins: CELL_PAD,
-          children: [
-            new Paragraph({
-              children: [new TextRun({ text: task.description, size: 18, font: FONT })],
-            }),
-            ...(task.notes ? [new Paragraph({
-              spacing: { before: 40 },
-              children: [new TextRun({ text: task.notes, size: 16, font: FONT, color: '7F8C8D', italics: true })],
-            })] : []),
-          ],
-        }),
-        makeCell(resultText(task.result), tc3, {
-          align: AlignmentType.CENTER,
-          bold: true,
-          size: 18,
-          shading: resultShading(task.result),
-          color: task.result === 'fail' || task.result === 'no' ? 'C0392B' : undefined,
-        }),
+        new TextRun({ text: `${asset.tasks.length} tasks: `, size: 20, font: FONT, color: '2C3E50' }),
+        new TextRun({ text: `${passed} pass`, bold: true, size: 20, font: FONT, color: '27AE60' }),
+        new TextRun({ text: ' · ', size: 20, font: FONT, color: '95A5A6' }),
+        new TextRun({ text: `${failed} fail`, bold: true, size: 20, font: FONT, color: failed > 0 ? 'C0392B' : '95A5A6' }),
+        ...(pending > 0 ? [
+          new TextRun({ text: ' · ', size: 20, font: FONT, color: '95A5A6' }),
+          new TextRun({ text: `${pending} pending`, size: 20, font: FONT, color: 'F39C12' }),
+        ] : []),
+        ...(na > 0 ? [
+          new TextRun({ text: ' · ', size: 20, font: FONT, color: '95A5A6' }),
+          new TextRun({ text: `${na} N/A`, size: 20, font: FONT, color: '95A5A6' }),
+        ] : []),
       ],
-    })
-  )
+    }))
 
-  children.push(new Table({
-    width: { size: ttw, type: WidthType.DXA },
-    columnWidths: [tc1, tc2, tc3],
-    rows: [
+    // Still show defects in summary
+    if (asset.defectsFound) {
+      children.push(new Paragraph({
+        spacing: { after: 60 },
+        border: { left: { style: BorderStyle.SINGLE, size: 8, color: 'E74C3C', space: 8 } },
+        indent: { left: 200 },
+        children: [new TextRun({ text: asset.defectsFound, size: 18, font: FONT, color: 'C0392B' })],
+      }))
+    }
+  } else {
+    // Standard + Detailed: full task checklist
+    children.push(spacer(200))
+    children.push(new Paragraph({
+      spacing: { after: 80 },
+      children: [new TextRun({ text: 'Maintenance Checklist', bold: true, size: 22, font: FONT, color: '2C3E50' })],
+    }))
+
+    const tc1 = 700   // Order
+    const tc2 = 6938  // Description
+    const tc3 = 2000  // Result
+    const ttw = tc1 + tc2 + tc3
+
+    const taskRows = asset.tasks.map(task =>
       new TableRow({
         children: [
-          makeHeaderCell('Order', tc1, brand),
-          makeHeaderCell('Description', tc2, brand),
-          makeHeaderCell('Completed', tc3, brand),
+          makeCell(String(task.order), tc1, { align: AlignmentType.CENTER, size: 18 }),
+          new TableCell({
+            borders: BORDERS_LIGHT,
+            width: { size: tc2, type: WidthType.DXA },
+            margins: CELL_PAD,
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: task.description, size: 18, font: FONT })],
+              }),
+              ...(task.notes ? [new Paragraph({
+                spacing: { before: 40 },
+                children: [new TextRun({ text: task.notes, size: 16, font: FONT, color: '7F8C8D', italics: true })],
+              })] : []),
+            ],
+          }),
+          makeCell(resultText(task.result), tc3, {
+            align: AlignmentType.CENTER,
+            bold: true,
+            size: 18,
+            shading: resultShading(task.result),
+            color: task.result === 'fail' || task.result === 'no' ? 'C0392B' : undefined,
+          }),
         ],
-      }),
-      ...taskRows,
-    ],
-  }))
+      })
+    )
 
-  // Defects / issues callout
-  if (asset.defectsFound) {
-    children.push(spacer(160))
-    children.push(new Paragraph({
-      spacing: { after: 60 },
-      children: [new TextRun({ text: 'Defects / Issues Found', bold: true, size: 20, font: FONT, color: 'C0392B' })],
+    children.push(new Table({
+      width: { size: ttw, type: WidthType.DXA },
+      columnWidths: [tc1, tc2, tc3],
+      rows: [
+        new TableRow({
+          children: [
+            makeHeaderCell('Order', tc1, brand),
+            makeHeaderCell('Description', tc2, brand),
+            makeHeaderCell('Completed', tc3, brand),
+          ],
+        }),
+        ...taskRows,
+      ],
     }))
-    children.push(new Paragraph({
-      spacing: { after: 80 },
-      border: { left: { style: BorderStyle.SINGLE, size: 8, color: 'E74C3C', space: 8 } },
-      indent: { left: 200 },
-      children: [new TextRun({ text: asset.defectsFound, size: 18, font: FONT, color: '34495E' })],
-    }))
-  }
 
-  // Recommended action
-  if (asset.recommendedAction) {
-    children.push(spacer(100))
-    children.push(new Paragraph({
-      spacing: { after: 60 },
-      children: [new TextRun({ text: 'Recommended Action', bold: true, size: 20, font: FONT, color: brand })],
-    }))
-    children.push(new Paragraph({
-      spacing: { after: 80 },
-      border: { left: { style: BorderStyle.SINGLE, size: 8, color: brand, space: 8 } },
-      indent: { left: 200 },
-      children: [new TextRun({ text: asset.recommendedAction, size: 18, font: FONT, color: '34495E' })],
-    }))
-  }
-
-  // Asset photos
-  if (asset.photos && asset.photos.length > 0) {
-    children.push(spacer(160))
-    children.push(new Paragraph({
-      spacing: { after: 80 },
-      children: [new TextRun({ text: 'Asset Photos', bold: true, size: 20, font: FONT, color: '2C3E50' })],
-    }))
-    for (const photo of asset.photos) {
+    // Defects / issues callout
+    if (asset.defectsFound) {
+      children.push(spacer(160))
       children.push(new Paragraph({
-        spacing: { after: 120 },
-        children: [new ImageRun({
-          type: photo.type,
-          data: photo.data,
-          transformation: { width: photo.width, height: photo.height },
-          altText: { title: `${asset.assetName} photo`, description: `Photo of ${asset.assetName}`, name: `photo-${asset.assetId}` },
-        })],
+        spacing: { after: 60 },
+        children: [new TextRun({ text: 'Defects / Issues Found', bold: true, size: 20, font: FONT, color: 'C0392B' })],
       }))
+      children.push(new Paragraph({
+        spacing: { after: 80 },
+        border: { left: { style: BorderStyle.SINGLE, size: 8, color: 'E74C3C', space: 8 } },
+        indent: { left: 200 },
+        children: [new TextRun({ text: asset.defectsFound, size: 18, font: FONT, color: '34495E' })],
+      }))
+    }
+
+    // Recommended action
+    if (asset.recommendedAction) {
+      children.push(spacer(100))
+      children.push(new Paragraph({
+        spacing: { after: 60 },
+        children: [new TextRun({ text: 'Recommended Action', bold: true, size: 20, font: FONT, color: brand })],
+      }))
+      children.push(new Paragraph({
+        spacing: { after: 80 },
+        border: { left: { style: BorderStyle.SINGLE, size: 8, color: brand, space: 8 } },
+        indent: { left: 200 },
+        children: [new TextRun({ text: asset.recommendedAction, size: 18, font: FONT, color: '34495E' })],
+      }))
+    }
+
+    // Asset photos (detailed only)
+    if (complexity === 'detailed' && asset.photos && asset.photos.length > 0) {
+      children.push(spacer(160))
+      children.push(new Paragraph({
+        spacing: { after: 80 },
+        children: [new TextRun({ text: 'Asset Photos', bold: true, size: 20, font: FONT, color: '2C3E50' })],
+      }))
+      for (const photo of asset.photos) {
+        children.push(new Paragraph({
+          spacing: { after: 120 },
+          children: [new ImageRun({
+            type: photo.type,
+            data: photo.data,
+            transformation: { width: photo.width, height: photo.height },
+            altText: { title: `${asset.assetName} photo`, description: `Photo of ${asset.assetName}`, name: `photo-${asset.assetId}` },
+          })],
+        }))
+      }
     }
   }
 
@@ -883,10 +923,13 @@ function buildSignOff(input: PmAssetReportInput): (Paragraph | Table)[] {
 export async function generatePMAssetReport(input: PmAssetReportInput): Promise<Buffer> {
   const brand = getBrand(input)
 
+  const complexity = input.complexity ?? 'standard'
+
   // Resolve section toggles (default all true)
   const showCover = input.showCoverPage !== false
   const showOverview = input.showSiteOverview !== false
-  const showContents = input.showContents !== false
+  // Summary skips TOC and executive summary unless explicitly enabled
+  const showContents = complexity === 'summary' ? false : input.showContents !== false
   const showSummary = input.showExecutiveSummary !== false
   const showSignOff = input.showSignOff !== false
 
@@ -900,7 +943,7 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
     if (i > 0) {
       assetSectionChildren.push(new Paragraph({ children: [new PageBreak()] }))
     }
-    assetSectionChildren.push(...buildAssetSection(input.assets[i], brand))
+    assetSectionChildren.push(...buildAssetSection(input.assets[i], brand, complexity))
   }
 
   // Build body content (conditionally include sections)

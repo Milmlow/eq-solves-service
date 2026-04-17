@@ -27,6 +27,7 @@ import {
   PageBreak,
   TableOfContents,
   Bookmark,
+  VerticalAlign,
 } from 'docx'
 
 // ---------- types ----------
@@ -36,7 +37,22 @@ export interface NsxReportInput {
   siteCode: string | null
   tenantProductName: string
   primaryColour: string
+  complexity?: 'summary' | 'standard' | 'detailed'
   tests: NsxReportTest[]
+
+  // Report settings (optional — all generators now read these)
+  logoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  companyName?: string
+  companyAddress?: string
+  companyAbn?: string
+  companyPhone?: string
+  showCoverPage?: boolean
+  showContents?: boolean
+  showExecutiveSummary?: boolean
+  showSignOff?: boolean
+  customHeaderText?: string
+  customFooterText?: string
+  signOffFields?: string[]
 }
 
 export interface NsxReportTest {
@@ -408,7 +424,7 @@ function buildTripTestTable(test: NsxReportTest): Table {
 
 // ---------- per-breaker section ----------
 
-function buildBreakerSection(test: NsxReportTest, siteName: string, index: number): (Paragraph | Table)[] {
+function buildBreakerSection(test: NsxReportTest, siteName: string, index: number, complexity: 'summary' | 'standard' | 'detailed' = 'standard'): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = []
   const label = test.assetName
 
@@ -449,13 +465,140 @@ function buildBreakerSection(test: NsxReportTest, siteName: string, index: numbe
   }))
   children.push(buildTripTestTable(test))
 
+  // Detailed: include notes
+  if (complexity === 'detailed' && test.notes) {
+    children.push(new Paragraph({ spacing: { before: 120 } }))
+    children.push(new Paragraph({
+      heading: HeadingLevel.HEADING_2,
+      children: [new TextRun({ text: `${label} - Notes & Commentary`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+    }))
+    children.push(new Paragraph({
+      spacing: { before: 60 },
+      children: [new TextRun({ text: test.notes, size: 20, font: 'Plus Jakarta Sans' })],
+    }))
+  }
+
   return children
+}
+
+// ---------- summary table (for summary complexity) ----------
+
+function buildSummaryTable(input: NsxReportInput): (Paragraph | Table)[] {
+  const children: (Paragraph | Table)[] = []
+
+  children.push(new Paragraph({
+    heading: HeadingLevel.HEADING_1,
+    children: [new TextRun({ text: 'Test Results Summary', bold: true, size: 28, font: 'Plus Jakarta Sans' })],
+  }))
+  children.push(new Paragraph({
+    spacing: { before: 60, after: 120 },
+    children: [new TextRun({ text: `${input.tests.length} circuit breakers tested at ${input.siteName}`, size: 20, font: 'Plus Jakarta Sans', color: '666666' })],
+  }))
+
+  const total = input.tests.length
+  const passed = input.tests.filter(t => t.overallResult === 'Pass').length
+  const failed = input.tests.filter(t => t.overallResult === 'Fail').length
+  const defect = input.tests.filter(t => t.overallResult === 'Defect').length
+
+  children.push(new Table({
+    width: { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: [Math.floor(CONTENT_WIDTH / 4), Math.floor(CONTENT_WIDTH / 4), Math.floor(CONTENT_WIDTH / 4), CONTENT_WIDTH - Math.floor(CONTENT_WIDTH / 4) * 3],
+    rows: [
+      new TableRow({
+        children: [
+          kpiCell('Total', String(total), 'EAF5FB'),
+          kpiCell('Pass', String(passed), 'DCFCE7'),
+          kpiCell('Fail', String(failed), failed > 0 ? 'FEE2E2' : 'F3F4F6'),
+          kpiCell('Defect', String(defect), defect > 0 ? 'FEF3C7' : 'F3F4F6'),
+        ],
+      }),
+    ],
+  }))
+
+  children.push(new Paragraph({ spacing: { before: 200 } }))
+
+  const colWidths = [3000, 1500, 1200, 1000, 1200, 1126]
+  const headerRow = new TableRow({
+    children: ['Asset', 'Make / Model', 'Rating', 'Date', 'Result', 'Tested By'].map((text, ci) =>
+      new TableCell({
+        borders: BORDERS,
+        width: { size: colWidths[ci], type: WidthType.DXA },
+        margins: CELL_MARGINS,
+        shading: { fill: 'F3F4F6', type: ShadingType.CLEAR },
+        children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+      })
+    ),
+  })
+
+  const dataRows = input.tests.map(t => {
+    const resultColour = t.overallResult === 'Pass' ? 'DCFCE7' : t.overallResult === 'Fail' ? 'FEE2E2' : t.overallResult === 'Defect' ? 'FEF3C7' : 'FFFFFF'
+    return new TableRow({
+      children: [
+        textCell(t.assetName, colWidths[0]),
+        textCell([t.cbMake, t.cbModel].filter(Boolean).join(' ') || '—', colWidths[1]),
+        textCell(t.cbRating ?? '—', colWidths[2]),
+        textCell(fmtDate(t.testDate), colWidths[3]),
+        new TableCell({
+          borders: BORDERS,
+          width: { size: colWidths[4], type: WidthType.DXA },
+          margins: CELL_MARGINS,
+          shading: { fill: resultColour, type: ShadingType.CLEAR },
+          children: [new Paragraph({ children: [new TextRun({ text: t.overallResult, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+        }),
+        textCell(t.testedBy ?? '—', colWidths[5]),
+      ],
+    })
+  })
+
+  children.push(new Table({
+    width: { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: colWidths,
+    rows: [headerRow, ...dataRows],
+  }))
+
+  return children
+}
+
+function kpiCell(label: string, value: string, fill: string): TableCell {
+  return new TableCell({
+    borders: BORDERS,
+    margins: { top: 120, bottom: 120, left: 160, right: 160 },
+    shading: { fill, type: ShadingType.CLEAR },
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: value, bold: true, size: 36, font: 'Plus Jakarta Sans' })],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: label, size: 16, font: 'Plus Jakarta Sans', color: '666666' })],
+      }),
+    ],
+  })
+}
+
+function textCell(text: string, width: number): TableCell {
+  return new TableCell({
+    borders: BORDERS,
+    width: { size: width, type: WidthType.DXA },
+    margins: CELL_MARGINS,
+    children: [new Paragraph({ children: [new TextRun({ text, size: 18, font: 'Plus Jakarta Sans' })] })],
+  })
+}
+
+function fmtDate(d: string): string {
+  try {
+    return new Date(d).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+  } catch { return d }
 }
 
 // ---------- main export ----------
 
 export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> {
   const brand = input.primaryColour.replace('#', '')
+  const complexity = input.complexity ?? 'standard'
+  const showCover = input.showCoverPage ?? true
+  const showContents = input.showContents ?? true
   const year = new Date().getFullYear()
   const today = formatDateDDMMYYYY(new Date().toISOString())
 
@@ -505,16 +648,20 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
     }),
   ]
 
-  const tocChildren: (Paragraph | Table | TableOfContents)[] = [
+  const tocChildren: (Paragraph | Table | TableOfContents)[] = (showContents && complexity !== 'summary') ? [
     new Paragraph({ children: [new PageBreak()] }),
     new TableOfContents('Table of Contents', { hyperlink: true, headingStyleRange: '1-3' }),
     new Paragraph({ children: [new PageBreak()] }),
-  ]
+  ] : []
 
   const breakerChildren: (Paragraph | Table)[] = []
-  input.tests.forEach((test, i) => {
-    breakerChildren.push(...buildBreakerSection(test, input.siteName, i))
-  })
+  if (complexity === 'summary') {
+    breakerChildren.push(...buildSummaryTable(input))
+  } else {
+    input.tests.forEach((test, i) => {
+      breakerChildren.push(...buildBreakerSection(test, input.siteName, i, complexity))
+    })
+  }
 
   const doc = new Document({
     styles: {
@@ -540,7 +687,7 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
       ],
     },
     sections: [
-      {
+      ...(showCover ? [{
         properties: {
           page: {
             size: { width: PAGE_WIDTH, height: PAGE_HEIGHT },
@@ -548,7 +695,7 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
           },
         },
         children: coverChildren,
-      },
+      }] : []),
       {
         properties: {
           page: {
@@ -561,7 +708,7 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
             children: [
               new Paragraph({
                 alignment: AlignmentType.RIGHT,
-                children: [new TextRun({ text: `${input.siteName} \u2014 NSX / MCCB Test Report`, size: 16, font: 'Plus Jakarta Sans', color: '999999' })],
+                children: [new TextRun({ text: input.customHeaderText ?? `${input.siteName} \u2014 NSX / MCCB Test Report`, size: 16, font: 'Plus Jakarta Sans', color: '999999' })],
               }),
             ],
           }),

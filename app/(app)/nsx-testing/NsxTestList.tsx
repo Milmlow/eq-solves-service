@@ -12,6 +12,8 @@ import { NsxTestDetail } from './NsxTestDetail'
 import { formatDate, formatNsxTestResult } from '@/lib/utils/format'
 import type { NsxTest, NsxTestReading, NsxTestResult, Asset, Site, Profile, Attachment } from '@/lib/types'
 import { FileText } from 'lucide-react'
+import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
+import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
 
 type TestRow = NsxTest & {
   assets?: { name: string; asset_type: string } | null
@@ -50,32 +52,27 @@ export function NsxTestList({
   const [editTest, setEditTest] = useState<TestRow | null>(null)
   const [detailTest, setDetailTest] = useState<TestRow | null>(null)
   const [reportSiteId, setReportSiteId] = useState('')
-  const [reportLoading, setReportLoading] = useState(false)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
 
-  async function handleGenerateReport() {
+  async function handleGenerateReport(complexity: ReportComplexity) {
     if (!reportSiteId) return
-    setReportLoading(true)
-    try {
-      const res = await fetch(`/api/nsx-report?site_id=${reportSiteId}`)
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Download failed' }))
-        alert(err.error ?? 'Report generation failed')
-        return
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const disposition = res.headers.get('Content-Disposition')
-      const match = disposition?.match(/filename="(.+?)"/)
-      a.download = match?.[1] ?? 'NSX Test Report.docx'
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
-    } finally {
-      setReportLoading(false)
+    const res = await fetch(`/api/nsx-report?site_id=${reportSiteId}&complexity=${complexity}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Download failed' }))
+      alert(err.error ?? 'Report generation failed')
+      throw new Error(err.error)
     }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const disposition = res.headers.get('Content-Disposition')
+    const match = disposition?.match(/filename="(.+?)"/)
+    a.download = match?.[1] ?? 'NSX Test Report.docx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
   }
 
   const columns: DataTableColumn<TestRow>[] = [
@@ -155,11 +152,11 @@ export function NsxTestList({
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={handleGenerateReport}
-                disabled={!reportSiteId || reportLoading}
+                onClick={() => setReportDialogOpen(true)}
+                disabled={!reportSiteId}
               >
                 <FileText className="w-4 h-4 mr-1.5" />
-                {reportLoading ? 'Generating...' : 'Report'}
+                Report
               </Button>
             </div>
           )}
@@ -222,6 +219,13 @@ export function NsxTestList({
           onEdit={() => { setEditTest(detailTest); setDetailTest(null) }}
         />
       )}
+
+      <ReportDownloadDialog
+        open={reportDialogOpen}
+        onClose={() => setReportDialogOpen(false)}
+        onDownload={handleGenerateReport}
+        title="NSX Test Report"
+      />
     </>
   )
 }

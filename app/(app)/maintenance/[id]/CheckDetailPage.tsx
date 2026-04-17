@@ -21,6 +21,8 @@ import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, C
 import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Printer, Send } from 'lucide-react'
 import Link from 'next/link'
 import { SendReportModal } from './SendReportModal'
+import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
+import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
 
 interface CheckAssetWithDetails extends CheckAsset {
   assets?: { name: string; maximo_id: string | null; location: string | null; job_plans?: { name: string } | null } | null
@@ -64,6 +66,27 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   const [pasteText, setPasteText] = useState('')
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
   const [showSendReport, setShowSendReport] = useState(false)
+  const [showReportDialog, setShowReportDialog] = useState(false)
+
+  async function handleDownloadReport(complexity: ReportComplexity) {
+    const res = await fetch(`/api/pm-asset-report?check_id=${check.id}&complexity=${complexity}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Download failed' }))
+      alert(err.error ?? 'Report generation failed')
+      throw new Error(err.error)
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const disposition = res.headers.get('Content-Disposition')
+    const match = disposition?.match(/filename="(.+?)"/)
+    a.download = match?.[1] ?? 'PM Asset Report.docx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
 
   const canAct = canWriteRole || isAssigned
 
@@ -298,10 +321,11 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           )}
           {check.status === 'complete' && (
             <>
-              <a href={`/api/pm-asset-report?check_id=${check.id}`} download
+              <button
+                onClick={() => setShowReportDialog(true)}
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors">
                 <Download className="w-4 h-4" /> Download Report
-              </a>
+              </button>
               <button
                 onClick={() => setShowSendReport(true)}
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-deep text-white rounded hover:bg-eq-ink transition-colors">
@@ -352,6 +376,14 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           </div>
         </div>
       )}
+
+      {/* Report download dialog */}
+      <ReportDownloadDialog
+        open={showReportDialog}
+        onClose={() => setShowReportDialog(false)}
+        onDownload={handleDownloadReport}
+        title="Maintenance Report"
+      />
 
       {/* Send Report modal */}
       {showSendReport && (

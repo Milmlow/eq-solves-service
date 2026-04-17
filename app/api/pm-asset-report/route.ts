@@ -21,6 +21,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'check_id is required' }, { status: 400 })
   }
 
+  // Complexity override — falls back to tenant default if not provided
+  const complexityParam = request.nextUrl.searchParams.get('complexity') as 'summary' | 'standard' | 'detailed' | null
+  const validComplexities = ['summary', 'standard', 'detailed'] as const
+  const complexityOverride = complexityParam && validComplexities.includes(complexityParam) ? complexityParam : null
+
   const supabase = await createClient()
 
   // Auth check
@@ -96,18 +101,20 @@ export async function GET(request: NextRequest) {
   // Fetch tenant settings for branding + report config
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, logo_url, report_show_cover_page, report_show_site_overview, report_show_contents, report_show_executive_summary, report_show_sign_off, report_header_text, report_footer_text, report_company_name, report_company_address, report_company_abn, report_company_phone, report_sign_off_fields')
+    .select('product_name, primary_colour, logo_url, report_logo_url, report_complexity, report_show_cover_page, report_show_site_overview, report_show_contents, report_show_executive_summary, report_show_sign_off, report_header_text, report_footer_text, report_company_name, report_company_address, report_company_abn, report_company_phone, report_sign_off_fields')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
+  const complexity = complexityOverride ?? (tenantSettings?.report_complexity as 'summary' | 'standard' | 'detailed' | null) ?? 'standard'
 
-  // Fetch logo image if URL exists
+  // Fetch logo image if URL exists (report-specific logo overrides tenant logo)
+  const resolvedLogoUrl = tenantSettings?.report_logo_url || tenantSettings?.logo_url
   let logoImage: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | undefined
-  if (tenantSettings?.logo_url) {
+  if (resolvedLogoUrl) {
     try {
-      const logoRes = await fetch(tenantSettings.logo_url)
+      const logoRes = await fetch(resolvedLogoUrl)
       if (logoRes.ok) {
         const buf = Buffer.from(await logoRes.arrayBuffer())
         const ct = logoRes.headers.get('content-type') ?? ''
@@ -182,6 +189,7 @@ export async function GET(request: NextRequest) {
   const frequency = check.frequency?.replace('_', ' ') ?? ''
 
   const reportInput: PmAssetReportInput = {
+    complexity,
     reportTitle: check.custom_name ?? `${siteName} - ${frequency} - ${jobPlanName}`,
     reportGeneratedDate: new Date().toISOString(),
     reportingPeriod: fmtPeriod(check.due_date ?? check.created_at),
