@@ -15,13 +15,16 @@ Multi-tenant maintenance management platform for electrical contractors — circ
 ### Database (Supabase)
 - Row-Level Security via `public.get_user_tenant_ids()` and `public.get_user_role(tenant_id)` — all tables enforce tenant isolation
 - Trigger function `public.set_updated_at()` auto-maintains `updated_at` timestamps
-- Migrations in `supabase/migrations/` numbered sequentially (0001–0031+)
+- Migrations in `supabase/migrations/` numbered sequentially (0001–0045+)
 - Storage buckets: `attachments` (general files), `logos` (tenant + customer logos, public bucket with auth RLS)
 
 ### Auth & Roles
 - `auth.uid()` resolves the current user via Supabase Auth
 - `tenant_members` table maps users → tenants with roles: `super_admin`, `admin`, `supervisor`, `technician`, `read_only`
 - App-layer role checks via `canWrite(role)` and `isAdmin(role)` from `lib/utils/roles`
+- **Known gap:** No trigger auto-creates `tenant_members` on signup — new users get orphaned in `profiles` with no tenant. Must manually insert `tenant_members` row when adding users. Unmapped users currently fall through to demo tenant silently (needs fix: should show "no tenant assigned" screen).
+- **Known bug:** MFA (TOTP) challenge loop — users with enrolled MFA factors get AAL1 sessions that loop between signin and MFA challenge page. Workaround: delete MFA factors + sessions, user re-enrols after login. Root cause in auth middleware / MFA challenge page, not yet fixed.
+- **Tenant IDs:** SKS = `ccca00fc-cbc8-442e-9489-0f1f216ddca8`, Demo = `a0000000-0000-0000-0000-000000000001`
 
 ### Server Actions
 - All mutations use Next.js server actions in `app/(app)/*/actions.ts`

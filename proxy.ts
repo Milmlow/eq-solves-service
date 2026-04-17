@@ -14,7 +14,9 @@ const PUBLIC_PATHS = [
 
 const MFA_PATHS = ['/auth/mfa', '/auth/enroll-mfa']
 // Paths an authenticated user can reach without completing MFA.
-const AAL_EXEMPT_PATHS = ['/auth/mfa', '/auth/enroll-mfa', '/auth/reset-password', '/auth/signout']
+// /auth/signin is included so users with a stale AAL1+TOTP session can
+// reach the signin page to sign out and start fresh — prevents MFA loop.
+const AAL_EXEMPT_PATHS = ['/auth/mfa', '/auth/enroll-mfa', '/auth/reset-password', '/auth/signout', '/auth/signin']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl

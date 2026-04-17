@@ -57,6 +57,12 @@ export function MfaChallengeForm() {
       >
         {mode === 'totp' ? 'Use a recovery code instead' : 'Use authenticator app instead'}
       </button>
+      <a
+        href="/auth/signout"
+        className="text-sm text-eq-grey hover:text-red-600 transition-colors text-center"
+      >
+        Sign out
+      </a>
     </form>
   )
 }
