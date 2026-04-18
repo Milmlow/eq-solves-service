@@ -49,8 +49,59 @@ export function pickLogo(
 }
 
 /**
+ * Read natural width/height from a PNG or JPEG buffer.
+ *
+ * Returns null if the buffer isn't a recognised format or is truncated.
+ * Deliberately small — avoids pulling in `image-size` / `sharp` just to keep
+ * logos proportional in the DOCX renderer.
+ */
+function readImageSize(buf: Buffer): { width: number; height: number } | null {
+  // PNG: 8-byte signature, then IHDR — width at offset 16, height at 20 (BE uint32).
+  if (
+    buf.length >= 24 &&
+    buf[0] === 0x89 && buf[1] === 0x50 &&
+    buf[2] === 0x4e && buf[3] === 0x47
+  ) {
+    return {
+      width: buf.readUInt32BE(16),
+      height: buf.readUInt32BE(20),
+    }
+  }
+
+  // JPEG: scan segments for a Start-Of-Frame marker (SOF0–SOF3, SOF5–SOF7,
+  // SOF9–SOF11, SOF13–SOF15). SOF payload is length(2) precision(1) height(2) width(2).
+  if (buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let offset = 2
+    while (offset < buf.length - 9) {
+      if (buf[offset] !== 0xff) break
+      const marker = buf[offset + 1]
+      const segLen = buf.readUInt16BE(offset + 2)
+      const isSof =
+        (marker >= 0xc0 && marker <= 0xc3) ||
+        (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) ||
+        (marker >= 0xcd && marker <= 0xcf)
+      if (isSof) {
+        return {
+          height: buf.readUInt16BE(offset + 5),
+          width:  buf.readUInt16BE(offset + 7),
+        }
+      }
+      offset += 2 + segLen
+    }
+  }
+
+  return null
+}
+
+/**
  * Resolve a logo URL → buffer. Returns undefined on any failure (404,
  * network, bad content-type). Never throws.
+ *
+ * The `width`/`height` opts describe the MAX box — the image is scaled to
+ * fit inside it while preserving its natural aspect ratio, so a 5:1 wordmark
+ * doesn't get squashed into a 3:1 slot. Falls back to the box size only if
+ * the natural dimensions can't be read.
  */
 export async function fetchLogoImage(
   url: string | null | undefined,
@@ -63,12 +114,21 @@ export async function fetchLogoImage(
     const buf = Buffer.from(await res.arrayBuffer())
     const ct = res.headers.get('content-type') ?? ''
     const type: LogoImage['type'] = ct.includes('png') ? 'png' : 'jpg'
-    return {
-      data: buf,
-      type,
-      width: opts.width ?? 180,
-      height: opts.height ?? 60,
+
+    const maxW = opts.width ?? 180
+    const maxH = opts.height ?? 60
+
+    // Scale to fit inside the box while preserving aspect ratio.
+    const natural = readImageSize(buf)
+    let width = maxW
+    let height = maxH
+    if (natural && natural.width > 0 && natural.height > 0) {
+      const scale = Math.min(maxW / natural.width, maxH / natural.height)
+      width = Math.max(1, Math.round(natural.width * scale))
+      height = Math.max(1, Math.round(natural.height * scale))
     }
+
+    return { data: buf, type, width, height }
   } catch {
     return undefined
   }
