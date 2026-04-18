@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  Zap, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle
+  Zap, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle, Contact2
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -14,6 +14,7 @@ const navItems = [
   { label: 'Dashboard',   href: '/dashboard',   icon: LayoutDashboard },
   { label: 'Customers',   href: '/customers',   icon: Building2 },
   { label: 'Sites',       href: '/sites',        icon: MapPin },
+  { label: 'Contacts',    href: '/contacts',     icon: Contact2 },
   { label: 'Assets',      href: '/assets',       icon: Package },
   { label: 'Job Plans',   href: '/job-plans',    icon: FileCheck },
   { label: 'Maintenance', href: '/maintenance',  icon: ClipboardCheck },

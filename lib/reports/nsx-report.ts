@@ -28,6 +28,7 @@ import {
   TableOfContents,
   Bookmark,
   VerticalAlign,
+  ImageRun,
 } from 'docx'
 
 // ---------- types ----------
@@ -41,7 +42,10 @@ export interface NsxReportInput {
   tests: NsxReportTest[]
 
   // Report settings (optional — all generators now read these)
+  /** @deprecated Pass `logoImageOnLight` / `logoImageOnDark` instead. */
   logoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  logoImageOnLight?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  logoImageOnDark?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
   companyName?: string
   companyAddress?: string
   companyAbn?: string
@@ -602,8 +606,25 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
   const year = new Date().getFullYear()
   const today = formatDateDDMMYYYY(new Date().toISOString())
 
-  const coverChildren: (Paragraph | Table)[] = [
-    new Paragraph({ spacing: { before: 4000 } }),
+  const coverLogo = input.logoImageOnLight ?? input.logoImage ?? input.logoImageOnDark
+
+  const coverChildren: (Paragraph | Table)[] = []
+
+  if (coverLogo) {
+    coverChildren.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 2000, after: 400 },
+      children: [new ImageRun({
+        type: coverLogo.type,
+        data: coverLogo.data,
+        transformation: { width: coverLogo.width, height: coverLogo.height },
+        altText: { title: 'Company Logo', description: 'Company logo', name: 'company-logo' },
+      })],
+    }))
+  }
+
+  coverChildren.push(
+    new Paragraph({ spacing: { before: coverLogo ? 800 : 4000 } }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
@@ -646,7 +667,7 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
         color: '999999',
       })],
     }),
-  ]
+  )
 
   const tocChildren: (Paragraph | Table | TableOfContents)[] = (showContents && complexity !== 'summary') ? [
     new Paragraph({ children: [new PageBreak()] }),

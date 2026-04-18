@@ -7,12 +7,15 @@ import { Upload, Trash2, Image as ImageIcon, Search, X } from 'lucide-react'
 import { uploadMediaAction, deleteMediaAction, updateMediaAction } from './actions'
 import type { MediaCategory } from '@/lib/types'
 
+type MediaSurface = 'light' | 'dark' | 'any'
+
 interface MediaItem {
   id: string
   name: string
   category: string
   entity_type: string | null
   entity_id: string | null
+  surface?: MediaSurface | null
   file_url: string
   file_name: string
   content_type: string | null
@@ -45,6 +48,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
   const [uploadCategory, setUploadCategory] = useState<MediaCategory>('general')
   const [uploadEntityType, setUploadEntityType] = useState<string>('')
   const [uploadEntityId, setUploadEntityId] = useState<string>('')
+  const [uploadSurface, setUploadSurface] = useState<MediaSurface>('any')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -59,6 +63,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
   const [editCategory, setEditCategory] = useState<MediaCategory>('general')
   const [editEntityType, setEditEntityType] = useState<string>('')
   const [editEntityId, setEditEntityId] = useState<string>('')
+  const [editSurface, setEditSurface] = useState<MediaSurface>('any')
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -68,6 +73,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
     setEditCategory(item.category as MediaCategory)
     setEditEntityType(item.entity_type ?? '')
     setEditEntityId(item.entity_id ?? '')
+    setEditSurface((item.surface ?? 'any') as MediaSurface)
     setEditError(null)
   }
 
@@ -90,6 +96,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
       category: editCategory,
       entity_type: editEntityType || null,
       entity_id: editEntityId || null,
+      surface: editSurface,
     })
     setSavingEdit(false)
     if (!result.success) {
@@ -106,6 +113,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
               category: editCategory,
               entity_type: editEntityType || null,
               entity_id: editEntityId || null,
+              surface: editSurface,
             }
           : m,
       ),
@@ -136,6 +144,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
     formData.append('file', uploadFile)
     formData.append('name', uploadName.trim())
     formData.append('category', uploadCategory)
+    formData.append('surface', uploadSurface)
     if (uploadEntityType) formData.append('entity_type', uploadEntityType)
     if (uploadEntityId) formData.append('entity_id', uploadEntityId)
 
@@ -152,6 +161,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
     setUploadCategory('general')
     setUploadEntityType('')
     setUploadEntityId('')
+    setUploadSurface('any')
     setUploadFile(null)
     if (fileRef.current) fileRef.current.value = ''
     setShowUpload(false)
@@ -257,6 +267,19 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                 ))}
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-eq-grey mb-1">Surface</label>
+              <select
+                value={uploadSurface}
+                onChange={e => setUploadSurface(e.target.value as MediaSurface)}
+                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
+              >
+                <option value="any">Any surface (works on light + dark)</option>
+                <option value="light">Light only (dark mark on white)</option>
+                <option value="dark">Dark only (light/white mark for dark bg)</option>
+              </select>
+              <p className="text-xs text-eq-grey mt-0.5">Tag so the picker shows the right variant for each slot.</p>
+            </div>
             {(uploadCategory === 'customer_logo' || uploadEntityType === 'customer') && (
               <div>
                 <label className="block text-xs font-medium text-eq-grey mb-1">Customer</label>
@@ -336,8 +359,8 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                 className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-eq-sky rounded-lg"
                 title="Click to edit properties"
               >
-                {/* Image preview */}
-                <div className="aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
+                {/* Image preview — dark surface rows render on dark bg so white marks are visible */}
+                <div className={`aspect-square flex items-center justify-center overflow-hidden ${item.surface === 'dark' ? 'bg-eq-ink' : 'bg-gray-50'}`}>
                   {item.content_type?.startsWith('image/svg') ? (
                     <img src={item.file_url} alt={item.name} className="max-w-full max-h-full object-contain p-2" />
                   ) : (
@@ -348,10 +371,15 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                 {/* Info */}
                 <div className="p-2">
                   <p className="text-xs font-medium text-eq-ink truncate" title={item.name}>{item.name}</p>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-eq-ice text-eq-deep font-medium">
+                  <div className="flex items-center justify-between mt-1 gap-1">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-eq-ice text-eq-deep font-medium truncate">
                       {CATEGORIES.find(c => c.value === item.category)?.label ?? item.category}
                     </span>
+                    {item.surface && item.surface !== 'any' && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${item.surface === 'dark' ? 'bg-eq-ink text-white' : 'bg-gray-100 text-eq-grey'}`}>
+                        {item.surface}
+                      </span>
+                    )}
                     <span className="text-[10px] text-eq-grey">{formatSize(item.file_size)}</span>
                   </div>
                   {item.entity_type && item.entity_id && (
@@ -438,6 +466,18 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                   {CATEGORIES.map((c) => (
                     <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-eq-grey mb-1">Surface</label>
+                <select
+                  value={editSurface}
+                  onChange={(e) => setEditSurface(e.target.value as MediaSurface)}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
+                >
+                  <option value="any">Any surface</option>
+                  <option value="light">Light only</option>
+                  <option value="dark">Dark only</option>
                 </select>
               </div>
               <div>

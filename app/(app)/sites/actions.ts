@@ -28,10 +28,12 @@ export async function createSiteAction(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
     const photoUrl = (formData.get('photo_url') as string)?.trim() || null
+    const logoUrl = (formData.get('logo_url') as string)?.trim() || null
+    const logoUrlOnDark = (formData.get('logo_url_on_dark') as string)?.trim() || null
 
     const { error } = await supabase
       .from('sites')
-      .insert({ ...parsed.data, photo_url: photoUrl, tenant_id: tenantId })
+      .insert({ ...parsed.data, photo_url: photoUrl, logo_url: logoUrl, logo_url_on_dark: logoUrlOnDark, tenant_id: tenantId })
 
     if (error) return { success: false, error: error.message }
 
@@ -65,10 +67,12 @@ export async function updateSiteAction(id: string, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
     const photoUrl = (formData.get('photo_url') as string)?.trim() || null
+    const logoUrl = (formData.get('logo_url') as string)?.trim() || null
+    const logoUrlOnDark = (formData.get('logo_url_on_dark') as string)?.trim() || null
 
     const { error } = await supabase
       .from('sites')
-      .update({ ...parsed.data, photo_url: photoUrl })
+      .update({ ...parsed.data, photo_url: photoUrl, logo_url: logoUrl, logo_url_on_dark: logoUrlOnDark })
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }

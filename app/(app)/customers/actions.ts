@@ -26,10 +26,11 @@ export async function createCustomerAction(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
     const logoUrl = (formData.get('logo_url') as string)?.trim() || null
+    const logoUrlOnDark = (formData.get('logo_url_on_dark') as string)?.trim() || null
 
     const { error } = await supabase
       .from('customers')
-      .insert({ ...parsed.data, logo_url: logoUrl, tenant_id: tenantId })
+      .insert({ ...parsed.data, logo_url: logoUrl, logo_url_on_dark: logoUrlOnDark, tenant_id: tenantId })
 
     if (error) return { success: false, error: error.message }
 
@@ -58,10 +59,11 @@ export async function updateCustomerAction(id: string, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
     const logoUrl = (formData.get('logo_url') as string)?.trim() || null
+    const logoUrlOnDark = (formData.get('logo_url_on_dark') as string)?.trim() || null
 
     const { error } = await supabase
       .from('customers')
-      .update({ ...parsed.data, logo_url: logoUrl })
+      .update({ ...parsed.data, logo_url: logoUrl, logo_url_on_dark: logoUrlOnDark })
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }

@@ -77,8 +77,21 @@ export interface PmAssetReportInput {
   // Site photo (optional)
   sitePhoto?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
 
-  // Logo (optional)
+  /**
+   * Tenant/report logo variants. Cover page (dark surface) prefers `onDark`;
+   * running header/body (light surface) prefers `onLight`. Either can fall
+   * back to the other — see {@link pickLogo}.
+   *
+   * @deprecated — pass `logoImageOnLight` / `logoImageOnDark` explicitly.
+   *              Kept as an alias so old call sites still compile.
+   */
   logoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  logoImageOnLight?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  logoImageOnDark?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+
+  /** Customer logo variants (rendered on cover when toggle is on). */
+  customerLogoOnLight?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  customerLogoOnDark?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
 
   // Company details (from report settings)
   companyName?: string
@@ -182,6 +195,41 @@ function anchorId(assetName: string, assetId: string): string {
   return `asset_${assetId}_${assetName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30)}`
 }
 
+/**
+ * Pick the appropriate tenant/report logo image for a given surface.
+ *
+ * - `light` surface (white cover, running header, body) prefers `logoImageOnLight`
+ * - `dark` surface (dark cover variant, ink banners) prefers `logoImageOnDark`
+ *
+ * Falls back through:
+ *   requested variant → other variant → legacy `logoImage` alias
+ *
+ * Guarantees something renders as long as *any* logo was supplied.
+ */
+function pickReportLogo(
+  input: PmAssetReportInput,
+  surface: 'light' | 'dark',
+): { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | undefined {
+  if (surface === 'dark') {
+    return input.logoImageOnDark ?? input.logoImageOnLight ?? input.logoImage
+  }
+  return input.logoImageOnLight ?? input.logoImage ?? input.logoImageOnDark
+}
+
+/**
+ * Pick customer logo for the cover page. Rendered when either variant is
+ * provided by the caller — the picker falls back between variants.
+ */
+function pickCustomerLogo(
+  input: PmAssetReportInput,
+  surface: 'light' | 'dark',
+): { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | undefined {
+  if (surface === 'dark') {
+    return input.customerLogoOnDark ?? input.customerLogoOnLight
+  }
+  return input.customerLogoOnLight ?? input.customerLogoOnDark
+}
+
 function makeCell(text: string, width: number, opts?: {
   bold?: boolean; size?: number; color?: string; shading?: string;
   align?: (typeof AlignmentType)[keyof typeof AlignmentType];
@@ -236,14 +284,17 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   const brand = getBrand(input)
   const children: (Paragraph | Table)[] = []
 
-  // Logo
-  if (input.logoImage) {
+  // Logo — cover page is currently a light surface in this template, but the
+  // picker is future-proof: if a "dark cover" variant is introduced later
+  // we'll just flip the surface argument here.
+  const coverLogo = pickReportLogo(input, 'light')
+  if (coverLogo) {
     children.push(new Paragraph({
       spacing: { after: 200 },
       children: [new ImageRun({
-        type: input.logoImage.type,
-        data: input.logoImage.data,
-        transformation: { width: input.logoImage.width, height: input.logoImage.height },
+        type: coverLogo.type,
+        data: coverLogo.data,
+        transformation: { width: coverLogo.width, height: coverLogo.height },
         altText: { title: 'Company Logo', description: 'Company logo', name: 'company-logo' },
       })],
     }))
@@ -256,7 +307,7 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   }))
 
   // Spacer
-  children.push(spacer(input.logoImage ? 400 : 1200))
+  children.push(spacer(coverLogo ? 400 : 1200))
 
   // Report title
   children.push(new Paragraph({
@@ -285,6 +336,27 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
       size: 20, font: FONT, color: '95A5A6',
     })],
   }))
+
+  // Customer logo — "Prepared for" lockup
+  const customerLogo = pickCustomerLogo(input, 'light')
+  if (customerLogo) {
+    children.push(new Paragraph({
+      spacing: { after: 80 },
+      children: [new TextRun({
+        text: 'Prepared for',
+        size: 18, font: FONT, color: '95A5A6',
+      })],
+    }))
+    children.push(new Paragraph({
+      spacing: { after: 400 },
+      children: [new ImageRun({
+        type: customerLogo.type,
+        data: customerLogo.data,
+        transformation: { width: customerLogo.width, height: customerLogo.height },
+        altText: { title: 'Customer Logo', description: `Logo for ${input.customerName}`, name: 'customer-logo' },
+      })],
+    }))
+  }
 
   // Site photo
   if (input.sitePhoto) {
@@ -697,29 +769,29 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
       children: [new TextRun({ text: 'Maintenance Checklist', bold: true, size: 22, font: FONT, color: '2C3E50' })],
     }))
 
-    const tc1 = 700   // Order
-    const tc2 = 6938  // Description
-    const tc3 = 2000  // Result
-    const ttw = tc1 + tc2 + tc3
+    // Column widths differ by complexity — Detailed gives more room to Notes
+    // so longer inspection commentary reads naturally instead of wrapping.
+    const tc1 = 700                                      // Order
+    const tc3 = 1400                                     // Result
+    const tc4 = complexity === 'detailed' ? 3600 : 2800  // Notes
+    const tc2 = CONTENT_WIDTH - tc1 - tc3 - tc4          // Description (fills remainder)
+    const ttw = tc1 + tc2 + tc3 + tc4
 
-    const taskRows = asset.tasks.map(task =>
-      new TableRow({
+    const taskRows = asset.tasks.map(task => {
+      const noteText = task.notes?.trim()
+      const hasNote = !!noteText
+      // Detailed shows the raw note; Standard trims very long notes to keep
+      // the table readable on a single page.
+      const displayNote = hasNote
+        ? (complexity === 'detailed' || noteText!.length <= 200
+            ? noteText!
+            : noteText!.slice(0, 200).trimEnd() + '…')
+        : '—'
+
+      return new TableRow({
         children: [
           makeCell(String(task.order), tc1, { align: AlignmentType.CENTER, size: 18 }),
-          new TableCell({
-            borders: BORDERS_LIGHT,
-            width: { size: tc2, type: WidthType.DXA },
-            margins: CELL_PAD,
-            children: [
-              new Paragraph({
-                children: [new TextRun({ text: task.description, size: 18, font: FONT })],
-              }),
-              ...(task.notes ? [new Paragraph({
-                spacing: { before: 40 },
-                children: [new TextRun({ text: task.notes, size: 16, font: FONT, color: '7F8C8D', italics: true })],
-              })] : []),
-            ],
-          }),
+          makeCell(task.description, tc2, { size: 18 }),
           makeCell(resultText(task.result), tc3, {
             align: AlignmentType.CENTER,
             bold: true,
@@ -727,52 +799,107 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
             shading: resultShading(task.result),
             color: task.result === 'fail' || task.result === 'no' ? 'C0392B' : undefined,
           }),
+          makeCell(displayNote, tc4, {
+            size: 17,
+            color: hasNote ? '34495E' : '95A5A6',
+            italics: !hasNote,
+          }),
         ],
       })
-    )
+    })
 
     children.push(new Table({
       width: { size: ttw, type: WidthType.DXA },
-      columnWidths: [tc1, tc2, tc3],
+      columnWidths: [tc1, tc2, tc3, tc4],
       rows: [
         new TableRow({
+          tableHeader: true,
           children: [
             makeHeaderCell('Order', tc1, brand),
             makeHeaderCell('Description', tc2, brand),
             makeHeaderCell('Completed', tc3, brand),
+            makeHeaderCell('Notes', tc4, brand),
           ],
         }),
         ...taskRows,
       ],
     }))
 
-    // Defects / issues callout
-    if (asset.defectsFound) {
-      children.push(spacer(160))
-      children.push(new Paragraph({
-        spacing: { after: 60 },
-        children: [new TextRun({ text: 'Defects / Issues Found', bold: true, size: 20, font: FONT, color: 'C0392B' })],
-      }))
-      children.push(new Paragraph({
-        spacing: { after: 80 },
-        border: { left: { style: BorderStyle.SINGLE, size: 8, color: 'E74C3C', space: 8 } },
-        indent: { left: 200 },
-        children: [new TextRun({ text: asset.defectsFound, size: 18, font: FONT, color: '34495E' })],
-      }))
-    }
+    // Defects / issues — always rendered so the reader can see at a glance
+    // that a section was reviewed and nothing was flagged.
+    const defectText = asset.defectsFound?.trim() || 'None identified.'
+    const hasDefect = !!asset.defectsFound?.trim()
+    children.push(spacer(160))
+    children.push(new Paragraph({
+      spacing: { after: 60 },
+      children: [new TextRun({
+        text: 'Defects / Issues Found',
+        bold: true, size: 20, font: FONT,
+        color: hasDefect ? 'C0392B' : '2C3E50',
+      })],
+    }))
+    children.push(new Paragraph({
+      spacing: { after: 80 },
+      border: {
+        left: {
+          style: BorderStyle.SINGLE,
+          size: 8,
+          color: hasDefect ? 'E74C3C' : 'BDC3C7',
+          space: 8,
+        },
+      },
+      indent: { left: 200 },
+      children: [new TextRun({
+        text: defectText,
+        size: 18, font: FONT,
+        color: hasDefect ? '34495E' : '7F8C8D',
+        italics: !hasDefect,
+      })],
+    }))
 
-    // Recommended action
-    if (asset.recommendedAction) {
-      children.push(spacer(100))
+    // Recommended action — always rendered, same pattern as defects
+    const actionText = asset.recommendedAction?.trim() || 'No follow-up action required.'
+    const hasAction = !!asset.recommendedAction?.trim()
+    children.push(spacer(100))
+    children.push(new Paragraph({
+      spacing: { after: 60 },
+      children: [new TextRun({
+        text: 'Recommended Action',
+        bold: true, size: 20, font: FONT,
+        color: hasAction ? brand : '2C3E50',
+      })],
+    }))
+    children.push(new Paragraph({
+      spacing: { after: 80 },
+      border: {
+        left: {
+          style: BorderStyle.SINGLE,
+          size: 8,
+          color: hasAction ? brand : 'BDC3C7',
+          space: 8,
+        },
+      },
+      indent: { left: 200 },
+      children: [new TextRun({
+        text: actionText,
+        size: 18, font: FONT,
+        color: hasAction ? '34495E' : '7F8C8D',
+        italics: !hasAction,
+      })],
+    }))
+
+    // Detailed-only: asset-level notes block (the overall `asset.notes` field)
+    if (complexity === 'detailed' && asset.notes?.trim()) {
+      children.push(spacer(120))
       children.push(new Paragraph({
         spacing: { after: 60 },
-        children: [new TextRun({ text: 'Recommended Action', bold: true, size: 20, font: FONT, color: brand })],
+        children: [new TextRun({ text: 'Technician Notes', bold: true, size: 20, font: FONT, color: '2C3E50' })],
       }))
       children.push(new Paragraph({
         spacing: { after: 80 },
-        border: { left: { style: BorderStyle.SINGLE, size: 8, color: brand, space: 8 } },
+        border: { left: { style: BorderStyle.SINGLE, size: 8, color: 'BDC3C7', space: 8 } },
         indent: { left: 200 },
-        children: [new TextRun({ text: asset.recommendedAction, size: 18, font: FONT, color: '34495E' })],
+        children: [new TextRun({ text: asset.notes, size: 18, font: FONT, color: '34495E' })],
       }))
     }
 

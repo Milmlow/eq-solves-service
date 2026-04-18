@@ -9,6 +9,7 @@ const DEFAULTS: TenantSettings = {
   ice_colour: '#EAF5FB',
   ink_colour: '#1A1A2E',
   logo_url: null,
+  logo_url_on_dark: null,
   product_name: 'EQ Solves',
   support_email: null,
   // Report template defaults
@@ -26,6 +27,7 @@ const DEFAULTS: TenantSettings = {
   report_sign_off_fields: ['Technician Signature', 'Supervisor Signature'],
   // Enhanced report settings
   report_logo_url: null,
+  report_logo_url_on_dark: null,
   report_customer_logo: true,
   report_site_photos: false,
   report_complexity: 'standard',

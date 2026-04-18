@@ -32,6 +32,9 @@ export function ReportSettingsForm({ settings }: Props) {
 
   // Logo & photos
   const [logoUrl, setLogoUrl] = useState(settings.report_logo_url ?? '')
+  const [logoUrlOnDark, setLogoUrlOnDark] = useState(
+    (settings as unknown as { report_logo_url_on_dark?: string | null }).report_logo_url_on_dark ?? '',
+  )
   const [showCustomerLogo, setShowCustomerLogo] = useState(settings.report_customer_logo ?? true)
   const [showSitePhotos, setShowSitePhotos] = useState(settings.report_site_photos ?? false)
   const [complexity, setComplexity] = useState<'summary' | 'standard' | 'detailed'>(settings.report_complexity ?? 'standard')
@@ -95,6 +98,7 @@ export function ReportSettingsForm({ settings }: Props) {
       report_company_phone: companyPhone || null,
       report_sign_off_fields: signOffFields.filter(f => f.trim().length > 0),
       report_logo_url: logoUrl || null,
+      report_logo_url_on_dark: logoUrlOnDark || null,
       report_customer_logo: showCustomerLogo,
       report_site_photos: showSitePhotos,
       report_complexity: complexity,
@@ -217,14 +221,30 @@ export function ReportSettingsForm({ settings }: Props) {
           <h2 className="text-sm font-bold text-eq-ink mb-1">Logos & Photos</h2>
           <p className="text-xs text-eq-grey mb-4">Configure logo display and site photography for report cover pages.</p>
           <div className="space-y-4">
-            <MediaPicker
-              label="Report Logo"
-              value={logoUrl || null}
-              onChange={(url) => setLogoUrl(url ?? '')}
-              category="report_image"
-              placeholder="Select logo from media library…"
-            />
-            <p className="text-xs text-eq-grey">Leave blank to use tenant logo. Upload images via Admin → Media Library.</p>
+            <div>
+              <MediaPicker
+                label="Report Logo — Light Surface"
+                value={logoUrl || null}
+                onChange={(url) => setLogoUrl(url ?? '')}
+                category="report_image"
+                surface="light"
+                previewBackground="light"
+                placeholder="Select light-surface logo…"
+              />
+              <p className="text-xs text-eq-grey mt-1">Used on report bodies and light headers. Falls back to tenant logo if empty.</p>
+            </div>
+            <div>
+              <MediaPicker
+                label="Report Logo — Dark Surface"
+                value={logoUrlOnDark || null}
+                onChange={(url) => setLogoUrlOnDark(url ?? '')}
+                category="report_image"
+                surface="dark"
+                previewBackground="dark"
+                placeholder="Select dark-surface logo…"
+              />
+              <p className="text-xs text-eq-grey mt-1">Used on report cover pages. Falls back to light logo if empty.</p>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <button
                 type="button"

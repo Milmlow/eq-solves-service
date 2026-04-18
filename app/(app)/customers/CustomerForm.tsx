@@ -23,6 +23,9 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(customer?.logo_url ?? null)
+  const [logoOnDarkPreview, setLogoOnDarkPreview] = useState<string | null>(
+    (customer as unknown as { logo_url_on_dark?: string | null })?.logo_url_on_dark ?? null,
+  )
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [logoMode, setLogoMode] = useState<'library' | 'upload'>(customer?.logo_url ? 'library' : 'library')
@@ -199,18 +202,37 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
           </div>
 
           {logoMode === 'library' ? (
-            <div className="space-y-2">
-              <MediaPicker
-                value={logoPreview}
-                onChange={(url) => {
-                  setLogoPreview(url)
-                  setLogoFile(null)
-                }}
-                category="customer_logo"
-                placeholder="Select logo from media library…"
-              />
-              {/* Hidden input so logo_url is included in FormData on create */}
+            <div className="space-y-3">
+              <div>
+                <MediaPicker
+                  value={logoPreview}
+                  onChange={(url) => {
+                    setLogoPreview(url)
+                    setLogoFile(null)
+                  }}
+                  category="customer_logo"
+                  surface="light"
+                  previewBackground="light"
+                  label="Logo on light backgrounds"
+                  placeholder="Select light-surface logo…"
+                />
+                <p className="text-xs text-eq-grey mt-1">Used on report bodies, list views, and light UI.</p>
+              </div>
+              <div>
+                <MediaPicker
+                  value={logoOnDarkPreview}
+                  onChange={(url) => setLogoOnDarkPreview(url)}
+                  category="customer_logo"
+                  surface="dark"
+                  previewBackground="dark"
+                  label="Logo on dark backgrounds"
+                  placeholder="Select dark-surface logo…"
+                />
+                <p className="text-xs text-eq-grey mt-1">Used on report covers and dark banners. Falls back to the light logo if empty.</p>
+              </div>
+              {/* Hidden inputs so both URLs are included in FormData on create/update */}
               <input type="hidden" name="logo_url" value={logoPreview ?? ''} />
+              <input type="hidden" name="logo_url_on_dark" value={logoOnDarkPreview ?? ''} />
             </div>
           ) : (
             <>

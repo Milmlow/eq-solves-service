@@ -23,6 +23,7 @@ export interface TenantSettings {
   ice_colour: string
   ink_colour: string
   logo_url: string | null
+  logo_url_on_dark: string | null
   product_name: string
   support_email: string | null
   // Report template settings
@@ -40,6 +41,7 @@ export interface TenantSettings {
   report_sign_off_fields: string[]
   // Enhanced report settings
   report_logo_url: string | null
+  report_logo_url_on_dark: string | null
   report_customer_logo: boolean
   report_site_photos: boolean
   report_complexity: 'summary' | 'standard' | 'detailed'
@@ -76,6 +78,8 @@ export interface Customer {
   phone: string | null
   address: string | null
   logo_url: string | null
+  logo_url_on_dark: string | null
+  primary_contact_id: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -184,6 +188,9 @@ export interface Site {
   latitude: number | null
   longitude: number | null
   photo_url: string | null
+  logo_url: string | null
+  logo_url_on_dark: string | null
+  primary_contact_id: string | null
   is_active: boolean
   created_at: string
   updated_at: string

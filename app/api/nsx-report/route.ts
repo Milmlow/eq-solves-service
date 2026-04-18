@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateNsxReport } from '@/lib/reports/nsx-report'
 import type { NsxReportInput, NsxReportTest, NsxReportReading } from '@/lib/reports/nsx-report'
+import { resolveReportLogos } from '@/lib/reports/logo-variants'
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 
@@ -56,11 +57,18 @@ export async function GET(request: NextRequest) {
   // Fetch tenant settings for branding + report config
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, report_complexity, report_company_name, report_company_abn, report_company_phone, report_company_address, report_header_text, report_footer_text, report_show_cover_page, report_show_contents, report_show_executive_summary, report_show_sign_off, report_sign_off_fields, logo_url, report_logo_url')
+    .select('product_name, primary_colour, report_complexity, report_company_name, report_company_abn, report_company_phone, report_company_address, report_header_text, report_footer_text, report_show_cover_page, report_show_contents, report_show_executive_summary, report_show_sign_off, report_sign_off_fields, logo_url, logo_url_on_dark, report_logo_url, report_logo_url_on_dark')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
-  const productName = tenantSettings?.product_name ?? 'EQ Solves'
+  // Fetch tenant row for product-name fallback (logos live on tenant_settings)
+  const { data: tenantRow } = await supabase
+    .from('tenants')
+    .select('name')
+    .eq('id', tenantId)
+    .maybeSingle()
+
+  const productName = tenantSettings?.product_name ?? tenantRow?.name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
   const complexity = complexityOverride ?? (tenantSettings?.report_complexity as 'summary' | 'standard' | 'detailed' | null) ?? 'standard'
 
@@ -129,20 +137,8 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  // Fetch logo image if URL exists
-  const logoUrl = tenantSettings?.report_logo_url || tenantSettings?.logo_url
-  let logoImage: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | undefined
-  if (logoUrl) {
-    try {
-      const logoRes = await fetch(logoUrl)
-      if (logoRes.ok) {
-        const buf = Buffer.from(await logoRes.arrayBuffer())
-        const ct = logoRes.headers.get('content-type') ?? ''
-        const imgType = ct.includes('png') ? 'png' as const : 'jpg' as const
-        logoImage = { data: buf, type: imgType, width: 180, height: 60 }
-      }
-    } catch { /* skip logo if fetch fails */ }
-  }
+  // Resolve tenant + report logo variants — see lib/reports/logo-variants
+  const reportLogos = await resolveReportLogos(tenantSettings, tenantRow)
 
   const input: NsxReportInput = {
     siteName: site.name,
@@ -152,7 +148,8 @@ export async function GET(request: NextRequest) {
     complexity,
     tests,
     // Report settings
-    logoImage,
+    logoImageOnLight: reportLogos.onLight,
+    logoImageOnDark:  reportLogos.onDark,
     companyName: tenantSettings?.report_company_name ?? undefined,
     companyAbn: tenantSettings?.report_company_abn ?? undefined,
     companyPhone: tenantSettings?.report_company_phone ?? undefined,

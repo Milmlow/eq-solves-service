@@ -12,6 +12,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generatePMAssetReport } from '@/lib/reports/pm-asset-report'
 import type { PmAssetReportInput, PmAssetSection, PmAssetTask } from '@/lib/reports/pm-asset-report'
+import {
+  resolveReportLogos,
+  resolveCustomerLogos,
+  fetchSitePhoto,
+} from '@/lib/reports/logo-variants'
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 
@@ -61,10 +66,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Check not found' }, { status: 404 })
   }
 
-  // Fetch site details for customer info
+  // Fetch site details for customer info + logo variants
   const { data: site } = await supabase
     .from('sites')
-    .select('*, customers(name)')
+    .select('*, customers(name, logo_url, logo_url_on_dark)')
     .eq('id', check.site_id)
     .maybeSingle()
 
@@ -101,29 +106,26 @@ export async function GET(request: NextRequest) {
   // Fetch tenant settings for branding + report config
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, logo_url, report_logo_url, report_complexity, report_show_cover_page, report_show_site_overview, report_show_contents, report_show_executive_summary, report_show_sign_off, report_header_text, report_footer_text, report_company_name, report_company_address, report_company_abn, report_company_phone, report_sign_off_fields')
+    .select('product_name, primary_colour, logo_url, logo_url_on_dark, report_logo_url, report_logo_url_on_dark, report_complexity, report_show_cover_page, report_show_site_overview, report_show_contents, report_show_executive_summary, report_show_sign_off, report_header_text, report_footer_text, report_company_name, report_company_address, report_company_abn, report_company_phone, report_sign_off_fields')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
-  const productName = tenantSettings?.product_name ?? 'EQ Solves'
+  // Fetch tenant row for product-name fallback
+  const { data: tenantRow } = await supabase
+    .from('tenants')
+    .select('name')
+    .eq('id', tenantId)
+    .maybeSingle()
+
+  const productName = tenantSettings?.product_name ?? tenantRow?.name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
   const complexity = complexityOverride ?? (tenantSettings?.report_complexity as 'summary' | 'standard' | 'detailed' | null) ?? 'standard'
 
-  // Fetch logo image if URL exists (report-specific logo overrides tenant logo)
-  const resolvedLogoUrl = tenantSettings?.report_logo_url || tenantSettings?.logo_url
-  let logoImage: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | undefined
-  if (resolvedLogoUrl) {
-    try {
-      const logoRes = await fetch(resolvedLogoUrl)
-      if (logoRes.ok) {
-        const buf = Buffer.from(await logoRes.arrayBuffer())
-        const ct = logoRes.headers.get('content-type') ?? ''
-        const imgType = ct.includes('png') ? 'png' as const : 'jpg' as const
-        // Scale logo to max 180px wide, 60px tall for report header
-        logoImage = { data: buf, type: imgType, width: 180, height: 60 }
-      }
-    } catch { /* skip logo if fetch fails */ }
-  }
+  // Resolve tenant + customer logos for both surfaces — see lib/reports/logo-variants
+  const reportLogos = await resolveReportLogos(tenantSettings, tenantRow)
+  const customerRow = site?.customers as { name: string; logo_url?: string | null; logo_url_on_dark?: string | null } | null
+  const customerLogos = await resolveCustomerLogos(customerRow, { width: 140, height: 48 })
+  const sitePhoto = check.site_id ? await fetchSitePhoto(supabase, check.site_id, tenantId) : undefined
 
   // Resolve user names (assigned_to, completed_by, etc.)
   const userIds = new Set<string>()
@@ -214,8 +216,16 @@ export async function GET(request: NextRequest) {
     tenantProductName: productName,
     primaryColour,
 
-    // Logo
-    logoImage,
+    // Tenant / report logo variants (light + dark surface)
+    logoImageOnLight: reportLogos.onLight,
+    logoImageOnDark:  reportLogos.onDark,
+
+    // Customer logo variants (cover page "Prepared for" lockup)
+    customerLogoOnLight: customerLogos.onLight,
+    customerLogoOnDark:  customerLogos.onDark,
+
+    // Site photo (cover page hero, below customer lockup)
+    sitePhoto,
 
     // Company details from report settings
     companyName: tenantSettings?.report_company_name ?? undefined,

@@ -29,6 +29,7 @@ import {
   TableOfContents,
   Bookmark,
   VerticalAlign,
+  ImageRun,
 } from 'docx'
 
 // ---------- types ----------
@@ -42,7 +43,10 @@ export interface AcbReportInput {
   tests: AcbReportTest[]
 
   // Report settings (optional — all generators now read these)
+  /** @deprecated Pass `logoImageOnLight` / `logoImageOnDark` instead. */
   logoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  logoImageOnLight?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  logoImageOnDark?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
   companyName?: string
   companyAddress?: string
   companyAbn?: string
@@ -520,11 +524,29 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
   const year = new Date().getFullYear()
   const today = formatDateDDMMYYYY(new Date().toISOString())
   const brand = input.primaryColour.replace('#', '')
+  const coverLogo = input.logoImageOnLight ?? input.logoImage ?? input.logoImageOnDark
+
+  const children: (Paragraph | Table)[] = []
+
+  // Logo (if provided) — renders above the title on light surface
+  if (coverLogo) {
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 2000, after: 400 },
+      children: [new ImageRun({
+        type: coverLogo.type,
+        data: coverLogo.data,
+        transformation: { width: coverLogo.width, height: coverLogo.height },
+        altText: { title: 'Company Logo', description: 'Company logo', name: 'company-logo' },
+      })],
+    }))
+  }
 
   return {
     children: [
+      ...children,
       // spacer
-      new Paragraph({ spacing: { before: 4000 } }),
+      new Paragraph({ spacing: { before: coverLogo ? 800 : 4000 } }),
       // site + title
       new Paragraph({
         alignment: AlignmentType.CENTER,

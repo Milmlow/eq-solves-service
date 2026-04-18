@@ -19,6 +19,8 @@ export async function uploadMediaAction(formData: FormData) {
     const category = (formData.get('category') as MediaCategory) ?? 'general'
     const entityType = (formData.get('entity_type') as string) || null
     const entityId = (formData.get('entity_id') as string) || null
+    const surfaceRaw = (formData.get('surface') as string) || 'any'
+    const surface = ['light', 'dark', 'any'].includes(surfaceRaw) ? surfaceRaw : 'any'
 
     if (!file || file.size === 0) return { success: false, error: 'No file provided.' }
     if (!name) return { success: false, error: 'Name is required.' }
@@ -59,6 +61,7 @@ export async function uploadMediaAction(formData: FormData) {
         file_name: file.name,
         content_type: file.type,
         file_size: file.size,
+        surface,
         uploaded_by: user.id,
       })
 
@@ -76,7 +79,7 @@ export async function uploadMediaAction(formData: FormData) {
   }
 }
 
-export async function updateMediaAction(id: string, data: { name?: string; category?: MediaCategory; entity_type?: string | null; entity_id?: string | null }) {
+export async function updateMediaAction(id: string, data: { name?: string; category?: MediaCategory; entity_type?: string | null; entity_id?: string | null; surface?: 'light' | 'dark' | 'any' }) {
   try {
     const { supabase, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }

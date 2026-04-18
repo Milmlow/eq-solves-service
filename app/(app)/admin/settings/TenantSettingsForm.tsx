@@ -32,6 +32,9 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
 
   // Logo
   const [logoUrl, setLogoUrl] = useState(settings.logo_url ?? '')
+  const [logoUrlOnDark, setLogoUrlOnDark] = useState(
+    (settings as unknown as { logo_url_on_dark?: string | null }).logo_url_on_dark ?? '',
+  )
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -45,8 +48,9 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     setLoading(true)
 
     const formData = new FormData(e.currentTarget)
-    // Ensure logo_url is current
+    // Ensure logo URLs are current
     formData.set('logo_url', logoUrl)
+    formData.set('logo_url_on_dark', logoUrlOnDark)
     const result = await updateTenantSettingsAction(formData)
 
     setLoading(false)
@@ -193,6 +197,33 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
           </div>
           {/* Hidden input for form submission */}
           <input type="hidden" name="logo_url" value={logoUrl} />
+
+          {/* Dark-surface logo variant */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Logo on Dark Surfaces</label>
+            <div className="flex items-start gap-4">
+              {/* Preview */}
+              <div className="w-24 h-24 border border-gray-200 rounded-lg flex items-center justify-center bg-eq-ink overflow-hidden shrink-0">
+                {logoUrlOnDark ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrlOnDark} alt="Dark-surface logo" className="max-w-full max-h-full object-contain p-1" />
+                ) : (
+                  <span className="text-xs text-white/50">No dark logo</span>
+                )}
+              </div>
+              <div className="space-y-2 flex-1">
+                <FormInput
+                  label="URL"
+                  name="logo_url_on_dark_display"
+                  value={logoUrlOnDark}
+                  onChange={(e) => setLogoUrlOnDark(e.target.value)}
+                  placeholder="https://example.com/logo-white.svg"
+                />
+                <p className="text-xs text-eq-grey">Used on report covers and dark banners. Leave empty to fall back to the light logo. Upload variants via Admin → Media Library.</p>
+              </div>
+            </div>
+          </div>
+          <input type="hidden" name="logo_url_on_dark" value={logoUrlOnDark} />
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">

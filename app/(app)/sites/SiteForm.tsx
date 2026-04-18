@@ -22,6 +22,12 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [photoUrl, setPhotoUrl] = useState<string | null>(site?.photo_url ?? null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(
+    (site as unknown as { logo_url?: string | null })?.logo_url ?? null,
+  )
+  const [logoUrlOnDark, setLogoUrlOnDark] = useState<string | null>(
+    (site as unknown as { logo_url_on_dark?: string | null })?.logo_url_on_dark ?? null,
+  )
 
   const isEdit = !!site
 
@@ -165,6 +171,34 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
             placeholder="Select site photo from media library…"
           />
           <input type="hidden" name="photo_url" value={photoUrl ?? ''} />
+        </div>
+
+        {/* Site Logo — optional override of customer logo */}
+        <div className="space-y-3 pt-2 border-t border-gray-100">
+          <div>
+            <p className="text-xs font-bold text-eq-grey uppercase tracking-wide">Site Logo Override</p>
+            <p className="text-xs text-eq-grey mt-0.5">Optional. Leave empty to inherit from customer.</p>
+          </div>
+          <MediaPicker
+            label="Logo on light backgrounds"
+            value={logoUrl}
+            onChange={(url) => setLogoUrl(url)}
+            category="customer_logo"
+            surface="light"
+            previewBackground="light"
+            placeholder="Select light-surface logo…"
+          />
+          <MediaPicker
+            label="Logo on dark backgrounds"
+            value={logoUrlOnDark}
+            onChange={(url) => setLogoUrlOnDark(url)}
+            category="customer_logo"
+            surface="dark"
+            previewBackground="dark"
+            placeholder="Select dark-surface logo…"
+          />
+          <input type="hidden" name="logo_url" value={logoUrl ?? ''} />
+          <input type="hidden" name="logo_url_on_dark" value={logoUrlOnDark ?? ''} />
         </div>
 
         {error && <p className="text-sm text-red-500">{error}</p>}

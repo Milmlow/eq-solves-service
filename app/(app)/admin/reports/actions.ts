@@ -19,6 +19,7 @@ interface ReportSettingsUpdate {
   report_company_phone: string | null
   report_sign_off_fields: string[]
   report_logo_url: string | null
+  report_logo_url_on_dark: string | null
   report_customer_logo: boolean
   report_site_photos: boolean
   report_complexity: 'summary' | 'standard' | 'detailed'
@@ -49,6 +50,7 @@ export async function updateReportSettingsAction(data: ReportSettingsUpdate) {
       report_company_phone: data.report_company_phone?.trim() || null,
       report_sign_off_fields: data.report_sign_off_fields.filter(f => f.trim().length > 0),
       report_logo_url: data.report_logo_url?.trim() || null,
+      report_logo_url_on_dark: data.report_logo_url_on_dark?.trim() || null,
       report_customer_logo: data.report_customer_logo ?? true,
       report_site_photos: data.report_site_photos ?? false,
       report_complexity: data.report_complexity ?? 'standard',
