@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Check, Download, Flag, RefreshCw } from 'lucide-react'
 import { navigate } from '../lib/router'
 import { useAssets, useFields, useJob } from '../hooks/useJobData'
-import { TopBar } from '../components/TopBar'
-import { ShareDialog } from '../components/ShareDialog'
 import { supabase } from '../lib/supabase'
+import { allCaptures, subscribeQueue } from '../lib/queue'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { ProgressBar } from '../components/ui/ProgressBar'
+import { cn } from '../lib/cn'
 
 interface Capture {
   asset_id: string
@@ -15,17 +19,28 @@ interface Capture {
   notes: string | null
 }
 
+/**
+ * Progress matrix (v2 Admin view) — every asset × every required field.
+ * Vertical field headers, sticky first column, click any cell to open that
+ * asset's capture page.
+ */
 export function AdminPage({ jobRef }: { jobRef: string }) {
   const { job } = useJob(jobRef)
   const jobId = job?.id ?? null
   const { assets } = useAssets(jobId)
   const { fields } = useFields(job?.classification_code ?? null)
-  const [captures, setCaptures] = useState<Capture[]>([])
+  const [serverCaptures, setServerCaptures] = useState<Capture[]>([])
   const [loading, setLoading] = useState(true)
   const [lastFetch, setLastFetch] = useState<Date | null>(null)
-  const [shareOpen, setShareOpen] = useState(false)
 
-  const fieldsCaptured = useMemo(() => fields.filter((f) => f.is_field_captured), [fields])
+  // Re-render when queue changes so pending local captures show immediately
+  const [, tick] = useState(0)
+  useEffect(() => subscribeQueue(() => tick((v) => v + 1)), [])
+
+  const fieldsCaptured = useMemo(
+    () => fields.filter((f) => f.is_field_captured),
+    [fields],
+  )
 
   const load = async () => {
     if (!assets.length) return
@@ -34,287 +49,377 @@ export function AdminPage({ jobRef }: { jobRef: string }) {
       .from('captures')
       .select('asset_id, classification_field_id, value, captured_by, captured_at, flagged, notes')
       .in('asset_id', assets.map((a) => a.id))
-    if (!error && data) setCaptures(data as Capture[])
+    if (!error && data) setServerCaptures(data as Capture[])
     setLoading(false)
     setLastFetch(new Date())
   }
 
   useEffect(() => {
     void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assets.length])
 
-  // Poll every 15s when tab is focused
+  // Poll every 15s when tab focused
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === 'visible') void load()
     }, 15000)
     return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assets.length])
 
-  // Index captures by (assetId, fieldId)
+  // Merge server + local queue — local wins (captures may be pending sync)
   const capByCell = useMemo(() => {
     const m = new Map<string, Capture>()
-    for (const c of captures) m.set(`${c.asset_id}:${c.classification_field_id}`, c)
+    for (const c of serverCaptures) m.set(`${c.asset_id}:${c.classification_field_id}`, c)
+    for (const q of allCaptures()) {
+      const key = `${q.assetId}:${q.classificationFieldId}`
+      m.set(key, {
+        asset_id: q.assetId,
+        classification_field_id: q.classificationFieldId,
+        value: q.value,
+        captured_by: q.capturedBy,
+        captured_at: q.capturedAt,
+        flagged: q.flagged,
+        notes: q.notes,
+      })
+    }
     return m
-  }, [captures])
+  }, [serverCaptures, assets])
 
-  // Per-asset progress
-  const progressByAsset = useMemo(() => {
-    const m = new Map<string, { done: number; total: number; byWhom: Set<string>; latest: string | null }>()
-    for (const a of assets) {
+  // Per-field coverage (column footer)
+  const colCoverage = useMemo(() => {
+    const m = new Map<number, { filled: number; total: number }>()
+    for (const f of fieldsCaptured) {
+      let filled = 0
+      for (const a of assets) {
+        const c = capByCell.get(`${a.id}:${f.id}`)
+        if (c?.value && c.value.trim() !== '') filled += 1
+      }
+      m.set(f.id, { filled, total: assets.length })
+    }
+    return m
+  }, [fieldsCaptured, assets, capByCell])
+
+  // Overall stats
+  const totals = useMemo(() => {
+    const totalCells = assets.length * fieldsCaptured.length
+    let filled = 0
+    let flagged = 0
+    const people = new Set<string>()
+    for (const c of capByCell.values()) {
+      if (c.value && c.value.trim() !== '') filled += 1
+      if (c.flagged) flagged += 1
+      if (c.captured_by) people.add(c.captured_by)
+    }
+    const assetsComplete = assets.filter((a) => {
       let done = 0
-      let latest: string | null = null
-      const byWhom = new Set<string>()
       for (const f of fieldsCaptured) {
         const c = capByCell.get(`${a.id}:${f.id}`)
-        if (c?.value && c.value !== '') {
-          done++
-          if (c.captured_by) byWhom.add(c.captured_by)
-          if (!latest || c.captured_at > latest) latest = c.captured_at
-        }
+        if (c?.value && c.value.trim() !== '') done += 1
       }
-      m.set(a.id, { done, total: fieldsCaptured.length, byWhom, latest })
-    }
-    return m
-  }, [assets, fieldsCaptured, capByCell])
+      return fieldsCaptured.length > 0 && done === fieldsCaptured.length
+    }).length
+    return { totalCells, filled, flagged, assetsComplete, people: people.size }
+  }, [capByCell, assets, fieldsCaptured])
 
-  const totalDone = useMemo(
-    () => [...progressByAsset.values()].filter((p) => p.done === p.total && p.total > 0).length,
-    [progressByAsset],
-  )
-  const totalCells = assets.length * fieldsCaptured.length
-  const filledCells = useMemo(() => {
-    let n = 0
-    for (const p of progressByAsset.values()) n += p.done
-    return n
-  }, [progressByAsset])
+  const exportCsv = () => {
+    const header = [
+      'row_number',
+      'asset_id',
+      'description',
+      ...fieldsCaptured.map((f) => f.display_name),
+    ]
+    const rows = assets.map((a) => {
+      const vals = fieldsCaptured.map((f) => {
+        const c = capByCell.get(`${a.id}:${f.id}`)
+        const v = c?.value ?? ''
+        return v.includes(',') || v.includes('"') || v.includes('\n')
+          ? `"${v.replace(/"/g, '""')}"`
+          : v
+      })
+      return [a.row_number, a.asset_id ?? '', a.description, ...vals].join(',')
+    })
+    const csv = [header.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${job?.slug ?? jobRef}_matrix.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
-  // Who captured what — breakdown by person
-  const byPerson = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const c of captures) {
-      if (!c.value || !c.captured_by) continue
-      m.set(c.captured_by, (m.get(c.captured_by) ?? 0) + 1)
-    }
-    return [...m.entries()].sort((a, b) => b[1] - a[1])
-  }, [captures])
-
-  const flagged = useMemo(() => captures.filter((c) => c.flagged), [captures])
+  if (!assets.length) {
+    return (
+      <div className="max-w-[1320px] mx-auto">
+        <div className="text-[13px] text-muted">Loading matrix…</div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen flex flex-col bg-sky-soft">
-      <TopBar
-        title={job?.name ?? 'Admin'}
-        subtitle={job ? `${job.site_code} · ${job.classification_code} · admin view` : undefined}
-        onBack={() => navigate(`/j/${jobRef}`)}
-        right={
-          <div className="flex gap-2 ml-2">
-            <button onClick={() => setShareOpen(true)} className="btn btn-ghost btn-md">
-              Share
-            </button>
-            <button onClick={load} className="btn btn-ghost btn-md">
-              {loading ? '…' : 'Refresh'}
-            </button>
+    <div className="max-w-[1320px] mx-auto">
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+        <div>
+          <div className="text-[20px] font-bold tracking-[-0.01em] leading-tight">
+            Progress matrix
           </div>
-        }
-      />
-
-      <div className="px-6 py-6 space-y-4 flex-1">
-        {/* KPI strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Kpi label="Assets complete" value={`${totalDone}/${assets.length}`} accent="sky" />
-          <Kpi
-            label="Data points filled"
-            value={`${filledCells}/${totalCells}`}
-            accent="ok"
-            sub={totalCells ? `${Math.round((filledCells / totalCells) * 100)}%` : '—'}
-          />
-          <Kpi label="Captured by" value={`${byPerson.length}`} sub="field techs" />
-          <Kpi
-            label="Flagged"
-            value={`${flagged.length}`}
-            accent={flagged.length ? 'warn' : undefined}
-            sub="review required"
-          />
+          <div className="text-[12px] text-muted mt-1">
+            Every asset × every required field. Click any cell to jump straight to it.
+            {lastFetch && (
+              <span className="ml-2 text-gray-400">· Updated {formatRelative(lastFetch)}</span>
+            )}
+          </div>
         </div>
-
-        {/* Per-person breakdown */}
-        {byPerson.length > 0 ? (
-          <div className="card p-4">
-            <h2 className="font-bold text-ink mb-2 text-sm">Captures by person</h2>
-            <div className="flex flex-wrap gap-2">
-              {byPerson.map(([name, n]) => (
-                <div
-                  key={name}
-                  className="px-3 py-1.5 rounded-full bg-sky-soft border border-border text-sm"
-                >
-                  <span className="font-semibold">{name}</span>
-                  <span className="text-muted ml-1.5">{n}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Flagged list */}
-        {flagged.length > 0 ? (
-          <div className="card p-4 border-warn/40 bg-warn/5">
-            <h2 className="font-bold text-ink mb-2 text-sm">Flagged for review</h2>
-            <div className="space-y-2 text-sm">
-              {flagged.slice(0, 10).map((c) => {
-                const asset = assets.find((a) => a.id === c.asset_id)
-                const field = fields.find((f) => f.id === c.classification_field_id)
-                return (
-                  <div key={`${c.asset_id}:${c.classification_field_id}`} className="flex items-start gap-2">
-                    <span className="text-warn">⚑</span>
-                    <div className="flex-1">
-                      <div className="font-semibold">
-                        {asset?.description ?? '?'} · {field?.display_name ?? '?'}
-                      </div>
-                      {c.notes ? <div className="text-xs text-muted">{c.notes}</div> : null}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Asset grid */}
-        <div className="card p-0 overflow-hidden">
-          <div className="p-3 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-ink text-sm">Asset matrix</h2>
-            <div className="text-xs text-muted">
-              {lastFetch ? `Updated ${formatRelative(lastFetch)}` : 'Loading…'} · auto-refreshes every 15s
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead className="bg-sky-soft/60 sticky top-0 z-10">
-                <tr>
-                  <th className="text-left px-3 py-2 font-semibold sticky left-0 bg-sky-soft z-10 min-w-[240px]">
-                    Asset
-                  </th>
-                  <th className="text-left px-3 py-2 font-semibold min-w-[100px]">Progress</th>
-                  <th className="text-left px-3 py-2 font-semibold min-w-[110px]">Captured by</th>
-                  <th className="text-left px-3 py-2 font-semibold min-w-[110px]">Last update</th>
-                  {fieldsCaptured.map((f) => (
-                    <th
-                      key={f.id}
-                      className="text-center px-1.5 py-2 font-semibold min-w-[28px]"
-                      title={f.display_name}
-                    >
-                      <div className="rotate-[-60deg] origin-left whitespace-nowrap h-12 translate-y-3 translate-x-3 text-[10px] font-semibold text-muted">
-                        {f.display_name.length > 22
-                          ? f.display_name.slice(0, 22) + '…'
-                          : f.display_name}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {assets.map((a) => {
-                  const p = progressByAsset.get(a.id)!
-                  const complete = p.done === p.total && p.total > 0
-                  return (
-                    <tr key={a.id} className="hover:bg-sky-soft/40">
-                      <td className="px-3 py-2 sticky left-0 bg-white/80 backdrop-blur z-[1] font-semibold text-ink">
-                        <button
-                          onClick={() => navigate(`/j/${jobRef}/a/${a.id}`)}
-                          className="text-left hover:text-sky-deep"
-                        >
-                          <div className="mono text-[10px] text-muted">#{a.asset_id ?? '—'}</div>
-                          <div className="leading-tight">{a.description}</div>
-                        </button>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-border/60 overflow-hidden">
-                            <div
-                              className={`h-full ${complete ? 'bg-ok' : 'bg-sky'}`}
-                              style={{ width: `${p.total ? (p.done / p.total) * 100 : 0}%` }}
-                            />
-                          </div>
-                          <span className="mono text-[10px] tabular-nums">
-                            {p.done}/{p.total}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-xs">
-                        {[...p.byWhom].join(', ') || <span className="text-muted">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-muted">
-                        {p.latest ? formatRelative(new Date(p.latest)) : '—'}
-                      </td>
-                      {fieldsCaptured.map((f) => {
-                        const c = capByCell.get(`${a.id}:${f.id}`)
-                        const has = Boolean(c?.value && c.value !== '')
-                        return (
-                          <td key={f.id} className="text-center px-1 py-1">
-                            <span
-                              title={
-                                c?.value
-                                  ? `${f.display_name}: ${c.value}${c.captured_by ? ' (' + c.captured_by + ')' : ''}`
-                                  : `${f.display_name}: empty`
-                              }
-                              className={`inline-block w-4 h-4 rounded ${
-                                has
-                                  ? c?.flagged
-                                    ? 'bg-warn'
-                                    : 'bg-ok'
-                                  : 'bg-border/60'
-                              }`}
-                            />
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" icon={RefreshCw} onClick={load} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button size="sm" variant="ghost" icon={Download} onClick={exportCsv}>
+            Export CSV
+          </Button>
         </div>
       </div>
 
-      {shareOpen && job ? (
-        <ShareDialog
-          url={`${window.location.origin}/#/j/${job.slug ?? job.id}`}
-          title={job.name ?? `${job.site_code} ${job.classification_code}`}
-          subtitle="Scan to open the capture form on a phone"
-          pin={null}
-          onClose={() => setShareOpen(false)}
+      {/* Top stat strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <MatrixStat
+          label="Assets complete"
+          value={`${totals.assetsComplete}/${assets.length}`}
+          tone={totals.assetsComplete === assets.length ? 'ok' : 'info'}
         />
-      ) : null}
+        <MatrixStat
+          label="Cells filled"
+          value={`${totals.filled}/${totals.totalCells}`}
+          sub={totals.totalCells ? `${Math.round((totals.filled / totals.totalCells) * 100)}%` : '—'}
+        />
+        <MatrixStat label="Capturers" value={totals.people} sub="field techs" />
+        <MatrixStat
+          label="Flagged"
+          value={totals.flagged}
+          tone={totals.flagged ? 'warn' : 'neutral'}
+          sub="review required"
+        />
+      </div>
+
+      {/* Matrix table */}
+      <Card padding={0} className="overflow-hidden">
+        <div className="overflow-auto max-h-[calc(100vh-340px)]">
+          <table className="border-collapse text-[11px] min-w-full">
+            <thead>
+              <tr>
+                <th
+                  className="sticky left-0 top-0 z-30 bg-gray-50 px-3 py-2.5 text-left border-b border-r border-gray-200 min-w-[240px]"
+                  style={{ verticalAlign: 'bottom' }}
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted">
+                    Asset
+                  </div>
+                </th>
+                {fieldsCaptured.map((f) => {
+                  const c = colCoverage.get(f.id)!
+                  const pct = c.total > 0 ? (c.filled / c.total) * 100 : 0
+                  const color = pct === 100 ? '#16A34A' : pct > 50 ? '#3DA8D8' : '#D97706'
+                  return (
+                    <th
+                      key={f.id}
+                      className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-1.5 py-2 min-w-[60px]"
+                      style={{ verticalAlign: 'bottom' }}
+                      title={f.display_name}
+                    >
+                      <div
+                        className="text-[10px] font-bold text-ink whitespace-nowrap mx-auto flex items-end"
+                        style={{
+                          writingMode: 'vertical-rl',
+                          transform: 'rotate(180deg)',
+                          height: 100,
+                        }}
+                      >
+                        {f.display_name}
+                      </div>
+                      <div className="mt-1.5 px-1">
+                        <ProgressBar done={c.filled} total={c.total} height={3} color={color} />
+                        <div
+                          className={cn(
+                            'text-[9px] font-bold font-mono mt-0.5 text-center tabular-nums',
+                            pct === 100 ? 'text-ok' : 'text-muted',
+                          )}
+                        >
+                          {c.filled}/{c.total}
+                        </div>
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {assets.map((a, ri) => {
+                const rowBg = ri % 2 ? 'bg-gray-50' : 'bg-white'
+                let done = 0
+                let rowFlagged = false
+                for (const f of fieldsCaptured) {
+                  const c = capByCell.get(`${a.id}:${f.id}`)
+                  if (c?.value && c.value.trim() !== '') done += 1
+                  if (c?.flagged) rowFlagged = true
+                }
+                const complete = fieldsCaptured.length > 0 && done === fieldsCaptured.length
+
+                return (
+                  <tr key={a.id} className="group">
+                    <td
+                      className={cn(
+                        'sticky left-0 z-10 px-3 py-2 border-b border-r border-gray-100 whitespace-nowrap',
+                        rowBg,
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/j/${jobRef}/a/${a.id}`)}
+                        className="flex items-center gap-2 text-left cursor-pointer hover:text-sky-deep"
+                      >
+                        <code className="text-[10px] font-bold font-mono text-sky-deep">
+                          #{a.row_number.toString().padStart(3, '0')}
+                        </code>
+                        <div className="min-w-0">
+                          <div className="text-[12px] font-semibold text-ink leading-tight">
+                            {a.asset_id ?? a.asset_uid ?? '—'}
+                          </div>
+                          <div className="text-[10px] text-muted truncate max-w-[160px]">
+                            {a.description}
+                          </div>
+                        </div>
+                        {rowFlagged && (
+                          <Flag size={10} strokeWidth={2.5} className="text-bad ml-1 shrink-0" />
+                        )}
+                        {complete && (
+                          <Check size={12} strokeWidth={2.5} className="text-ok ml-1 shrink-0" />
+                        )}
+                      </button>
+                    </td>
+                    {fieldsCaptured.map((f) => {
+                      const c = capByCell.get(`${a.id}:${f.id}`)
+                      return (
+                        <td
+                          key={f.id}
+                          className={cn('p-0 border-b border-gray-100', rowBg)}
+                        >
+                          <MatrixCell
+                            value={c?.value ?? null}
+                            flagged={Boolean(c?.flagged)}
+                            fieldName={f.display_name}
+                            onClick={() => navigate(`/j/${jobRef}/a/${a.id}`)}
+                          />
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Legend */}
+      <div className="flex items-center gap-3 mt-3 text-[11px] text-muted flex-wrap">
+        <LegendSwatch color="#F0FDF4" border="#16A34A" label="Captured" />
+        <LegendSwatch color="#FFFBEB" border="#D97706" label="Flagged" />
+        <LegendSwatch color="#F9FAFB" border="#D1D5DB" label="Empty" />
+        <div className="ml-auto">Click any cell to open that asset.</div>
+      </div>
     </div>
   )
 }
 
-function Kpi({
+// ─── Internals ────────────────────────────────────────────────────────────
+
+function MatrixCell({
+  value,
+  flagged,
+  fieldName,
+  onClick,
+}: {
+  value: string | null
+  flagged: boolean
+  fieldName: string
+  onClick: () => void
+}) {
+  const hasVal = Boolean(value && value.trim())
+  const short = hasVal
+    ? value!.length > 8
+      ? value!.slice(0, 7) + '…'
+      : value!
+    : ''
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={hasVal ? `${fieldName}: ${value}` : `${fieldName} — not captured`}
+      className={cn(
+        'h-[34px] min-w-[60px] w-full flex items-center justify-center cursor-pointer',
+        'text-[10px] font-semibold font-mono border-r border-gray-100',
+        'transition-colors duration-120',
+        flagged
+          ? 'bg-[#FFFBEB] text-[#B45309] hover:bg-[#FEF3C7]'
+          : hasVal
+            ? 'bg-[#F0FDF4] text-[#15803D] hover:bg-[#DCFCE7]'
+            : 'bg-transparent text-gray-300 hover:bg-gray-100',
+      )}
+    >
+      {hasVal ? short : '—'}
+    </button>
+  )
+}
+
+function MatrixStat({
   label,
   value,
   sub,
-  accent,
+  tone = 'neutral',
 }: {
   label: string
-  value: string
+  value: string | number
   sub?: string
-  accent?: 'sky' | 'ok' | 'warn'
+  tone?: 'neutral' | 'info' | 'ok' | 'warn'
 }) {
-  const accentClass =
-    accent === 'ok'
+  const toneCls =
+    tone === 'ok'
       ? 'text-ok'
-      : accent === 'warn'
+      : tone === 'warn'
         ? 'text-warn'
-        : accent === 'sky'
+        : tone === 'info'
           ? 'text-sky-deep'
           : 'text-ink'
   return (
-    <div className="card p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</div>
-      <div className={`text-2xl font-bold ${accentClass}`}>{value}</div>
-      {sub ? <div className="text-xs text-muted">{sub}</div> : null}
+    <Card padding={14}>
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted">{label}</div>
+      <div className={cn('font-mono font-bold text-[22px] leading-none mt-1.5 tabular-nums', toneCls)}>
+        {value}
+      </div>
+      {sub && <div className="text-[11px] text-muted mt-1">{sub}</div>}
+    </Card>
+  )
+}
+
+function LegendSwatch({
+  color,
+  border,
+  label,
+}: {
+  color: string
+  border: string
+  label: string
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div
+        className="w-3.5 h-3.5 rounded-sm"
+        style={{ background: color, border: `1px solid ${border}` }}
+      />
+      <span>{label}</span>
     </div>
   )
 }

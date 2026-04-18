@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Delete } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { EqMark } from './EqMark'
 import { navigate } from '../lib/router'
+import { Eyebrow } from './ui/Eyebrow'
 
 const PIN_PASS_KEY_PREFIX = 'eq-pin-pass-v1:'
 
@@ -56,18 +58,12 @@ interface Props {
 }
 
 export function PinGate({ jobId, onPass }: Props) {
-  const [digits, setDigits] = useState(['', '', '', ''])
+  const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
   const [attempts, setAttempts] = useState(0)
   const [cooldownUntil, setCooldownUntil] = useState(0)
   const [now, setNow] = useState(Date.now())
-  const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)]
-
-  useEffect(() => {
-    refs[0].current?.focus()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Tick while cooling down so the countdown updates
   useEffect(() => {
@@ -76,32 +72,44 @@ export function PinGate({ jobId, onPass }: Props) {
     return () => clearInterval(id)
   }, [cooldownUntil, now])
 
+  // Physical keyboard support
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (cooldownUntil > Date.now() || checking) return
+      if (e.key >= '0' && e.key <= '9') push(e.key)
+      else if (e.key === 'Backspace') back()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin, cooldownUntil, checking])
+
   const cooldownRemaining = Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
   const locked = cooldownRemaining > 0
 
-  const setDigit = (i: number, v: string) => {
-    if (locked) return
-    const clean = v.replace(/\D/g, '').slice(0, 1)
-    const next = [...digits]
-    next[i] = clean
-    setDigits(next)
+  const push = (d: string) => {
+    if (locked || checking) return
+    if (pin.length >= 4) return
+    const next = pin + d
     setError(null)
-    if (clean && i < 3) refs[i + 1].current?.focus()
-    if (next.every((d) => d !== '')) {
-      void submit(next.join(''))
+    setPin(next)
+    if (next.length === 4) {
+      setTimeout(() => {
+        void submit(next)
+      }, 150)
     }
   }
 
-  const handleKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[i] && i > 0) {
-      refs[i - 1].current?.focus()
-    }
+  const back = () => {
+    if (locked || checking) return
+    setPin((p) => p.slice(0, -1))
+    setError(null)
   }
 
-  const submit = async (pin: string) => {
+  const submit = async (candidate: string) => {
     if (locked) return
     setChecking(true)
-    const ok = await verifyPin(jobId, pin)
+    const ok = await verifyPin(jobId, candidate)
     setChecking(false)
     if (ok) {
       grantPinPass(jobId)
@@ -110,7 +118,7 @@ export function PinGate({ jobId, onPass }: Props) {
     }
     const newAttempts = attempts + 1
     setAttempts(newAttempts)
-    setDigits(['', '', '', ''])
+    setPin('')
 
     // Progressive cooldown: 3rd wrong = 10s, 4th = 30s, 5th+ = 2min
     if (newAttempts >= 5) {
@@ -123,58 +131,198 @@ export function PinGate({ jobId, onPass }: Props) {
       setCooldownUntil(Date.now() + 10_000)
       setError('Too many wrong attempts. Wait 10 seconds.')
     } else {
-      setError('Wrong PIN. Check with the office.')
-      refs[0].current?.focus()
+      setError('Wrong PIN — check with the office.')
     }
   }
 
+  const isError = Boolean(error) && !locked
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-6">
-          <div className="inline-flex mb-4">
-            <EqMark size={40} />
-          </div>
-          <h1 className="text-2xl font-bold text-ink mb-1">Job PIN</h1>
-          <p className="text-sm text-muted">Ask the office for today's 4-digit code.</p>
+    <div
+      className="min-h-screen grid bg-white"
+      style={{ gridTemplateColumns: 'minmax(0,1fr) 480px' }}
+    >
+      {/* ── Left: brand panel ──────────────────────────────────── */}
+      <div
+        className="relative overflow-hidden text-white p-[60px] flex flex-col"
+        style={{
+          background:
+            'linear-gradient(135deg, #1A1A2E 0%, #2986B4 100%)',
+        }}
+      >
+        {/* Decorative blurred blobs */}
+        <div
+          className="absolute rounded-full pointer-events-none"
+          style={{
+            top: -120,
+            right: -120,
+            width: 420,
+            height: 420,
+            background: 'rgba(61,168,216,0.18)',
+            filter: 'blur(40px)',
+          }}
+        />
+        <div
+          className="absolute rounded-full pointer-events-none"
+          style={{
+            bottom: -80,
+            left: -80,
+            width: 300,
+            height: 300,
+            background: 'rgba(61,168,216,0.12)',
+            filter: 'blur(50px)',
+          }}
+        />
+
+        <div className="relative z-10 flex items-center gap-3">
+          <EqMark variant="white" size={40} aria-hidden />
         </div>
-        <div className="card p-6">
-          <div className="flex gap-3 justify-center mb-3">
-            {digits.map((d, i) => (
-              <input
-                key={i}
-                ref={refs[i]}
-                type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={1}
-                value={d}
-                onChange={(e) => setDigit(i, e.target.value)}
-                onKeyDown={(e) => handleKey(i, e)}
-                disabled={checking || locked}
-                className="w-14 h-16 rounded-xl border-2 border-border bg-white text-ink text-center text-2xl font-bold mono focus:border-sky focus:ring-2 focus:ring-sky/20 outline-none disabled:opacity-50"
-                aria-label={`PIN digit ${i + 1}`}
-              />
-            ))}
-          </div>
-          {locked ? (
-            <div className="text-center text-sm text-warn font-semibold">
-              {error} <span className="mono">({cooldownRemaining}s)</span>
-            </div>
-          ) : error ? (
-            <div className="text-center text-sm text-bad font-semibold">{error}</div>
-          ) : null}
-          {checking ? <div className="text-center text-sm text-muted">Checking…</div> : null}
-        </div>
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => navigate('/')}
-            className="text-sm text-muted hover:text-ink underline underline-offset-2"
+
+        <div className="relative z-10 flex-1 flex flex-col justify-center">
+          <div
+            className="text-[11px] font-bold uppercase mb-3.5"
+            style={{ letterSpacing: '0.22em', color: 'rgba(255,255,255,0.6)' }}
           >
-            Wrong link? Go home
-          </button>
+            Solves · Assets
+          </div>
+          <h1
+            className="font-extrabold mb-4"
+            style={{
+              fontSize: 44,
+              lineHeight: 1.05,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Nameplates<br />in, spreadsheet<br />out.
+          </h1>
+          <p
+            className="max-w-[440px] text-[15px]"
+            style={{ lineHeight: 1.55, color: 'rgba(255,255,255,0.75)' }}
+          >
+            Capture electrical asset data with your phone, on-site and offline.
+            Sync back to the office the moment you're in range.
+          </p>
+        </div>
+
+        <div
+          className="relative z-10 text-[11px]"
+          style={{ color: 'rgba(255,255,255,0.5)' }}
+        >
+          © {new Date().getFullYear()} EQ Solutions
+        </div>
+      </div>
+
+      {/* ── Right: PIN pad ─────────────────────────────────────── */}
+      <div className="flex flex-col justify-center px-14 py-[60px]">
+        <Eyebrow>Crew sign-in</Eyebrow>
+        <h2
+          className="text-ink font-bold mt-1.5 mb-1"
+          style={{ fontSize: 28, letterSpacing: '-0.015em' }}
+        >
+          Enter job PIN
+        </h2>
+        <p className="text-[13px] text-muted mb-7">
+          Ask the office for today's 4-digit code.
+        </p>
+
+        {/* PIN slots */}
+        <div className="flex gap-3 mb-7">
+          {[0, 1, 2, 3].map((i) => {
+            const filled = i < pin.length
+            const borderColor = isError
+              ? '#DC2626'
+              : filled
+                ? '#2986B4'
+                : '#D1D5DB'
+            return (
+              <div
+                key={i}
+                className="flex-1 h-14 rounded-lg flex items-center justify-center transition-all duration-150"
+                style={{
+                  background: filled ? '#EAF5FB' : '#FFFFFF',
+                  border: `1.5px solid ${borderColor}`,
+                }}
+              >
+                {filled && (
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{
+                      background: isError ? '#DC2626' : '#2986B4',
+                    }}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Keypad */}
+        <div
+          className="grid gap-2.5"
+          style={{ gridTemplateColumns: 'repeat(3, 1fr)', maxWidth: 320 }}
+        >
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+            <PinKey key={n} onClick={() => push(String(n))} disabled={locked || checking}>
+              {n}
+            </PinKey>
+          ))}
+          <div />
+          <PinKey onClick={() => push('0')} disabled={locked || checking}>
+            0
+          </PinKey>
+          <PinKey onClick={back} disabled={locked || checking} aria-label="Backspace">
+            <Delete size={18} strokeWidth={2} />
+          </PinKey>
+        </div>
+
+        {/* Status row */}
+        <div className="mt-6 min-h-[20px] text-[12px]">
+          {checking && <span className="text-muted">Checking…</span>}
+          {!checking && locked && (
+            <span className="text-warn-fg font-semibold">
+              {error} <span className="font-mono">({cooldownRemaining}s)</span>
+            </span>
+          )}
+          {!checking && !locked && error && (
+            <span className="text-bad-fg font-semibold">{error}</span>
+          )}
+          {!checking && !locked && !error && (
+            <span className="text-muted">
+              Trouble signing in?{' '}
+              <button
+                onClick={() => navigate('/')}
+                className="text-sky-deep font-semibold hover:underline"
+              >
+                Go home →
+              </button>
+            </span>
+          )}
         </div>
       </div>
     </div>
+  )
+}
+
+function PinKey({
+  children,
+  onClick,
+  disabled,
+  'aria-label': ariaLabel,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  disabled?: boolean
+  'aria-label'?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className="h-14 rounded-lg text-[20px] font-semibold text-ink bg-white border border-gray-200 transition-colors duration-[80ms] flex items-center justify-center hover:bg-ice hover:border-sky-deep active:bg-ice focus:outline-none focus-visible:shadow-focus disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {children}
+    </button>
   )
 }

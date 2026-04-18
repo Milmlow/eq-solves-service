@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Mail, MessageSquare, Phone } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSite } from '../hooks/useJobData'
 import { EqMark } from './EqMark'
@@ -150,9 +151,10 @@ function ContactCard({ contact }: { contact: { role: string; name: string; phone
         {contact.phone ? (
           <a
             href={`tel:${stripNonDial(contact.phone)}`}
-            className="btn btn-primary btn-md flex-1 justify-center"
+            className="btn btn-primary btn-md flex-1 justify-center gap-1.5"
           >
-            <span className="mr-1.5">📞</span> Call
+            <Phone size={14} strokeWidth={2} />
+            Call
           </a>
         ) : null}
         {contact.phone ? (
@@ -162,7 +164,7 @@ function ContactCard({ contact }: { contact: { role: string; name: string; phone
             aria-label="Text"
             title="Text"
           >
-            💬
+            <MessageSquare size={14} strokeWidth={2} />
           </a>
         ) : null}
         {contact.email ? (
@@ -172,7 +174,7 @@ function ContactCard({ contact }: { contact: { role: string; name: string; phone
             aria-label="Email"
             title="Email"
           >
-            ✉️
+            <Mail size={14} strokeWidth={2} />
           </a>
         ) : null}
       </div>

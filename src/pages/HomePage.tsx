@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChevronRight, FileSpreadsheet, LogOut, Wrench } from 'lucide-react'
 import { navigate } from '../lib/router'
 import { EqLockup, EqMark } from '../components/EqMark'
 import { SiteInfoSheet } from '../components/SiteInfoSheet'
@@ -84,12 +85,10 @@ export function HomePage() {
                     </button>
                     <button
                       onClick={() => navigate(`/j/${ref}`)}
-                      className="p-1 -mr-1"
+                      className="p-1 -mr-1 text-muted"
                       aria-label="Open job"
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
-                        <path d="M9 18l6-6-6-6" />
-                      </svg>
+                      <ChevronRight size={16} strokeWidth={2} />
                     </button>
                   </div>
                 )
@@ -104,15 +103,17 @@ export function HomePage() {
             </div>
             <button
               onClick={() => navigate('/import')}
-              className="btn btn-ghost btn-md w-full justify-start"
+              className="btn btn-ghost btn-md w-full justify-start gap-2"
             >
-              <span className="mr-2">📋</span> Import a new template
+              <FileSpreadsheet size={16} strokeWidth={2} />
+              Import a new template
             </button>
             <button
               onClick={() => navigate('/debug')}
-              className="btn btn-ghost btn-md w-full justify-start"
+              className="btn btn-ghost btn-md w-full justify-start gap-2"
             >
-              <span className="mr-2">🔧</span> Run self-check
+              <Wrench size={16} strokeWidth={2} />
+              Run self-check
             </button>
             {capturedBy ? (
               <button
@@ -121,16 +122,17 @@ export function HomePage() {
                   signOut()
                   setCapturedBy(null)
                 }}
-                className="btn btn-ghost btn-md w-full justify-start text-bad"
+                className="btn btn-ghost btn-md w-full justify-start gap-2 text-bad-fg"
               >
-                <span className="mr-2">🚪</span> Sign out ({capturedBy})
+                <LogOut size={16} strokeWidth={2} />
+                Sign out ({capturedBy})
               </button>
             ) : null}
           </div>
         </div>
       </div>
       <div className="safe-bottom py-4 flex items-center justify-center gap-1.5 text-xs text-muted">
-        <EqMark size={14} aria-hidden />
+        <EqMark size={20} aria-hidden />
         <span>EQ Solutions</span>
         <span className="mono text-[10px]">· {versionLabel()}</span>
       </div>

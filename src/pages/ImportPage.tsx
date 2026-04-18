@@ -1,8 +1,20 @@
 import { useState } from 'react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Check,
+  FileText,
+  Info,
+  Plus,
+  Upload,
+} from 'lucide-react'
 import { navigate } from '../lib/router'
-import { TopBar } from '../components/TopBar'
 import { parseTemplate, type ParsedTemplate } from '../lib/templateParser'
 import { supabase } from '../lib/supabase'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Pill } from '../components/ui/Pill'
+import { cn } from '../lib/cn'
 
 type Stage = 'idle' | 'parsing' | 'preview' | 'creating' | 'done' | 'error'
 
@@ -17,6 +29,8 @@ export function ImportPage() {
   const [error, setError] = useState<string | null>(null)
   const [createdJobIds, setCreatedJobIds] = useState<string[]>([])
   const [createdJobSlugs, setCreatedJobSlugs] = useState<Array<string | null>>([])
+
+  const stepIndex = stage === 'idle' ? 0 : stage === 'preview' ? 1 : stage === 'done' ? 2 : stage === 'creating' ? 2 : 0
 
   const onFile = async (f: File) => {
     setFile(f)
@@ -41,13 +55,8 @@ export function ImportPage() {
     setStage('creating')
     setError(null)
     try {
-      // Ensure classification rows exist (for new-to-us classifications we
-      // won't create them here — they're part of the pre-seed. But fields
-      // might need updating.)
       const createdIds: string[] = []
       const createdSlugs: Array<string | null> = []
-
-      // Simple slug: site-classification, lowercased, unique-suffix if taken
       const makeSlug = (site: string, cls: string) =>
         `${site}-${cls}`
           .toLowerCase()
@@ -55,7 +64,6 @@ export function ImportPage() {
           .replace(/^-+|-+$/g, '')
 
       for (const cls of parsed.classifications) {
-        // 1. Upsert classification_fields for this classification
         const fields = parsed.fieldsByClassification[cls] ?? []
         if (fields.length > 0) {
           const fieldRows = fields.map((f) => ({
@@ -76,10 +84,8 @@ export function ImportPage() {
           if (fErr) throw new Error(`Field upsert failed for ${cls}: ${fErr.message}`)
         }
 
-        // 2. Create the job
         const baseSlug = makeSlug(siteCode.trim(), cls)
         let slug: string | null = baseSlug
-        // Check if slug already exists; append -2, -3 etc. if needed
         for (let i = 2; i < 10; i++) {
           const { data: exists } = await supabase
             .from('jobs')
@@ -89,6 +95,7 @@ export function ImportPage() {
           if (!exists) break
           slug = `${baseSlug}-${i}`
         }
+
         const jobRow = {
           slug,
           site_code: siteCode.trim().toUpperCase(),
@@ -101,26 +108,21 @@ export function ImportPage() {
         const jobResp = await supabase.from('jobs').insert(jobRow as never).select('id, slug').single()
         if (jobResp.error) throw new Error(`Job creation failed: ${jobResp.error.message}`)
         const newJob = jobResp.data as { id: string; slug: string | null }
-        const newJobId = newJob.id
-        createdIds.push(newJobId)
+        createdIds.push(newJob.id)
         createdSlugs.push(newJob.slug)
 
-        // Optional PIN
         if (jobPin.trim().length === 4 && /^\d{4}$/.test(jobPin.trim())) {
           const { error: pinErr } = await supabase.rpc('set_job_pin' as never, {
-            job: newJobId,
+            job: newJob.id,
             new_pin: jobPin.trim(),
           } as never)
-          if (pinErr) {
-            console.warn('Could not set PIN:', pinErr.message)
-          }
+          if (pinErr) console.warn('Could not set PIN:', pinErr.message)
         }
 
-        // 3. Insert the assets for this classification
         const clsAssets = parsed.assets.filter((a) => a.classification_code === cls)
         if (clsAssets.length > 0) {
           const assetRows = clsAssets.map((a) => ({
-            job_id: newJobId,
+            job_id: newJob.id,
             row_number: a.row_number,
             asset_id: a.asset_id,
             description: a.description,
@@ -132,7 +134,6 @@ export function ImportPage() {
             serial: a.serial,
             source_row: a.source_row,
           }))
-          // Chunk to avoid Supabase's default payload limit for wide rows
           const CHUNK = 100
           for (let i = 0; i < assetRows.length; i += CHUNK) {
             const { error: aErr } = await supabase
@@ -153,124 +154,199 @@ export function ImportPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <TopBar title="Import template" subtitle="Onboard a new asset capture job" onBack={() => navigate('/')} />
+    <div className="max-w-[960px] mx-auto">
+      {/* Header */}
+      <div className="mb-5">
+        <div className="text-[20px] font-bold tracking-[-0.01em] leading-tight">Import template</div>
+        <div className="text-[12px] text-muted mt-1">
+          Turn a spreadsheet into a capture job. We'll detect fields and classifications automatically.
+        </div>
+      </div>
 
-      <div className="flex-1 px-4 pt-4 pb-6 space-y-4 max-w-3xl mx-auto w-full">
-        {stage === 'idle' && <Uploader onFile={onFile} />}
-        {stage === 'parsing' && (
-          <div className="card p-8 text-center">
-            <div className="text-3xl mb-2">⏳</div>
-            <div className="font-bold">Parsing template…</div>
-            <div className="text-sm text-muted">Reading sheets, detecting green cells, extracting LOVs</div>
+      {/* Stepper */}
+      <Stepper
+        labels={['Choose file', 'Review & map', 'Create']}
+        current={stepIndex}
+        className="mb-4"
+      />
+
+      {/* Step bodies */}
+      {stage === 'idle' && <UploaderCard onFile={onFile} />}
+
+      {stage === 'parsing' && (
+        <Card className="p-10 text-center">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-ice text-sky-deep flex items-center justify-center">
+            <Upload size={22} strokeWidth={2} />
           </div>
-        )}
+          <div className="text-[15px] font-bold text-ink mb-1">Parsing template…</div>
+          <div className="text-[12px] text-muted">
+            Reading sheets, detecting green cells, extracting LOVs
+          </div>
+        </Card>
+      )}
 
-        {stage === 'preview' && parsed && (
-          <Preview
-            parsed={parsed}
-            file={file!}
-            siteCode={siteCode}
-            setSiteCode={setSiteCode}
-            clientCode={clientCode}
-            setClientCode={setClientCode}
-            jobName={jobName}
-            setJobName={setJobName}
-            jobPin={jobPin}
-            setJobPin={setJobPin}
-            onConfirm={create}
-            onReset={() => {
+      {stage === 'preview' && parsed && (
+        <Preview
+          parsed={parsed}
+          file={file!}
+          siteCode={siteCode}
+          setSiteCode={setSiteCode}
+          clientCode={clientCode}
+          setClientCode={setClientCode}
+          jobName={jobName}
+          setJobName={setJobName}
+          jobPin={jobPin}
+          setJobPin={setJobPin}
+          onConfirm={create}
+          onReset={() => {
+            setStage('idle')
+            setParsed(null)
+            setFile(null)
+          }}
+        />
+      )}
+
+      {stage === 'creating' && (
+        <Card className="p-10 text-center">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-ice text-sky-deep flex items-center justify-center">
+            <Upload size={22} strokeWidth={2} className="animate-pulse" />
+          </div>
+          <div className="text-[15px] font-bold text-ink mb-1">
+            Creating job{parsed && parsed.classifications.length > 1 ? 's' : ''}…
+          </div>
+          <div className="text-[12px] text-muted">Inserting fields and assets</div>
+        </Card>
+      )}
+
+      {stage === 'done' && (
+        <Card>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-ok-bg text-ok flex items-center justify-center">
+              <Check size={26} strokeWidth={2.5} />
+            </div>
+            <div>
+              <div className="text-[16px] font-bold text-ink">
+                {createdJobIds.length} job{createdJobIds.length === 1 ? '' : 's'} created
+              </div>
+              <div className="text-[12px] text-muted">
+                Ready for field capture. Jump straight in or share the link.
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            {createdJobIds.map((id, idx) => {
+              const slug = createdJobSlugs[idx]
+              const displayRef = slug ?? id
+              return (
+                <div key={id} className="flex items-center gap-2">
+                  <code className="flex-1 text-[11px] font-mono bg-gray-50 px-2.5 py-2 rounded border border-border truncate">
+                    /#/j/{displayRef}
+                  </code>
+                  <Button size="md" variant="primary" onClick={() => navigate(`/j/${displayRef}`)}>
+                    Open
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+          <Button
+            size="md"
+            variant="ghost"
+            fullWidth
+            className="mt-4"
+            onClick={() => {
               setStage('idle')
               setParsed(null)
               setFile(null)
+              setCreatedJobIds([])
             }}
-          />
-        )}
+          >
+            Import another
+          </Button>
+        </Card>
+      )}
 
-        {stage === 'creating' && (
-          <div className="card p-8 text-center">
-            <div className="text-3xl mb-2">⏳</div>
-            <div className="font-bold">Creating job{parsed && parsed.classifications.length > 1 ? 's' : ''}…</div>
-            <div className="text-sm text-muted">Inserting fields and assets</div>
-          </div>
-        )}
-
-        {stage === 'done' && (
-          <div className="card p-6 border-ok/40 bg-ok/5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="text-3xl">✅</div>
-              <div>
-                <div className="font-bold text-ink">Job created</div>
-                <div className="text-sm text-muted">
-                  {createdJobIds.length} job{createdJobIds.length === 1 ? '' : 's'} ready for field capture
-                </div>
-              </div>
+      {stage === 'error' && (
+        <Card className="border-bad/40 bg-bad-bg">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-white text-bad flex items-center justify-center border border-bad/30">
+              <AlertTriangle size={20} strokeWidth={2.5} />
             </div>
-            <div className="space-y-2">
-              {createdJobIds.map((id: string, idx: number) => {
-                const slug = createdJobSlugs[idx]
-                const displayRef = slug ?? id
-                return (
-                  <div key={id} className="flex items-center gap-2">
-                    <code className="text-xs mono bg-white px-2 py-1 rounded border border-border truncate flex-1">
-                      /#/j/{displayRef}
-                    </code>
-                    <button onClick={() => navigate(`/j/${displayRef}`)} className="btn btn-primary btn-md">
-                      Open
-                    </button>
-                  </div>
-                )
-              })}
+            <div>
+              <div className="text-[15px] font-bold text-ink">Import failed</div>
+              <div className="text-[12px] text-muted">See details below</div>
             </div>
-            <button
-              onClick={() => {
-                setStage('idle')
-                setParsed(null)
-                setFile(null)
-                setCreatedJobIds([])
-              }}
-              className="btn btn-ghost btn-md w-full mt-4"
-            >
-              Import another
-            </button>
           </div>
-        )}
-
-        {stage === 'error' && (
-          <div className="card p-6 border-bad/40 bg-bad/5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="text-3xl">❌</div>
-              <div>
-                <div className="font-bold text-ink">Import failed</div>
-                <div className="text-sm text-muted">See details below</div>
-              </div>
-            </div>
-            <pre className="text-xs mono bg-white p-3 rounded border border-border overflow-x-auto">
-              {error}
-            </pre>
-            <button onClick={() => setStage('idle')} className="btn btn-ghost btn-md w-full mt-3">
-              Try again
-            </button>
-          </div>
-        )}
-      </div>
+          <pre className="text-[11px] font-mono bg-white p-3 rounded-md border border-border overflow-x-auto whitespace-pre-wrap">
+            {error}
+          </pre>
+          <Button
+            size="md"
+            variant="ghost"
+            fullWidth
+            className="mt-3"
+            onClick={() => setStage('idle')}
+          >
+            Try again
+          </Button>
+        </Card>
+      )}
     </div>
   )
 }
 
-function Uploader({ onFile }: { onFile: (f: File) => void }) {
+// ─── Stepper ────────────────────────────────────────────────────────
+
+function Stepper({
+  labels,
+  current,
+  className,
+}: {
+  labels: string[]
+  current: number
+  className?: string
+}) {
+  return (
+    <div className={cn('flex items-center gap-1 flex-wrap', className)}>
+      {labels.map((label, i) => {
+        const done = current > i
+        const active = current === i
+        return (
+          <div key={i} className="flex items-center gap-1">
+            <div
+              className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-full border text-[12px] font-bold',
+                done
+                  ? 'bg-ok-bg border-ok text-ok'
+                  : active
+                    ? 'bg-ice border-sky-deep text-sky-deep'
+                    : 'bg-white border-border text-muted',
+              )}
+            >
+              <div
+                className={cn(
+                  'w-[18px] h-[18px] rounded-full flex items-center justify-center text-white text-[10px] font-bold',
+                  done ? 'bg-ok' : active ? 'bg-sky-deep' : 'bg-gray-300',
+                )}
+              >
+                {done ? <Check size={11} strokeWidth={3} /> : i + 1}
+              </div>
+              {label}
+            </div>
+            {i < labels.length - 1 && <div className="w-5 h-px bg-border" />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Uploader ───────────────────────────────────────────────────────
+
+function UploaderCard({ onFile }: { onFile: (f: File) => void }) {
   const [dragging, setDragging] = useState(false)
   return (
-    <div>
-      <div className="card p-4 mb-4">
-        <h2 className="font-bold text-ink mb-1">How it works</h2>
-        <ol className="text-sm text-muted space-y-1 list-decimal pl-5">
-          <li>Upload the Equinix-format .xlsm or .xlsx template</li>
-          <li>We parse the green cells, asset rows, classifications, and LOVs</li>
-          <li>You confirm the site code and job name</li>
-          <li>A job is created with everything ready for field capture</li>
-        </ol>
-      </div>
+    <Card padding={0}>
       <label
         onDragOver={(e) => {
           e.preventDefault()
@@ -283,13 +359,23 @@ function Uploader({ onFile }: { onFile: (f: File) => void }) {
           const f = e.dataTransfer.files?.[0]
           if (f) onFile(f)
         }}
-        className={`block card p-10 text-center cursor-pointer border-2 border-dashed transition ${
-          dragging ? 'border-sky bg-sky-soft' : 'border-border hover:border-sky/60'
-        }`}
+        className={cn(
+          'block m-5 p-10 text-center rounded-xl cursor-pointer border-2 border-dashed transition',
+          dragging ? 'border-sky bg-ice' : 'border-gray-300 bg-gray-50 hover:border-sky-deep/60',
+        )}
       >
-        <div className="text-4xl mb-2">📋</div>
-        <div className="font-bold text-ink">Drop the Equinix template here</div>
-        <div className="text-sm text-muted mb-3">or click to browse</div>
+        <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-ice text-sky-deep flex items-center justify-center">
+          <Upload size={22} strokeWidth={2} />
+        </div>
+        <div className="text-[15px] font-bold text-ink mb-1">Drop a spreadsheet here</div>
+        <div className="text-[12px] text-muted mb-4">
+          .xlsx or .xlsm · up to 5,000 rows. We'll extract the field list automatically.
+        </div>
+        <div className="inline-block">
+          <Button size="md" variant="primary" icon={FileText}>
+            Choose file
+          </Button>
+        </div>
         <input
           type="file"
           accept=".xlsx,.xlsm"
@@ -300,9 +386,17 @@ function Uploader({ onFile }: { onFile: (f: File) => void }) {
           }}
         />
       </label>
-    </div>
+      <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-[11px] text-muted flex items-center gap-2">
+        <Info size={12} strokeWidth={2} />
+        <span>
+          Equinix-format .xlsm/.xlsx templates. Green cells become field-capture slots.
+        </span>
+      </div>
+    </Card>
   )
 }
+
+// ─── Preview ─────────────────────────────────────────────────────────
 
 function Preview({
   parsed,
@@ -335,185 +429,203 @@ function Preview({
     (a, fs) => a + fs.filter((f) => f.is_field_captured).length,
     0,
   )
-  const totalDataPoints = parsed.assets.length *
+  const totalDataPoints =
+    parsed.assets.length *
     ((parsed.detectedClassification &&
-      parsed.fieldsByClassification[parsed.detectedClassification]?.filter((f) => f.is_field_captured).length) ||
+      parsed.fieldsByClassification[parsed.detectedClassification]?.filter(
+        (f) => f.is_field_captured,
+      ).length) ||
       0)
 
   return (
-    <div className="space-y-4">
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">File</div>
-            <div className="font-semibold text-ink mono text-sm truncate">{file.name}</div>
+    <div className="flex flex-col gap-4">
+      {/* File summary */}
+      <Card padding={0}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+          <div className="w-9 h-9 rounded-md bg-ice text-sky-deep flex items-center justify-center shrink-0">
+            <FileText size={16} strokeWidth={2} />
           </div>
-          <button onClick={onReset} className="btn btn-ghost btn-md">
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-bold font-mono text-ink truncate">{file.name}</div>
+            <div className="text-[11px] text-muted">
+              {parsed.assets.length} rows · {parsed.classifications.length} classification
+              {parsed.classifications.length === 1 ? '' : 's'}
+              {parsed.detectedClassification && (
+                <>
+                  {' '}
+                  · detected <b>{parsed.detectedClassification}</b>
+                </>
+              )}
+            </div>
+          </div>
+          <Pill tone="ok" size="sm">
+            Auto-mapped {totalGreen}
+          </Pill>
+          <Button size="sm" variant="ghost" onClick={onReset}>
             Change
-          </button>
+          </Button>
         </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4">
           <Stat label="Assets" value={`${parsed.assets.length}`} />
           <Stat label="Classifications" value={`${parsed.classifications.length}`} />
           <Stat label="Green fields" value={`${totalGreen}`} />
           <Stat label="Data points" value={totalDataPoints ? `${totalDataPoints}` : '—'} />
         </div>
-      </div>
+      </Card>
 
+      {/* Warnings */}
       {parsed.warnings.length > 0 && (
-        <div className="card p-4 border-warn/40 bg-warn/5">
-          <div className="font-bold text-sm mb-2">Warnings</div>
-          <ul className="text-sm text-muted list-disc pl-5 space-y-1">
+        <Card className="border-warn/40 bg-warn-bg">
+          <div className="flex items-center gap-2 text-[13px] font-bold text-ink mb-2">
+            <AlertTriangle size={14} strokeWidth={2.5} className="text-warn" />
+            Warnings
+          </div>
+          <ul className="text-[12px] text-muted list-disc pl-5 space-y-1">
             {parsed.warnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
 
-      <div className="card p-4 space-y-3">
-        <h2 className="font-bold text-ink">Job details</h2>
-
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted block mb-1">
-            Site code
-          </label>
-          <input
-            value={siteCode}
-            onChange={(e) => setSiteCode(e.target.value)}
-            placeholder="SY6"
-            className="field-input"
-          />
-        </div>
-
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted block mb-1">
-            Client code
-          </label>
-          <input
-            value={clientCode}
-            onChange={(e) => setClientCode(e.target.value)}
-            placeholder="DCCA"
-            className="field-input"
-          />
-          <div className="text-[10px] text-muted mt-1">Internal code — never surface real client names</div>
-        </div>
-
-        {parsed.classifications.length === 1 && (
-          <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted block mb-1">
-              Job name
-            </label>
+      {/* Job details */}
+      <Card>
+        <div className="text-[14px] font-bold text-ink mb-3">Job details</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Field label="Site code">
             <input
-              value={jobName}
-              onChange={(e) => setJobName(e.target.value)}
+              value={siteCode}
+              onChange={(e) => setSiteCode(e.target.value)}
+              placeholder="SY6"
               className="field-input"
             />
-          </div>
-        )}
+          </Field>
+          <Field label="Client code" hint="Internal code — never surface real client names">
+            <input
+              value={clientCode}
+              onChange={(e) => setClientCode(e.target.value)}
+              placeholder="DCCA"
+              className="field-input"
+            />
+          </Field>
 
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted block mb-1">
-            Job PIN (optional, 4 digits)
-          </label>
-          <input
-            value={jobPin}
-            onChange={(e) => setJobPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={4}
-            placeholder="Leave blank for open access"
-            className="field-input mono"
-          />
-          <div className="text-[10px] text-muted mt-1">
-            Field tech will be prompted for this PIN. Share out-of-band (SMS, phone call).
-          </div>
+          {parsed.classifications.length === 1 && (
+            <Field label="Job name" className="md:col-span-2">
+              <input
+                value={jobName}
+                onChange={(e) => setJobName(e.target.value)}
+                className="field-input"
+              />
+            </Field>
+          )}
+
+          <Field
+            label="Job PIN (optional)"
+            hint="Field tech will be prompted for this PIN. Share out-of-band."
+            className="md:col-span-2"
+          >
+            <input
+              value={jobPin}
+              onChange={(e) => setJobPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              placeholder="Leave blank for open access"
+              className="field-input mono"
+            />
+          </Field>
         </div>
 
         {parsed.classifications.length > 1 && (
-          <div className="text-xs text-muted p-3 rounded bg-sky-soft border border-border">
+          <div className="text-[12px] text-muted p-3 mt-3 rounded-md bg-ice border border-border">
             One job will be created per classification: {parsed.classifications.join(', ')}
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Classification breakdowns */}
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         {parsed.classifications.map((cls) => {
           const fs = parsed.fieldsByClassification[cls] ?? []
           const green = fs.filter((f) => f.is_field_captured)
           const assetCount = parsed.assets.filter((a) => a.classification_code === cls).length
           return (
-            <details key={cls} className="card p-4" open={parsed.classifications.length === 1}>
-              <summary className="cursor-pointer flex items-center justify-between select-none">
-                <div>
-                  <div className="font-bold text-ink">{cls}</div>
-                  <div className="text-xs text-muted">
-                    {assetCount} asset{assetCount === 1 ? '' : 's'} · {green.length}/{fs.length} green fields
+            <details key={cls} open={parsed.classifications.length === 1}>
+              <summary className="cursor-pointer list-none">
+                <Card className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[13px] font-bold text-ink">{cls}</div>
+                    <div className="text-[11px] text-muted">
+                      {assetCount} asset{assetCount === 1 ? '' : 's'} · {green.length}/{fs.length}{' '}
+                      green fields
+                    </div>
                   </div>
-                </div>
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-muted"
-                >
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
+                  <Pill size="sm" tone="info">
+                    {green.length} capture
+                  </Pill>
+                </Card>
               </summary>
-
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-1 text-xs">
+              <div className="mt-2 px-1 grid grid-cols-1 md:grid-cols-2 gap-1">
                 {green.map((f) => (
-                  <div key={f.spec_id} className="flex items-center gap-2 py-1">
+                  <div
+                    key={f.spec_id}
+                    className="flex items-center gap-2 py-1.5 text-[12px] border-b border-gray-100 last:border-b-0"
+                  >
                     <span className="w-1.5 h-1.5 rounded-full bg-ok shrink-0" />
                     <span className="font-mono text-[11px] truncate" title={f.display_name}>
                       {f.display_name}
                     </span>
-                    <span className="ml-auto text-[10px] text-muted mono">{f.data_type}</span>
+                    <span className="ml-auto text-[10px] text-muted font-mono">{f.data_type}</span>
                   </div>
                 ))}
               </div>
-
-              {fs.length > green.length && (
-                <details className="mt-2 text-xs">
-                  <summary className="cursor-pointer text-muted">
-                    {fs.length - green.length} office-filled fields (not part of capture)
-                  </summary>
-                  <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-1">
-                    {fs
-                      .filter((f) => !f.is_field_captured)
-                      .map((f) => (
-                        <div key={f.spec_id} className="flex items-center gap-2 py-1 text-muted">
-                          <span className="w-1.5 h-1.5 rounded-full bg-border shrink-0" />
-                          <span className="font-mono text-[11px] truncate">{f.display_name}</span>
-                        </div>
-                      ))}
-                  </div>
-                </details>
-              )}
             </details>
           )
         })}
       </div>
 
-      <div className="flex gap-2 sticky bottom-4">
-        <button onClick={onReset} className="btn btn-ghost btn-lg flex-1">
-          Cancel
-        </button>
-        <button
-          disabled={!siteCode.trim()}
-          onClick={onConfirm}
-          className="btn btn-primary btn-lg flex-[2] disabled:opacity-40"
-        >
-          Create job & continue
-        </button>
+      {/* Sticky footer action bar */}
+      <div className="sticky bottom-0 -mx-2 md:mx-0 bg-gray-50 pt-3 pb-1">
+        <div className="flex gap-2">
+          <Button size="lg" variant="ghost" onClick={onReset} className="flex-1">
+            Cancel
+          </Button>
+          <Button
+            size="lg"
+            variant="primary"
+            disabled={!siteCode.trim()}
+            onClick={onConfirm}
+            iconRight={ArrowRight}
+            className="flex-[2]"
+          >
+            Create {parsed.classifications.length > 1 ? `${parsed.classifications.length} jobs` : 'job'}
+          </Button>
+        </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Small helpers ──────────────────────────────────────────────────
+
+function Field({
+  label,
+  hint,
+  children,
+  className,
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={className}>
+      <label className="block text-[10px] font-bold uppercase tracking-[0.06em] text-muted mb-1">
+        {label}
+      </label>
+      {children}
+      {hint && <div className="text-[10px] text-muted mt-1">{hint}</div>}
     </div>
   )
 }
@@ -521,8 +633,13 @@ function Preview({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</div>
-      <div className="text-xl font-bold text-ink mono">{value}</div>
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted">{label}</div>
+      <div className="text-[18px] font-bold font-mono text-ink mt-0.5 tabular-nums">{value}</div>
     </div>
   )
 }
+
+// Suppress unused-import warning when the UI doesn't render the Plus icon in
+// every branch but keeps it in scope for the "Create" CTA variant.
+const _ensureIconsKept = { Plus }
+void _ensureIconsKept

@@ -1,40 +1,67 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Cpu,
+  Database,
+  FileSpreadsheet,
+  Layers,
+  ListChecks,
+  RefreshCw,
+  ServerCog,
+  Wifi,
+  WifiOff,
+  XCircle,
+} from 'lucide-react'
 import { navigate } from '../lib/router'
 import { supabase } from '../lib/supabase'
-import { TopBar } from '../components/TopBar'
 import { allCaptures, pendingCount } from '../lib/queue'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { KpiSmall } from '../components/ui/KPI'
+import { Pill } from '../components/ui/Pill'
 
-type CheckStatus = 'pending' | 'ok' | 'fail'
-interface Check {
+type CheckStatus = 'pending' | 'ok' | 'warn' | 'fail'
+
+interface DiagCheck {
   id: string
   label: string
   status: CheckStatus
   detail?: string
+  icon: LucideIcon
 }
 
 const STABLE_JOB_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 const STABLE_JOB_SLUG = 'sy6-assets'
 
-export function DebugPage() {
-  const [checks, setChecks] = useState<Check[]>([
-    { id: 'config', label: 'Runtime config loaded', status: 'pending' },
-    { id: 'connectivity', label: 'Supabase reachable', status: 'pending' },
-    { id: 'schema', label: 'Schema deployed (classifications table)', status: 'pending' },
-    { id: 'fields', label: 'Classification fields seeded', status: 'pending' },
-    { id: 'job', label: 'SY6 BREAKER job exists', status: 'pending' },
-    { id: 'assets', label: 'SY6 assets loaded (expect 101)', status: 'pending' },
-    { id: 'captures', label: 'Captures table writable (non-destructive)', status: 'pending' },
-  ])
-  const [running, setRunning] = useState(false)
+const INITIAL_CHECKS: DiagCheck[] = [
+  { id: 'config',       label: 'Runtime config loaded',                 status: 'pending', icon: ServerCog },
+  { id: 'connectivity', label: 'Supabase reachable',                    status: 'pending', icon: Wifi },
+  { id: 'schema',       label: 'Schema deployed (classifications)',     status: 'pending', icon: Database },
+  { id: 'fields',       label: 'Classification fields seeded',          status: 'pending', icon: Layers },
+  { id: 'job',          label: 'SY6 BREAKER job exists',                status: 'pending', icon: FileSpreadsheet },
+  { id: 'assets',       label: 'SY6 assets loaded (expect 101)',        status: 'pending', icon: ListChecks },
+  { id: 'captures',     label: 'Captures table writable (probed)',      status: 'pending', icon: Activity },
+]
 
-  const update = (id: string, patch: Partial<Check>) => {
+export function DebugPage() {
+  const [checks, setChecks] = useState<DiagCheck[]>(INITIAL_CHECKS)
+  const [running, setRunning] = useState(false)
+  const [durationMs, setDurationMs] = useState<number | null>(null)
+
+  const update = (id: string, patch: Partial<DiagCheck>) => {
     setChecks((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
   }
 
   const runChecks = async () => {
     setRunning(true)
-    // Reset
-    setChecks((cs) => cs.map((c) => ({ ...c, status: 'pending' as const, detail: undefined })))
+    setDurationMs(null)
+    const started = performance.now()
+    setChecks((cs) =>
+      cs.map((c) => ({ ...c, status: 'pending' as const, detail: undefined })),
+    )
 
     // 1. Config
     const cfg = window.__EQ_CONFIG__ ?? {}
@@ -43,48 +70,56 @@ export function DebugPage() {
     if (!url || !key || key === 'REPLACE_ME_WITH_ANON_KEY') {
       update('config', {
         status: 'fail',
-        detail: 'config.js is missing or still has the placeholder anon key. Edit /config.js on the deployed site.',
+        detail:
+          'config.js is missing or still has the placeholder anon key. Edit /config.js on the deployed site.',
       })
       setRunning(false)
+      setDurationMs(performance.now() - started)
       return
     }
     update('config', {
       status: 'ok',
-      detail: `URL: ${url}\nKey: ${key.slice(0, 12)}…${key.slice(-6)}`,
+      detail: `URL: ${url}  ·  Key: ${key.slice(0, 10)}…${key.slice(-6)}`,
     })
 
-    // 2. Connectivity — cheap head request
+    // 2. Connectivity
     try {
-      const { error } = await supabase.from('classifications').select('code', { count: 'exact', head: true })
+      const { error } = await supabase
+        .from('classifications')
+        .select('code', { count: 'exact', head: true })
       if (error) throw error
       update('connectivity', { status: 'ok', detail: 'HTTP reachable' })
-    } catch (err: any) {
-      update('connectivity', { status: 'fail', detail: err?.message ?? String(err) })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      update('connectivity', { status: 'fail', detail: msg })
       setRunning(false)
+      setDurationMs(performance.now() - started)
       return
     }
 
-    // 3. Schema — count classifications
+    // 3. Schema
     const { data: classData, error: classErr } = await supabase
       .from('classifications')
       .select('code')
     if (classErr || !classData) {
-      update('schema', { status: 'fail', detail: classErr?.message ?? 'No rows returned' })
+      update('schema', {
+        status: 'fail',
+        detail: classErr?.message ?? 'No rows returned',
+      })
     } else {
-      update('schema', { status: 'ok', detail: `${classData.length} classifications` })
+      update('schema', {
+        status: 'ok',
+        detail: `${classData.length} classifications`,
+      })
     }
 
     // 4. Fields
-    const { data: fieldData, error: fieldErr } = await supabase
+    const { error: fieldErr, count } = await supabase
       .from('classification_fields')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
     if (fieldErr) {
       update('fields', { status: 'fail', detail: fieldErr.message })
     } else {
-      // head:true returns count only via the count option
-      const { count } = await supabase
-        .from('classification_fields')
-        .select('*', { count: 'exact', head: true })
       update('fields', { status: 'ok', detail: `${count ?? '?'} field rows` })
     }
 
@@ -95,14 +130,20 @@ export function DebugPage() {
       .eq('id', STABLE_JOB_ID)
       .maybeSingle()
     const jobErr = jobResp.error
-    const job = jobResp.data as { name: string | null; site_code: string; classification_code: string } | null
+    const job = jobResp.data as
+      | { name: string | null; site_code: string; classification_code: string }
+      | null
     if (jobErr || !job) {
       update('job', {
         status: 'fail',
-        detail: jobErr?.message ?? 'SY6 BREAKER job not found. Did you run setup.sql?',
+        detail:
+          jobErr?.message ?? 'SY6 BREAKER job not found. Did you run setup.sql?',
       })
     } else {
-      update('job', { status: 'ok', detail: `${job.name} (${job.site_code} · ${job.classification_code})` })
+      update('job', {
+        status: 'ok',
+        detail: `${job.name ?? '—'} (${job.site_code} · ${job.classification_code})`,
+      })
     }
 
     // 6. Assets
@@ -111,18 +152,20 @@ export function DebugPage() {
       .select('id, description')
       .eq('job_id', STABLE_JOB_ID)
     const assetsErr = assetsResp.error
-    const assetsData = (assetsResp.data as Array<{ id: string; description: string }> | null) ?? null
+    const assetsData =
+      (assetsResp.data as Array<{ id: string; description: string }> | null) ??
+      null
     if (assetsErr) {
       update('assets', { status: 'fail', detail: assetsErr.message })
     } else {
       const n = assetsData?.length ?? 0
       update('assets', {
-        status: n === 101 ? 'ok' : 'fail',
+        status: n === 101 ? 'ok' : n === 0 ? 'fail' : 'warn',
         detail: `${n} assets (expected 101)`,
       })
     }
 
-    // 7. Captures — write a test row then delete it
+    // 7. Captures probe
     if (assetsData && assetsData.length > 0) {
       const testAssetId = assetsData[0].id
       const fieldsResp = await supabase
@@ -148,7 +191,6 @@ export function DebugPage() {
         if (writeErr) {
           update('captures', { status: 'fail', detail: writeErr.message })
         } else {
-          // Clean up — match by the probe value so we don't nuke real data
           await supabase
             .from('captures')
             .delete()
@@ -158,126 +200,258 @@ export function DebugPage() {
           update('captures', { status: 'ok', detail: 'Probe write/delete OK' })
         }
       } else {
-        update('captures', { status: 'fail', detail: 'No BREAKER fields — cannot probe' })
+        update('captures', {
+          status: 'fail',
+          detail: 'No BREAKER fields — cannot probe',
+        })
       }
     } else {
       update('captures', { status: 'fail', detail: 'No assets to probe against' })
     }
 
     setRunning(false)
+    setDurationMs(performance.now() - started)
   }
 
   useEffect(() => {
     void runChecks()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const allOk = checks.every((c) => c.status === 'ok')
-  const anyFail = checks.some((c) => c.status === 'fail')
+  const stats = useMemo(() => {
+    let pass = 0
+    let warn = 0
+    let fail = 0
+    for (const c of checks) {
+      if (c.status === 'ok') pass++
+      else if (c.status === 'warn') warn++
+      else if (c.status === 'fail') fail++
+    }
+    return { pass, warn, fail }
+  }, [checks])
+
+  const localTotal = allCaptures().length
+  const localPending = pendingCount()
+  const online = typeof navigator !== 'undefined' ? navigator.onLine : true
+  const duration = durationMs !== null
+    ? `${(durationMs / 1000).toFixed(1)}s`
+    : running
+      ? '…'
+      : '—'
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <TopBar title="Self-check" subtitle="Deploy diagnostic" onBack={() => navigate('/')} />
-      <div className="flex-1 px-4 pt-4 pb-6 space-y-4 safe-bottom">
-        <div
-          className={`card p-4 ${
-            anyFail ? 'border-bad/40 bg-bad/5' : allOk ? 'border-ok/40 bg-ok/5' : ''
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="text-2xl">{running ? '⏳' : allOk ? '✅' : anyFail ? '❌' : '…'}</div>
-            <div className="flex-1 min-w-0">
-              <div className="font-bold text-ink">
-                {running ? 'Running checks…' : allOk ? 'All systems go' : anyFail ? 'Something needs attention' : 'Idle'}
-              </div>
-              <div className="text-xs text-muted">
-                {running ? 'Usually takes 2–3 seconds' : 'Last run just now'}
-              </div>
-            </div>
-            <button onClick={runChecks} disabled={running} className="btn btn-ghost btn-md">
-              Rerun
-            </button>
-          </div>
-        </div>
+    <div className="max-w-[900px] mx-auto">
+      {/* ── KPI strip ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        <KpiSmall label="Passed"   value={stats.pass}  tone="ok" />
+        <KpiSmall label="Warnings" value={stats.warn}  tone={stats.warn ? 'warn' : 'neutral'} />
+        <KpiSmall label="Failed"   value={stats.fail}  tone={stats.fail ? 'bad' : 'neutral'} />
+        <KpiSmall label="Duration" value={duration}    tone="neutral" />
+      </div>
 
-        <div className="card divide-y divide-border/60">
-          {checks.map((c) => (
-            <CheckRow key={c.id} check={c} />
-          ))}
-        </div>
-
-        <div className="card p-4">
-          <h2 className="font-bold text-ink mb-2">Local state</h2>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Online</div>
-              <div>{navigator.onLine ? '✓ yes' : '— offline'}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">User agent</div>
-              <div className="text-xs mono truncate" title={navigator.userAgent}>
-                {navigator.userAgent.slice(0, 40)}…
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Local captures</div>
-              <div className="mono">{allCaptures().length} total</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Pending sync</div>
-              <div className="mono">{pendingCount()}</div>
+      {/* ── Diagnostic checks ─────────────────────────────────── */}
+      <Card padding={0}>
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <div className="text-[13px] font-bold text-ink">Diagnostic checks</div>
+            <div className="text-[11px] text-muted mt-0.5">
+              Verify the app is healthy before you go on site.
             </div>
           </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={RefreshCw}
+            onClick={runChecks}
+            disabled={running}
+          >
+            {running ? 'Running…' : 'Re-run'}
+          </Button>
         </div>
-
-        <div className="card p-4">
-          <h2 className="font-bold text-ink mb-2">Quick links</h2>
-          <div className="grid grid-cols-1 gap-2 text-sm">
-            <button
-              onClick={() => navigate(`/j/${STABLE_JOB_SLUG}`)}
-              className="btn btn-ghost btn-md w-full justify-start"
+        {checks.map((c, i) => {
+          const Icon = c.icon
+          return (
+            <div
+              key={c.id}
+              className={
+                'flex items-center gap-3 px-4 py-3 ' +
+                (i < checks.length - 1 ? 'border-b border-gray-100' : '')
+              }
             >
+              <div className="flex items-center justify-center h-8 w-8 rounded-md bg-ice text-sky-deep shrink-0">
+                <Icon size={14} strokeWidth={2} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-ink">
+                  {c.label}
+                </div>
+                {c.detail && (
+                  <div className="text-[11px] text-muted font-mono mt-0.5 break-all">
+                    {c.detail}
+                  </div>
+                )}
+              </div>
+              <StatusPill status={c.status} />
+            </div>
+          )
+        })}
+      </Card>
+
+      {/* ── Local state + quick links ─────────────────────────── */}
+      <div className="grid grid-cols-2 gap-4 mt-4">
+        <Card padding={0}>
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="text-[13px] font-bold text-ink">Local state</div>
+          </div>
+          <div className="p-4 grid grid-cols-2 gap-3">
+            <LocalStat
+              icon={online ? Wifi : WifiOff}
+              label="Connection"
+              value={online ? 'Online' : 'Offline'}
+              tone={online ? 'ok' : 'warn'}
+            />
+            <LocalStat
+              icon={Database}
+              label="Local captures"
+              value={String(localTotal)}
+              tone="neutral"
+            />
+            <LocalStat
+              icon={Activity}
+              label="Pending sync"
+              value={String(localPending)}
+              tone={localPending ? 'warn' : 'ok'}
+            />
+            <LocalStat
+              icon={Cpu}
+              label="User agent"
+              value={
+                typeof navigator !== 'undefined'
+                  ? navigator.userAgent.split(' ')[0]
+                  : '—'
+              }
+              tone="neutral"
+              mono
+            />
+          </div>
+        </Card>
+
+        <Card padding={0}>
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="text-[13px] font-bold text-ink">Quick links</div>
+          </div>
+          <div className="p-2 flex flex-col">
+            <QuickLink onClick={() => navigate(`/j/${STABLE_JOB_SLUG}`)}>
               Open SY6 BREAKER job →
-            </button>
-            <button
-              onClick={() => navigate(`/j/${STABLE_JOB_SLUG}/admin`)}
-              className="btn btn-ghost btn-md w-full justify-start"
-            >
-              Admin view →
-            </button>
-            <button
-              onClick={() => navigate(`/j/${STABLE_JOB_SLUG}/export`)}
-              className="btn btn-ghost btn-md w-full justify-start"
-            >
+            </QuickLink>
+            <QuickLink onClick={() => navigate(`/j/${STABLE_JOB_SLUG}/admin`)}>
+              Progress matrix →
+            </QuickLink>
+            <QuickLink onClick={() => navigate(`/j/${STABLE_JOB_SLUG}/export`)}>
               Export →
-            </button>
+            </QuickLink>
+            <QuickLink onClick={() => navigate('/import')}>
+              Import template →
+            </QuickLink>
           </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function StatusPill({ status }: { status: CheckStatus }) {
+  if (status === 'pending') {
+    return (
+      <Pill tone="neutral" size="sm">
+        Running
+      </Pill>
+    )
+  }
+  if (status === 'ok') {
+    return (
+      <Pill tone="ok" size="sm">
+        <CheckCircle2 size={9} strokeWidth={2.5} />
+        Pass
+      </Pill>
+    )
+  }
+  if (status === 'warn') {
+    return (
+      <Pill tone="warn" size="sm">
+        <AlertTriangle size={9} strokeWidth={2.5} />
+        Warn
+      </Pill>
+    )
+  }
+  return (
+    <Pill tone="bad" size="sm">
+      <XCircle size={9} strokeWidth={2.5} />
+      Fail
+    </Pill>
+  )
+}
+
+function LocalStat({
+  icon: Icon,
+  label,
+  value,
+  tone,
+  mono,
+}: {
+  icon: LucideIcon
+  label: string
+  value: string
+  tone: 'ok' | 'warn' | 'neutral'
+  mono?: boolean
+}) {
+  const ring =
+    tone === 'ok'
+      ? 'text-ok-fg bg-ok-bg'
+      : tone === 'warn'
+        ? 'text-warn-fg bg-warn-bg'
+        : 'text-sky-deep bg-ice'
+  return (
+    <div className="flex items-start gap-2 min-w-0">
+      <div
+        className={
+          'flex items-center justify-center h-7 w-7 rounded-md shrink-0 ' + ring
+        }
+      >
+        <Icon size={12} strokeWidth={2} />
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted">
+          {label}
+        </div>
+        <div
+          className={
+            'text-[13px] font-semibold text-ink truncate ' +
+            (mono ? 'font-mono text-[12px]' : '')
+          }
+          title={value}
+        >
+          {value}
         </div>
       </div>
     </div>
   )
 }
 
-function CheckRow({ check }: { check: Check }) {
-  const icon = check.status === 'ok' ? '✓' : check.status === 'fail' ? '✕' : '○'
-  const colour =
-    check.status === 'ok'
-      ? 'text-ok bg-ok/10 border-ok/20'
-      : check.status === 'fail'
-        ? 'text-bad bg-bad/10 border-bad/20'
-        : 'text-muted bg-border/30 border-border'
+function QuickLink({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+}) {
   return (
-    <div className="p-4 flex items-start gap-3">
-      <div
-        className={`w-7 h-7 rounded-full border flex items-center justify-center font-bold text-sm shrink-0 ${colour}`}
-      >
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold text-ink text-sm">{check.label}</div>
-        {check.detail ? (
-          <div className="text-xs text-muted mono mt-1 whitespace-pre-wrap break-all">{check.detail}</div>
-        ) : null}
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left px-3 py-2.5 rounded-md text-[13px] font-semibold text-ink hover:bg-ice hover:text-sky-deep transition-colors"
+    >
+      {children}
+    </button>
   )
 }

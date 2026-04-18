@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 interface Photo {
@@ -149,7 +150,7 @@ export function PhotoPicker({ assetId, jobId }: Props) {
         ) : null}
 
         <div className="flex gap-2">
-          <label className="btn btn-primary btn-md flex-1 justify-center cursor-pointer">
+          <label className="btn btn-primary btn-md flex-1 justify-center cursor-pointer gap-2">
             <input
               ref={fileRef}
               type="file"
@@ -160,7 +161,14 @@ export function PhotoPicker({ assetId, jobId }: Props) {
               onChange={(e) => onFiles(e.target.files)}
               disabled={uploading}
             />
-            {uploading ? 'Uploading…' : '📷  Take / choose photo'}
+            {uploading ? (
+              'Uploading…'
+            ) : (
+              <>
+                <Camera size={14} strokeWidth={2} />
+                Take / choose photo
+              </>
+            )}
           </label>
         </div>
 
