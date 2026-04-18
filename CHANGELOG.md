@@ -4,6 +4,41 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-19 — IP hardening pass (branch `feat/ip-hardening`, not merged)
+
+**Built by:** Royce Milmlow + Claude (via Cowork)
+**Branch:** `feat/ip-hardening` (pushed, no PR, no merge)
+**Driver:** EQ IP Protection & Commercialisation amendment (18 Apr 2026). Operationalises register items 4, 6, 8, 9, 10, 11, 12 and lays header groundwork for item 7.
+
+### Added
+- **`components/ui/EqFooter.tsx`** — medium-form copyright footer (`© {year} EQ · CDC Solutions Pty Ltd · ABN 40 651 962 935 · All rights reserved.`) with link to `/terms`. Rendered in every route group.
+- **`components/ui/EqAttribution.tsx`** — persistent bottom-right sticky "Powered by EQ" anchor linking to `https://eq.solutions` with tooltip. Mounted at `app/layout.tsx` so it appears on every page regardless of tenant skin.
+- **`app/loading.tsx`** — root loading splash: EQ logo + "Loading EQ Solves Service…". Paints before tenant skin resolves, satisfies register item #12 (pre-auth EQ branding).
+- **`app/terms/page.tsx`** — plain-English Terms of Use (9 sections, ~500 words): ownership, licensed-not-sold, customer data ownership, no reverse-engineering, confidentiality, governing law = Australia. Linked from every footer. **Draft — needs Webb / SaaS-lawyer review before commercial reliance.**
+- **`supabase/migrations/0048_eq_meta.sql`** — singleton `_meta` table with `product_owner` / `trading_as` / `product_name` / `tenant` / `legal_acn` / `legal_abn`. Seeds `CDC Solutions Pty Ltd` / `EQ` / `EQ Solves Service` / `sks-technologies`. RLS enabled, read-only for `anon`+`authenticated`, writes via service-role only. **NOT applied.** Apply to `urjhmkhbgaxrofurpbgc` (dev) and again to Service prod when that project is created.
+
+### Changed
+- **`app/layout.tsx`** — added Next `Metadata` fields: `applicationName: 'EQ Solves Service'`, `authors: [{ name: 'CDC Solutions Pty Ltd' }]`, `publisher: 'EQ'`, `other.copyright`. Mounts `EqAttribution` inside `<body>`.
+- **`app/(app)/layout.tsx`** — wrapped `<main>` in a flex column so `EqFooter` sits below the main content area on every authenticated page. Sidebar and tenant skin untouched.
+- **`app/(auth)/layout.tsx`** — upgraded the brand-panel copyright from `© {year} EQ Solutions` to the long-form ownership disclosure including ACN + ABN. Added `EqFooter` to the form panel. No changes to auth logic.
+- **`app/(portal)/layout.tsx`** — converted to a flex column and mounted `EqFooter`.
+- **`package.json`** — set `"license": "UNLICENSED"`, `"author": "CDC Solutions Pty Ltd"`, added proprietary description string. `"private": true` was already set.
+- **File headers** added to: `app/layout.tsx`, `app/(app)/layout.tsx`, `app/(auth)/layout.tsx`, `app/(portal)/layout.tsx`, `proxy.ts`, `lib/supabase/middleware.ts`, plus every new file listed above. Per agreed scope: new files + top-level entry points only — not a full backfill of every existing `.ts/.tsx`.
+
+### Not changed (intentional)
+- No auth-flow logic changed (proxy.ts rules untouched).
+- No tenant-scoped DB schema changes.
+- Existing file backfill with headers (P2 #7 full-repo) deferred — touches hundreds of files, needs a dedicated session.
+- Webb TM filing (P2 #13), SKS IP email (P1 #1), repo visibility audit (P1 #2), GitHub MCP unblock (P1 #5) — remain on Royce's plate.
+
+### Verification
+- `tsc --noEmit` ran clean (0 errors).
+- Secret sweep (`SUPABASE_SERVICE_ROLE` / `eyJ…` / `sbp_` / `ghp_` / `sk-` patterns) — only env-var **names** referenced in code, no literal key values.
+- **IP check:** Headers ✓ | Secrets ✓ | Repo private ✓ (assumed — needs Royce's visibility audit per P1 #2 to confirm).
+- **Status:** Branch `feat/ip-hardening` pushed. Ready for review and merge, ready for `0048_eq_meta.sql` to be applied to `urjhmkhbgaxrofurpbgc` on Royce's approval.
+
+---
+
 ## 2026-04-16 — SY1 reconciliation against Delta Elcom master file
 
 ### Fixed
