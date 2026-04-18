@@ -6,7 +6,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import {
   startCheckAction,
   completeCheckAction,
-  cancelCheckAction,
+  archiveCheckAction,
   updateCheckItemAction,
   forceCompleteCheckAssetAction,
   bulkUpdateWorkOrdersAction,
@@ -165,11 +165,16 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     if (!result.success) setError(result.error ?? 'Failed to complete.')
   }
 
-  async function handleCancel() {
+  async function handleDelete() {
+    if (
+      !confirm(
+        `Delete "${check.custom_name ?? 'this check'}"? It will be removed from all views. You can restore it from Admin → Archive.`
+      )
+    ) return
     setError(null); setLoading(true)
-    const result = await cancelCheckAction(check.id)
+    const result = await archiveCheckAction(check.id, false)
     setLoading(false)
-    if (!result.success) setError(result.error ?? 'Failed to cancel.')
+    if (!result.success) setError(result.error ?? 'Failed to delete.')
   }
 
   async function handleForceComplete(checkAssetId: string) {
@@ -347,8 +352,8 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
               </a>
             </>
           )}
-          {check.status !== 'complete' && check.status !== 'cancelled' && isAdmin && (
-            <Button size="sm" variant="danger" onClick={handleCancel} disabled={loading}>Cancel</Button>
+          {isAdmin && (
+            <Button size="sm" variant="danger" onClick={handleDelete} disabled={loading}>Delete</Button>
           )}
         </div>
       </div>

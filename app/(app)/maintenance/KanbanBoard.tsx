@@ -3,9 +3,9 @@
 import { useTransition } from 'react'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatDate } from '@/lib/utils/format'
-import { Eye, Archive, Trash2 } from 'lucide-react'
+import { Eye, Trash2 } from 'lucide-react'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus } from '@/lib/types'
-import { archiveCheckAction, cancelCheckAction } from './actions'
+import { archiveCheckAction } from './actions'
 
 type CheckRow = MaintenanceCheck & {
   job_plans?: { name: string } | null
@@ -56,19 +56,11 @@ function getColumnBg(column: 'scheduled' | 'in_progress' | 'overdue' | 'complete
 export function KanbanBoard({ checks, itemsMap, onCheckClick, isAdmin = false }: KanbanBoardProps) {
   const [pending, startTransition] = useTransition()
 
-  function handleArchive(e: React.MouseEvent, checkId: string) {
+  function handleDelete(e: React.MouseEvent, checkId: string) {
     e.stopPropagation()
-    if (!confirm('Archive this check? It will be hidden from list views.')) return
+    if (!confirm('Delete this check? It will be removed from all views. You can restore it from Admin → Archive.')) return
     startTransition(async () => {
       await archiveCheckAction(checkId, false)
-    })
-  }
-
-  function handleCancel(e: React.MouseEvent, checkId: string) {
-    e.stopPropagation()
-    if (!confirm('Cancel (delete) this check? This marks it as cancelled.')) return
-    startTransition(async () => {
-      await cancelCheckAction(checkId)
     })
   }
   // Group checks by status
@@ -138,22 +130,13 @@ export function KanbanBoard({ checks, itemsMap, onCheckClick, isAdmin = false }:
                       className="relative text-left p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200 hover:border-eq-sky group cursor-pointer"
                     >
                       {isAdmin && (
-                        <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
-                            onClick={(e) => handleArchive(e, check.id)}
-                            disabled={pending}
-                            className="p-1 rounded hover:bg-gray-100 text-eq-grey hover:text-eq-ink"
-                            title="Archive check"
-                          >
-                            <Archive className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleCancel(e, check.id)}
+                            onClick={(e) => handleDelete(e, check.id)}
                             disabled={pending}
                             className="p-1 rounded hover:bg-red-50 text-eq-grey hover:text-red-600"
-                            title="Cancel / delete check"
+                            title="Delete check"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

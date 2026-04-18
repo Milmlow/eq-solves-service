@@ -34,8 +34,7 @@ interface CheckHeaderProps {
   isAdmin: boolean
   onStart: () => void
   onComplete: () => void
-  onCancel: () => void
-  onArchive: () => void
+  onDelete: () => void
   onPasteWOs: (lines: string) => Promise<void>
   onForceStatus?: (status: CheckStatus) => void
 }
@@ -60,8 +59,7 @@ export function CheckHeader({
   isAdmin,
   onStart,
   onComplete,
-  onCancel,
-  onArchive,
+  onDelete,
   onPasteWOs,
   onForceStatus,
 }: CheckHeaderProps) {
@@ -160,14 +158,9 @@ export function CheckHeader({
             <ClipboardPaste className="w-4 h-4 mr-1" /> Paste WO #s
           </Button>
         )}
-        {check.status !== 'complete' && check.status !== 'cancelled' && isAdmin && (
-          <Button size="sm" variant="danger" onClick={onCancel} disabled={loading}>
-            Cancel
-          </Button>
-        )}
         {isAdmin && (
-          <Button size="sm" variant="danger" onClick={onArchive} disabled={loading}>
-            Archive
+          <Button size="sm" variant="danger" onClick={onDelete} disabled={loading}>
+            Delete
           </Button>
         )}
       </div>

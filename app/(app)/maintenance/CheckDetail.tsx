@@ -9,7 +9,6 @@ import type { CheckAssetWithDetails } from './AssetRow'
 import {
   startCheckAction,
   completeCheckAction,
-  cancelCheckAction,
   archiveCheckAction,
   updateCheckAction,
   updateCheckItemAction,
@@ -92,12 +91,17 @@ export function CheckDetail({
     if (!result.success) setError(result.error ?? 'Failed to complete.')
   }
 
-  async function handleCancel() {
+  async function handleDelete() {
+    if (
+      !confirm(
+        `Delete "${check.custom_name ?? 'this check'}"? It will be removed from all views. You can restore it from Admin → Archive.`
+      )
+    ) return
     setError(null)
     setLoading(true)
-    const result = await cancelCheckAction(check.id)
+    const result = await archiveCheckAction(check.id, false)
     setLoading(false)
-    if (!result.success) setError(result.error ?? 'Failed to cancel.')
+    if (!result.success) setError(result.error ?? 'Failed to delete.')
     else onClose()
   }
 
@@ -123,20 +127,6 @@ export function CheckDetail({
     if (!result.success) setError(result.error ?? 'Failed to update status.')
   }
 
-  async function handleArchive() {
-    if (
-      !confirm(
-        'Archive this entire maintenance check? It will be hidden from all list views. You can restore it later from the audit log.'
-      )
-    )
-      return
-    setError(null)
-    setLoading(true)
-    const result = await archiveCheckAction(check.id, false)
-    setLoading(false)
-    if (!result.success) setError(result.error ?? 'Failed to archive.')
-    else onClose()
-  }
 
   // ─── Asset-level actions ─────────────────────────────────────────────
 
@@ -260,8 +250,7 @@ export function CheckDetail({
           isAdmin={isAdmin}
           onStart={handleStart}
           onComplete={handleComplete}
-          onCancel={handleCancel}
-          onArchive={handleArchive}
+          onDelete={handleDelete}
           onPasteWOs={handlePasteWOs}
           onForceStatus={handleForceStatus}
         />
