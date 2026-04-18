@@ -35,10 +35,6 @@ function formatDateTime(dateStr: string | null) {
   })
 }
 
-function formatCurrency(amount: number) {
-  return amount === 0 ? '—' : `$${amount.toLocaleString('en-AU', { minimumFractionDigits: 0 })}`
-}
-
 const categoryColours: Record<string, string> = {
   'Thermal scanning': 'bg-red-100 text-red-700',
   'Dark site test': 'bg-purple-100 text-purple-700',
@@ -92,14 +88,6 @@ export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEd
           <div>
             <div className="text-xs text-eq-grey font-medium uppercase">End</div>
             <div className="text-eq-ink">{formatDateTime(entry.end_time)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-eq-grey font-medium uppercase">Hours</div>
-            <div className="text-eq-ink font-semibold">{Number(entry.hours) || 0}</div>
-          </div>
-          <div>
-            <div className="text-xs text-eq-grey font-medium uppercase">Cost</div>
-            <div className="text-eq-ink font-semibold">{formatCurrency(Number(entry.contractor_materials_cost) || 0)}</div>
           </div>
         </div>
 

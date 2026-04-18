@@ -68,12 +68,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch check assets' }, { status: 500 })
   }
 
-  // Fetch ALL check items for this check in one query
+  // Fetch ALL check items for this check in one query (lift Supabase 1000-row default)
   const { data: allItems } = await supabase
     .from('maintenance_check_items')
     .select('*')
     .eq('check_id', checkId)
     .order('sort_order')
+    .limit(10000)
 
   if (!allItems) {
     return NextResponse.json({ error: 'Failed to fetch check items' }, { status: 500 })

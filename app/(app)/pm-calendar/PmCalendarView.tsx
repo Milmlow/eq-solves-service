@@ -63,9 +63,7 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function formatCurrency(amount: number) {
-  return amount === 0 ? '—' : `$${amount.toLocaleString('en-AU', { minimumFractionDigits: 0 })}`
-}
+
 
 const QUARTER_LABELS: Record<AuFyQuarter, string> = {
   Q1: 'Q1 (Jul–Sep)',
@@ -160,14 +158,12 @@ export function PmCalendarView({
 
   // ===== QUARTERLY SUMMARY =====
   const quarterlySummary = useMemo(() => {
-    const summary: Record<string, Record<string, { hours: number; cost: number; count: number }>> = {}
+    const summary: Record<string, Record<string, { count: number }>> = {}
     for (const e of entries) {
       const q = e.quarter ?? 'Unknown'
       const site = e.site_name
       if (!summary[q]) summary[q] = {}
-      if (!summary[q][site]) summary[q][site] = { hours: 0, cost: 0, count: 0 }
-      summary[q][site].hours += Number(e.hours) || 0
-      summary[q][site].cost += Number(e.contractor_materials_cost) || 0
+      if (!summary[q][site]) summary[q][site] = { count: 0 }
       summary[q][site].count += 1
     }
     return summary
@@ -229,18 +225,6 @@ export function PmCalendarView({
       sortAccessor: (row) => new Date(row.start_time).getTime(),
     },
     {
-      key: 'hours',
-      header: 'Hours',
-      render: (row) => <span className="text-xs tabular-nums">{Number(row.hours) || 0}</span>,
-      sortAccessor: (row) => Number(row.hours) || 0,
-    },
-    {
-      key: 'contractor_materials_cost',
-      header: 'Cost',
-      render: (row) => <span className="text-xs tabular-nums">{formatCurrency(Number(row.contractor_materials_cost) || 0)}</span>,
-      sortAccessor: (row) => Number(row.contractor_materials_cost) || 0,
-    },
-    {
       key: 'quarter',
       header: 'Quarter',
       render: (row) => <span className="text-xs">{row.quarter ?? '—'}</span>,
@@ -279,8 +263,6 @@ export function PmCalendarView({
     category: e.category,
     start_time: e.start_time,
     end_time: e.end_time ?? '',
-    hours: Number(e.hours) || 0,
-    cost: Number(e.contractor_materials_cost) || 0,
     quarter: e.quarter ?? '',
     financial_year: e.financial_year ?? '',
     status: e.status,
@@ -293,15 +275,11 @@ export function PmCalendarView({
     { key: 'category' as const, label: 'Category' },
     { key: 'start_time' as const, label: 'Start' },
     { key: 'end_time' as const, label: 'End' },
-    { key: 'hours' as const, label: 'Hours' },
-    { key: 'cost' as const, label: 'Cost' },
     { key: 'quarter' as const, label: 'Quarter' },
     { key: 'status' as const, label: 'Status' },
   ]
 
   // ===== TOTALS =====
-  const totalHours = entries.reduce((s, e) => s + (Number(e.hours) || 0), 0)
-  const totalCost = entries.reduce((s, e) => s + (Number(e.contractor_materials_cost) || 0), 0)
 
   return (
     <>
@@ -390,8 +368,6 @@ export function PmCalendarView({
       {/* Summary bar */}
       <div className="flex items-center gap-6 px-4 py-3 bg-white border border-gray-200 rounded-lg">
         <div className="text-sm"><span className="text-eq-grey">Entries:</span> <span className="font-semibold text-eq-ink">{entries.length}</span></div>
-        <div className="text-sm"><span className="text-eq-grey">Total Hours:</span> <span className="font-semibold text-eq-ink">{totalHours.toLocaleString()}</span></div>
-        <div className="text-sm"><span className="text-eq-grey">Total Cost:</span> <span className="font-semibold text-eq-ink">${totalCost.toLocaleString('en-AU')}</span></div>
       </div>
 
       {/* ===== LIST VIEW ===== */}
@@ -443,7 +419,6 @@ export function PmCalendarView({
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <CategoryBadge category={e.category} />
-                          {Number(e.hours) > 0 && <span className="text-[10px] text-eq-grey">{e.hours}h</span>}
                         </div>
                       </button>
                     ))
@@ -461,8 +436,6 @@ export function PmCalendarView({
           {(['Q1', 'Q2', 'Q3', 'Q4'] as AuFyQuarter[]).map((q) => {
             const siteSummaries = quarterlySummary[q] ?? {}
             const siteKeys = Object.keys(siteSummaries).sort()
-            const qHours = siteKeys.reduce((s, k) => s + siteSummaries[k].hours, 0)
-            const qCost = siteKeys.reduce((s, k) => s + siteSummaries[k].cost, 0)
             const qCount = siteKeys.reduce((s, k) => s + siteSummaries[k].count, 0)
 
             return (
@@ -471,8 +444,6 @@ export function PmCalendarView({
                   <h3 className="font-bold text-eq-ink">{QUARTER_LABELS[q]}</h3>
                   <div className="flex items-center gap-4 text-xs text-eq-grey">
                     <span>{qCount} tasks</span>
-                    <span>{qHours}h</span>
-                    <span className="font-semibold text-eq-ink">{formatCurrency(qCost)}</span>
                   </div>
                 </div>
                 <div className="p-4">
@@ -484,8 +455,6 @@ export function PmCalendarView({
                         <tr className="text-left text-xs text-eq-grey border-b border-gray-100">
                           <th className="pb-2">Site</th>
                           <th className="pb-2 text-right">Tasks</th>
-                          <th className="pb-2 text-right">Hours</th>
-                          <th className="pb-2 text-right">Cost</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -493,8 +462,6 @@ export function PmCalendarView({
                           <tr key={site} className="border-b border-gray-50">
                             <td className="py-1.5 font-medium text-eq-ink text-xs">{site}</td>
                             <td className="py-1.5 text-right tabular-nums text-xs">{siteSummaries[site].count}</td>
-                            <td className="py-1.5 text-right tabular-nums text-xs">{siteSummaries[site].hours}</td>
-                            <td className="py-1.5 text-right tabular-nums text-xs">{formatCurrency(siteSummaries[site].cost)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -502,8 +469,6 @@ export function PmCalendarView({
                         <tr className="font-semibold text-eq-ink">
                           <td className="pt-2 text-xs">Total</td>
                           <td className="pt-2 text-right tabular-nums text-xs">{qCount}</td>
-                          <td className="pt-2 text-right tabular-nums text-xs">{qHours}</td>
-                          <td className="pt-2 text-right tabular-nums text-xs">{formatCurrency(qCost)}</td>
                         </tr>
                       </tfoot>
                     </table>

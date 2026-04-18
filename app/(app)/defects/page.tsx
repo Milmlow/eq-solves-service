@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
-import { formatDate } from '@/lib/utils/format'
 import Link from 'next/link'
 import { DefectRow } from './DefectRow'
 
@@ -67,14 +66,21 @@ export default async function DefectsPage({
   // Fetch team members for assignment dropdown
   const { data: teamMembers } = await supabase
     .from('tenant_members')
-    .select('user_id, profiles(full_name)')
+    .select('user_id')
     .eq('is_active', true)
 
-  type TeamMember = { user_id: string; profiles: { full_name: string | null } | { full_name: string | null }[] | null }
-  const team = (teamMembers ?? []).map((m: TeamMember) => {
-    const profile = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
-    return { id: m.user_id, name: profile?.full_name ?? 'Unknown' }
-  })
+  const memberIds = (teamMembers ?? []).map((m) => m.user_id as string)
+  let team: { id: string; name: string }[] = []
+  if (memberIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', memberIds)
+    team = (profiles ?? []).map((p) => ({
+      id: p.id,
+      name: p.full_name ?? p.email ?? 'Unknown',
+    }))
+  }
 
   const counts = {
     total: totalRes.count ?? 0,

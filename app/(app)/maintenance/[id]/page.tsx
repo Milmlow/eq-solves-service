@@ -54,12 +54,13 @@ export default async function MaintenanceCheckPage({
     .eq('check_id', id)
     .order('created_at')
 
-  // Fetch all check items
+  // Fetch all check items (Supabase defaults to 1000 rows — lift the cap)
   const { data: allItems } = await supabase
     .from('maintenance_check_items')
     .select('*')
     .eq('check_id', id)
     .order('sort_order')
+    .limit(10000)
 
   // Fetch attachments
   const { data: attachments } = await supabase

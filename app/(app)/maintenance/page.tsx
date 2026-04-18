@@ -135,6 +135,7 @@ export default async function MaintenancePage({
       .select('*')
       .in('check_id', checkIds)
       .order('sort_order')
+      .limit(10000)
 
     itemsMap = (allItems ?? []).reduce((acc, item) => {
       const key = item.check_id as string

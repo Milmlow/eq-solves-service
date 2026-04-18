@@ -126,12 +126,6 @@ export function PmCalendarForm({ open, onClose, entry, sites, categories, techni
           </div>
         </div>
 
-        {/* Hours / Cost */}
-        <div className="grid grid-cols-2 gap-3">
-          <FormInput label="Hours" name="hours" type="number" defaultValue={entry ? String(entry.hours) : '0'} />
-          <FormInput label="Contractor / Materials Cost ($)" name="contractor_materials_cost" type="number" defaultValue={entry ? String(entry.contractor_materials_cost) : '0'} />
-        </div>
-
         {/* Status */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Status</label>
