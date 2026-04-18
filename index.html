@@ -9,9 +9,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>EQ Asset Capture</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+    <!--
+      Plus Jakarta Sans is self-hosted via @font-face in src/index.css.
+      See public/fonts/ for the variable-font TTF files.
+      This removes the dependency on Google Fonts CDN — important for an
+      offline-first PWA used in data halls with patchy connectivity.
+    -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <script src="/config.js"></script>
   </head>

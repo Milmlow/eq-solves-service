@@ -1,17 +1,41 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   EQ Asset Capture — index.css
+   Aligned to EQ Design Brief v1.3
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Self-hosted Plus Jakarta Sans — no CDN dependency.
+   Font files live at public/fonts/ and ship with the build. */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-VariableFont_wght.ttf') format('truetype-variations'),
+       url('/fonts/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-Italic-VariableFont_wght.ttf') format('truetype-variations'),
+       url('/fonts/PlusJakartaSans-Italic-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 800;
+  font-style: italic;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --sky: #3DA8D8;
-  --sky-soft: #EAF5FB;
-  --sky-deep: #2B7CA6;
-  --ink: #1A1A2E;
-  --border: #D5E6EF;
-  --muted: #6B7280;
-  --ok: #2E7D32;
-  --warn: #E6A700;
-  --bad: #C03232;
+  --sky:       #3DA8D8;
+  --sky-soft:  #EAF5FB;
+  --sky-deep:  #2986B4;   /* was #2B7CA6 — aligned to brand v1.3 */
+  --ink:       #1A1A2E;
+  --border:    #E5E7EB;   /* was #D5E6EF — neutral grey */
+  --muted:     #666666;   /* was #6B7280 — EQ Mid Grey */
+  --ok:        #16A34A;   /* was #2E7D32 */
+  --warn:      #D97706;   /* was #E6A700 */
+  --bad:       #DC2626;   /* was #C03232 */
   color-scheme: light;
 }
 
@@ -49,7 +73,7 @@ input::-webkit-inner-spin-button {
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Safe area on iOS */
-.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-top    { padding-top: env(safe-area-inset-top); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
 /* Field row focus ring */

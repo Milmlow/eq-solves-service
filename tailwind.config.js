@@ -4,20 +4,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        // EQ brand tokens
+        // ─── EQ brand tokens (EQ Design Brief v1.3) ────────────────
         sky: {
-          DEFAULT: '#3DA8D8',
-          soft: '#EAF5FB',
-          deep: '#2B7CA6',
+          DEFAULT: '#3DA8D8',   // EQ Sky Blue — primary
+          soft:    '#EAF5FB',   // EQ Ice Blue — background tint
+          deep:    '#2986B4',   // EQ Deep Blue — hover (was #2B7CA6)
         },
-        ink: '#1A1A2E',
+        ink:   '#1A1A2E',       // EQ Ink — body text
         paper: '#FFFFFF',
-        // Utility
-        ok: '#2E7D32',
-        warn: '#E6A700',
-        bad: '#C03232',
-        border: '#D5E6EF',
-        muted: '#6B7280',
+
+        // ─── Status (aligned to brand spec — matches Service + Field) ──
+        ok:   '#16A34A',        // was #2E7D32
+        warn: '#D97706',        // was #E6A700
+        bad:  '#DC2626',        // was #C03232
+
+        // ─── Neutrals (aligned to Tailwind scale — spec default) ───
+        border: '#E5E7EB',      // was #D5E6EF — neutral grey, not blue-tinted
+        muted:  '#666666',      // EQ Mid Grey (was #6B7280)
       },
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
