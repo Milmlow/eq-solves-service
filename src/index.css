@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sky: #3DA8D8;
+  --sky-soft: #EAF5FB;
+  --sky-deep: #2B7CA6;
+  --ink: #1A1A2E;
+  --border: #D5E6EF;
+  --muted: #6B7280;
+  --ok: #2E7D32;
+  --warn: #E6A700;
+  --bad: #C03232;
+  color-scheme: light;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: var(--sky-soft);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+/* Bigger tap targets on mobile */
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: 16px; /* prevents iOS zoom */
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Hide scrollbar but allow scrolling */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Safe area on iOS */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Field row focus ring */
+.field-input {
+  @apply w-full rounded-xl border border-border bg-white px-4 py-3.5 text-[16px] text-ink outline-none transition;
+}
+.field-input:focus {
+  @apply border-sky ring-2 ring-sky/20;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-xl font-semibold transition active:scale-[0.98];
+}
+.btn-primary {
+  @apply bg-sky text-white hover:bg-sky-deep;
+}
+.btn-ghost {
+  @apply bg-white text-ink border border-border hover:border-sky/60;
+}
+.btn-danger {
+  @apply bg-bad text-white;
+}
+.btn-lg { @apply px-5 py-4 text-base; }
+.btn-md { @apply px-4 py-3 text-sm; }
+
+.card {
+  @apply bg-white rounded-xl shadow-card border border-border/60;
+}
+
+/* Label pill */
+.pill {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}

@@ -1,0 +1,2925 @@
+{
+  "AHU": {
+    "classification_code": "AHU",
+    "fields": [
+      {
+        "spec_id": "COOLING CAPACITY",
+        "display_name": "Cooling\u00a0Capacity",
+        "definition": null,
+        "sample_values": "20, 100, 200, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY UNITS",
+        "display_name": "Cooling\u00a0Capacity\u00a0Units",
+        "definition": null,
+        "sample_values": "TONS, KW",
+        "data_type": "LOV",
+        "options": [
+          "KW-COOLING",
+          "TONS"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "FREE COOLING Y/N",
+        "display_name": "Free\u00a0Cooling\u00a0Y/N?",
+        "definition": "Does the unit have the capability to transition to free cooling?",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 4,
+    "field_captured_count": 0
+  },
+  "ATS": {
+    "classification_code": "ATS",
+    "fields": [
+      {
+        "spec_id": "AMPERAGE RATING",
+        "display_name": "Amperage\u00a0Rating",
+        "definition": null,
+        "sample_values": "1200",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ORACLE NAME",
+        "display_name": "Oracle\u00a0Name",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "TYPE",
+        "display_name": "Type",
+        "definition": "Open-transition, Delayed-transition, Closed-transition",
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "OPEN",
+          "CLOSED",
+          "DELAYED"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 4,
+    "field_captured_count": 0
+  },
+  "BATT-LA": {
+    "classification_code": "BATT-LA",
+    "fields": [
+      {
+        "spec_id": "BATT TYPE",
+        "display_name": "Battery Type",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "VRLA",
+          "FLOODED"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "BATTERY VOLTAGE",
+        "display_name": "Battery Voltage",
+        "definition": "Voltage of the battery (E.g. 2 volts, 12 volts)",
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [
+          "2",
+          "4",
+          "6",
+          "8",
+          "12",
+          "16",
+          "24"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "STRING SIZE",
+        "display_name": "String Size",
+        "definition": "Number of batteries in a string",
+        "sample_values": "40, 80, 240",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 3,
+    "field_captured_count": 0
+  },
+  "BATT-LI": {
+    "classification_code": "BATT-LI",
+    "fields": [
+      {
+        "spec_id": "BATT TYPE",
+        "display_name": "Battery Type",
+        "definition": null,
+        "sample_values": "Li-Ion",
+        "data_type": "LOV",
+        "options": [
+          "VRLA",
+          "FLOODED"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "BATTERY VOLTAGE",
+        "display_name": "Battery Voltage",
+        "definition": "Voltage of the battery (E.g. 2 volts, 12 volts)",
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [
+          "2",
+          "4",
+          "6",
+          "8",
+          "12",
+          "16",
+          "24"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "STRING SIZE",
+        "display_name": "String Size",
+        "definition": "Number of batteries in a string",
+        "sample_values": "40, 80, 240",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 3,
+    "field_captured_count": 0
+  },
+  "BREAKER": {
+    "classification_code": "BREAKER",
+    "fields": [
+      {
+        "spec_id": "AMP FRAME",
+        "display_name": "AMP FRAME",
+        "definition": "Continuous full load current breaker is rated for.  Can be listed a Iu = (value)",
+        "sample_values": "Iu = 3200",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ASSET UID BREAKER IS INSTALLED IN",
+        "display_name": "ASSET UID BREAKER IS INSTALLED IN",
+        "definition": "Asset UID where the breaker is installed",
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "BREAKER CONSTRUCTION",
+        "display_name": "Breaker Construction",
+        "definition": "Type of construction",
+        "sample_values": "MCCB, ICB MCB",
+        "data_type": "LOV",
+        "options": [
+          "ACB - AIR CIRCUIT BREAKER",
+          "ICB - INSULATED CASE",
+          "MCB - METAL CLAD",
+          "MCCB - MOLDED CASE"
+        ],
+        "display_order": 2,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "BREAKER MOUNT",
+        "display_name": "BREAKER MOUNT",
+        "definition": "Breaker is bolted on bus or can be removed by cranking off bus.",
+        "sample_values": "Fixed, Draw out",
+        "data_type": "LOV",
+        "options": [
+          "FIXED",
+          "DRAWOUT",
+          "PLUG-IN"
+        ],
+        "display_order": 3,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "BREAKER TYPE",
+        "display_name": "Breaker Type",
+        "definition": "Fuse and Switch amp values should be entered in the \"LONG TIME PICK UP(LTPU X IN) (IR)\" Field",
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "INPUT",
+          "OUTPUT",
+          "BUS TIE",
+          "SWITCH",
+          "FUSE"
+        ],
+        "display_order": 4,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "GROUND FAULT DELAY(TG(S))",
+        "display_name": "GROUND FAULT DELAY\n(TG(S))",
+        "definition": "Time delay after Ground Fault current exceeds Pick Up values. Expressed as seconds.",
+        "sample_values": "tg or t4 = 0.4 sec etc.",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 5,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "GROUND FAULT PICK UP (PU X IN) (IG)",
+        "display_name": "GROUND FAULT PICK UP\n(PU X IN) (IG)",
+        "definition": "Ground current level execced to fault Pick Up.  Expressed as percentage of In.  Can be expressed as a number or or letter.",
+        "sample_values": "Ig or I4 = 0.4, K etc.",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 6,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "GROUND FAULT (I2T)",
+        "display_name": "GROUND FAULT\n(I2T)",
+        "definition": "Ground Fault curve.  Generallye expressed as On / Off or In / Out",
+        "sample_values": "On / Off, In / Out",
+        "data_type": "LOV",
+        "options": [
+          "N/A",
+          "ON/IN",
+          "OFF/OUT"
+        ],
+        "display_order": 7,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "INST(X IN) (LI)",
+        "display_name": "INST\n(X IN (II)",
+        "definition": "High current level that initiates instantaneous trip.  A multiple of In",
+        "sample_values": "Ii or I3 = 3, 5\u202612",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 8,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KA RATING",
+        "display_name": "KA RATING",
+        "definition": "Fault current withstand in amps.  Varies based on system voltage.",
+        "sample_values": "Icu = 42KA",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 9,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "LONG TIME DELAY(LTD / TR(S)",
+        "display_name": "LONG TIME DELAY\n(LTD / TR(S)",
+        "definition": "Time delay after current exceeds Long Time Pick Up.  Expressed as a seconds or number.  T1,",
+        "sample_values": "tr = X or, T1 = X, in seconds",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 10,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "LONG TIME PICK UP(LTPU X IN) (IR)",
+        "display_name": "LONG TIME\n PICK  UP\n(LTPU X IN) (IR)",
+        "definition": "Continuous current limit when breaker will trip after a time delay.  Expressed as a percentage or fraction.",
+        "sample_values": "LTPU = X, Ir = X or I1 = X",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 11,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "OPERATOR TYPE",
+        "display_name": "OPERATOR TYPE",
+        "definition": "I operation local only or remote control",
+        "sample_values": "ELEC, MECH",
+        "data_type": "LOV",
+        "options": [
+          "Mechanical",
+          "Electrical"
+        ],
+        "display_order": 12,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "SENSOR IN (PLUG RATING)",
+        "display_name": "SENOR IN\n(PLUG RATING)",
+        "definition": "Current sensor rating plug in amps",
+        "sample_values": "In = 1600",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 13,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "SHORT TIME (I2T)",
+        "display_name": "SHORT TIME (I2T)",
+        "definition": "Short time delay curve shape.",
+        "sample_values": "On / Off, or In / Out",
+        "data_type": "LOV",
+        "options": [
+          "N/A",
+          "OFF/OUT",
+          "ON/IN"
+        ],
+        "display_order": 14,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "SHORT TIME DELAY (TSD(S))",
+        "display_name": "SHORT TIME DELAY\n(TSD(S))",
+        "definition": "Time delay after current exceeds Short Time Pick UP.  Expreesed in STD, tsd or T2 = time in seconds",
+        "sample_values": "T2 or tsd = 0.4, 0.5 ..",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 15,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "SHORT TIME PICK UP (PU X IR) (LSD)",
+        "display_name": "SHORT TIME PICK UP\n(PU X IR) (LSD)",
+        "definition": "High current level that exceeds a pick-up rating for a faster trip.  Expressed as STPU or I2 expressed as a number times In",
+        "sample_values": "STPU = Z or, Isd = X or I2 = X, generally a number such as 2, 4 \u2026",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 16,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "TRIP MODEL",
+        "display_name": "TRIP MODEL",
+        "definition": "Trip unit model number",
+        "sample_values": "Micrologic 6.0 P",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 17,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "TRIP TYPE",
+        "display_name": "TRIP TYPE",
+        "definition": "Thermomagnetic, Electronic, Shunt, None",
+        "sample_values": "LS, LSI, L, S, LSID",
+        "data_type": "LOV",
+        "options": [
+          "L",
+          "LI",
+          "LS",
+          "LSI",
+          "LSIG",
+          "N/A",
+          "S"
+        ],
+        "display_order": 18,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "VERIFIED AGAINST COORDINATION STUDY",
+        "display_name": "Verified Against Coordination Study",
+        "definition": "Values compared against a relay coordination study.",
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "MISMATCH",
+          "NO STUDY",
+          "NOT VALIDATED",
+          "VALIDATED"
+        ],
+        "display_order": 19,
+        "is_field_captured": true,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "VOLTAGE RATING",
+        "display_name": "VOLTAGE RATING",
+        "definition": "Breaker system voltage rating",
+        "sample_values": "Ue = 480",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 20,
+        "is_field_captured": true,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 21,
+    "field_captured_count": 21
+  },
+  "CDU": {
+    "classification_code": "CDU",
+    "fields": [
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Connected\u00a0to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "MAX NUMBER OF LOOPS",
+        "display_name": "MAX # OF LOOPS",
+        "definition": "The highest number of loops the CDU can support",
+        "sample_values": "1, 2\u2026 10",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 2,
+    "field_captured_count": 0
+  },
+  "CHILLER-AC": {
+    "classification_code": "CHILLER-AC",
+    "fields": [
+      {
+        "spec_id": "COMPRESSOR TYPE",
+        "display_name": "Compressor\u00a0Type",
+        "definition": null,
+        "sample_values": "SCREW, SCROLL, ROTARY, etc.",
+        "data_type": "LOV",
+        "options": [
+          "CENTRIFUGAL",
+          "N/A",
+          "ROTARY",
+          "SCREW",
+          "SCROLL",
+          "SEMI_HERMETIC_SCREW"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY",
+        "display_name": "Size of the chiller",
+        "definition": null,
+        "sample_values": "30, 350",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY UNITS",
+        "display_name": "Cooling\u00a0Capacity\u00a0Units",
+        "definition": null,
+        "sample_values": "TONS, KW",
+        "data_type": "LOV",
+        "options": [
+          "KW-COOLING",
+          "TONS"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "FREE COOLING Y/N",
+        "display_name": "Free\u00a0Cooling\u00a0Y/N?",
+        "definition": "Does the unit have the capability to transition to free cooling?",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT TYPE",
+        "display_name": "Type of refridgerant used by the unit",
+        "definition": null,
+        "sample_values": "R-22, R-134A, etc.",
+        "data_type": "LOV",
+        "options": [
+          "N/A",
+          "CO2",
+          "R-12",
+          "R-123",
+          "R-1233zd",
+          "R-1234ye",
+          "R-1234ze",
+          "R-134A",
+          "R-22",
+          "R-32 (R-452E)",
+          "R-290",
+          "R-404A",
+          "R-407C",
+          "R-410A",
+          "R-422B",
+          "R-422D",
+          "R-442A (RS-50)",
+          "R-444B",
+          "R-453 (RS44B)",
+          "R-454B",
+          "R-454C",
+          "R-455A",
+          "R-466A",
+          "R-470A (RS-53)",
+          "R-507A",
+          "R-513A",
+          "R-513B",
+          "R-514A",
+          "R-515B",
+          "R-717 (NH3)",
+          "R-744 (CO2)"
+        ],
+        "display_order": 6,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE UNITS",
+        "display_name": "Refrigerant Charge Units",
+        "definition": "Refrigernat Unit of Measure",
+        "sample_values": "KG, LBS",
+        "data_type": "LOV",
+        "options": [
+          "LBS",
+          "KG"
+        ],
+        "display_order": 7,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE TOTAL",
+        "display_name": "Refrigerant Charge Total",
+        "definition": "Total refrigerant amount contained within the asset.",
+        "sample_values": "22.7 KG, 50 LBS",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 8,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 9,
+    "field_captured_count": 0
+  },
+  "CHILLER-WC": {
+    "classification_code": "CHILLER-WC",
+    "fields": [
+      {
+        "spec_id": "COMPRESSOR TYPE",
+        "display_name": "Compressor\u00a0Type",
+        "definition": null,
+        "sample_values": "SCREW, SCROLL, ROTARY, etc.",
+        "data_type": "LOV",
+        "options": [
+          "CENTRIFUGAL",
+          "N/A",
+          "ROTARY",
+          "SCREW",
+          "SCROLL",
+          "SEMI_HERMETIC_SCREW"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY",
+        "display_name": "Size of the chiller",
+        "definition": null,
+        "sample_values": "30, 350",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY UNITS",
+        "display_name": "Cooling\u00a0Capacity\u00a0Units",
+        "definition": null,
+        "sample_values": "TONS, KW",
+        "data_type": "LOV",
+        "options": [
+          "KW-COOLING",
+          "TONS"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "FREE COOLING Y/N",
+        "display_name": "Free\u00a0Cooling\u00a0Y/N?",
+        "definition": "Does the unit have the capability to transition to free cooling?",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT TYPE",
+        "display_name": "Type of refridgerant used by the unit",
+        "definition": null,
+        "sample_values": "R-22, R-134A, etc.",
+        "data_type": "LOV",
+        "options": [
+          "N/A",
+          "CO2",
+          "R-12",
+          "R-123",
+          "R-1233zd",
+          "R-1234ye",
+          "R-1234ze",
+          "R-134A",
+          "R-22",
+          "R-32 (R-452E)",
+          "R-290",
+          "R-404A",
+          "R-407C",
+          "R-410A",
+          "R-422B",
+          "R-422D",
+          "R-442A (RS-50)",
+          "R-444B",
+          "R-453 (RS44B)",
+          "R-454B",
+          "R-454C",
+          "R-455A",
+          "R-466A",
+          "R-470A (RS-53)",
+          "R-507A",
+          "R-513A",
+          "R-513B",
+          "R-514A",
+          "R-515B",
+          "R-717 (NH3)",
+          "R-744 (CO2)"
+        ],
+        "display_order": 6,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE UNITS",
+        "display_name": "Refrigerant Charge Units",
+        "definition": "Refrigernat Unit of Measure",
+        "sample_values": "KG, LBS",
+        "data_type": "LOV",
+        "options": [
+          "LBS",
+          "KG"
+        ],
+        "display_order": 7,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE TOTAL",
+        "display_name": "Refrigerant Charge Total",
+        "definition": "Total refrigerant amount contained within the asset.",
+        "sample_values": "22.7 KG, 50 LBS",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 8,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 9,
+    "field_captured_count": 0
+  },
+  "CLNTWR": {
+    "classification_code": "CLNTWR",
+    "fields": [
+      {
+        "spec_id": "COOLING CAPACITY",
+        "display_name": "Cooling\u00a0Capacity",
+        "definition": null,
+        "sample_values": "20, 100, 200, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY UNITS",
+        "display_name": "Cooling\u00a0Capacity\u00a0Units",
+        "definition": null,
+        "sample_values": "TONS, KW",
+        "data_type": "LOV",
+        "options": [
+          "KW-COOLING",
+          "TONS"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "LOOP TYPE",
+        "display_name": "Loop Type",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "OPEN",
+          "CLOSED",
+          "RING",
+          "CROSSFLOW",
+          "OPEN & CLOSED"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "MOTOR HORSEPOWER / KW",
+        "display_name": "Motor Horsepower / KW",
+        "definition": "Enter either Motor Horsepower or Motor KW, both are not required",
+        "sample_values": "30HP or 22KW",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter\u00a0Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 6,
+    "field_captured_count": 0
+  },
+  "CONTRL": {
+    "classification_code": "CONTRL",
+    "fields": [
+      {
+        "spec_id": "NETWORK TYPE",
+        "display_name": "NETWORK TYPE",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "TYPE OF SYSTEM",
+        "display_name": "TYPE OF SYSTEM",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 2,
+    "field_captured_count": 0
+  },
+  "CRAC": {
+    "classification_code": "CRAC",
+    "fields": [
+      {
+        "spec_id": "COMPRESSOR TYPE",
+        "display_name": "Compressor\u00a0Type",
+        "definition": null,
+        "sample_values": "SCREW, SCROLL, ROTARY, etc.",
+        "data_type": "LOV",
+        "options": [
+          "CENTRIFUGAL",
+          "N/A",
+          "ROTARY",
+          "SCREW",
+          "SCROLL",
+          "SEMI_HERMETIC_SCREW"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY",
+        "display_name": "Cooling\u00a0Capacity",
+        "definition": null,
+        "sample_values": "20, 100, 200, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY UNITS",
+        "display_name": "Cooling\u00a0Capacity\u00a0Units",
+        "definition": null,
+        "sample_values": "TONS, KW",
+        "data_type": "LOV",
+        "options": [
+          "KW-COOLING",
+          "TONS"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "FREE COOLING Y/N",
+        "display_name": "Free\u00a0Cooling\u00a0Y/N?",
+        "definition": "Does the unit have the capability to transition to free cooling?",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "HEATING",
+        "display_name": "Heating\u00a0(Y/N)",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "IRC (In Row Cooler)",
+        "display_name": "In Row Coolers (Y/N)",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [],
+        "display_order": 6,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT TYPE",
+        "display_name": "Type of refridgerant used by the unit",
+        "definition": null,
+        "sample_values": "R-22, R-134A, etc.",
+        "data_type": "LOV",
+        "options": [
+          "N/A",
+          "CO2",
+          "R-12",
+          "R-123",
+          "R-1233zd",
+          "R-1234ye",
+          "R-1234ze",
+          "R-134A",
+          "R-22",
+          "R-32 (R-452E)",
+          "R-290",
+          "R-404A",
+          "R-407C",
+          "R-410A",
+          "R-422B",
+          "R-422D",
+          "R-442A (RS-50)",
+          "R-444B",
+          "R-453 (RS44B)",
+          "R-454B",
+          "R-454C",
+          "R-455A",
+          "R-466A",
+          "R-470A (RS-53)",
+          "R-507A",
+          "R-513A",
+          "R-513B",
+          "R-514A",
+          "R-515B",
+          "R-717 (NH3)",
+          "R-744 (CO2)"
+        ],
+        "display_order": 7,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE UNITS",
+        "display_name": "Refrigerant Charge Units",
+        "definition": "Refrigernat Unit of Measure",
+        "sample_values": "KG, LBS",
+        "data_type": "LOV",
+        "options": [
+          "LBS",
+          "KG"
+        ],
+        "display_order": 8,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE TOTAL",
+        "display_name": "Refrigerant Charge Total",
+        "definition": "Total refrigerant amount contained within the asset.",
+        "sample_values": "22.7 KG, 50 LBS",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 9,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 10,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "IRC (In Row Cooler)",
+        "display_name": "In Row Coolers (Y/N)",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [],
+        "display_order": 11,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 12,
+    "field_captured_count": 0
+  },
+  "CRAH": {
+    "classification_code": "CRAH",
+    "fields": [
+      {
+        "spec_id": "COOLING CAPACITY",
+        "display_name": "Cooling\u00a0Capacity",
+        "definition": null,
+        "sample_values": "20, 100, 200, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY UNITS",
+        "display_name": "Cooling\u00a0Capacity\u00a0Units",
+        "definition": null,
+        "sample_values": "TONS, KW",
+        "data_type": "LOV",
+        "options": [
+          "KW-COOLING",
+          "TONS"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "FREE COOLING Y/N",
+        "display_name": "Free\u00a0Cooling\u00a0Y/N?",
+        "definition": "Does the unit have the capability to transition to free cooling?",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 4,
+    "field_captured_count": 0
+  },
+  "DC PLANT": {
+    "classification_code": "DC PLANT",
+    "fields": [
+      {
+        "spec_id": "AMPERAGE RATING",
+        "display_name": "Amperage\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "BATTERY BACKUP",
+        "display_name": "Battery Backup (Y/N)",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "DC OUTPUT VOLTAGE",
+        "display_name": "DC Output Voltage",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "FUSE OR CIRCUIT BREAKER",
+        "display_name": "Fuse\u00a0or\u00a0Circuit\u00a0Breaker",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "FUSE",
+          "CIRCUIT BREAKER"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Connected\u00a0to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KW RATING",
+        "display_name": "kW\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "NUMBER OF RECTIFIERS",
+        "display_name": "Number\u00a0of\u00a0Rectifiers",
+        "definition": "The number of rectifiers that make up the usable power of the DC plant",
+        "sample_values": "4, 5, 10, 20, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 6,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ORACLE NAME",
+        "display_name": "Oracle\u00a0Name",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 7,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "UPS OR UTILITY",
+        "display_name": "UPS or UTILITY",
+        "definition": "Is the plant fed from UPS or Utility power",
+        "sample_values": null,
+        "data_type": "LOV",
+        "options": [
+          "UPS",
+          "UTILITY"
+        ],
+        "display_order": 8,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 9,
+    "field_captured_count": 0
+  },
+  "DRYCOOLER": {
+    "classification_code": "DRYCOOLER",
+    "fields": [
+      {
+        "spec_id": "COOLING CAPACITY",
+        "display_name": "Cooling\u00a0Capacity",
+        "definition": null,
+        "sample_values": "20, 100, 200, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY UNITS",
+        "display_name": "Cooling\u00a0Capacity\u00a0Units",
+        "definition": null,
+        "sample_values": "TONS, KW",
+        "data_type": "LOV",
+        "options": [
+          "KW-COOLING",
+          "TONS"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 3,
+    "field_captured_count": 0
+  },
+  "FIRESYS": {
+    "classification_code": "FIRESYS",
+    "fields": [
+      {
+        "spec_id": "AIR OR NITROGEN",
+        "display_name": "AIR OR NITROGEN",
+        "definition": "Type of inert gas that is contained within the pipes.",
+        "sample_values": "Air, Nitrogen",
+        "data_type": "LOV",
+        "options": [
+          "Air",
+          "Nitrogen",
+          "N/A"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Fire"
+      }
+    ],
+    "total_fields": 1,
+    "field_captured_count": 0
+  },
+  "FUELSYS": {
+    "classification_code": "FUELSYS",
+    "fields": [
+      {
+        "spec_id": "ABOVE OR BELOW GROUND",
+        "display_name": "Above or Below Ground",
+        "definition": "Storage tank loaction",
+        "sample_values": "Above, Below",
+        "data_type": "LOV",
+        "options": [
+          "ABOVE",
+          "BELOW",
+          "N/A"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "BULK STORAGE CONTAINMENT TYPE",
+        "display_name": "Bulk Storage Containment Type",
+        "definition": "Type of containment design",
+        "sample_values": "Double walled air gap, contrete filled",
+        "data_type": "LOV",
+        "options": [
+          "DOUBLE WALL AIR GAP",
+          "DOUBLE WALL FIBERGLASS",
+          "DOUBLE WALL STEEL",
+          "SINGLE WALL FIBERGLASS",
+          "SINGLE WALL STEEL",
+          "STEEL INNER/CONCRETE OUTER",
+          "N/A"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "CAPACITY",
+        "display_name": "Capacity",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "LEAK DETECTION",
+        "display_name": "Leak Detection (Y/N)",
+        "definition": null,
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "TANK CONSTRUCTION",
+        "display_name": "Tank Construction",
+        "definition": "The material the tank is made from",
+        "sample_values": "Fiberglass, Steel, etc.",
+        "data_type": "LOV",
+        "options": [
+          "FIBERGLASS",
+          "STEEL",
+          "STEEL & CONCRETE",
+          "PVC",
+          "PLASTIC"
+        ],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 5,
+    "field_captured_count": 0
+  },
+  "GENSET": {
+    "classification_code": "GENSET",
+    "fields": [
+      {
+        "spec_id": "FREQUENCY",
+        "display_name": "Frequency (50/60)",
+        "definition": null,
+        "sample_values": "50HZ or 60HZ",
+        "data_type": "LOV",
+        "options": [
+          "50HZ",
+          "60HZ"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KVA RATING",
+        "display_name": "kVA\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KW RATING",
+        "display_name": "kW\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "PARALLELING",
+        "display_name": "Paralleling (Y/N)",
+        "definition": null,
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "POWER FACTOR",
+        "display_name": "Power Factor",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "VOLTAGE RATING",
+        "display_name": "Voltage Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 5,
+        "is_field_captured": true,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 6,
+    "field_captured_count": 1
+  },
+  "LOAD BANK": {
+    "classification_code": "LOAD BANK",
+    "fields": [
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KW RATING",
+        "display_name": "kW\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "PORTABLE OR FIXED",
+        "display_name": "Portable or Fixed",
+        "definition": null,
+        "sample_values": "PORTABLE, FIXED",
+        "data_type": "LOV",
+        "options": [
+          "PORTABLE",
+          "FIXED"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 3,
+    "field_captured_count": 0
+  },
+  "PDU / RPP": {
+    "classification_code": "PDU / RPP",
+    "fields": [
+      {
+        "spec_id": "AMPERAGE RATING",
+        "display_name": "Amperage\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "BCM ENABLED",
+        "display_name": "BCM\u00a0Enabled\u00a0(Y/N)",
+        "definition": "Branch Circuit Monitoring",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "FUSE OR CIRCUIT BREAKER",
+        "display_name": "Fuse\u00a0or\u00a0Circuit\u00a0Breaker",
+        "definition": null,
+        "sample_values": "FUSE, CIRCUIT BREAKER",
+        "data_type": "LOV",
+        "options": [
+          "FUSE",
+          "CIRCUIT BREAKER"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Feeding Power Directly to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KVA RATING",
+        "display_name": "kVA\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KW RATING",
+        "display_name": "kW\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 6,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "NUMBER OF CIRCUIT BREAKERS",
+        "display_name": "Number of Circuit Breakers",
+        "definition": "Number\u00a0of\u00a0Pole\u00a0Positions",
+        "sample_values": "24, 48, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 7,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "NUMBER OF RECTIFIERS",
+        "display_name": "Number\u00a0of\u00a0Rectifiers",
+        "definition": null,
+        "sample_values": "1, 2, 5, 10,  etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 8,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ORACLE NAME",
+        "display_name": "Oracle\u00a0Name",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 9,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "PANEL TYPE",
+        "display_name": "Panel\u00a0Type (AC/DC)",
+        "definition": null,
+        "sample_values": "AC or DC",
+        "data_type": "LOV",
+        "options": [
+          "AC",
+          "DC"
+        ],
+        "display_order": 10,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 11,
+    "field_captured_count": 0
+  },
+  "PUMP": {
+    "classification_code": "PUMP",
+    "fields": [
+      {
+        "spec_id": "MOTOR HORSEPOWER / KW",
+        "display_name": "Motor Horsepower / KW",
+        "definition": "Enter either Motor Horsepower or Motor KW, both are not required",
+        "sample_values": "30HP or 22KW",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "PUMP CAPACITY",
+        "display_name": "Pump\u00a0CAPACITY",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "PUMP CAPACITY UNITS",
+        "display_name": "Pump\u00a0CAPACITY\u00a0UNITS",
+        "definition": "Flow rate of the pump",
+        "sample_values": "BAR, GPM, PSI, etc.",
+        "data_type": "LOV",
+        "options": [
+          "GPM",
+          "M3/S",
+          "M3/MIN",
+          "M3/H",
+          "KPA",
+          "L/S",
+          "L/M",
+          "L/H",
+          "BAR",
+          "HP",
+          "KG/S",
+          "KG/M",
+          "KG/H",
+          "PSI",
+          "FT-HEAD"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 3,
+    "field_captured_count": 0
+  },
+  "RTU": {
+    "classification_code": "RTU",
+    "fields": [
+      {
+        "spec_id": "COMPRESSOR TYPE",
+        "display_name": "Compressor\u00a0Type",
+        "definition": null,
+        "sample_values": "SCREW, SCROLL, ROTARY, etc.",
+        "data_type": "LOV",
+        "options": [
+          "CENTRIFUGAL",
+          "N/A",
+          "ROTARY",
+          "SCREW",
+          "SCROLL",
+          "SEMI_HERMETIC_SCREW"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY",
+        "display_name": "Cooling\u00a0Capacity",
+        "definition": null,
+        "sample_values": "20, 100, 200, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COOLING CAPACITY UNITS",
+        "display_name": "Cooling\u00a0Capacity\u00a0Units",
+        "definition": null,
+        "sample_values": "TONS, KW",
+        "data_type": "LOV",
+        "options": [
+          "KW-COOLING",
+          "TONS"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "FREE COOLING Y/N",
+        "display_name": "Free\u00a0Cooling\u00a0Y/N?",
+        "definition": "Does the unit have the capability to transition to free cooling?",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "HEATING",
+        "display_name": "Heating\u00a0(Y/N)",
+        "definition": null,
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT TYPE",
+        "display_name": "Refrigerant\u00a0Type",
+        "definition": null,
+        "sample_values": "R-22, R-134A, etc.",
+        "data_type": "LOV",
+        "options": [
+          "N/A",
+          "CO2",
+          "R-12",
+          "R-123",
+          "R-1233zd",
+          "R-1234ye",
+          "R-1234ze",
+          "R-134A",
+          "R-22",
+          "R-32 (R-452E)",
+          "R-290",
+          "R-404A",
+          "R-407C",
+          "R-410A",
+          "R-422B",
+          "R-422D",
+          "R-442A (RS-50)",
+          "R-444B",
+          "R-453 (RS44B)",
+          "R-454B",
+          "R-454C",
+          "R-455A",
+          "R-466A",
+          "R-470A (RS-53)",
+          "R-507A",
+          "R-513A",
+          "R-513B",
+          "R-514A",
+          "R-515B",
+          "R-717 (NH3)",
+          "R-744 (CO2)"
+        ],
+        "display_order": 6,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE UNITS",
+        "display_name": "Refrigerant Charge Units",
+        "definition": "Refrigernat Unit of Measure",
+        "sample_values": "KG, LBS",
+        "data_type": "LOV",
+        "options": [
+          "LBS",
+          "KG"
+        ],
+        "display_order": 7,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE TOTAL",
+        "display_name": "Refrigerant Charge Total",
+        "definition": "Total refrigerant amount contained within the asset.",
+        "sample_values": "22.7 KG, 50 LBS",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 8,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 9,
+    "field_captured_count": 0
+  },
+  "SECURITY": {
+    "classification_code": "SECURITY",
+    "fields": [
+      {
+        "spec_id": "OS VERSION",
+        "display_name": "OS VERSION",
+        "definition": "The operating system of the server.",
+        "sample_values": "Windows Server 2019, Windows Server 2022, etc.",
+        "data_type": "LOV",
+        "options": [
+          "Windows Server 2022",
+          "Windows Server 2019",
+          "Windows Server 2016",
+          "Windows Server 2012",
+          "N/A"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Security"
+      },
+      {
+        "spec_id": "SQL VERSION",
+        "display_name": "SQL VERSION",
+        "definition": null,
+        "sample_values": "SQL 2014, 2016, 2017, 2022, NA",
+        "data_type": "LOV",
+        "options": [
+          "SQL Server 2022",
+          "SQL Server 2019",
+          "SQL Server 2017",
+          "SQL Server 2016",
+          "SQL Server 2014",
+          "N/A"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Security"
+      },
+      {
+        "spec_id": "SERVICE TAG NUMBER",
+        "display_name": "Service Tag Number",
+        "definition": "Service tag that the manufacturer apllies to the server for identifcation so the can provide support if needed.",
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Security"
+      }
+    ],
+    "total_fields": 3,
+    "field_captured_count": 0
+  },
+  "STS": {
+    "classification_code": "STS",
+    "fields": [
+      {
+        "spec_id": "AMPERAGE RATING",
+        "display_name": "Amperage\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "FREQUENCY",
+        "display_name": "Frequency (50/60)",
+        "definition": null,
+        "sample_values": "50HZ, 60HZ",
+        "data_type": "LOV",
+        "options": [
+          "50HZ",
+          "60HZ"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Feeding Power Directly to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KVA RATING",
+        "display_name": "kVA\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ORACLE NAME",
+        "display_name": "Oracle\u00a0Name",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 5,
+    "field_captured_count": 0
+  },
+  "SWCHGEAR": {
+    "classification_code": "SWCHGEAR",
+    "fields": [
+      {
+        "spec_id": "AMPERAGE RATING",
+        "display_name": "Amperage\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ELECTRICALLY OPERATED CB",
+        "display_name": "Electrically\u00a0Operated\u00a0CB?",
+        "definition": null,
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Feeding Power Directly to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ORACLE NAME",
+        "display_name": "Oracle\u00a0Name",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "NUMBER OF REVENUE METERS",
+        "display_name": "Number of Revenue Meters",
+        "definition": null,
+        "sample_values": "1, 2, 3, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 6,
+    "field_captured_count": 0
+  },
+  "TED": {
+    "classification_code": "TED",
+    "fields": [
+      {
+        "spec_id": "CAPACITY",
+        "display_name": "Capacity",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "COMPRESSOR TYPE",
+        "display_name": "Compressor\u00a0Type",
+        "definition": null,
+        "sample_values": "SCREW, SCROLL, ROTARY, etc.",
+        "data_type": "LOV",
+        "options": [
+          "CENTRIFUGAL",
+          "N/A",
+          "ROTARY",
+          "SCREW",
+          "SCROLL",
+          "SEMI_HERMETIC_SCREW"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE TOTAL",
+        "display_name": "Refrigerant Charge Total",
+        "definition": "Total refrigerant amount contained within the asset.",
+        "sample_values": "22.7 KG, 50 LBS",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT CHARGE UNITS",
+        "display_name": "Refrigerant Charge Units",
+        "definition": "Refrigernat Unit of Measure",
+        "sample_values": "KG, LBS",
+        "data_type": "LOV",
+        "options": [
+          "LBS",
+          "KG"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "REFRIGERANT TYPE",
+        "display_name": "Refrigerant\u00a0Type",
+        "definition": null,
+        "sample_values": "R-22, R-134A, etc.",
+        "data_type": "LOV",
+        "options": [
+          "N/A",
+          "CO2",
+          "R-12",
+          "R-123",
+          "R-1233zd",
+          "R-1234ye",
+          "R-1234ze",
+          "R-134A",
+          "R-22",
+          "R-32 (R-452E)",
+          "R-290",
+          "R-404A",
+          "R-407C",
+          "R-410A",
+          "R-422B",
+          "R-422D",
+          "R-442A (RS-50)",
+          "R-444B",
+          "R-453 (RS44B)",
+          "R-454B",
+          "R-454C",
+          "R-455A",
+          "R-466A",
+          "R-470A (RS-53)",
+          "R-507A",
+          "R-513A",
+          "R-513B",
+          "R-514A",
+          "R-515B",
+          "R-717 (NH3)",
+          "R-744 (CO2)"
+        ],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 6,
+    "field_captured_count": 0
+  },
+  "TANK": {
+    "classification_code": "TANK",
+    "fields": [
+      {
+        "spec_id": "ABOVE OR BELOW GROUND",
+        "display_name": "Above or Below Ground",
+        "definition": "Storage tank loaction",
+        "sample_values": "Above, Below",
+        "data_type": "LOV",
+        "options": [
+          "ABOVE",
+          "BELOW",
+          "N/A"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "BULK STORAGE CONTAINMENT TYPE",
+        "display_name": "Bulk Storage Containment Type",
+        "definition": "Type of containment design",
+        "sample_values": "Double walled air gap, contrete filled",
+        "data_type": "LOV",
+        "options": [
+          "DOUBLE WALL AIR GAP",
+          "DOUBLE WALL FIBERGLASS",
+          "DOUBLE WALL STEEL",
+          "SINGLE WALL FIBERGLASS",
+          "SINGLE WALL STEEL",
+          "STEEL INNER/CONCRETE OUTER",
+          "N/A"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "CAPACITY",
+        "display_name": "Capacity",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "LEAK DETECTION",
+        "display_name": "Leak Detection (Y/N)",
+        "definition": null,
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "LIQUID TYPE",
+        "display_name": "Liquid Type",
+        "definition": null,
+        "sample_values": "ALCOHOL, DIESEL, GASOLINE, GLYCOOL, WATER",
+        "data_type": "LOV",
+        "options": [
+          "ALCOHOL",
+          "DIESEL",
+          "GASOLINE",
+          "GLYCOL",
+          "HYDROGEN PEROXIDE",
+          "UREA",
+          "WATER"
+        ],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "TANK CONSTRUCTION",
+        "display_name": "Tank Construction",
+        "definition": "The material the tank is made from",
+        "sample_values": "Fiberglass, Steel, etc.",
+        "data_type": "LOV",
+        "options": [
+          "FIBERGLASS",
+          "STEEL",
+          "STEEL & CONCRETE",
+          "PVC",
+          "PLASTIC"
+        ],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 6,
+    "field_captured_count": 0
+  },
+  "TRNSFMR": {
+    "classification_code": "TRNSFMR",
+    "fields": [
+      {
+        "spec_id": "FREQUENCY",
+        "display_name": "Frequency (50/60)",
+        "definition": null,
+        "sample_values": "50HZ, 60HZ",
+        "data_type": "LOV",
+        "options": [
+          "50HZ",
+          "60HZ"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "INPUT VOLTAGE L-L",
+        "display_name": "INPUT\u00a0VOLTAGE\u00a0L-L",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Feeding Power Directly to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KVA RATING",
+        "display_name": "kVA\u00a0Rating",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "LIQUID or DRY",
+        "display_name": "Liquid or Dry",
+        "definition": null,
+        "sample_values": "LIQUID, DRY",
+        "data_type": "LOV",
+        "options": [
+          "LIQUID",
+          "DRY"
+        ],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "NUMBER OF OUTPUT CIRCUIT BREAKERS",
+        "display_name": "Number of Output Circuit Breakers",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ORACLE NAME",
+        "display_name": "Oracle\u00a0Name",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 6,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "OUTPUT VOLTAGE L-L",
+        "display_name": "Output Voltage Line to Line",
+        "definition": null,
+        "sample_values": "480, 208",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 7,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 8,
+    "field_captured_count": 0
+  },
+  "UPSH": {
+    "classification_code": "UPSH",
+    "fields": [
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Feeding Power Directly to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KVA RATING",
+        "display_name": "kVA\u00a0Rating",
+        "definition": "Rated size (capacity in KVA) of UPS at time of installation or upgrades.",
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KW RATING",
+        "display_name": "kW\u00a0Rating",
+        "definition": "Rated size (capacity in KW) of UPS at time of installation or upgrades.",
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "OUTPUT VOLTAGE L-L",
+        "display_name": "Output Voltage Line to Line",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 4,
+    "field_captured_count": 0
+  },
+  "UPSR": {
+    "classification_code": "UPSR",
+    "fields": [
+      {
+        "spec_id": "FREQUENCY",
+        "display_name": "Frequency (50/60)",
+        "definition": null,
+        "sample_values": "50HZ, 60HZ",
+        "data_type": "LOV",
+        "options": [
+          "50HZ",
+          "60HZ"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Feeding Power Directly to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KVA RATING",
+        "display_name": "kVA\u00a0Rating",
+        "definition": "Rated size (capacity in KVA) of UPS at time of installation or upgrades.",
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KW RATING",
+        "display_name": "kW\u00a0Rating",
+        "definition": "Rated size (capacity in KW) of UPS at time of installation or upgrades.",
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 4,
+    "field_captured_count": 0
+  },
+  "UPSS": {
+    "classification_code": "UPSS",
+    "fields": [
+      {
+        "spec_id": "ECO MODE",
+        "display_name": "ECO Mode (Y/N)",
+        "definition": null,
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "FREQUENCY",
+        "display_name": "Frequency (50/60)",
+        "definition": null,
+        "sample_values": "50HZ, 60HZ",
+        "data_type": "LOV",
+        "options": [
+          "50HZ",
+          "60HZ"
+        ],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "IT LOAD",
+        "display_name": "IT Load (Y/N)",
+        "definition": "Feeding Power Directly to\u00a0Customer\u00a0Equipment",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KVA RATING",
+        "display_name": "KVA\u00a0Rating",
+        "definition": "Rated size (capacity in KVA) of UPS at time of installation or upgrades.",
+        "sample_values": "225, 500, 1000, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "KW RATING",
+        "display_name": "KW\u00a0Rating",
+        "definition": "Rated size (capacity in KW) of UPS at time of installation or upgrades.",
+        "sample_values": "225, 500, 1000, etc.",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 4,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "ORACLE NAME",
+        "display_name": "Oracle\u00a0Name",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 5,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "OUTPUT VOLTAGE L-L",
+        "display_name": "OUTPUT VOLTAGE L-L",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 6,
+        "is_field_captured": false,
+        "group": "Electrical"
+      },
+      {
+        "spec_id": "PARALLELING",
+        "display_name": "PARALLELING",
+        "definition": null,
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 7,
+        "is_field_captured": false,
+        "group": "Electrical"
+      }
+    ],
+    "total_fields": 8,
+    "field_captured_count": 0
+  },
+  "VENT": {
+    "classification_code": "VENT",
+    "fields": [
+      {
+        "spec_id": "ACTUATOR MAKE",
+        "display_name": "ACTUATOR MAKE",
+        "definition": null,
+        "sample_values": null,
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "CFM",
+        "display_name": "(Cubic Feet per Minute) or M3/sec",
+        "definition": "Max airflow supported by the air handling unit",
+        "sample_values": "43000",
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "MOTOR HORSEPOWER / KW",
+        "display_name": "Motor Horsepower / KW",
+        "definition": "Enter either Motor Horsepower or Motor KW, both are not required",
+        "sample_values": "30HP or 22KW",
+        "data_type": "FREETEXT",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "STARTER TYPE",
+        "display_name": "Starter\u00a0Type",
+        "definition": null,
+        "sample_values": "Alt, Belt, Contactor, etc.",
+        "data_type": "LOV",
+        "options": [
+          "ATL",
+          "BELT",
+          "CAPACITOR",
+          "CONTACTOR",
+          "DIRECT",
+          "DOL",
+          "HARDWIRED",
+          "INVERTER",
+          "MOTOR",
+          "N/A",
+          "SOFT",
+          "STAR_DELTA",
+          "VFD",
+          "VSD",
+          "WYE_DELTA"
+        ],
+        "display_order": 3,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 4,
+    "field_captured_count": 0
+  },
+  "VFD": {
+    "classification_code": "VFD",
+    "fields": [
+      {
+        "spec_id": "BYPASS",
+        "display_name": "BYPASS",
+        "definition": "Is unit equiped with a bypass switch/function",
+        "sample_values": "Y, N",
+        "data_type": "LOV",
+        "options": [
+          "Y",
+          "N"
+        ],
+        "display_order": 0,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "VFD/VSD CAPACITY",
+        "display_name": "VFD/VSD CAPACITY",
+        "definition": "Full load capability of the unit",
+        "sample_values": null,
+        "data_type": "NUM",
+        "options": [],
+        "display_order": 1,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      },
+      {
+        "spec_id": "VFD/VSD CAPACITY UNITS",
+        "display_name": "VFD/VSD CAPACITY UNITS",
+        "definition": "Unit of measure for full load capability of the unit",
+        "sample_values": "AMPS, HZ, VOLTS, etc.",
+        "data_type": "LOV",
+        "options": [],
+        "display_order": 2,
+        "is_field_captured": false,
+        "group": "Mechanical"
+      }
+    ],
+    "total_fields": 3,
+    "field_captured_count": 0
+  }
+}

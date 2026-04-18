@@ -1,0 +1,380 @@
+[
+  {
+    "code": "AHU",
+    "failure_class": "AHU",
+    "life_expectancy": 30,
+    "description": "Air Handler Unit",
+    "cost_parent_id": "9001PRPR",
+    "aux_id": "9001AUX",
+    "notes": null
+  },
+  {
+    "code": "ATS",
+    "failure_class": "ATS",
+    "life_expectancy": 20,
+    "description": "Automatic Transfer Switch",
+    "cost_parent_id": "9002PRPR",
+    "aux_id": "9002AUX",
+    "notes": null
+  },
+  {
+    "code": "BATMON",
+    "failure_class": "BATMON",
+    "life_expectancy": 15,
+    "description": "Battery Monitoring",
+    "cost_parent_id": "9041PRPR",
+    "aux_id": "9041AUX",
+    "notes": null
+  },
+  {
+    "code": "BATT-LA",
+    "failure_class": "BATT-LA",
+    "life_expectancy": 6,
+    "description": "Battery Strings - Lead Acid",
+    "cost_parent_id": "9003PRPR",
+    "aux_id": "9003AUX",
+    "notes": "BATT-LA 2v = 12, BATT-LA 12v = 6 Default is 6 and the ADCS automatically adjusts the value based on Battery Voltage specification."
+  },
+  {
+    "code": "BATT-LI",
+    "failure_class": "BATT-LI",
+    "life_expectancy": 10,
+    "description": "BATTERY Lithium",
+    "cost_parent_id": "9040PRPR",
+    "aux_id": "9040AUX",
+    "notes": null
+  },
+  {
+    "code": "BLDFAB",
+    "failure_class": "BLDFAB",
+    "life_expectancy": 30,
+    "description": "Building Fabric",
+    "cost_parent_id": "9004PRPR",
+    "aux_id": "9004AUX",
+    "notes": null
+  },
+  {
+    "code": "BOILER",
+    "failure_class": "BOILER",
+    "life_expectancy": 15,
+    "description": "Boiler",
+    "cost_parent_id": "9005PRPR",
+    "aux_id": "9005AUX",
+    "notes": "A water heating device.  Can use gas, electric, oil or other fuel."
+  },
+  {
+    "code": "BREAKER",
+    "failure_class": "BREAKER",
+    "life_expectancy": 30,
+    "description": "Breaker",
+    "cost_parent_id": "9000PRPR",
+    "aux_id": "9000AUX",
+    "notes": "Breakers for critical (above PDU / RPP level) and mechanical equipment."
+  },
+  {
+    "code": "CDU",
+    "failure_class": "CDU",
+    "life_expectancy": 15,
+    "description": "Cooling Distribution Unit",
+    "cost_parent_id": "9100PRPR",
+    "aux_id": "9100AUX",
+    "notes": "Cooling water supplied to customer cabinets"
+  },
+  {
+    "code": "CHILLER-AC",
+    "failure_class": "CHILLER-AC",
+    "life_expectancy": 20,
+    "description": "Chiller - Air Cooled",
+    "cost_parent_id": "9101PRPR",
+    "aux_id": "9101AUX",
+    "notes": "Air Cooled Chillers"
+  },
+  {
+    "code": "CHILLER-WC",
+    "failure_class": "CHILLER-WC",
+    "life_expectancy": 25,
+    "description": "Chiller - Water Cooled",
+    "cost_parent_id": "9102PRPR",
+    "aux_id": "9102AUX",
+    "notes": "Water Cooled Chillers"
+  },
+  {
+    "code": "CLNTWR",
+    "failure_class": "CLNTWR",
+    "life_expectancy": 30,
+    "description": "Cooling Tower",
+    "cost_parent_id": "9007PRPR",
+    "aux_id": "9007AUX",
+    "notes": "Typical cooling tower, evaporative, hybrid, etc"
+  },
+  {
+    "code": "CONTRL",
+    "failure_class": "CONTRL",
+    "life_expectancy": 15,
+    "description": "Control Systems",
+    "cost_parent_id": "9008PRPR",
+    "aux_id": "9008AUX",
+    "notes": null
+  },
+  {
+    "code": "CRAC",
+    "failure_class": "CRAC",
+    "life_expectancy": 20,
+    "description": "CRAC DX (Direct Expansion)",
+    "cost_parent_id": "9009PRPR",
+    "aux_id": "9009AUX",
+    "notes": null
+  },
+  {
+    "code": "CRAH",
+    "failure_class": "CRAH",
+    "life_expectancy": 20,
+    "description": "CRAH / CRAC (Chilled Water)",
+    "cost_parent_id": "9034PRPR",
+    "aux_id": "9034AUX",
+    "notes": null
+  },
+  {
+    "code": "DC PLANT",
+    "failure_class": "DC PLANT",
+    "life_expectancy": 15,
+    "description": "DC Plant",
+    "cost_parent_id": "9010PRPR",
+    "aux_id": "9010AUX",
+    "notes": null
+  },
+  {
+    "code": "DRYCOOLER",
+    "failure_class": "DRYCOOLER",
+    "life_expectancy": 15,
+    "description": "Dry Cooler",
+    "cost_parent_id": "9011PRPR",
+    "aux_id": "9011AUX",
+    "notes": null
+  },
+  {
+    "code": "ELEVATOR",
+    "failure_class": "ELEVATOR",
+    "life_expectancy": 30,
+    "description": "Elevator",
+    "cost_parent_id": "9012PRPR",
+    "aux_id": "9012AUX",
+    "notes": null
+  },
+  {
+    "code": "EQUIPTOOLS",
+    "failure_class": "EQUIPTOOLS",
+    "life_expectancy": 5,
+    "description": "Equipment & Tools",
+    "cost_parent_id": "9025PRPR",
+    "aux_id": "9025AUX",
+    "notes": null
+  },
+  {
+    "code": "FIRESYS",
+    "failure_class": "FIRESYS",
+    "life_expectancy": 20,
+    "description": "Fire Systems",
+    "cost_parent_id": "9013PRPR",
+    "aux_id": "9013AUX",
+    "notes": null
+  },
+  {
+    "code": "FUELCELL",
+    "failure_class": "FUELCELL",
+    "life_expectancy": 30,
+    "description": "Fuel Cell",
+    "cost_parent_id": "9038PRPR",
+    "aux_id": "9038AUX",
+    "notes": null
+  },
+  {
+    "code": "FUELSYS",
+    "failure_class": "FUELSYS",
+    "life_expectancy": 30,
+    "description": "Fuel System",
+    "cost_parent_id": "9014PRPR",
+    "aux_id": "9014AUX",
+    "notes": null
+  },
+  {
+    "code": "GENSET",
+    "failure_class": "GENSET",
+    "life_expectancy": 30,
+    "description": "Generator",
+    "cost_parent_id": "9015PRPR",
+    "aux_id": "9015AUX",
+    "notes": null
+  },
+  {
+    "code": "LIGHTING",
+    "failure_class": "LIGHTING",
+    "life_expectancy": 20,
+    "description": "Lighting",
+    "cost_parent_id": "9016PRPR",
+    "aux_id": "9016AUX",
+    "notes": "Normal and Emergency"
+  },
+  {
+    "code": "LOAD BANK",
+    "failure_class": "LOAD BANK",
+    "life_expectancy": 30,
+    "description": "Load Bank",
+    "cost_parent_id": "9017PRPR",
+    "aux_id": "9017AUX",
+    "notes": "UPS, GEN"
+  },
+  {
+    "code": "MEP ROUNDS",
+    "failure_class": null,
+    "life_expectancy": null,
+    "description": "MEP Rounds",
+    "cost_parent_id": null,
+    "aux_id": null,
+    "notes": null
+  },
+  {
+    "code": "PDU / RPP",
+    "failure_class": "PDU / RPP",
+    "life_expectancy": 30,
+    "description": "PDU / RPP",
+    "cost_parent_id": "9018PRPR",
+    "aux_id": "9018AUX",
+    "notes": "Breaker Panel for customer circuits (EMEA/AP = PDU // AMER = RPP)"
+  },
+  {
+    "code": "PIPESYS",
+    "failure_class": "PIPESYS",
+    "life_expectancy": 30,
+    "description": "Pipe Work",
+    "cost_parent_id": "9019PRPR",
+    "aux_id": "9019AUX",
+    "notes": "Major Piping systems (Chiller, Condenser)"
+  },
+  {
+    "code": "PUMP",
+    "failure_class": "PUMP",
+    "life_expectancy": 20,
+    "description": "Pump",
+    "cost_parent_id": "9020PRPR",
+    "aux_id": "9020AUX",
+    "notes": null
+  },
+  {
+    "code": "RTU",
+    "failure_class": "RTU",
+    "life_expectancy": 20,
+    "description": "Roof Top Unit",
+    "cost_parent_id": "9021PRPR",
+    "aux_id": "9021AUX",
+    "notes": "Self contained unit.  No condenser or chiller water"
+  },
+  {
+    "code": "SECURITY",
+    "failure_class": "SECURITY",
+    "life_expectancy": 15,
+    "description": "Building Security Systems",
+    "cost_parent_id": "9022PRPR",
+    "aux_id": "9022AUX",
+    "notes": null
+  },
+  {
+    "code": "SOLARCELL",
+    "failure_class": "SOLARCEL",
+    "life_expectancy": 30,
+    "description": "Solar Cell",
+    "cost_parent_id": "9039PRPR",
+    "aux_id": "9039AUX",
+    "notes": null
+  },
+  {
+    "code": "STS",
+    "failure_class": "STS",
+    "life_expectancy": 20,
+    "description": "Static Transfer Switch",
+    "cost_parent_id": "9023PRPR",
+    "aux_id": "9023AUX",
+    "notes": null
+  },
+  {
+    "code": "SWCHGEAR",
+    "failure_class": "SWCHGEAR",
+    "life_expectancy": 30,
+    "description": "Switchboard/Switchgear",
+    "cost_parent_id": "9024PRPR",
+    "aux_id": "9024AUX",
+    "notes": null
+  },
+  {
+    "code": "TANK",
+    "failure_class": "TANK",
+    "life_expectancy": 30,
+    "description": "TANK",
+    "cost_parent_id": "9103PRPR",
+    "aux_id": "9103AUX",
+    "notes": null
+  },
+  {
+    "code": "TED",
+    "failure_class": "TED",
+    "life_expectancy": 30,
+    "description": "Thermally Enhanced Design",
+    "cost_parent_id": "9033PRPR",
+    "aux_id": "9033AUX",
+    "notes": null
+  },
+  {
+    "code": "TRNSFMR",
+    "failure_class": "TRNSFMR",
+    "life_expectancy": 30,
+    "description": "Transformer",
+    "cost_parent_id": "9026PRPR",
+    "aux_id": "9026AUX",
+    "notes": "AMER = PDU, Liquid filled = 30,  Dry = 20, Default is 30 and the ADCS automatically adjusts the value based on Liquid or Dry specification."
+  },
+  {
+    "code": "UPSH",
+    "failure_class": "UPSH",
+    "life_expectancy": 20,
+    "description": "UPS (Hybrid)",
+    "cost_parent_id": "9027PRPR",
+    "aux_id": "9027AUX",
+    "notes": "Uses mechanical and batteries for energy storage"
+  },
+  {
+    "code": "UPSR",
+    "failure_class": "UPSR",
+    "life_expectancy": 20,
+    "description": "UPS (Rotary)",
+    "cost_parent_id": "9028PRPR",
+    "aux_id": "9028AUX",
+    "notes": "Flywheel or other mechanical energy storage"
+  },
+  {
+    "code": "UPSS",
+    "failure_class": "UPSS",
+    "life_expectancy": 20,
+    "description": "UPS (Static)",
+    "cost_parent_id": "9029PRPR",
+    "aux_id": "9029AUX",
+    "notes": "Uses batteries for energy storage"
+  },
+  {
+    "code": "VENT",
+    "failure_class": "VENT",
+    "life_expectancy": 20,
+    "description": "Ventilation System",
+    "cost_parent_id": "9030PRPR",
+    "aux_id": "9030AUX",
+    "notes": null
+  },
+  {
+    "code": "VFD",
+    "failure_class": "VFD",
+    "life_expectancy": 15,
+    "description": "VFD / VSD",
+    "cost_parent_id": "9031PRPR",
+    "aux_id": "9031AUX",
+    "notes": null
+  }
+]
