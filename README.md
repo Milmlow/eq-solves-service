@@ -67,126 +67,83 @@ npm run build
 
 ### 3. Deploy
 
-Drag `dist/` to Netlify Drop (https://app.netlify.com/drop), or connect this repo to Netlify for auto-deploys from `main`.
+This repo is connected to Netlify for auto-deploy on push to `main`. The build config lives in `netlify.toml` — publish dir `dist`, build command `npm run build`.
 
-### 4. Runtime config
+Production site: `https://eq-solves-assets.netlify.app`
 
-Edit `/config.js` on the deployed site (Netlify → Deploys → latest → Edit). Set the real Supabase URL and anon key. Use `public/config.example.js` as a template.
-
-This lets you rotate keys without rebuilding.
-
-### 5. Verify
-
-Visit `/#/debug` on the deployed site. All seven checks should pass.
+Manual redeploy (from Netlify): Deploys → **Trigger deploy** → *Clear cache and deploy site*. Use "Clear cache" whenever env vars change — Vite bakes `import.meta.env.VITE_*` into the bundle at build time, so a cached build will ship the old values.
 
 ---
 
-## Routes
+## Runtime configuration
 
-| Route | Purpose | Access |
-|---|---|---|
-| `/#/` | Home — live jobs list | public |
-| `/#/debug` | Self-check diagnostic | public |
-| `/#/import` | Upload a new template, create a job | office |
-| `/#/j/:ref` | Asset list | PIN |
-| `/#/j/:ref/a/:assetId` | Asset capture form | PIN + name |
-| `/#/j/:ref/admin` | Desktop progress grid | PIN |
-| `/#/j/:ref/export` | Generate completed workbook | PIN |
+The front-end resolves Supabase credentials with this precedence (see `src/lib/supabase.ts`):
 
-`:ref` accepts either a UUID or a short slug (e.g. `sy6-assets`). The router resolves either to the same job.
+1. `window.__EQ_CONFIG__` — populated by `/public/config.js`, fetched at page load. Edit post-deploy to rotate keys without rebuilding.
+2. `import.meta.env.VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` — baked in at build time from Netlify env vars (or local `.env.local` for `npm run dev`).
 
----
+The committed `public/config.js` ships empty (`window.__EQ_CONFIG__ = {}`) so step 2 is the default path. The runtime override exists for key rotation in a pinch.
 
-## Adding a new capture job
+**Production Supabase project**
 
-### Option A — UI
+| Field | Value |
+|-------|-------|
+| Project name | `eq-asset-capture` |
+| Project ref | `hshvnjzczdytfiklhojz` |
+| Region | `ap-southeast-2` (Sydney) |
+| URL | `https://hshvnjzczdytfiklhojz.supabase.co` |
+| Anon key | See Supabase dashboard → Project settings → API, or Netlify env var `VITE_SUPABASE_ANON_KEY` |
 
-Visit `/#/import`, drop in the client's .xlsm template, fill in site code and (optionally) a 4-digit PIN, click Create.
+**Netlify env vars required for production**
 
-### Option B — SQL (for scripting)
+| Key | Notes |
+|-----|-------|
+| `VITE_SUPABASE_URL` | Full URL above |
+| `VITE_SUPABASE_ANON_KEY` | Legacy JWT anon key (safe to expose — RLS enforces access) |
 
-```
-INSERT INTO jobs (site_code, client_code, classification_code, name, slug, active)
-VALUES ('SY6', 'EQX', 'CRAC', 'SY6 CRAC — Asset Capture', 'sy6-crac', TRUE)
-RETURNING id;
--- then insert assets for that job_id
-SELECT set_job_pin('<job-uuid>'::uuid, '1234');  -- optional PIN
-```
+Set in Netlify → Site configuration → Environment variables, then trigger a *Clear cache and deploy*.
 
 ---
 
-## Operational notes
+## Self-check diagnostic
 
-**Export format.** Produces `.xlsx` (not `.xlsm`). ExcelJS doesn't preserve VBA macros reliably. If a client insists on macros, open the output in Excel and Save As .xlsm — content is preserved.
+The Self-check page at `/#/debug` runs seven automated checks in order. Any fail short-circuits subsequent checks (they stay in "Running" forever — that's why a config fail leaves the other six stuck).
 
-**Offline.** Writes land in localStorage immediately. A background worker drains to Supabase when online. The TopBar pill shows `SYNCED` / `N PENDING` / `N ERROR` / `OFFLINE`. Tap a red `ERROR` pill to see the last sync error. Nothing is lost if the device loses signal mid-capture.
+| # | Check | What it validates | If it fails |
+|---|-------|-------------------|-------------|
+| 1 | Runtime config loaded | `window.__EQ_CONFIG__` or `VITE_*` env vars resolve to non-placeholder values | Set Netlify env vars and redeploy with cache cleared. See Runtime configuration above. |
+| 2 | Supabase reachable | `HEAD /rest/v1/classifications` returns 2xx | Check Supabase project is `ACTIVE_HEALTHY`, key is valid, CORS allows the Netlify origin |
+| 3 | Schema deployed | `classifications` table exists and returns rows | Run migrations in `supabase/migrations/` via Supabase SQL editor |
+| 4 | Fields seeded | `classification_fields` row count > 0 | Same — migration `20260417_init.sql` seeds defaults |
+| 5 | SY6 BREAKER job exists | Stable UUID `aaaa…eeee` resolves in `jobs` | Run `supabase/setup.sql` (git-ignored, kept local) |
+| 6 | SY6 assets loaded | 101 rows in `assets` for that job | Same — `setup.sql` inserts the SY6 asset register |
+| 7 | Captures writable | Probe insert + delete on `captures` round-trips | RLS policy on `captures` rejecting the anon role — check policies in migration `20260417_init.sql` |
 
-**PIN rotation.** `SELECT set_job_pin('<job-uuid>'::uuid, '1234');` — takes effect on next PIN entry. Existing 12-hour passports remain valid until expiry.
+Re-run any time from the Re-run button, or by navigating back to the page.
 
-**Photos.** Default bucket is public. Fine for internal use, not for client handover — flip to private and generate signed URLs before productising.
+---
+
+## Pre-site checklist
+
+Before handing a phone to a tech on a job site, run through this on the device:
+
+- [ ] Self-check `/#/debug` — all 7 green
+- [ ] Open target job, enter PIN, load at least one asset form
+- [ ] Capture one field offline (enable flight mode → edit → disable flight mode → watch Pending sync drain to 0)
+- [ ] Take one photo — confirms storage bucket + RLS write
+- [ ] Run Export once from `/j/<slug>/export` — confirms the workbook round-trips cleanly
+- [ ] Confirm site info page loads any attached PDFs
 
 ---
 
 ## Local development
 
-```
+```bash
+cp .env.example .env.local    # fill VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
 npm install
-npm run dev
+npm run dev                    # http://localhost:5173
 ```
 
-Service worker registers even in dev. If caching misbehaves: DevTools → Application → Service Workers → Unregister.
+`npm run build` produces `dist/`. `npm run preview` serves the built output locally to sanity-check production behaviour before pushing.
 
-### Code tour
-
-```
-src/
-  App.tsx               Hash-based router
-  pages/                HomePage, JobPage, AssetPage, AdminPage, ExportPage, ImportPage, DebugPage
-  components/           EqMark, JobGuard, PinGate, TopBar, OverflowMenu, PhotoPicker, SiteInfoSheet, ShareDialog
-  lib/
-    queue.ts            Offline capture queue (source of truth)
-    export.ts           ExcelJS writer + three-bug post-process repair
-    templateParser.ts   .xlsm → schema inference
-    router.ts           Hash parser + navigate()
-    constants.ts        Capturer roster, sign-out helper
-    supabase.ts         Client with runtime config fallback
-    version.ts          APP_VERSION + BUILD_TIME for footer badge
-  hooks/
-    useJobData.ts       useJob, useAssets, useFields, useSite
-supabase/
-  migrations/           Chronological SQL migrations (run in order)
-public/
-  sw.js                 Service worker (version stamped at build)
-  config.example.js     Template — copy to config.js with real values
-  manifest.webmanifest  PWA manifest
-```
-
----
-
-## Design brief
-
-UI adheres to EQ Design Brief v1.3 — Plus Jakarta Sans, Sky Blue (#3DA8D8) primary, Ice Blue (#EAF5FB) backgrounds, 8px grid, WCAG 2.1 AA contrast.
-
----
-
-## Known limits
-
-Mapped on the roadmap:
-
-- **Single Supabase project** — no multi-tenancy. Fine for SKS as a single contractor. Would need RLS per contractor or project-per-tenant for externalisation.
-- **Public photo bucket** — see Operational Notes.
-- **No capture audit trail** — upserts overwrite silently.
-- **No bulk-fill** — filling one field across 5 identical breakers at once is Phase 2.
-- **No tests on the export pipeline** — three bugs have been patched. Vitest specs are the right call before onboarding a client other than Equinix.
-
----
-
-## Licence
-
-All rights reserved. © CDC Solutions Pty Ltd trading as EQ Solutions.
-
----
-
-## Contact
-
-Royce Milmlow — royce@eq.solutions
+The service worker is disabled in dev — cache-invalidation only matters for deployed builds.
