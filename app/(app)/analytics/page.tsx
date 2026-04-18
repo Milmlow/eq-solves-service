@@ -16,13 +16,13 @@ export default async function AnalyticsPage() {
     { data: instruments },
     { data: sites },
   ] = await Promise.all([
-    supabase.from('assets').select('id, created_at, is_active').eq('is_active', true),
-    supabase.from('maintenance_checks').select('id, status, due_date, completed_at, created_at'),
-    supabase.from('test_records').select('id, result, test_date, created_at').eq('is_active', true),
-    supabase.from('acb_tests').select('id, overall_result, test_date, created_at').eq('is_active', true),
-    supabase.from('nsx_tests').select('id, overall_result, test_date, created_at').eq('is_active', true),
-    supabase.from('instruments').select('id, status, calibration_due, is_active').eq('is_active', true),
-    supabase.from('sites').select('id, name').eq('is_active', true),
+    supabase.from('assets').select('id, created_at, is_active').eq('is_active', true).limit(10000),
+    supabase.from('maintenance_checks').select('id, status, due_date, completed_at, created_at').limit(10000),
+    supabase.from('test_records').select('id, result, test_date, created_at').eq('is_active', true).limit(10000),
+    supabase.from('acb_tests').select('id, overall_result, test_date, created_at').eq('is_active', true).limit(10000),
+    supabase.from('nsx_tests').select('id, overall_result, test_date, created_at').eq('is_active', true).limit(10000),
+    supabase.from('instruments').select('id, status, calibration_due, is_active').eq('is_active', true).limit(10000),
+    supabase.from('sites').select('id, name').eq('is_active', true).limit(10000),
   ])
 
   // ── Monthly test volume (last 12 months) ──
@@ -101,7 +101,21 @@ export default async function AnalyticsPage() {
   const checksChangePercent = checksLastMonth > 0 ? Math.round(((checksThisMonth - checksLastMonth) / checksLastMonth) * 100) : 0
 
   const completedThisMonth = (checks ?? []).filter((c) => c.due_date?.startsWith(thisMonth) && c.status === 'complete').length
-  const avgTimeToComplete = activeChecks > 0 ? Math.round(Math.random() * 8 + 2) : 0 // Placeholder calculation
+
+  // Avg days between created_at and completed_at for completed checks
+  const completedWithDates = (checks ?? []).filter(
+    (c) => c.status === 'complete' && c.completed_at && c.created_at
+  )
+  const avgTimeToComplete = completedWithDates.length > 0
+    ? Math.round(
+        completedWithDates.reduce((sum, c) => {
+          const created = new Date(c.created_at).getTime()
+          const completed = new Date(c.completed_at).getTime()
+          return sum + (completed - created) / (1000 * 60 * 60 * 24)
+        }, 0) / completedWithDates.length
+      )
+    : 0
+
   const defectRate = totalTests > 0 ? ((checks?.length ?? 0 - completedChecks) / totalTests * 100).toFixed(1) : '0.0'
 
   const chartData = {
@@ -128,31 +142,31 @@ export default async function AnalyticsPage() {
 
       {/* Top KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <div className="bg-sky-50 border border-sky-200 rounded-lg p-4">
+        <div className="bg-sky-50 border border-sky-200 rounded-lg p-4 cursor-help" title="Count of active assets from the assets table (is_active = true). Source: assets table.">
           <p className="text-xs font-bold text-sky-700 uppercase tracking-wide mb-3">Total Assets</p>
           <p className="text-4xl font-bold text-sky-900">{totalAssets.toLocaleString()}</p>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 cursor-help" title="Count of active sites. Source: sites table (is_active = true).">
           <p className="text-xs font-bold text-green-700 uppercase tracking-wide mb-3">Total Sites</p>
           <p className="text-4xl font-bold text-green-900">{totalSites.toLocaleString()}</p>
         </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 cursor-help" title="Combined count of General test_records + ACB acb_tests + NSX nsx_tests (all active). Source: test_records + acb_tests + nsx_tests tables.">
           <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-3">Total Tests</p>
           <p className="text-4xl font-bold text-amber-900">{totalTests.toLocaleString()}</p>
         </div>
-        <div className="bg-violet-50 border border-violet-200 rounded-lg p-4">
+        <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 cursor-help" title={`Tests with result 'pass' or 'Pass' ÷ total tests. ${passCount} passed out of ${totalTests}. Source: test_records.result + acb_tests.overall_result + nsx_tests.overall_result.`}>
           <p className="text-xs font-bold text-violet-700 uppercase tracking-wide mb-3">Pass Rate</p>
           <p className={`text-4xl font-bold ${overallPassRate >= 80 ? 'text-green-600' : overallPassRate >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
             {overallPassRate}<span className="text-2xl">%</span>
           </p>
         </div>
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4">
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 cursor-help" title={`Completed checks ÷ all checks. ${completedChecks} completed out of ${activeChecks}. Source: maintenance_checks table (status = 'complete').`}>
           <p className="text-xs font-bold text-rose-700 uppercase tracking-wide mb-3">Compliance</p>
           <p className={`text-4xl font-bold ${overallCompliance >= 80 ? 'text-green-600' : overallCompliance >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
             {overallCompliance}<span className="text-2xl">%</span>
           </p>
         </div>
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 cursor-help" title="Maintenance checks with status 'overdue'. Source: maintenance_checks table (status = 'overdue').">
           <p className="text-xs font-bold text-orange-700 uppercase tracking-wide mb-3">Overdue Checks</p>
           <p className={`text-4xl font-bold ${overdueChecks > 0 ? 'text-red-600' : 'text-green-600'}`}>
             {overdueChecks}

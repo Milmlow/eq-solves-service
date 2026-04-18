@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { ReportFilters } from './ReportFilters'
-import { BulkExportButton } from './BulkExportButton'
+import { GenerateReportButton } from './GenerateReportButton'
 import {
   computeMaintenanceCompliance,
   computeComplianceBySite,
@@ -11,31 +11,39 @@ import {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ site_id?: string; from?: string; to?: string }>
+  searchParams: Promise<{ customer_id?: string; site_id?: string; from?: string; to?: string }>
 }) {
   const params = await searchParams
+  const customerId = params.customer_id ?? ''
   const siteId = params.site_id ?? ''
   const fromDate = params.from ?? ''
   const toDate = params.to ?? ''
 
   const supabase = await createClient()
 
-  // Sites for filter
-  const { data: sites } = await supabase
-    .from('sites')
-    .select('id, name')
-    .eq('is_active', true)
-    .order('name')
+  // Sites + Customers for filters
+  const [{ data: sites }, { data: customers }] = await Promise.all([
+    supabase.from('sites').select('id, name, customer_id').eq('is_active', true).order('name').limit(10000),
+    supabase.from('customers').select('id, name').eq('is_active', true).order('name').limit(10000),
+  ])
+
+  // If customer is selected, get their site IDs for filtering
+  const customerSiteIds = customerId
+    ? (sites ?? []).filter((s) => s.customer_id === customerId).map((s) => s.id)
+    : null
 
   // ────────── Maintenance stats ──────────
-  let mCheckQuery = supabase.from('maintenance_checks').select('id, status, due_date, completed_at, site_id')
-  if (siteId) mCheckQuery = mCheckQuery.eq('site_id', siteId)
+  let mCheckQuery = supabase.from('maintenance_checks').select('id, status, due_date, completed_at, site_id').limit(10000)
+  if (siteId) {
+    mCheckQuery = mCheckQuery.eq('site_id', siteId)
+  } else if (customerSiteIds) {
+    mCheckQuery = mCheckQuery.in('site_id', customerSiteIds)
+  }
   if (fromDate) mCheckQuery = mCheckQuery.gte('due_date', fromDate)
   if (toDate) mCheckQuery = mCheckQuery.lte('due_date', toDate)
 
   const { data: checks } = await mCheckQuery
 
-  // Canonical compliance stats — shared with AI features via lib/analytics/site-health.
   const maintenance = computeMaintenanceCompliance(checks)
   const mTotal = maintenance.total
   const mComplete = maintenance.complete
@@ -46,8 +54,12 @@ export default async function ReportsPage({
   const mComplianceRate = maintenance.complianceRate
 
   // ────────── Testing stats ──────────
-  let tRecordQuery = supabase.from('test_records').select('id, result, test_date, site_id').eq('is_active', true)
-  if (siteId) tRecordQuery = tRecordQuery.eq('site_id', siteId)
+  let tRecordQuery = supabase.from('test_records').select('id, result, test_date, site_id').eq('is_active', true).limit(10000)
+  if (siteId) {
+    tRecordQuery = tRecordQuery.eq('site_id', siteId)
+  } else if (customerSiteIds) {
+    tRecordQuery = tRecordQuery.in('site_id', customerSiteIds)
+  }
   if (fromDate) tRecordQuery = tRecordQuery.gte('test_date', fromDate)
   if (toDate) tRecordQuery = tRecordQuery.lte('test_date', toDate)
 
@@ -79,14 +91,12 @@ export default async function ReportsPage({
     .sort((a, b) => new Date(b.test_date).getTime() - new Date(a.test_date).getTime())
     .slice(0, 10)
 
-  // Resolve asset names for failed tests
-  const failedTestIds = failedTests.map((t) => t.id)
   let failedTestDetails: { id: string; test_type: string; test_date: string; result: string; assets: { name: string } | null; sites: { name: string } | null }[] = []
-  if (failedTestIds.length > 0) {
+  if (failedTests.length > 0) {
     const { data } = await supabase
       .from('test_records')
       .select('id, test_type, test_date, result, assets(name), sites(name)')
-      .in('id', failedTestIds)
+      .in('id', failedTests.map((t) => t.id))
       .order('test_date', { ascending: false })
     failedTestDetails = (data ?? []) as unknown as typeof failedTestDetails
   }
@@ -96,7 +106,12 @@ export default async function ReportsPage({
     .from('acb_tests')
     .select('id, step1_status, step2_status, step3_status, overall_result, test_date, site_id')
     .eq('is_active', true)
-  if (siteId) acbQuery = acbQuery.eq('site_id', siteId)
+    .limit(10000)
+  if (siteId) {
+    acbQuery = acbQuery.eq('site_id', siteId)
+  } else if (customerSiteIds) {
+    acbQuery = acbQuery.in('site_id', customerSiteIds)
+  }
   if (fromDate) acbQuery = acbQuery.gte('test_date', fromDate)
   if (toDate) acbQuery = acbQuery.lte('test_date', toDate)
   const { data: acbTests } = await acbQuery
@@ -105,7 +120,12 @@ export default async function ReportsPage({
     .from('nsx_tests')
     .select('id, step1_status, step2_status, step3_status, overall_result, test_date, site_id')
     .eq('is_active', true)
-  if (siteId) nsxQuery = nsxQuery.eq('site_id', siteId)
+    .limit(10000)
+  if (siteId) {
+    nsxQuery = nsxQuery.eq('site_id', siteId)
+  } else if (customerSiteIds) {
+    nsxQuery = nsxQuery.in('site_id', customerSiteIds)
+  }
   if (fromDate) nsxQuery = nsxQuery.gte('test_date', fromDate)
   if (toDate) nsxQuery = nsxQuery.lte('test_date', toDate)
   const { data: nsxTests } = await nsxQuery
@@ -134,7 +154,12 @@ export default async function ReportsPage({
   let defectQuery = supabase
     .from('defects')
     .select('id, severity, status, site_id, created_at')
-  if (siteId) defectQuery = defectQuery.eq('site_id', siteId)
+    .limit(10000)
+  if (siteId) {
+    defectQuery = defectQuery.eq('site_id', siteId)
+  } else if (customerSiteIds) {
+    defectQuery = defectQuery.in('site_id', customerSiteIds)
+  }
   if (fromDate) defectQuery = defectQuery.gte('created_at', fromDate)
   if (toDate) defectQuery = defectQuery.lte('created_at', toDate)
   const { data: defects } = await defectQuery
@@ -149,7 +174,6 @@ export default async function ReportsPage({
   const defectsLow = defects?.filter((d) => d.severity === 'low').length ?? 0
 
   // ────────── Compliance by site (top 10 by maintenance volume) ──────────
-  // Shared with AI site-health features via lib/analytics/site-health.
   const complianceBySite = computeComplianceBySite(checks, siteMap, 10).map((r) => ({
     site: r.siteName,
     total: r.total,
@@ -195,6 +219,16 @@ export default async function ReportsPage({
   }
   const maxTrendValue = Math.max(1, ...months.flatMap((m) => [m.tests, m.checks]))
 
+  // Build filter description for report generation
+  const selectedCustomer = customerId ? customers?.find((c) => c.id === customerId) : null
+  const selectedSite = siteId ? sites?.find((s) => s.id === siteId) : null
+  const filterDescription = [
+    selectedCustomer ? selectedCustomer.name : null,
+    selectedSite ? selectedSite.name : null,
+    fromDate ? `from ${fromDate}` : null,
+    toDate ? `to ${toDate}` : null,
+  ].filter(Boolean).join(' — ') || 'All data'
+
   return (
     <div className="space-y-6">
       <div>
@@ -202,31 +236,17 @@ export default async function ReportsPage({
         <h1 className="text-3xl font-bold text-eq-sky mt-2">Compliance Reports</h1>
       </div>
 
-      {/* Filters + Bulk Export */}
-      <div className="flex items-center justify-between gap-4">
-        <ReportFilters sites={sites ?? []} />
-        <BulkExportButton sites={sites ?? []} />
+      {/* Filters + Generate Report */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <ReportFilters sites={sites ?? []} customers={customers ?? []} />
+        <GenerateReportButton
+          customerId={customerId}
+          siteId={siteId}
+          from={fromDate}
+          to={toDate}
+          filterDescription={filterDescription}
+        />
       </div>
-
-      {/* Sample Reports */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-eq-ink">Sample Reports &amp; Style Guide</h2>
-            <p className="text-xs text-eq-grey mt-1">View demo reports with sample data to understand report styles and content.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <a
-              href="/demo-reports.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-eq-sky text-white hover:bg-eq-deep transition-colors"
-            >
-              Report Style Comparison
-            </a>
-          </div>
-        </div>
-      </Card>
 
       {/* Top-level KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

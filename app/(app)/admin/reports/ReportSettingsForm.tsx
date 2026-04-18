@@ -187,8 +187,8 @@ export function ReportSettingsForm({ settings }: Props) {
 
         {/* Report Complexity */}
         <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <h2 className="text-sm font-bold text-eq-ink mb-1">Report Style</h2>
-          <p className="text-xs text-eq-grey mb-4">Choose how detailed generated reports should be. This controls the level of information included per asset.</p>
+          <h2 className="text-sm font-bold text-eq-ink mb-1">Default Report Style</h2>
+          <p className="text-xs text-eq-grey mb-4">Sets the default detail level for all reports. Users can override this when generating individual reports.</p>
           <div className="grid grid-cols-3 gap-3">
             {([
               { value: 'summary' as const, label: 'Summary', desc: 'KPIs, pass/fail counts, and high-level overview only' },

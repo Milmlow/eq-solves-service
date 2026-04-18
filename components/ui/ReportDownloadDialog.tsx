@@ -16,6 +16,8 @@ interface ReportDownloadDialogProps {
   onDownload: (complexity: ReportComplexity) => Promise<void>
   /** Optional title override */
   title?: string
+  /** Optional description shown below the title */
+  description?: string
 }
 
 const COMPLEXITY_OPTIONS: { value: ReportComplexity; label: string; desc: string }[] = [
@@ -30,6 +32,7 @@ export function ReportDownloadDialog({
   defaultComplexity = 'standard',
   onDownload,
   title = 'Generate Report',
+  description,
 }: ReportDownloadDialogProps) {
   const [complexity, setComplexity] = useState<ReportComplexity>(defaultComplexity)
   const [loading, setLoading] = useState(false)
@@ -50,6 +53,7 @@ export function ReportDownloadDialog({
     <Modal open={open} onClose={onClose} title={title}>
       <div className="space-y-4">
         <div>
+          {description && <p className="text-xs text-eq-grey mb-2">{description}</p>}
           <p className="text-xs text-eq-grey mb-3">Choose report detail level</p>
           <div className="grid grid-cols-3 gap-2">
             {COMPLEXITY_OPTIONS.map(opt => (
