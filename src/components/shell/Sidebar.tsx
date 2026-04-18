@@ -106,7 +106,7 @@ export function Sidebar({ active, onNavigate, jobCtx }: Props) {
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
               Solves
             </div>
-            <div className="text-[18px] font-bold text-white">
+            <div className="text-[18px] font-bold text-sky">
               Assets
             </div>
           </div>
@@ -170,9 +170,9 @@ export function Sidebar({ active, onNavigate, jobCtx }: Props) {
       {!collapsed && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -left-6 bottom-10 select-none opacity-[0.06]"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-12 select-none opacity-[0.06]"
         >
-          <EqMark variant="white" size={160} fit="tight" aria-hidden />
+          <EqMark variant="white" size={90} fit="tight" aria-hidden />
         </div>
       )}
 
