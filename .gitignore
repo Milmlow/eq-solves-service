@@ -36,7 +36,6 @@ Thumbs.db
 .env.production.local
 
 # Runtime config — never commit real values
-public/config.js
 
 # TypeScript incremental build cache
 *.tsbuildinfo
