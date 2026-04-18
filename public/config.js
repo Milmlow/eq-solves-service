@@ -1,6 +1,4 @@
-﻿// Empty runtime config — app falls back to VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
-// set in Netlify environment variables at build time.
-//
-// To override at runtime (rotate keys without rebuilding), set values here:
-//   window.__EQ_CONFIG__ = { supabaseUrl: '...', supabaseAnonKey: '...' }
-window.__EQ_CONFIG__ = {}
+window.__EQ_CONFIG__ = {
+  supabaseUrl: 'https://hshvnjzczdytfiklhojz.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzaHZuanpjemR5dGZpa2xob2p6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzODI3MzksImV4cCI6MjA5MTk1ODczOX0.jrYFoMawixO5W5nPANSWXxJKFp9wqjTm0rpB5MTCwAM',
+}
