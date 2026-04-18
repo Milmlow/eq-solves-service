@@ -8,7 +8,7 @@ export default async function AnalyticsPage() {
 
   // ── Fetch raw data in parallel ──
   const [
-    { data: assets },
+    { count: assetCount },
     { data: checks },
     { data: testRecords },
     { data: acbTests },
@@ -16,7 +16,7 @@ export default async function AnalyticsPage() {
     { data: instruments },
     { data: sites },
   ] = await Promise.all([
-    supabase.from('assets').select('id, created_at, is_active').eq('is_active', true).limit(10000),
+    supabase.from('assets').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('maintenance_checks').select('id, status, due_date, completed_at, created_at').limit(10000),
     supabase.from('test_records').select('id, result, test_date, created_at').eq('is_active', true).limit(10000),
     supabase.from('acb_tests').select('id, overall_result, test_date, created_at').eq('is_active', true).limit(10000),
@@ -59,7 +59,7 @@ export default async function AnalyticsPage() {
   })
 
   // ── Summary KPIs ──
-  const totalAssets = assets?.length ?? 0
+  const totalAssets = assetCount ?? 0
   const totalSites = sites?.length ?? 0
   const totalTests = (testRecords?.length ?? 0) + (acbTests?.length ?? 0) + (nsxTests?.length ?? 0)
 
@@ -261,3 +261,4 @@ export default async function AnalyticsPage() {
     </div>
   )
 }
+                                                                                                                                                                                                                                                                       
