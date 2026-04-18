@@ -63,15 +63,22 @@ export function DebugPage() {
       cs.map((c) => ({ ...c, status: 'pending' as const, detail: undefined })),
     )
 
-    // 1. Config
+    // 1. Config — mirror lib/supabase.ts precedence: runtime override → build-time env.
     const cfg = window.__EQ_CONFIG__ ?? {}
-    const url = cfg.supabaseUrl || ''
-    const key = cfg.supabaseAnonKey || ''
+    const envUrl = import.meta.env.VITE_SUPABASE_URL as string
+    const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+    const url = cfg.supabaseUrl || envUrl || ''
+    const key = cfg.supabaseAnonKey || envKey || ''
+    const source = cfg.supabaseUrl
+      ? 'runtime /config.js'
+      : envUrl
+        ? 'build-time env (Netlify)'
+        : 'none'
     if (!url || !key || key === 'REPLACE_ME_WITH_ANON_KEY') {
       update('config', {
         status: 'fail',
         detail:
-          'config.js is missing or still has the placeholder anon key. Edit /config.js on the deployed site.',
+          'No Supabase credentials found. Set VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY in Netlify env vars and redeploy with cache cleared, or edit /config.js on the deployed site.',
       })
       setRunning(false)
       setDurationMs(performance.now() - started)
@@ -79,7 +86,7 @@ export function DebugPage() {
     }
     update('config', {
       status: 'ok',
-      detail: `URL: ${url}  ·  Key: ${key.slice(0, 10)}…${key.slice(-6)}`,
+      detail: `URL: ${url}  ·  Key: ${key.slice(0, 10)}…${key.slice(-6)}  ·  Source: ${source}`,
     })
 
     // 2. Connectivity
