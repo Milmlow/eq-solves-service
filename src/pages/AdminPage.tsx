@@ -1,13 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Check, Download, Flag, RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  AlertTriangle,
+  Check,
+  Download,
+  FileSpreadsheet,
+  Flag,
+  RefreshCw,
+  Upload,
+  X,
+} from 'lucide-react'
 import { navigate } from '../lib/router'
 import { useAssets, useFields, useJob } from '../hooks/useJobData'
 import { supabase } from '../lib/supabase'
-import { allCaptures, subscribeQueue } from '../lib/queue'
+import { allCaptures, enqueueCapture, subscribeQueue } from '../lib/queue'
+import { CAPTURED_BY_KEY } from '../lib/constants'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { cn } from '../lib/cn'
+import type { Asset, ClassificationField } from '../types/db'
 
 interface Capture {
   asset_id: string
@@ -32,6 +43,9 @@ export function AdminPage({ jobRef }: { jobRef: string }) {
   const [serverCaptures, setServerCaptures] = useState<Capture[]>([])
   const [loading, setLoading] = useState(true)
   const [lastFetch, setLastFetch] = useState<Date | null>(null)
+  const [importDialog, setImportDialog] = useState(false)
+
+  const openImport = () => setImportDialog(true)
 
   // Re-render when queue changes so pending local captures show immediately
   const [, tick] = useState(0)
@@ -177,11 +191,37 @@ export function AdminPage({ jobRef }: { jobRef: string }) {
           <Button size="sm" variant="ghost" icon={RefreshCw} onClick={load} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </Button>
+          <Button size="sm" variant="ghost" icon={Upload} onClick={openImport}>
+            Import CSV
+          </Button>
           <Button size="sm" variant="ghost" icon={Download} onClick={exportCsv}>
             Export CSV
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={FileSpreadsheet}
+            onClick={() => navigate(`/j/${jobRef}/export`)}
+            title="Full workbook export — needs the original .xlsm template"
+          >
+            Full export →
+          </Button>
         </div>
       </div>
+
+      {importDialog ? (
+        <ImportDialog
+          assets={assets}
+          fields={fieldsCaptured}
+          capByCell={capByCell}
+          jobId={jobId}
+          onClose={() => setImportDialog(false)}
+          onImported={() => {
+            setImportDialog(false)
+            void load()
+          }}
+        />
+      ) : null}
 
       {/* Top stat strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -430,4 +470,416 @@ function formatRelative(d: Date): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   return d.toLocaleDateString()
+}
+
+// ─── CSV import ──────────────────────────────────────────────────────────
+//
+// Matches the shape that `exportCsv` writes: header row of
+//   row_number, asset_id, description, <field display_name 1>, <field 2>, …
+// Merge rule (per product decision 2026-04-19): CSV wins on conflict.
+//   - blank cell in CSV → skip (never clears existing)
+//   - value in CSV, current empty → add
+//   - value in CSV, current differs → overwrite with CSV value
+//   - value in CSV matches current → no-op
+// Every imported cell is stamped with the current device's capturer name,
+// falling back to "CSV Import" so provenance is visible in the admin view.
+
+type ImportDiff = {
+  add: number
+  overwrite: number
+  unchanged: number
+  skippedBlank: number
+  unmatchedAssets: string[]
+  unmatchedFields: string[]
+  // Flat list of operations that will be enqueued on confirm.
+  ops: Array<{
+    assetId: string
+    classificationFieldId: number
+    value: string
+    prev: string | null
+  }>
+}
+
+function ImportDialog({
+  assets,
+  fields,
+  capByCell,
+  jobId,
+  onClose,
+  onImported,
+}: {
+  assets: Asset[]
+  fields: ClassificationField[]
+  capByCell: Map<string, Capture>
+  jobId: string | null
+  onClose: () => void
+  onImported: () => void
+}) {
+  const [stage, setStage] = useState<'pick' | 'preview' | 'importing' | 'done' | 'error'>('pick')
+  const [error, setError] = useState<string | null>(null)
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [diff, setDiff] = useState<ImportDiff | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const onFile = async (f: File) => {
+    setFileName(f.name)
+    setError(null)
+    try {
+      const text = await f.text()
+      const d = computeDiff(text, assets, fields, capByCell)
+      setDiff(d)
+      setStage('preview')
+    } catch (err: any) {
+      setError(err?.message ?? String(err))
+      setStage('error')
+    }
+  }
+
+  const confirm = async () => {
+    if (!diff || !jobId) return
+    setStage('importing')
+    const capturedBy =
+      (typeof localStorage !== 'undefined' && localStorage.getItem(CAPTURED_BY_KEY)) || 'CSV Import'
+    for (const op of diff.ops) {
+      enqueueCapture({
+        jobId,
+        assetId: op.assetId,
+        classificationFieldId: op.classificationFieldId,
+        value: op.value,
+        capturedBy,
+        flagged: false,
+        notes: null,
+      })
+    }
+    setStage('done')
+    // Small delay so the user sees the success state before the panel auto-closes
+    setTimeout(onImported, 700)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-xl bg-white rounded-xl shadow-xl border border-gray-200 max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 shrink-0">
+          <div className="flex items-center gap-2">
+            <Upload size={16} className="text-sky-deep" />
+            <div className="font-bold text-[15px]">Import CSV</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-md hover:bg-gray-100 flex items-center justify-center text-muted"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 overflow-y-auto">
+          {stage === 'pick' && (
+            <>
+              <p className="text-[13px] text-ink leading-relaxed">
+                Import a CSV in the same shape this page exports (columns:
+                {' '}<code className="mono text-[12px] text-sky-deep">row_number, asset_id, description, …fields</code>).
+              </p>
+              <div className="mt-3 text-[12px] text-muted leading-relaxed">
+                <div className="font-semibold text-ink mb-1">How the merge works</div>
+                <div>• If a CSV cell is blank, the existing value is kept (never cleared).</div>
+                <div>• If a CSV cell has a value, it wins — even over values captured on phones.</div>
+                <div>• Every imported cell is stamped with your capturer name.</div>
+              </div>
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) void onFile(f)
+                }}
+              />
+              <div className="mt-4">
+                <Button
+                  variant="primary"
+                  icon={Upload}
+                  onClick={() => inputRef.current?.click()}
+                >
+                  Choose CSV file
+                </Button>
+              </div>
+            </>
+          )}
+
+          {stage === 'preview' && diff && (
+            <>
+              <div className="text-[12px] text-muted">{fileName}</div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <DiffStat label="Will add" value={diff.add} tone="ok" />
+                <DiffStat label="Will overwrite" value={diff.overwrite} tone="warn" />
+                <DiffStat label="Unchanged" value={diff.unchanged} tone="neutral" />
+                <DiffStat label="Blank in CSV (skipped)" value={diff.skippedBlank} tone="neutral" />
+              </div>
+
+              {(diff.unmatchedAssets.length > 0 || diff.unmatchedFields.length > 0) && (
+                <div className="mt-3 flex items-start gap-2 p-3 rounded-md bg-warn-bg/40 border border-warn-bg">
+                  <AlertTriangle size={14} className="text-warn mt-0.5 shrink-0" />
+                  <div className="text-[12px]">
+                    {diff.unmatchedAssets.length > 0 && (
+                      <div>
+                        <b>Skipped {diff.unmatchedAssets.length} unknown asset
+                        {diff.unmatchedAssets.length === 1 ? '' : 's'}:</b>{' '}
+                        <span className="mono text-[11px]">
+                          {diff.unmatchedAssets.slice(0, 6).join(', ')}
+                          {diff.unmatchedAssets.length > 6 ? '…' : ''}
+                        </span>
+                      </div>
+                    )}
+                    {diff.unmatchedFields.length > 0 && (
+                      <div className="mt-1">
+                        <b>Skipped {diff.unmatchedFields.length} unknown column
+                        {diff.unmatchedFields.length === 1 ? '' : 's'}:</b>{' '}
+                        <span className="mono text-[11px]">
+                          {diff.unmatchedFields.slice(0, 6).join(', ')}
+                          {diff.unmatchedFields.length > 6 ? '…' : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {diff.overwrite > 0 && (
+                <div className="mt-3 p-3 rounded-md bg-bad-bg/40 border border-bad-bg text-[12px]">
+                  <div className="font-semibold text-bad-fg flex items-center gap-1.5">
+                    <AlertTriangle size={13} />
+                    {diff.overwrite} cell{diff.overwrite === 1 ? '' : 's'} will be overwritten
+                  </div>
+                  <div className="text-muted mt-1">
+                    These have existing values captured on phones. CSV values win — the phone
+                    values will be replaced.
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {stage === 'importing' && (
+            <div className="py-6 text-center text-[13px] text-muted">
+              Queuing {diff?.ops.length ?? 0} captures…
+            </div>
+          )}
+
+          {stage === 'done' && (
+            <div className="py-6 text-center">
+              <div className="w-10 h-10 mx-auto rounded-full bg-ok-bg flex items-center justify-center">
+                <Check size={18} className="text-ok" />
+              </div>
+              <div className="mt-2 text-[14px] font-semibold text-ink">Import queued</div>
+              <div className="text-[12px] text-muted mt-1">
+                {diff?.ops.length ?? 0} captures added to the sync queue.
+              </div>
+            </div>
+          )}
+
+          {stage === 'error' && (
+            <div className="py-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-bad mt-0.5 shrink-0" />
+                <div>
+                  <div className="text-[13px] font-semibold text-bad-fg">Couldn't parse CSV</div>
+                  <div className="text-[12px] text-muted mt-1">{error}</div>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button variant="ghost" onClick={() => setStage('pick')}>Try again</Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {stage === 'preview' && diff && (
+          <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-200 shrink-0">
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button
+              variant="primary"
+              icon={Check}
+              onClick={confirm}
+              disabled={diff.ops.length === 0}
+            >
+              {diff.ops.length === 0
+                ? 'Nothing to import'
+                : `Import ${diff.ops.length} cell${diff.ops.length === 1 ? '' : 's'}`}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DiffStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone: 'ok' | 'warn' | 'neutral'
+}) {
+  const color =
+    tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : 'text-ink'
+  return (
+    <div className="border border-gray-200 rounded-md px-3 py-2">
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted">{label}</div>
+      <div className={cn('font-mono font-bold text-[18px] tabular-nums mt-0.5', color)}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+// CSV parser tolerant to quoted fields with embedded commas, CRLF line endings,
+// and escaped double-quotes (RFC-4180-ish). Returns array of rows.
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let cur: string[] = []
+  let field = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i++
+        } else {
+          inQuotes = false
+        }
+      } else {
+        field += ch
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true
+      } else if (ch === ',') {
+        cur.push(field)
+        field = ''
+      } else if (ch === '\r') {
+        // swallow; \n will close row
+      } else if (ch === '\n') {
+        cur.push(field)
+        rows.push(cur)
+        cur = []
+        field = ''
+      } else {
+        field += ch
+      }
+    }
+  }
+  // Last field/row if no trailing newline
+  if (field.length > 0 || cur.length > 0) {
+    cur.push(field)
+    rows.push(cur)
+  }
+  return rows.filter((r) => r.length > 0 && !(r.length === 1 && r[0] === ''))
+}
+
+function normKey(s: string): string {
+  return s.toLowerCase().replace(/[\s_]+/g, '').trim()
+}
+
+function computeDiff(
+  text: string,
+  assets: Asset[],
+  fields: ClassificationField[],
+  capByCell: Map<string, Capture>,
+): ImportDiff {
+  const rows = parseCsv(text)
+  if (rows.length < 2) throw new Error('CSV is empty or has no data rows.')
+
+  const header = rows[0]
+  const headerKeys = header.map(normKey)
+
+  // Locate mandatory columns
+  const rowNumIdx = headerKeys.findIndex((h) => h === 'rownumber' || h === 'row')
+  const assetIdIdx = headerKeys.findIndex((h) => h === 'assetid')
+  if (assetIdIdx === -1 && rowNumIdx === -1) {
+    throw new Error('CSV must have an "asset_id" or "row_number" column to match assets.')
+  }
+
+  // Map field columns by display_name (case/space-insensitive)
+  const fieldByKey = new Map<string, ClassificationField>()
+  for (const f of fields) fieldByKey.set(normKey(f.display_name), f)
+
+  const skipCols = new Set(
+    ['rownumber', 'row', 'assetid', 'description'].map(normKey),
+  )
+  const colToField = new Map<number, ClassificationField>()
+  const unmatchedFieldsSet = new Set<string>()
+  for (let c = 0; c < header.length; c++) {
+    const key = headerKeys[c]
+    if (skipCols.has(key)) continue
+    const f = fieldByKey.get(key)
+    if (f) colToField.set(c, f)
+    else unmatchedFieldsSet.add(header[c])
+  }
+
+  // Index assets for lookup
+  const assetById = new Map<string, Asset>()
+  const assetByRowNum = new Map<string, Asset>()
+  for (const a of assets) {
+    if (a.asset_id) assetById.set(a.asset_id.trim(), a)
+    assetByRowNum.set(String(a.row_number), a)
+  }
+
+  const diff: ImportDiff = {
+    add: 0,
+    overwrite: 0,
+    unchanged: 0,
+    skippedBlank: 0,
+    unmatchedAssets: [],
+    unmatchedFields: Array.from(unmatchedFieldsSet),
+    ops: [],
+  }
+
+  const unmatchedAssetsSet = new Set<string>()
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r]
+    const assetIdCell = assetIdIdx !== -1 ? (row[assetIdIdx] ?? '').trim() : ''
+    const rowNumCell = rowNumIdx !== -1 ? (row[rowNumIdx] ?? '').trim() : ''
+    const asset =
+      (assetIdCell && assetById.get(assetIdCell)) ||
+      (rowNumCell && assetByRowNum.get(rowNumCell)) ||
+      null
+    if (!asset) {
+      if (assetIdCell || rowNumCell) unmatchedAssetsSet.add(assetIdCell || `row ${rowNumCell}`)
+      continue
+    }
+    for (const [colIdx, field] of colToField.entries()) {
+      const raw = (row[colIdx] ?? '').trim()
+      if (raw === '') {
+        diff.skippedBlank += 1
+        continue
+      }
+      const existing = capByCell.get(`${asset.id}:${field.id}`)
+      const prev = existing?.value ?? null
+      if (prev === raw) {
+        diff.unchanged += 1
+        continue
+      }
+      if (prev == null || prev === '') {
+        diff.add += 1
+      } else {
+        diff.overwrite += 1
+      }
+      diff.ops.push({
+        assetId: asset.id,
+        classificationFieldId: field.id,
+        value: raw,
+        prev,
+      })
+    }
+  }
+
+  diff.unmatchedAssets = Array.from(unmatchedAssetsSet)
+  return diff
 }

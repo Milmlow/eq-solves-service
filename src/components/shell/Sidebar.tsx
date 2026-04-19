@@ -81,15 +81,34 @@ export function Sidebar({ active, onNavigate, jobCtx }: Props) {
 
   return (
     <aside
-      className="flex flex-col shrink-0 bg-ink text-white border-r border-white/[0.06] transition-[width] duration-150"
+      className="relative overflow-hidden flex flex-col shrink-0 bg-ink text-white border-r border-white/[0.06] transition-[width] duration-150"
       style={{ width: collapsed ? 64 : 232 }}
     >
-      {/* Logo lockup */}
-      <div className="flex items-center gap-2.5 h-14 px-4 border-b border-white/[0.08] shrink-0">
-        <EqMark variant="white" size={24} aria-hidden />
+      {/* Logo lockup — tight-cropped mark sized to match the visual weight of
+          the SKS mark in eq-solves-service. When expanded, the EQ glyph leads
+          and the wordmark sits stacked beside it so the big cropped mark
+          doesn't squeeze the text. When collapsed, only the mark is shown
+          and it sits flush. */}
+      <div
+        className={cn(
+          'flex items-center gap-3 border-b border-white/[0.08] shrink-0',
+          collapsed ? 'h-16 px-3 justify-center' : 'h-[72px] px-4',
+        )}
+      >
+        <EqMark
+          variant="white"
+          size={collapsed ? 30 : 40}
+          fit="tight"
+          aria-hidden
+        />
         {!collapsed && (
-          <div className="text-[13px] font-bold tracking-tight whitespace-nowrap leading-none">
-            Solves <span className="text-sky">Assets</span>
+          <div className="leading-[1.05] tracking-tight">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">
+              Solves
+            </div>
+            <div className="text-[18px] font-bold text-sky">
+              Assets
+            </div>
           </div>
         )}
       </div>
@@ -144,8 +163,21 @@ export function Sidebar({ active, onNavigate, jobCtx }: Props) {
         ))}
       </nav>
 
+      {/* Decorative brand watermark — same pattern as eq-solves-service's
+          faded SKS mark bottom-left. Huge, low-opacity, anchored to the
+          bottom-left and partly tucked under the collapse bar. Hidden when
+          collapsed (no room) and aria-hidden since it's purely decorative. */}
+      {!collapsed && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-32 select-none opacity-[0.06]"
+        >
+          <EqMark variant="white" size={90} fit="tight" aria-hidden />
+        </div>
+      )}
+
       {/* Collapse toggle */}
-      <div className="p-2 border-t border-white/[0.08]">
+      <div className="relative z-10 p-2 border-t border-white/[0.08] bg-ink/80 backdrop-blur-sm">
         <button
           onClick={() => setCollapsed(c => !c)}
           className={cn(
