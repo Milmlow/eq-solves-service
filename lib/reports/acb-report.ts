@@ -47,6 +47,15 @@ export interface AcbReportInput {
   logoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
   logoImageOnLight?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
   logoImageOnDark?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+
+  /** Customer details for "Prepared for" lockup on cover page. */
+  customerName?: string
+  customerLogoOnLight?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  customerLogoOnDark?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+
+  /** Site photo rendered on cover page (when provided). */
+  sitePhoto?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+
   companyName?: string
   companyAddress?: string
   companyAbn?: string
@@ -525,14 +534,16 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
   const today = formatDateDDMMYYYY(new Date().toISOString())
   const brand = input.primaryColour.replace('#', '')
   const coverLogo = input.logoImageOnLight ?? input.logoImage ?? input.logoImageOnDark
+  const customerLogo = input.customerLogoOnLight ?? input.customerLogoOnDark
+  const sitePhoto = input.sitePhoto
 
-  const children: (Paragraph | Table)[] = []
+  const out: (Paragraph | Table)[] = []
 
-  // Logo (if provided) — renders above the title on light surface
+  // Tenant / report logo — top of page
   if (coverLogo) {
-    children.push(new Paragraph({
+    out.push(new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { before: 2000, after: 400 },
+      spacing: { before: 1200, after: 300 },
       children: [new ImageRun({
         type: coverLogo.type,
         data: coverLogo.data,
@@ -540,61 +551,113 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
         altText: { title: 'Company Logo', description: 'Company logo', name: 'company-logo' },
       })],
     }))
+  } else {
+    out.push(new Paragraph({ spacing: { before: 1800 } }))
   }
 
-  return {
-    children: [
-      ...children,
-      // spacer
-      new Paragraph({ spacing: { before: coverLogo ? 800 : 4000 } }),
-      // site + title
-      new Paragraph({
+  // Title
+  out.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 200 },
+    children: [new TextRun({
+      text: `${input.siteName} - ACB Test List - ${year}`,
+      bold: true,
+      size: 52,
+      font: 'Plus Jakarta Sans',
+      color: brand,
+    })],
+  }))
+  out.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 400 },
+    children: [new TextRun({
+      text: `Report Generated: ${today}`,
+      italics: true,
+      size: 24,
+      font: 'Plus Jakarta Sans',
+      color: '666666',
+    })],
+  }))
+
+  // "Prepared for" lockup — customer name + optional logo
+  if (input.customerName || customerLogo) {
+    out.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 600, after: 120 },
+      children: [new TextRun({
+        text: 'PREPARED FOR',
+        size: 18, bold: true,
+        font: 'Plus Jakarta Sans',
+        color: '6B7280',
+      })],
+    }))
+    if (input.customerName) {
+      out.push(new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { after: 200 },
         children: [new TextRun({
-          text: `${input.siteName} - ACB Test List - ${year}`,
-          bold: true,
-          size: 52,
+          text: input.customerName,
+          size: 28, bold: true,
           font: 'Plus Jakarta Sans',
-          color: brand,
+          color: '1A1A2E',
         })],
-      }),
-      new Paragraph({
+      }))
+    }
+    if (customerLogo) {
+      out.push(new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { after: 400 },
-        children: [new TextRun({
-          text: `Report Generated: ${today}`,
-          italics: true,
-          size: 24,
-          font: 'Plus Jakarta Sans',
-          color: '666666',
+        spacing: { after: 200 },
+        children: [new ImageRun({
+          type: customerLogo.type,
+          data: customerLogo.data,
+          transformation: { width: customerLogo.width, height: customerLogo.height },
+          altText: { title: 'Customer Logo', description: 'Customer logo', name: 'customer-logo' },
         })],
-      }),
-      // spacer
-      new Paragraph({ spacing: { before: 2000 } }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [new TextRun({
-          text: input.siteName,
-          bold: true,
-          size: 36,
-          font: 'Plus Jakarta Sans',
-        })],
-      }),
-      // large spacer to fill page
-      new Paragraph({ spacing: { before: 3000 } }),
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [new TextRun({
-          text: input.tenantProductName,
-          size: 20,
-          font: 'Plus Jakarta Sans',
-          color: '999999',
-        })],
-      }),
-      // page break (via next section)
-    ],
+      }))
+    }
   }
+
+  // Site photo — hero image below customer lockup
+  if (sitePhoto) {
+    out.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 400, after: 400 },
+      children: [new ImageRun({
+        type: sitePhoto.type,
+        data: sitePhoto.data,
+        transformation: { width: sitePhoto.width, height: sitePhoto.height },
+        altText: { title: 'Site Photo', description: `Photo of ${input.siteName}`, name: 'site-photo' },
+      })],
+    }))
+  }
+
+  // Site name (footer on cover)
+  out.push(new Paragraph({ spacing: { before: sitePhoto ? 400 : 2000 } }))
+  out.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    children: [new TextRun({
+      text: input.siteName,
+      bold: true,
+      size: 32,
+      font: 'Plus Jakarta Sans',
+    })],
+  }))
+
+  // Tenant product name at the very bottom
+  out.push(new Paragraph({ spacing: { before: 1000 } }))
+  out.push(new Paragraph({
+    alignment: AlignmentType.CENTER,
+    border: { top: { style: BorderStyle.SINGLE, size: 3, color: brand, space: 1 } },
+    spacing: { before: 200 },
+    children: [new TextRun({
+      text: input.tenantProductName,
+      size: 20,
+      font: 'Plus Jakarta Sans',
+      color: '999999',
+    })],
+  }))
+
+  return { children: out }
 }
 
 // ---------- per-breaker section ----------
