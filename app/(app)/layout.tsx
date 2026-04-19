@@ -4,12 +4,15 @@
  * ACN 651 962 935 · ABN 40 651 962 935
  * Proprietary and confidential. All rights reserved.
  */
+import { headers } from 'next/headers'
 import { Sidebar } from '@/components/ui/Sidebar'
 import { HelpWidget } from '@/components/ui/HelpWidget'
 import { EqFooter } from '@/components/ui/EqFooter'
+import { DemoBanner } from '@/components/ui/DemoBanner'
 import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
+import { isDemoEmail } from '@/lib/utils/demo'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -104,10 +107,25 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     '--eq-ink': settings.ink_colour,
   } as React.CSSProperties
 
+  // Demo banner — only for the public demo fixture user.
+  const isDemoSession = isDemoEmail(user?.email)
+  let demoShareUrl = '/demo'
+  if (isDemoSession) {
+    try {
+      const h = await headers()
+      const host = h.get('x-forwarded-host') ?? h.get('host')
+      const proto = h.get('x-forwarded-proto') ?? 'https'
+      if (host) demoShareUrl = `${proto}://${host}/demo`
+    } catch {
+      // Fall back to the relative link — copy still works, just without origin.
+    }
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-50" style={tenantStyle}>
       <Sidebar isAdmin={isAdmin} settings={settings} />
       <div className="flex flex-1 min-w-0 flex-col">
+        {isDemoSession && <DemoBanner shareUrl={demoShareUrl} />}
         <main className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8">
           {children}
         </main>
