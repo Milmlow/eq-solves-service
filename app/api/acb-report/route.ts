@@ -9,7 +9,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateAcbReport } from '@/lib/reports/acb-report'
 import type { AcbReportInput, AcbReportTest, AcbReportReading } from '@/lib/reports/acb-report'
-import { resolveReportLogos } from '@/lib/reports/logo-variants'
+import {
+  resolveReportLogos,
+  resolveCustomerLogos,
+  fetchSitePhoto,
+} from '@/lib/reports/logo-variants'
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 
@@ -47,10 +51,10 @@ export async function GET(request: NextRequest) {
 
   const tenantId = membership.tenant_id
 
-  // Fetch site
+  // Fetch site + customer (for cover-page "Prepared for" lockup + logo)
   const { data: site } = await supabase
     .from('sites')
-    .select('id, name, code')
+    .select('id, name, code, customers(name, logo_url, logo_url_on_dark)')
     .eq('id', siteId)
     .maybeSingle()
 
@@ -146,6 +150,17 @@ export async function GET(request: NextRequest) {
   // Resolve tenant + report logo variants — see lib/reports/logo-variants
   const reportLogos = await resolveReportLogos(tenantSettings, tenantRow)
 
+  // Resolve customer logo + site photo for cover page.
+  // Supabase nested-select type may be surfaced as an array or object depending
+  // on the generated types — cast through `unknown` to normalise.
+  const customerRaw = site.customers as unknown as
+    | { name?: string | null; logo_url?: string | null; logo_url_on_dark?: string | null }
+    | Array<{ name?: string | null; logo_url?: string | null; logo_url_on_dark?: string | null }>
+    | null
+  const customerRow = Array.isArray(customerRaw) ? (customerRaw[0] ?? null) : customerRaw
+  const customerLogos = await resolveCustomerLogos(customerRow, { width: 140, height: 48 })
+  const sitePhoto = await fetchSitePhoto(supabase, siteId, tenantId)
+
   const input: AcbReportInput = {
     siteName: site.name,
     siteCode: site.code ?? null,
@@ -156,6 +171,10 @@ export async function GET(request: NextRequest) {
     // Report settings
     logoImageOnLight: reportLogos.onLight,
     logoImageOnDark:  reportLogos.onDark,
+    customerName: customerRow?.name ?? undefined,
+    customerLogoOnLight: customerLogos.onLight,
+    customerLogoOnDark:  customerLogos.onDark,
+    sitePhoto,
     companyName: tenantSettings?.report_company_name ?? undefined,
     companyAbn: tenantSettings?.report_company_abn ?? undefined,
     companyPhone: tenantSettings?.report_company_phone ?? undefined,

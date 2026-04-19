@@ -110,6 +110,8 @@ export interface PmAssetReportInput {
   showSiteOverview?: boolean     // default true
   showContents?: boolean         // default true
   showExecutiveSummary?: boolean // default true
+  showAssetSummary?: boolean     // default true — one-row-per-asset register with progress
+  showDefectsRegister?: boolean  // default true — only renders when defects exist
   showSignOff?: boolean          // default true
   customHeaderText?: string      // overrides default header
   customFooterText?: string      // overrides default footer
@@ -122,6 +124,7 @@ export interface PmAssetSection {
   site: string
   location: string
   jobPlanName: string               // e.g. "M14.5 - Load banks"
+  workOrderNumber?: string | null   // Maximo work order #, if captured via Delta import
   tasks: PmAssetTask[]
   defectsFound?: string
   recommendedAction?: string
@@ -476,7 +479,7 @@ function buildContentsPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   children.push(divider(brand))
 
   // Fixed sections
-  const fixedSections = ['Site Overview', 'Executive Summary']
+  const fixedSections = ['Site Overview', 'Executive Summary', 'Asset Summary']
   for (const section of fixedSections) {
     const anchor = section.toLowerCase().replace(/\s+/g, '_')
     children.push(new Paragraph({
@@ -515,8 +518,17 @@ function buildContentsPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     }))
   }
 
-  // Sign-off link
+  // Defects Register link
   children.push(spacer(120))
+  children.push(new Paragraph({
+    spacing: { before: 80, after: 80 },
+    children: [new InternalHyperlink({
+      anchor: 'defects_register',
+      children: [new TextRun({ text: 'Defects Register', style: 'Hyperlink', size: 20, font: FONT })],
+    })],
+  }))
+
+  // Sign-off link
   children.push(new Paragraph({
     spacing: { before: 80, after: 80 },
     children: [new InternalHyperlink({
@@ -713,14 +725,10 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
       }),
       new TableRow({
         children: [
-          makeCell('Job Plan', c1, { bold: true, shading: 'F8F9FA', size: 18 }),
-          new TableCell({
-            borders: BORDERS_LIGHT,
-            width: { size: c2 + c3 + c4, type: WidthType.DXA },
-            margins: CELL_PAD,
-            columnSpan: 3,
-            children: [new Paragraph({ children: [new TextRun({ text: asset.jobPlanName, size: 18, font: FONT })] })],
-          }),
+          makeCell('Work Order #', c1, { bold: true, shading: 'F8F9FA', size: 18 }),
+          makeCell(asset.workOrderNumber ?? '—', c2, { size: 18 }),
+          makeCell('Job Plan', c3, { bold: true, shading: 'F8F9FA', size: 18 }),
+          makeCell(asset.jobPlanName, c4, { size: 18 }),
         ],
       }),
     ],
@@ -1045,6 +1053,290 @@ function buildSignOff(input: PmAssetReportInput): (Paragraph | Table)[] {
   return children
 }
 
+// ─────────── Asset status classification ───────────
+
+type AssetStatus = 'complete' | 'defect' | 'in_progress' | 'pending'
+
+interface AssetStats {
+  status: AssetStatus
+  done: number
+  total: number
+  failed: number
+  followUp: number
+}
+
+/**
+ * Classify a single asset for the summary/register.
+ *
+ * - `complete`: every task answered, no fails, no follow-ups
+ * - `defect`: any task failed or flagged for follow-up (takes precedence)
+ * - `in_progress`: some tasks answered, none failed
+ * - `pending`: no tasks answered yet
+ */
+function classifyAsset(asset: PmAssetSection): AssetStats {
+  let done = 0
+  let failed = 0
+  let followUp = 0
+  for (const t of asset.tasks) {
+    if (t.result === 'pass' || t.result === 'yes' || t.result === 'na') done++
+    else if (t.result === 'fail' || t.result === 'no') { done++; failed++ }
+    else if (t.result === 'requires_followup') { done++; followUp++ }
+  }
+  const total = asset.tasks.length
+  let status: AssetStatus
+  if (failed > 0 || followUp > 0 || (asset.defectsFound && asset.defectsFound.trim())) status = 'defect'
+  else if (done === 0) status = 'pending'
+  else if (done < total) status = 'in_progress'
+  else status = 'complete'
+  return { status, done, total, failed, followUp }
+}
+
+function statusBadgeCell(status: AssetStatus, width: number): TableCell {
+  const text = status === 'complete' ? 'Complete'
+    : status === 'defect' ? 'Defect'
+    : status === 'in_progress' ? 'In Progress'
+    : 'Pending'
+  const fill = status === 'complete' ? 'DCFCE7'
+    : status === 'defect' ? 'FEF3C7'
+    : status === 'in_progress' ? 'EAF5FB'
+    : 'F3F4F6'
+  const color = status === 'complete' ? '15803D'
+    : status === 'defect' ? 'B45309'
+    : status === 'in_progress' ? '2986B4'
+    : '6B7280'
+  return makeCell(text, width, {
+    align: AlignmentType.CENTER,
+    bold: true,
+    size: 16,
+    shading: fill,
+    color,
+  })
+}
+
+/**
+ * Render a text-only "progress bar" for DOCX — percentage + filled blocks.
+ * Actual graphical bars in docx require drawing primitives; the block
+ * glyphs give a clean visual in a single cell and print reliably.
+ */
+function progressCell(done: number, total: number, width: number): TableCell {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0
+  const segments = 10
+  const filled = Math.round((pct / 100) * segments)
+  const bar = '█'.repeat(filled) + '░'.repeat(segments - filled)
+  return new TableCell({
+    borders: BORDERS_LIGHT,
+    width: { size: width, type: WidthType.DXA },
+    margins: CELL_PAD_TIGHT,
+    verticalAlign: VerticalAlign.CENTER,
+    children: [new Paragraph({
+      alignment: AlignmentType.LEFT,
+      children: [
+        new TextRun({ text: bar, size: 14, font: FONT, color: pct === 100 ? '15803D' : pct > 0 ? '3DA8D8' : 'D5D8DC' }),
+        new TextRun({ text: `  ${pct}%`, size: 14, font: FONT, color: '6B7280' }),
+      ],
+    })],
+  })
+}
+
+function buildAssetSummary(input: PmAssetReportInput): (Paragraph | Table)[] {
+  const brand = getBrand(input)
+  const children: (Paragraph | Table)[] = []
+
+  children.push(new Paragraph({
+    heading: HeadingLevel.HEADING_1,
+    children: [new Bookmark({
+      id: 'asset_summary',
+      children: [new TextRun({ text: 'Asset Summary', bold: true, size: 28, font: FONT_HEADING, color: brand })],
+    })],
+  }))
+
+  children.push(divider(brand))
+
+  // Column widths — total ≈ CONTENT_WIDTH (9638)
+  const wAsset   = 1900
+  const wMaximo  = 1500
+  const wLoc     = 1800
+  const wWO      = 1300
+  const wTasks   = 900
+  const wProg    = 1300
+  const wStatus  = CONTENT_WIDTH - (wAsset + wMaximo + wLoc + wWO + wTasks + wProg)
+  const tw = wAsset + wMaximo + wLoc + wWO + wTasks + wProg + wStatus
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+      makeHeaderCell('Asset', wAsset, brand),
+      makeHeaderCell('Maximo ID', wMaximo, brand),
+      makeHeaderCell('Location', wLoc, brand),
+      makeHeaderCell('WO #', wWO, brand),
+      makeHeaderCell('Tasks', wTasks, brand),
+      makeHeaderCell('Progress', wProg, brand),
+      makeHeaderCell('Status', wStatus, brand),
+    ],
+  })
+
+  const dataRows = input.assets.map(asset => {
+    const s = classifyAsset(asset)
+    return new TableRow({
+      children: [
+        makeCell(asset.assetName, wAsset, { bold: true, size: 17 }),
+        makeCell(asset.assetId, wMaximo, { size: 17 }),
+        makeCell(asset.location, wLoc, { size: 17 }),
+        makeCell(asset.workOrderNumber ?? '—', wWO, { size: 17 }),
+        makeCell(`${s.done}/${s.total}`, wTasks, { size: 17, align: AlignmentType.CENTER }),
+        progressCell(s.done, s.total, wProg),
+        statusBadgeCell(s.status, wStatus),
+      ],
+    })
+  })
+
+  children.push(new Table({
+    width: { size: tw, type: WidthType.DXA },
+    columnWidths: [wAsset, wMaximo, wLoc, wWO, wTasks, wProg, wStatus],
+    rows: [headerRow, ...dataRows],
+  }))
+
+  return children
+}
+
+function buildDefectsRegister(input: PmAssetReportInput): (Paragraph | Table)[] {
+  const brand = getBrand(input)
+  const children: (Paragraph | Table)[] = []
+
+  // Collect defect rows from failed/follow-up tasks + asset-level defectsFound.
+  interface DefectRow {
+    assetName: string
+    description: string
+    raisedBy: string
+    date: string
+    severity: 'high' | 'medium' | 'low'
+  }
+  const rows: DefectRow[] = []
+
+  for (const asset of input.assets) {
+    const failedTasks = asset.tasks.filter(t => t.result === 'fail' || t.result === 'no')
+    const followUpTasks = asset.tasks.filter(t => t.result === 'requires_followup')
+
+    for (const t of failedTasks) {
+      const desc = t.notes?.trim()
+        ? `${t.description} — ${t.notes.trim()}`
+        : t.description
+      rows.push({
+        assetName: asset.assetName,
+        description: desc,
+        raisedBy: asset.technicianName,
+        date: fmtDate(asset.completedDate),
+        severity: 'high',
+      })
+    }
+    for (const t of followUpTasks) {
+      const desc = t.notes?.trim()
+        ? `${t.description} — ${t.notes.trim()}`
+        : t.description
+      rows.push({
+        assetName: asset.assetName,
+        description: desc,
+        raisedBy: asset.technicianName,
+        date: fmtDate(asset.completedDate),
+        severity: 'medium',
+      })
+    }
+    // Asset-level defectsFound catches anything not already covered by a task row
+    if (asset.defectsFound?.trim() && failedTasks.length === 0 && followUpTasks.length === 0) {
+      rows.push({
+        assetName: asset.assetName,
+        description: asset.defectsFound.trim(),
+        raisedBy: asset.technicianName,
+        date: fmtDate(asset.completedDate),
+        severity: 'medium',
+      })
+    }
+  }
+
+  // No defects? Render an empty-state instead of suppressing, so the reader
+  // has positive confirmation nothing was flagged.
+  children.push(new Paragraph({
+    heading: HeadingLevel.HEADING_1,
+    children: [new Bookmark({
+      id: 'defects_register',
+      children: [new TextRun({ text: 'Defects Register', bold: true, size: 28, font: FONT_HEADING, color: brand })],
+    })],
+  }))
+
+  children.push(divider(brand))
+
+  if (rows.length === 0) {
+    children.push(new Paragraph({
+      spacing: { after: 120 },
+      children: [new TextRun({
+        text: 'No defects identified during this maintenance check.',
+        italics: true, size: 20, font: FONT, color: '15803D',
+      })],
+    }))
+    return children
+  }
+
+  const wSev    = 1200
+  const wAsset  = 1800
+  const wDesc   = CONTENT_WIDTH - (1200 + 1800 + 1600 + 1400 + 1200)
+  const wBy     = 1600
+  const wDate   = 1400
+  const wStat   = 1200
+  const tw = wSev + wAsset + wDesc + wBy + wDate + wStat
+
+  const sevCell = (sev: 'high' | 'medium' | 'low', width: number) => {
+    const label = sev === 'high' ? 'High' : sev === 'medium' ? 'Medium' : 'Low'
+    const fill = sev === 'high' ? 'FEE2E2' : sev === 'medium' ? 'FEF3C7' : 'EAF5FB'
+    const color = sev === 'high' ? 'B91C1C' : sev === 'medium' ? 'B45309' : '2986B4'
+    return makeCell(label, width, {
+      align: AlignmentType.CENTER,
+      bold: true,
+      size: 16,
+      shading: fill,
+      color,
+    })
+  }
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+      makeHeaderCell('Severity', wSev, brand),
+      makeHeaderCell('Asset', wAsset, brand),
+      makeHeaderCell('Description', wDesc, brand),
+      makeHeaderCell('Raised By', wBy, brand),
+      makeHeaderCell('Date', wDate, brand),
+      makeHeaderCell('Status', wStat, brand),
+    ],
+  })
+
+  const dataRows = rows.map(r =>
+    new TableRow({
+      children: [
+        sevCell(r.severity, wSev),
+        makeCell(r.assetName, wAsset, { bold: true, size: 17 }),
+        makeCell(r.description, wDesc, { size: 17 }),
+        makeCell(r.raisedBy, wBy, { size: 17 }),
+        makeCell(r.date, wDate, { size: 17 }),
+        makeCell('Open', wStat, {
+          align: AlignmentType.CENTER,
+          bold: true,
+          size: 16,
+          shading: 'FEF3C7',
+          color: 'B45309',
+        }),
+      ],
+    })
+  )
+
+  children.push(new Table({
+    width: { size: tw, type: WidthType.DXA },
+    columnWidths: [wSev, wAsset, wDesc, wBy, wDate, wStat],
+    rows: [headerRow, ...dataRows],
+  }))
+
+  return children
+}
+
 // ─────────── Main Export ───────────
 
 export async function generatePMAssetReport(input: PmAssetReportInput): Promise<Buffer> {
@@ -1058,6 +1350,8 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
   // Summary skips TOC and executive summary unless explicitly enabled
   const showContents = complexity === 'summary' ? false : input.showContents !== false
   const showSummary = input.showExecutiveSummary !== false
+  const showAssetSummary = input.showAssetSummary !== false
+  const showDefectsRegister = input.showDefectsRegister !== false
   const showSignOff = input.showSignOff !== false
 
   // Custom header / footer text
@@ -1088,8 +1382,17 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
     bodyChildren.push(...buildExecutiveSummary(input))
     bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
   }
+  if (showAssetSummary && input.assets.length > 0) {
+    bodyChildren.push(...buildAssetSummary(input))
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+  }
 
   bodyChildren.push(...assetSectionChildren)
+
+  if (showDefectsRegister) {
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+    bodyChildren.push(...buildDefectsRegister(input))
+  }
 
   if (showSignOff) {
     bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
