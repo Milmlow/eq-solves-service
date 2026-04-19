@@ -122,6 +122,7 @@ export interface PmAssetSection {
   site: string
   location: string
   jobPlanName: string               // e.g. "M14.5 - Load banks"
+  workOrderNumber?: string | null   // Maximo work order #, if captured via Delta import
   tasks: PmAssetTask[]
   defectsFound?: string
   recommendedAction?: string
@@ -713,14 +714,10 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
       }),
       new TableRow({
         children: [
-          makeCell('Job Plan', c1, { bold: true, shading: 'F8F9FA', size: 18 }),
-          new TableCell({
-            borders: BORDERS_LIGHT,
-            width: { size: c2 + c3 + c4, type: WidthType.DXA },
-            margins: CELL_PAD,
-            columnSpan: 3,
-            children: [new Paragraph({ children: [new TextRun({ text: asset.jobPlanName, size: 18, font: FONT })] })],
-          }),
+          makeCell('Work Order #', c1, { bold: true, shading: 'F8F9FA', size: 18 }),
+          makeCell(asset.workOrderNumber ?? '—', c2, { size: 18 }),
+          makeCell('Job Plan', c3, { bold: true, shading: 'F8F9FA', size: 18 }),
+          makeCell(asset.jobPlanName, c4, { size: 18 }),
         ],
       }),
     ],

@@ -174,6 +174,7 @@ export async function GET(request: NextRequest) {
       site: site?.name ?? (check.sites as { name: string } | null)?.name ?? 'Unknown',
       location: asset?.location ?? '—',
       jobPlanName: asset?.job_plans?.name ?? (check.job_plans as { name: string } | null)?.name ?? '—',
+      workOrderNumber: ca.work_order_number ?? null,
       tasks,
       defectsFound,
       recommendedAction: failedItems.length > 0 ? 'Follow-up rectification required for failed items.' : undefined,
