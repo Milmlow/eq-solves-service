@@ -1,5 +1,6 @@
 'use server'
 
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
@@ -8,64 +9,337 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin } from '@/lib/utils/roles'
 
-async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated.')
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, is_active')
-    .eq('id', user.id)
-    .maybeSingle()
-  if (!profile || !['super_admin', 'admin'].includes(profile.role) || !profile.is_active) {
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+const VALID_ROLES = ['super_admin', 'admin', 'supervisor', 'technician', 'read_only'] as const
+type AppRole = typeof VALID_ROLES[number]
+
+const InviteSchema = z.object({
+  email: z.string().email({ error: 'Invalid email address.' }).transform((s) => s.trim().toLowerCase()),
+  role: z.enum(VALID_ROLES, { error: 'Invalid role.' }),
+  full_name: z.string().trim().max(120).optional().nullable(),
+})
+
+/**
+ * Requires the caller to be a super_admin or admin OF THE CURRENT TENANT.
+ * Returns their supabase client, user, tenantId, role.
+ *
+ * Uses requireUser() so the tenant_id we operate on is always the tenant the
+ * caller is a member of — never trusts client-provided tenant_id.
+ */
+async function requireTenantAdmin() {
+  const ctx = await requireUser()
+  if (!isAdmin(ctx.role)) {
     throw new Error('Not authorised.')
   }
-  return { supabase, user }
+  return ctx
 }
 
-export async function inviteUserAction(formData: FormData) {
-  const email = String(formData.get('email') || '').trim().toLowerCase()
-  const role = String(formData.get('role') || 'user')
-  const full_name = String(formData.get('full_name') || '').trim()
+/**
+ * Translate raw Supabase auth admin errors into operator-friendly strings.
+ * Keeps the UI informative without leaking internals.
+ */
+function friendlyAuthError(message: string | undefined): string {
+  const m = (message || '').toLowerCase()
+  if (!m) return 'Unknown error — please try again.'
+  if (m.includes('user already registered') || m.includes('already been registered'))
+    return 'That email is already registered. Use Resend to re-send the invite.'
+  if (m.includes('email rate limit') || m.includes('rate limit'))
+    return 'Supabase invite rate limit hit — wait a minute and try again.'
+  if (m.includes('invalid email')) return 'That email address is invalid.'
+  if (m.includes('database error saving new user'))
+    return 'Signup trigger failed. Contact an administrator — the handle_new_user trigger may be broken.'
+  return message || 'Unknown error — please try again.'
+}
 
-  const validRoles = ['super_admin', 'admin', 'supervisor', 'technician', 'read_only']
-  if (!email) return { error: 'Email is required.' }
-  if (!validRoles.includes(role)) return { error: 'Invalid role.' }
+/**
+ * Look up an auth user by email (admin client, bypasses RLS). Returns undefined
+ * if not found. Uses listUsers filter — for our scale this is cheap.
+ */
+async function findAuthUserByEmail(admin: ReturnType<typeof createAdminClient>, email: string) {
+  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 })
+  if (error) return undefined
+  return data.users.find((u) => u.email?.toLowerCase() === email)
+}
 
-  await requireAdmin()
+/**
+ * Ensure the profile row exists and reflects the chosen role + name.
+ * Idempotent — safe to call even if the trigger already created the row.
+ */
+async function upsertProfile(
+  admin: ReturnType<typeof createAdminClient>,
+  args: { id: string; email: string; full_name: string | null; role: AppRole }
+) {
+  const { error } = await admin
+    .from('profiles')
+    .upsert(
+      {
+        id: args.id,
+        email: args.email,
+        full_name: args.full_name,
+        role: args.role,
+        is_active: true,
+      },
+      { onConflict: 'id' }
+    )
+  if (error) throw new Error(`profile upsert failed: ${error.message}`)
+}
 
-  const h = await headers()
-  const host = h.get('origin') ?? h.get('host') ?? ''
-  const origin = host.startsWith('http') ? host : `https://${host}`
+/**
+ * Ensure an active tenant_members row exists for (tenantId, userId) with the
+ * chosen role. Idempotent. Reactivates if previously soft-deleted.
+ */
+async function upsertTenantMembership(
+  admin: ReturnType<typeof createAdminClient>,
+  args: { tenant_id: string; user_id: string; role: AppRole }
+) {
+  const { error } = await admin
+    .from('tenant_members')
+    .upsert(
+      { tenant_id: args.tenant_id, user_id: args.user_id, role: args.role, is_active: true },
+      { onConflict: 'tenant_id,user_id' }
+    )
+  if (error) throw new Error(`tenant_members upsert failed: ${error.message}`)
+}
+
+/**
+ * Best-effort audit entry for orphan recovery / first-time tenant assignment.
+ * Fails silently — not load-bearing.
+ */
+async function recordOrphanAssignment(
+  admin: ReturnType<typeof createAdminClient>,
+  args: { user_id: string; tenant_id: string; role: AppRole; assigned_by: string; reason: string }
+) {
+  try {
+    await admin.from('orphaned_user_assignments').insert({
+      user_id: args.user_id,
+      assigned_tenant_id: args.tenant_id,
+      assigned_role: args.role,
+      assigned_by: args.assigned_by,
+      reason: args.reason,
+    })
+  } catch {
+    /* non-fatal */
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Public actions
+// -----------------------------------------------------------------------------
+
+/**
+ * Invite a new user, or re-attach an existing one to this tenant.
+ *
+ * Contract:
+ *   1. Validate input with Zod.
+ *   2. Caller must be admin / super_admin of the current tenant.
+ *   3. If email already exists in auth.users: skip the invite call, but
+ *      STILL attach them to this tenant with the chosen role, and resend
+ *      the invite link. (Admin keeps control, no orphan users.)
+ *   4. If email is new: call inviteUserByEmail, then attach membership.
+ *   5. Profile + tenant_members are upserted idempotently, so this is safe
+ *      to re-run if a previous attempt partially succeeded.
+ *   6. Friendly error messages on failure.
+ */
+export async function inviteUserAction(formData: FormData): Promise<{ ok: true; email: string } | { error: string }> {
+  const parsed = InviteSchema.safeParse({
+    email: formData.get('email'),
+    role: formData.get('role'),
+    full_name: formData.get('full_name') || null,
+  })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
+  }
+  const { email, role, full_name } = parsed.data
+
+  let ctx
+  try {
+    ctx = await requireTenantAdmin()
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+  const { user: actor, tenantId } = ctx
 
   const admin = createAdminClient()
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${origin}/auth/reset-password`,
-    data: { full_name },
-  })
+  const h = await headers()
+  const hostHdr = h.get('origin') ?? h.get('host') ?? ''
+  const origin = hostHdr.startsWith('http') ? hostHdr : `https://${hostHdr}`
+  const redirectTo = `${origin}/auth/reset-password`
 
-  if (error) return { error: error.message }
+  try {
+    // --- 1. Resolve the auth user (invite if new, look up if existing) --------
+    let authUserId: string | undefined
+    let wasCreated = false
 
-  // Trigger has already created the profile; set the chosen role.
-  if (data.user) {
-    await admin
-      .from('profiles')
-      .update({ role, full_name: full_name || null })
-      .eq('id', data.user.id)
+    const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
+      redirectTo,
+      data: { full_name: full_name ?? '' },
+    })
+
+    if (inviteErr) {
+      // Common case: user already exists. Fall back to lookup + resend.
+      const existing = await findAuthUserByEmail(admin, email)
+      if (!existing) {
+        return { error: friendlyAuthError(inviteErr.message) }
+      }
+      authUserId = existing.id
+    } else if (inviteData?.user) {
+      authUserId = inviteData.user.id
+      wasCreated = true
+    } else {
+      return { error: 'Supabase did not return a user record.' }
+    }
+
+    if (!authUserId) {
+      return { error: 'Could not resolve user id after invite.' }
+    }
+
+    // --- 2. Profile (idempotent). Trigger normally creates it; this heals
+    // any case where it didn't or the role/name need updating.
+    await upsertProfile(admin, {
+      id: authUserId,
+      email,
+      full_name: full_name || null,
+      role,
+    })
+
+    // --- 3. Tenant membership (idempotent, reactivates if soft-deleted). ------
+    await upsertTenantMembership(admin, {
+      tenant_id: tenantId,
+      user_id: authUserId,
+      role,
+    })
+
+    await recordOrphanAssignment(admin, {
+      user_id: authUserId,
+      tenant_id: tenantId,
+      role,
+      assigned_by: actor.id,
+      reason: wasCreated ? 'New invite' : 'Attached existing user to tenant via invite',
+    })
+
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'user',
+      entityId: authUserId,
+      summary: `${wasCreated ? 'Invited' : 'Re-invited'} ${email} as ${role}`,
+    })
+
+    revalidatePath('/admin/users')
+    return { ok: true, email }
+  } catch (e) {
+    return { error: friendlyAuthError((e as Error).message) }
+  }
+}
+
+/**
+ * Resend an invite link to an existing user. Safe to run repeatedly; does not
+ * change role or tenant assignment. Useful when a user never clicked the first
+ * email or the link expired.
+ */
+export async function resendInviteAction(formData: FormData) {
+  const userId = String(formData.get('user_id') || '')
+  if (!userId) return { error: 'Missing user.' }
+
+  try {
+    await requireTenantAdmin()
+  } catch (e) {
+    return { error: (e as Error).message }
   }
 
-  await logAuditEvent({ action: 'create', entityType: 'user', entityId: data.user?.id, summary: `Invited user ${email} with role ${role}` })
+  const admin = createAdminClient()
+  const h = await headers()
+  const hostHdr = h.get('origin') ?? h.get('host') ?? ''
+  const origin = hostHdr.startsWith('http') ? hostHdr : `https://${hostHdr}`
+  const redirectTo = `${origin}/auth/reset-password`
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('email, full_name')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (!profile?.email) return { error: 'User has no email on file.' }
+
+  const { error } = await admin.auth.admin.inviteUserByEmail(profile.email, {
+    redirectTo,
+    data: { full_name: profile.full_name ?? '' },
+  })
+  if (error) return { error: friendlyAuthError(error.message) }
+
+  await logAuditEvent({
+    action: 'update',
+    entityType: 'user',
+    entityId: userId,
+    summary: `Resent invite to ${profile.email}`,
+  })
   revalidatePath('/admin/users')
   return { ok: true }
 }
 
+/**
+ * Attach a user (who may be orphaned or whose membership was soft-deleted) to
+ * the current tenant with the given role. This is the manual "fix" path for
+ * any user who shows up in profiles but is not a member of the current tenant.
+ */
+export async function repairUserTenantAction(formData: FormData) {
+  const userId = String(formData.get('user_id') || '')
+  const role = (String(formData.get('role') || 'technician') as AppRole)
+  if (!userId) return { error: 'Missing user.' }
+  if (!VALID_ROLES.includes(role)) return { error: 'Invalid role.' }
+
+  let ctx
+  try {
+    ctx = await requireTenantAdmin()
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+  const { user: actor, tenantId } = ctx
+
+  const admin = createAdminClient()
+
+  try {
+    await upsertTenantMembership(admin, { tenant_id: tenantId, user_id: userId, role })
+    await recordOrphanAssignment(admin, {
+      user_id: userId,
+      tenant_id: tenantId,
+      role,
+      assigned_by: actor.id,
+      reason: 'Repair: attached orphan to current tenant',
+    })
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'user',
+      entityId: userId,
+      summary: `Repaired tenant membership as ${role}`,
+    })
+    revalidatePath('/admin/users')
+    return { ok: true }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+/**
+ * Soft-deactivate or reactivate a user globally (profiles.is_active).
+ * Keeps their tenant memberships intact — for tenant-scoped removal use
+ * removeUserFromTenantAction.
+ */
 export async function setActiveAction(formData: FormData) {
   const userId = String(formData.get('user_id') || '')
   const isActive = String(formData.get('is_active') || 'true') === 'true'
   if (!userId) return { error: 'Missing user.' }
 
-  const { user } = await requireAdmin()
-  if (userId === user.id && !isActive) {
+  let actorId: string
+  try {
+    const { user } = await requireTenantAdmin()
+    actorId = user.id
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+  if (userId === actorId && !isActive) {
     return { error: 'You cannot deactivate yourself.' }
   }
 
@@ -73,30 +347,36 @@ export async function setActiveAction(formData: FormData) {
   const { error } = await admin.from('profiles').update({ is_active: isActive }).eq('id', userId)
   if (error) return { error: error.message }
 
-  await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'user', entityId: userId, summary: isActive ? 'Reactivated user' : 'Deactivated user' })
+  await logAuditEvent({
+    action: isActive ? 'update' : 'delete',
+    entityType: 'user',
+    entityId: userId,
+    summary: isActive ? 'Reactivated user' : 'Deactivated user',
+  })
   revalidatePath('/admin/users')
   return { ok: true }
 }
 
 /**
- * Removes a user from the current tenant by soft-deleting their
- * tenant_members row (is_active = false). The auth account and any other
- * tenant memberships are left intact — this is reversible. Matches the
- * 'soft-delete via is_active' convention in AGENTS.md.
+ * Soft-remove a user from the CURRENT tenant (tenant_members.is_active = false).
+ * Their auth account and other tenant memberships are unaffected — this is
+ * reversible via inviteUserAction or repairUserTenantAction.
  */
 export async function removeUserFromTenantAction(formData: FormData) {
   const userId = String(formData.get('user_id') || '')
   if (!userId) return { error: 'Missing user.' }
 
-  const { supabase, user, tenantId, role } = await requireUser()
-  if (!isAdmin(role)) return { error: 'Not authorised.' }
-  if (userId === user.id) return { error: 'You cannot remove yourself.' }
+  let ctx
+  try {
+    ctx = await requireTenantAdmin()
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+  const { supabase, user: actor, tenantId } = ctx
+  if (userId === actor.id) return { error: 'You cannot remove yourself.' }
 
   const admin = createAdminClient()
 
-  // Soft-delete the membership for THIS tenant only. Use the admin client
-  // to bypass RLS so we can act on a row we're about to remove ourselves
-  // from visibility for.
   const { data: target, error: fetchErr } = await admin
     .from('tenant_members')
     .select('id, is_active')
@@ -112,10 +392,8 @@ export async function removeUserFromTenantAction(formData: FormData) {
     .from('tenant_members')
     .update({ is_active: false })
     .eq('id', target.id)
-
   if (error) return { error: error.message }
 
-  // Fetch email for the audit summary (best-effort, non-fatal on failure)
   const { data: profile } = await supabase
     .from('profiles')
     .select('email')
@@ -132,24 +410,47 @@ export async function removeUserFromTenantAction(formData: FormData) {
   return { ok: true }
 }
 
+/**
+ * Change a user's role in BOTH profiles AND tenant_members for the current
+ * tenant. Keeping them in sync avoids a class of bugs where the legacy global
+ * profiles.role says one thing and the per-tenant role says another.
+ */
 export async function setRoleAction(formData: FormData) {
   const userId = String(formData.get('user_id') || '')
-  const role = String(formData.get('role') || 'user')
-  const validRoles = ['super_admin', 'admin', 'supervisor', 'technician', 'read_only']
-  if (!userId || !validRoles.includes(role)) {
+  const role = String(formData.get('role') || '') as AppRole
+  if (!userId || !VALID_ROLES.includes(role)) {
     return { error: 'Invalid request.' }
   }
 
-  const { user } = await requireAdmin()
-  if (userId === user.id && !['super_admin', 'admin'].includes(role)) {
-    return { error: 'You cannot demote yourself.' }
+  let ctx
+  try {
+    ctx = await requireTenantAdmin()
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+  const { user: actor, tenantId } = ctx
+
+  if (userId === actor.id && !isAdmin(role)) {
+    return { error: 'You cannot demote yourself out of admin.' }
   }
 
   const admin = createAdminClient()
-  const { error } = await admin.from('profiles').update({ role }).eq('id', userId)
-  if (error) return { error: error.message }
+  const { error: pErr } = await admin.from('profiles').update({ role }).eq('id', userId)
+  if (pErr) return { error: pErr.message }
 
-  await logAuditEvent({ action: 'update', entityType: 'user', entityId: userId, summary: `Changed user role to ${role}` })
+  const { error: tErr } = await admin
+    .from('tenant_members')
+    .update({ role })
+    .eq('tenant_id', tenantId)
+    .eq('user_id', userId)
+  if (tErr) return { error: tErr.message }
+
+  await logAuditEvent({
+    action: 'update',
+    entityType: 'user',
+    entityId: userId,
+    summary: `Changed role to ${role}`,
+  })
   revalidatePath('/admin/users')
   return { ok: true }
 }

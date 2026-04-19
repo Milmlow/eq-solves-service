@@ -10,12 +10,14 @@ export function InviteUserForm() {
   const [ok, setOk] = useState(false)
   const [pending, startTransition] = useTransition()
 
+  const [okEmail, setOkEmail] = useState<string>()
+
   function onSubmit(formData: FormData) {
-    setError(undefined); setOk(false)
+    setError(undefined); setOk(false); setOkEmail(undefined)
     startTransition(async () => {
       const res = await inviteUserAction(formData)
-      if (res?.error) setError(res.error)
-      else if (res?.ok) setOk(true)
+      if ('error' in res && res.error) setError(res.error)
+      else if ('ok' in res && res.ok) { setOk(true); setOkEmail(res.email) }
     })
   }
 
@@ -48,7 +50,8 @@ export function InviteUserForm() {
       )}
       {ok && (
         <div className="md:col-span-4 text-xs text-eq-deep bg-eq-ice border border-eq-sky/30 rounded-md p-3">
-          Invite sent. The user will receive an email with a link to set their password.
+          Invite sent to <strong>{okEmail}</strong>. They&apos;ll receive an email with a link to set their password.
+          If they don&apos;t see it, use the Resend action in the table below.
         </div>
       )}
     </form>
