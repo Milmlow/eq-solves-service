@@ -15,8 +15,9 @@ import { formatDate, formatSiteLabel } from '@/lib/utils/format'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Calendar, LayoutGrid, List } from 'lucide-react'
+import { Calendar, LayoutGrid, List, MapPin } from 'lucide-react'
 import { KanbanBoard } from './KanbanBoard'
+import { SiteGroupedView } from './SiteGroupedView'
 
 type CheckRow = MaintenanceCheck & {
   job_plans?: { name: string } | null
@@ -70,7 +71,7 @@ export function MaintenanceList({
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
-  const [view, setView] = useState<'table' | 'kanban'>('kanban')
+  const [view, setView] = useState<'table' | 'kanban' | 'sites'>('sites')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const columns: DataTableColumn<CheckRow>[] = [
@@ -141,6 +142,17 @@ export function MaintenanceList({
           {/* View Toggle */}
           <div className="flex gap-1 bg-gray-100 rounded-md p-1">
             <button
+              onClick={() => setView('sites')}
+              className={`p-2 rounded transition-colors ${
+                view === 'sites'
+                  ? 'bg-white text-eq-sky shadow-sm'
+                  : 'text-eq-grey hover:text-eq-deep'
+              }`}
+              title="Site view"
+            >
+              <MapPin className="w-4 h-4" />
+            </button>
+            <button
               onClick={() => setView('table')}
               className={`p-2 rounded transition-colors ${
                 view === 'table'
@@ -197,10 +209,18 @@ export function MaintenanceList({
               />
               <Pagination page={page} totalPages={totalPages} />
             </>
-          ) : (
+          ) : view === 'kanban' ? (
             <KanbanBoard
               checks={checks}
               itemsMap={itemsMap}
+              onCheckClick={(c) => router.push(`/maintenance/${c.id}`)}
+              isAdmin={isAdmin}
+            />
+          ) : (
+            <SiteGroupedView
+              checks={checks}
+              itemsMap={itemsMap}
+              sites={sites}
               onCheckClick={(c) => router.push(`/maintenance/${c.id}`)}
               isAdmin={isAdmin}
             />
