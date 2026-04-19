@@ -33,7 +33,7 @@ export default async function ReportsPage({
     : null
 
   // ────────── Maintenance stats ──────────
-  let mCheckQuery = supabase.from('maintenance_checks').select('id, status, due_date, completed_at, site_id').limit(10000)
+  let mCheckQuery = supabase.from('maintenance_checks').select('id, status, due_date, completed_at, site_id').eq('is_active', true).limit(10000)
   if (siteId) {
     mCheckQuery = mCheckQuery.eq('site_id', siteId)
   } else if (customerSiteIds) {

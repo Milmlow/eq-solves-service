@@ -17,7 +17,7 @@ export default async function AnalyticsPage() {
     { data: sites },
   ] = await Promise.all([
     supabase.from('assets').select('id', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('maintenance_checks').select('id, status, due_date, completed_at, created_at').limit(10000),
+    supabase.from('maintenance_checks').select('id, status, due_date, completed_at, created_at').eq('is_active', true).limit(10000),
     supabase.from('test_records').select('id, result, test_date, created_at').eq('is_active', true).limit(10000),
     supabase.from('acb_tests').select('id, overall_result, test_date, created_at').eq('is_active', true).limit(10000),
     supabase.from('nsx_tests').select('id, overall_result, test_date, created_at').eq('is_active', true).limit(10000),

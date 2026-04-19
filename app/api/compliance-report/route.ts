@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
   const filterDescription = filterParts.length > 0 ? filterParts.join(' — ') : 'All data'
 
   // ── Maintenance checks ──
-  let mCheckQuery = supabase.from('maintenance_checks').select('id, status, due_date, completed_at, site_id').eq('tenant_id', tenantId).limit(10000)
+  let mCheckQuery = supabase.from('maintenance_checks').select('id, status, due_date, completed_at, site_id').eq('tenant_id', tenantId).eq('is_active', true).limit(10000)
   if (siteId) {
     mCheckQuery = mCheckQuery.eq('site_id', siteId)
   } else if (customerSiteIds) {

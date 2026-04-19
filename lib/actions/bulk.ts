@@ -45,6 +45,13 @@ export async function bulkDeactivateAction(table: EntityTable, ids: string[]) {
       summary: `Bulk deactivated ${ids.length} ${config.label}${ids.length > 1 ? 's' : ''}`,
     })
     revalidatePath(config.path)
+    if (table === 'maintenance_checks') {
+      revalidatePath('/testing/summary')
+      revalidatePath('/dashboard')
+      revalidatePath('/analytics')
+      revalidatePath('/reports')
+      revalidatePath('/sites', 'layout')
+    }
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -124,6 +131,13 @@ export async function bulkDeleteAction(table: EntityTable, ids: string[]) {
       summary: `Permanently deleted ${ids.length} ${config.label}${ids.length > 1 ? 's' : ''}`,
     })
     revalidatePath(config.path)
+    if (table === 'maintenance_checks') {
+      revalidatePath('/testing/summary')
+      revalidatePath('/dashboard')
+      revalidatePath('/analytics')
+      revalidatePath('/reports')
+      revalidatePath('/sites', 'layout')
+    }
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

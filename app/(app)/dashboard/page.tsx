@@ -63,15 +63,16 @@ export default async function DashboardPage({
     supabase.from('sites').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('assets').select('*', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('job_plans').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    // Maintenance counts — optionally filtered by assigned_to
-    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'scheduled'), filterByUser, userId),
-    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'), filterByUser, userId),
-    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'overdue'), filterByUser, userId),
-    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('status', 'complete'), filterByUser, userId),
+    // Maintenance counts — optionally filtered by assigned_to; exclude archived (is_active = false)
+    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('status', 'scheduled'), filterByUser, userId),
+    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('status', 'in_progress'), filterByUser, userId),
+    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('status', 'overdue'), filterByUser, userId),
+    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('status', 'complete'), filterByUser, userId),
     // Upcoming checks
     buildListQuery(
       supabase.from('maintenance_checks')
         .select('id, custom_name, status, due_date, sites(name)')
+        .eq('is_active', true)
         .in('status', ['scheduled', 'in_progress', 'overdue'])
         .order('due_date', { ascending: true })
         .limit(8),
@@ -81,6 +82,7 @@ export default async function DashboardPage({
     buildListQuery(
       supabase.from('maintenance_checks')
         .select('id, custom_name, status, completed_at, sites(name)')
+        .eq('is_active', true)
         .eq('status', 'complete')
         .order('completed_at', { ascending: false })
         .limit(6),

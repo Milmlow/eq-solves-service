@@ -72,12 +72,14 @@ export default async function SiteDetailPage({
       .from('maintenance_checks')
       .select('*', { count: 'exact', head: true })
       .eq('site_id', id)
+      .eq('is_active', true)
       .neq('status', 'complete'),
     // Completed maintenance checks count
     supabase
       .from('maintenance_checks')
       .select('*', { count: 'exact', head: true })
       .eq('site_id', id)
+      .eq('is_active', true)
       .eq('status', 'complete'),
     // Test records count
     supabase
@@ -98,6 +100,7 @@ export default async function SiteDetailPage({
       .from('maintenance_checks')
       .select('*, job_plans(name)')
       .eq('site_id', id)
+      .eq('is_active', true)
       .order('updated_at', { ascending: false })
       .limit(5),
     // Recent test records (top 5)

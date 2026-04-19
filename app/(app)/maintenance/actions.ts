@@ -13,6 +13,22 @@ import {
 } from '@/lib/validations/maintenance-check'
 
 /**
+ * Every page that surfaces maintenance_checks counts/lists. Any mutation to a
+ * check (create / update / archive / delete / complete / item result) must
+ * invalidate all of these so the numbers don't drift out of sync.
+ *
+ * Kept as a single source of truth — add new paths here as new surfaces land.
+ */
+function revalidateMaintenanceSurfaces() {
+  revalidatePath('/maintenance')
+  revalidatePath('/testing/summary')
+  revalidatePath('/dashboard')
+  revalidatePath('/analytics')
+  revalidatePath('/reports')
+  revalidatePath('/sites', 'layout')
+}
+
+/**
  * Get the frequency flag column name for a given maintenance frequency.
  */
 function freqColumn(freq: string): string {
@@ -308,8 +324,7 @@ export async function createCheckAction(formData: FormData) {
       summary: `Created check: ${assetsWithTasks.length} assets, ${checkItems.length} tasks (${freq})`,
     })
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true, checkId: check.id, assetCount: assetsWithTasks.length, taskCount: checkItems.length }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -368,8 +383,7 @@ export async function updateCheckAction(id: string, formData: FormData) {
 
     await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Updated maintenance check' })
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -405,8 +419,7 @@ export async function startCheckAction(id: string) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Started maintenance check' })
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -469,8 +482,7 @@ export async function completeCheckAction(id: string) {
     }
 
     await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Completed maintenance check' })
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -493,8 +505,7 @@ export async function cancelCheckAction(id: string) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'delete', entityType: 'maintenance_check', entityId: id, summary: 'Cancelled maintenance check' })
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -523,8 +534,7 @@ export async function archiveCheckAction(id: string, active = false) {
       entityId: id,
       summary: `${active ? 'Restored' : 'Archived'} maintenance check`,
     })
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -596,8 +606,7 @@ export async function updateCheckItemAction(
       mutationId,
     })
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   })
 }
@@ -717,8 +726,7 @@ export async function batchCreateChecksAction(formData: FormData) {
       summary: `Batch created ${createdCount} checks from job plan`,
     })
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true, created: createdCount }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -761,8 +769,7 @@ export async function forceCompleteCheckAssetAction(checkId: string, checkAssetI
 
     if (caErr) return { success: false, error: caErr.message }
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -801,8 +808,7 @@ export async function bulkUpdateWorkOrdersAction(
       if (!error) updated++
     }
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true, updated }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -838,8 +844,7 @@ export async function updateCheckAssetAction(
 
     if (error) return { success: false, error: error.message }
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -883,8 +888,7 @@ export async function raiseDefectAction(data: {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${data.title}"` })
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -935,8 +939,7 @@ export async function updateDefectAction(defectId: string, updates: {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'update', entityType: 'defect', entityId: defectId, summary: `Updated defect: ${updates.status ? `status → ${updates.status}` : 'fields updated'}` })
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     revalidatePath('/defects')
     return { success: true }
   } catch (e: unknown) {
@@ -978,8 +981,7 @@ export async function completeAllCheckAssetsAction(checkId: string) {
 
     if (caErr) return { success: false, error: caErr.message }
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -1027,8 +1029,7 @@ export async function batchForceCompleteAssetsAction(checkId: string, checkAsset
 
     if (caErr) return { success: false, error: caErr.message }
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -1113,8 +1114,7 @@ export async function updateCheckItemResultAction(
       }
     }
 
-    revalidatePath('/maintenance')
-    revalidatePath('/testing/summary')
+    revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
