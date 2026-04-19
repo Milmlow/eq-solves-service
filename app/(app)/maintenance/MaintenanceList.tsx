@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -164,7 +165,12 @@ export function MaintenanceList({
           </div>
 
           {canWriteRole && (
-            <Button onClick={() => setCreateOpen(true)}>Create Check</Button>
+            <>
+              <Link href="/maintenance/import">
+                <Button variant="secondary">Import</Button>
+              </Link>
+              <Button onClick={() => setCreateOpen(true)}>Create Check</Button>
+            </>
           )}
         </div>
       </div>

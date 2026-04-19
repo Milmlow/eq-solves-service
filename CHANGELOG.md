@@ -4,10 +4,42 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
-## 2026-04-19 — IP hardening pass (branch `feat/ip-hardening`, not merged)
+## 2026-04-19 — Delta/Equinix Maximo work-order Excel import
 
-**Built by:** Royce Milmlow + Claude (via Cowork)
-**Branch:** `feat/ip-hardening` (pushed, no PR, no merge)
+Merged to `main`.
+
+### Added
+- **`lib/import/delta-wo-parser.ts`** — pure parser for the monthly Delta work-order `.xlsx` Equinix sends from Maximo. Strips `AU0x-` site prefix, splits job plans on the last dash, maps Delta frequency suffixes to the EQ frequency enum (`A`→annual, `Q`/`3`→quarterly, `M`→monthly, `S`/`6`→semi_annual, `W`→weekly, `2`/`5`/`10`→n-yr). Fail-closed on unknown frequency. Deterministic grouping by `(site, jp_code, frequency, start_date)`.
+- **`lib/utils/levenshtein.ts`** — two-row DP edit-distance helper + `closestMatch()`. Powers fuzzy job-plan-code suggestions (e.g. MVSWBD→MVSWDB). Suggestions only; never auto-applied.
+- **`app/(app)/maintenance/import/page.tsx`** — role-guarded (`canWrite`) entry page with breadcrumb.
+- **`app/(app)/maintenance/import/ImportWizard.tsx`** — client wizard: upload → preview → commit. Group cards show per-asset resolution status, duplicate-WO flags, blocker/warning banners, sticky commit bar.
+- **`app/(app)/maintenance/import/actions.ts`** — server actions:
+  - `previewDeltaImportAction` parses the workbook, resolves sites by code, job plans by code (with tenant alias + fuzzy fallback), assets by `(site_id, maximo_id)`, and flags duplicate WO numbers.
+  - `commitDeltaImportAction` wrapped in `withIdempotency`. Re-parses the workbook server-side — never trusts the client preview payload. Refuses wholesale if any blocker exists (unresolved site, unresolved plan, unknown frequency, unmatched asset, duplicate WO). Preloads `job_plan_items` per distinct `(jobPlanId, frequencyColumn)` pair. Per group inserts `maintenance_checks` → `check_assets` (with `work_order_number`) → batched `maintenance_check_items`. Audit log row carries the `mutationId`.
+- **`supabase/migrations/0049_job_plan_aliases.sql`** — tenant-scoped alias table (`source_system: delta|maximo|manual`) for remapping unknown upstream codes and accepted fuzzy matches. RLS enabled with tenant-scoped read + writer-role write policies.
+- **`supabase/migrations/0050_check_assets_wo_unique_idx.sql`** — partial unique index on `check_assets(tenant_id, work_order_number) WHERE work_order_number IS NOT NULL`. DB backstop for duplicate detection.
+- **`tests/lib/import/delta-wo-parser.test.ts`** — 27 tests (site prefix, job plan split, frequency map, group key, full workbook parse against the Aug 2025 fixture).
+- **`tests/lib/utils/levenshtein.test.ts`** — 11 tests.
+
+### Changed
+- **`app/(app)/maintenance/MaintenanceList.tsx`** — Import button added before Create Check (toolbar convention: Import left).
+- **`app/api/pm-asset-report/route.ts`** — passes `ca.work_order_number` into `PmAssetSection`.
+- **`lib/reports/pm-asset-report.ts`** — `PmAssetSection.workOrderNumber` renders in the asset metadata table alongside Job Plan on the PM Asset Report.
+
+### Verified
+- 38/38 unit tests pass. `tsc --noEmit` clean.
+- Supabase security advisors: 0 new ERROR-level findings.
+- Supabase performance advisors: only INFO-level "unused index" findings on the brand-new `job_plan_aliases` table (expected — no traffic yet).
+
+### Pending
+- Live dry-run on SKS tenant with the Aug 2025 Delta file: confirm ~250 rows resolve, MVSWBD fuzzy prompt fires, LBS unknown-code prompt works, commit succeeds, re-upload triggers the duplicate blocker.
+
+---
+
+## 2026-04-19 — IP hardening pass
+
+Merged to `main`.
+
 **Driver:** EQ IP Protection & Commercialisation amendment (18 Apr 2026). Operationalises register items 4, 6, 8, 9, 10, 11, 12 and lays header groundwork for item 7.
 
 ### Added
@@ -35,7 +67,7 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 - `tsc --noEmit` ran clean (0 errors).
 - Secret sweep (`SUPABASE_SERVICE_ROLE` / `eyJ…` / `sbp_` / `ghp_` / `sk-` patterns) — only env-var **names** referenced in code, no literal key values.
 - **IP check:** Headers ✓ | Secrets ✓ | Repo private ✓ (assumed — needs Royce's visibility audit per P1 #2 to confirm).
-- **Status:** Branch `feat/ip-hardening` pushed. Ready for review and merge, ready for `0048_eq_meta.sql` to be applied to `urjhmkhbgaxrofurpbgc` on Royce's approval.
+- **Status:** Merged to `main` 2026-04-19. Migration `0048_eq_meta.sql` applied to `urjhmkhbgaxrofurpbgc`.
 
 ---
 
