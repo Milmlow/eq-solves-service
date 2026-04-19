@@ -1,5 +1,12 @@
+/**
+ * EQ Solves Service
+ * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
+ * ACN 651 962 935 · ABN 40 651 962 935
+ * Proprietary and confidential. All rights reserved.
+ */
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
 import type { TenantSettings } from '@/lib/types'
+import { EqFooter } from '@/components/ui/EqFooter'
 
 const WHITE_LOGO_URL = 'https://pub-409bd651f2e549f4907f5a856a9264ae.r2.dev/EQ_logo_white_transparent.svg'
 
@@ -54,31 +61,36 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
           </p>
         </div>
 
-        <p className="text-xs text-white/30 relative z-10">
-          © {new Date().getFullYear()} EQ Solutions
+        <p className="text-xs text-white/30 relative z-10 leading-relaxed">
+          © {new Date().getFullYear()} EQ, a registered business name of CDC Solutions Pty Ltd
+          <br />
+          ACN 651 962 935 · ABN 40 651 962 935
         </p>
       </div>
 
       {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-10 bg-white">
-        <div className="w-full max-w-sm">
-          {/* Mobile logo */}
-          <div className="lg:hidden flex flex-col items-center mb-10">
-            {settings.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={settings.logo_url} alt={productName} className="h-7 w-auto" />
-            ) : (
-              <span className="text-xl font-bold tracking-tight" style={{ color: settings.ink_colour }}>
-                EQ <span style={{ color: settings.primary_colour }}>Solves</span>
+      <div className="flex-1 flex flex-col bg-white">
+        <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
+          <div className="w-full max-w-sm">
+            {/* Mobile logo */}
+            <div className="lg:hidden flex flex-col items-center mb-10">
+              {settings.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={settings.logo_url} alt={productName} className="h-7 w-auto" />
+              ) : (
+                <span className="text-xl font-bold tracking-tight" style={{ color: settings.ink_colour }}>
+                  EQ <span style={{ color: settings.primary_colour }}>Solves</span>
+                </span>
+              )}
+              <span className="text-[10px] uppercase tracking-[0.2em] mt-1.5" style={{ color: settings.deep_colour }}>
+                Service Platform
               </span>
-            )}
-            <span className="text-[10px] uppercase tracking-[0.2em] mt-1.5" style={{ color: settings.deep_colour }}>
-              Service Platform
-            </span>
-          </div>
+            </div>
 
-          {children}
+            {children}
+          </div>
         </div>
+        <EqFooter />
       </div>
     </div>
   )

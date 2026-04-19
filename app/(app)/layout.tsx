@@ -1,5 +1,12 @@
+/**
+ * EQ Solves Service
+ * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
+ * ACN 651 962 935 · ABN 40 651 962 935
+ * Proprietary and confidential. All rights reserved.
+ */
 import { Sidebar } from '@/components/ui/Sidebar'
 import { HelpWidget } from '@/components/ui/HelpWidget'
+import { EqFooter } from '@/components/ui/EqFooter'
 import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
@@ -100,9 +107,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen bg-gray-50" style={tenantStyle}>
       <Sidebar isAdmin={isAdmin} settings={settings} />
-      <main className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8">
-        {children}
-      </main>
+      <div className="flex flex-1 min-w-0 flex-col">
+        <main className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8">
+          {children}
+        </main>
+        <EqFooter />
+      </div>
       <HelpWidget />
       {showOnboarding && (
         <OnboardingWizard userName={userName} companyName={tenantName} />

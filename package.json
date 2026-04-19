@@ -2,6 +2,9 @@
   "name": "eq-solves-service",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
+  "author": "CDC Solutions Pty Ltd",
+  "description": "EQ Solves Service — proprietary maintenance management platform for electrical contractors. © 2026 EQ, a registered business name of CDC Solutions Pty Ltd (ACN 651 962 935, ABN 40 651 962 935). Proprietary and confidential.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

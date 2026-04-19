@@ -1,3 +1,9 @@
+/**
+ * EQ Solves Service
+ * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
+ * ACN 651 962 935 · ABN 40 651 962 935
+ * Proprietary and confidential. All rights reserved.
+ */
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { publicEnv } from '@/lib/env'
