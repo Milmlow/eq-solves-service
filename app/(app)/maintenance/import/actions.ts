@@ -146,6 +146,71 @@ const ResolutionSchema = z.discriminatedUnion('action', [
 
 const ResolutionsMapSchema = z.record(z.string(), ResolutionSchema)
 
+// ── Row-level resolutions — per unmatched-asset-row user choices ────────
+
+/**
+ * A user's decision for an unmatched row within a group.
+ * Keyed on the client as `${PreviewGroup.key}:${PreviewAsset.rowNumber}`.
+ *
+ * `link`   — link this row to an existing tenant asset (user-picked)
+ * `create` — insert a new asset using the row's maximo_id / description /
+ *            location as defaults; no inline edits
+ * `skip`   — drop this row (no check_asset created for this work order)
+ */
+export type RowResolution =
+  | { action: 'link'; assetId: string }
+  | { action: 'create' }
+  | { action: 'skip' }
+
+const RowResolutionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('link'), assetId: z.string().uuid('Invalid asset id') }),
+  z.object({ action: z.literal('create') }),
+  z.object({ action: z.literal('skip') }),
+])
+
+const RowResolutionsMapSchema = z.record(z.string(), RowResolutionSchema)
+
+/**
+ * Lightweight list of active tenant assets at a given site for the "Link to
+ * existing asset" combobox. Role-gated and tenant/site-scoped.
+ */
+export async function listAssetsForSiteAction(
+  siteId: string,
+): Promise<
+  | { success: true; assets: { id: string; name: string; maximoId: string | null; location: string | null }[] }
+  | { success: false; error: string }
+> {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) {
+      return { success: false, error: 'Insufficient permissions.' }
+    }
+    const parsed = z.string().uuid().safeParse(siteId)
+    if (!parsed.success) {
+      return { success: false, error: 'Invalid site id.' }
+    }
+    const { data, error } = await supabase
+      .from('assets')
+      .select('id, name, maximo_id, location')
+      .eq('tenant_id', tenantId)
+      .eq('site_id', siteId)
+      .eq('is_active', true)
+      .order('name', { ascending: true })
+    if (error) return { success: false, error: error.message }
+    return {
+      success: true,
+      assets: (data ?? []).map((a) => ({
+        id: a.id,
+        name: a.name,
+        maximoId: a.maximo_id ?? null,
+        location: a.location ?? null,
+      })),
+    }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
 /**
  * Lightweight list of active tenant job plans for the import-review combobox
  * when the user picks "Nominate existing plan". Read-only and role-gated
@@ -501,6 +566,10 @@ export interface CommitSummary {
   checksCreated: number
   checkAssetsCreated: number
   checkItemsCreated: number
+  /** Row-level resolutions applied during commit. */
+  rowsLinked: number
+  rowsCreated: number
+  rowsSkipped: number
   groupsCreated: {
     key: string
     checkId: string
@@ -570,6 +639,27 @@ export async function commitDeltaImportAction(
         }
       }
       resolutions = parsed.data
+    }
+
+    // Optional — per-row resolutions collected in the review UI.
+    // Shape: Record<`${groupKey}:${rowNumber}`, RowResolution>.
+    let rowResolutions: Record<string, RowResolution> = {}
+    const rowResolutionsRaw = formData.get('rowResolutions')
+    if (typeof rowResolutionsRaw === 'string' && rowResolutionsRaw.trim().length > 0) {
+      let parsedJson: unknown
+      try {
+        parsedJson = JSON.parse(rowResolutionsRaw)
+      } catch {
+        return { success: false, error: 'Invalid rowResolutions payload — expected JSON.' }
+      }
+      const parsed = RowResolutionsMapSchema.safeParse(parsedJson)
+      if (!parsed.success) {
+        return {
+          success: false,
+          error: `Invalid row resolution: ${parsed.error.issues[0]?.message ?? 'bad payload'}`,
+        }
+      }
+      rowResolutions = parsed.data
     }
 
     // ── Parse ─────────────────────────────────────────────────────────
@@ -832,10 +922,16 @@ export async function commitDeltaImportAction(
       jobPlanName: string
       frequency: FrequencyEnum
       assetIdByRow: Map<number, string>
+      /** Row numbers explicitly skipped via rowResolutions — excluded from check_assets. */
+      skippedRowNumbers: Set<number>
     }
 
     const resolved: ResolvedGroup[] = []
     const blockers: string[] = []
+
+    let rowsLinked = 0
+    let rowsCreated = 0
+    let rowsSkipped = 0
 
     for (const g of workingGroups) {
       const site = siteByCode.get(g.siteCode)
@@ -858,24 +954,101 @@ export async function commitDeltaImportAction(
         continue
       }
 
+      // Derive a sensible asset_type default when creating new assets inline.
+      // Use the canonical job-plan code (alias target if aliased, else raw),
+      // falling back to the plan name if somehow empty. Users can edit later.
+      const assetTypeDefault =
+        aliasMap.get(g.jobPlanCode)?.code ?? g.jobPlanCode ?? jp.name ?? 'Equipment'
+
       const assetIdByRow = new Map<number, string>()
-      let unmatched = 0
+      const skippedRowNumbers = new Set<number>()
+      const unmatchedWithoutResolution: number[] = []
+
       for (const r of g.rows) {
         const match = assetByKey.get(`${site.id}|${r.maximoAssetId}`)
         if (match) {
           assetIdByRow.set(r.rowNumber, match.id)
-        } else {
-          unmatched++
+          continue
+        }
+
+        // No match — check per-row resolution.
+        const rowKey = `${g.key}:${r.rowNumber}`
+        const rr = rowResolutions[rowKey]
+        if (!rr) {
+          unmatchedWithoutResolution.push(r.rowNumber)
+          continue
+        }
+
+        if (rr.action === 'skip') {
+          skippedRowNumbers.add(r.rowNumber)
+          rowsSkipped++
+          continue
+        }
+
+        if (rr.action === 'link') {
+          // Validate the nominated asset belongs to this tenant + site and is active.
+          const { data: linked, error: linkErr } = await supabase
+            .from('assets')
+            .select('id, name, site_id, is_active')
+            .eq('id', rr.assetId)
+            .eq('tenant_id', tenantId)
+            .eq('site_id', site.id)
+            .eq('is_active', true)
+            .maybeSingle()
+          if (linkErr || !linked) {
+            return {
+              success: false,
+              error: `Row ${r.rowNumber} (${g.siteCode}/${g.jobPlanCode}): nominated asset not found or not at site "${g.siteCode}".`,
+            }
+          }
+          assetIdByRow.set(r.rowNumber, linked.id)
+          rowsLinked++
+          continue
+        }
+
+        if (rr.action === 'create') {
+          // Insert a new asset with row-derived defaults. No inline edits
+          // from the UI — user confirmed "simple is best" on defaults.
+          const name = r.description?.trim() || r.maximoAssetId
+          const { data: created, error: createErr } = await supabase
+            .from('assets')
+            .insert({
+              tenant_id: tenantId,
+              site_id: site.id,
+              name,
+              asset_type: assetTypeDefault,
+              maximo_id: r.maximoAssetId,
+              location: r.location?.trim() || null,
+              job_plan_id: jp.id,
+              is_active: true,
+            })
+            .select('id')
+            .single()
+          if (createErr || !created) {
+            return {
+              success: false,
+              error: `Row ${r.rowNumber} (${g.siteCode}/${g.jobPlanCode}): failed to create asset — ${createErr?.message ?? 'insert failed'}.`,
+            }
+          }
+          assetIdByRow.set(r.rowNumber, created.id)
+          // Keep local lookups coherent in case a later row reuses this maximo_id.
+          assetByKey.set(`${site.id}|${r.maximoAssetId}`, { id: created.id, name })
+          rowsCreated++
+          continue
         }
       }
-      if (unmatched > 0) {
+
+      if (unmatchedWithoutResolution.length > 0) {
         blockers.push(
-          `Group ${g.siteCode}/${g.jobPlanCode}: ${unmatched} asset(s) not found by maximo_id`,
+          `Group ${g.siteCode}/${g.jobPlanCode}: ${unmatchedWithoutResolution.length} unresolved asset row(s) — choose Link / Create / Skip for each`,
         )
         continue
       }
 
-      const dupInGroup = g.rows.filter((r) => existingWO.has(r.workOrder)).length
+      // Duplicate WO check — only count rows we're actually importing.
+      const dupInGroup = g.rows.filter(
+        (r) => !skippedRowNumbers.has(r.rowNumber) && existingWO.has(r.workOrder),
+      ).length
       if (dupInGroup > 0) {
         blockers.push(
           `Group ${g.siteCode}/${g.jobPlanCode}: ${dupInGroup} duplicate work order(s)`,
@@ -891,6 +1064,7 @@ export async function commitDeltaImportAction(
         jobPlanName: jp.name,
         frequency: g.frequency,
         assetIdByRow,
+        skippedRowNumbers,
       })
     }
 
@@ -961,10 +1135,18 @@ export async function commitDeltaImportAction(
       checksCreated: 0,
       checkAssetsCreated: 0,
       checkItemsCreated: 0,
+      rowsLinked,
+      rowsCreated,
+      rowsSkipped,
       groupsCreated: [],
     }
 
     for (const g of resolved) {
+      // If the user skipped every row in the group, don't create a check at all.
+      if (g.skippedRowNumbers.size === g.parsed.rows.length) {
+        continue
+      }
+
       const startIso = g.parsed.startDate.toISOString().slice(0, 10)
       const monthName = g.parsed.startDate.toLocaleString('en-AU', { month: 'long' })
       const year = g.parsed.startDate.getFullYear()
@@ -992,13 +1174,16 @@ export async function commitDeltaImportAction(
       }
 
       // 2. check_assets (one per parsed row, with work_order_number)
-      const checkAssetRows = g.parsed.rows.map((r) => ({
-        tenant_id: tenantId,
-        check_id: check.id,
-        asset_id: g.assetIdByRow.get(r.rowNumber)!,
-        status: 'pending' as const,
-        work_order_number: r.workOrder,
-      }))
+      // Skipped rows are excluded — no check_asset, no check_items for them.
+      const checkAssetRows = g.parsed.rows
+        .filter((r) => !g.skippedRowNumbers.has(r.rowNumber))
+        .map((r) => ({
+          tenant_id: tenantId,
+          check_id: check.id,
+          asset_id: g.assetIdByRow.get(r.rowNumber)!,
+          status: 'pending' as const,
+          work_order_number: r.workOrder,
+        }))
 
       const { data: insertedCA, error: caErr } = await supabase
         .from('check_assets')
@@ -1079,6 +1264,9 @@ export async function commitDeltaImportAction(
         groupsSkipped: skippedKeys.size,
         aliasesCreated: aliasesCreated.length,
         plansCreated: plansCreated.length,
+        rowsLinked: summary.rowsLinked,
+        rowsCreated: summary.rowsCreated,
+        rowsSkipped: summary.rowsSkipped,
       },
       mutationId,
     })

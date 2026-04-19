@@ -22,15 +22,29 @@ import {
   previewDeltaImportAction,
   commitDeltaImportAction,
   listJobPlansForImportAction,
+  listAssetsForSiteAction,
   type CommitSummary,
   type GroupResolution,
   type PreviewGroup,
   type PreviewResult,
+  type RowResolution,
 } from './actions'
 
 // ── Resolution state — keyed by group.key ───────────────────────────────
 
 type ResolutionsMap = Record<string, GroupResolution>
+
+// ── Row resolution state — keyed by `${group.key}:${rowNumber}` ─────────
+
+type RowResolutionsMap = Record<string, RowResolution>
+
+/** Lightweight asset row for the Link combobox. */
+interface AssetOption {
+  id: string
+  name: string
+  maximoId: string | null
+  location: string | null
+}
 
 /** Lightweight plan row for the combobox. */
 interface JobPlanOption {
@@ -55,6 +69,7 @@ export function ImportWizard() {
   const [error, setError] = useState<string | null>(null)
   const [commitResult, setCommitResult] = useState<CommitSummary | null>(null)
   const [resolutions, setResolutions] = useState<ResolutionsMap>({})
+  const [rowResolutions, setRowResolutions] = useState<RowResolutionsMap>({})
   const [isPending, startTransition] = useTransition()
   const [isCommitting, startCommit] = useTransition()
 
@@ -65,6 +80,7 @@ export function ImportWizard() {
     setError(null)
     setCommitResult(null)
     setResolutions({})
+    setRowResolutions({})
   }
 
   function handlePreview() {
@@ -72,6 +88,7 @@ export function ImportWizard() {
     setError(null)
     setCommitResult(null)
     setResolutions({})
+    setRowResolutions({})
     startTransition(async () => {
       const fd = new FormData()
       fd.append('file', file)
@@ -95,6 +112,9 @@ export function ImportWizard() {
       if (Object.keys(resolutions).length > 0) {
         fd.append('resolutions', JSON.stringify(resolutions))
       }
+      if (Object.keys(rowResolutions).length > 0) {
+        fd.append('rowResolutions', JSON.stringify(rowResolutions))
+      }
       // Generate an idempotency key scoped to this commit attempt. A client
       // retry inside the same tab reuses the same id — safe replay.
       const mutationId = cryptoRandomId()
@@ -114,6 +134,7 @@ export function ImportWizard() {
     setError(null)
     setCommitResult(null)
     setResolutions({})
+    setRowResolutions({})
     if (fileInput.current) fileInput.current.value = ''
   }
 
@@ -124,6 +145,16 @@ export function ImportWizard() {
         return rest
       }
       return { ...prev, [groupKey]: resolution }
+    })
+  }
+
+  function setRowResolution(rowKey: string, resolution: RowResolution | null) {
+    setRowResolutions((prev) => {
+      if (!resolution) {
+        const { [rowKey]: _drop, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [rowKey]: resolution }
     })
   }
 
@@ -187,6 +218,8 @@ export function ImportWizard() {
           preview={preview}
           resolutions={resolutions}
           setResolution={setResolution}
+          rowResolutions={rowResolutions}
+          setRowResolution={setRowResolution}
           onCommit={handleCommit}
           isCommitting={isCommitting}
         />
@@ -210,12 +243,16 @@ function Preview({
   preview,
   resolutions,
   setResolution,
+  rowResolutions,
+  setRowResolution,
   onCommit,
   isCommitting,
 }: {
   preview: PreviewResult
   resolutions: ResolutionsMap
   setResolution: (groupKey: string, resolution: GroupResolution | null) => void
+  rowResolutions: RowResolutionsMap
+  setRowResolution: (rowKey: string, resolution: RowResolution | null) => void
   onCommit: () => void
   isCommitting: boolean
 }) {
@@ -224,6 +261,14 @@ function Preview({
   const [plans, setPlans] = useState<JobPlanOption[] | null>(null)
   const [plansError, setPlansError] = useState<string | null>(null)
   const [plansLoading, setPlansLoading] = useState(false)
+
+  // Per-site asset lists — cached so the Link picker doesn't refetch.
+  const [assetsBySite, setAssetsBySite] = useState<Record<string, AssetOption[]>>({})
+  const [assetsSiteLoading, setAssetsSiteLoading] = useState<Record<string, boolean>>({})
+  const [assetsSiteError, setAssetsSiteError] = useState<Record<string, string>>({})
+
+  // Show only rows / groups that still need a human decision.
+  const [showOnlyReview, setShowOnlyReview] = useState(false)
 
   async function ensurePlansLoaded(): Promise<void> {
     if (plans || plansLoading) return
@@ -236,6 +281,22 @@ function Preview({
       return
     }
     setPlans(result.plans)
+  }
+
+  async function ensureAssetsLoadedForSite(siteId: string): Promise<void> {
+    if (assetsBySite[siteId] || assetsSiteLoading[siteId]) return
+    setAssetsSiteLoading((m) => ({ ...m, [siteId]: true }))
+    setAssetsSiteError((m) => {
+      const { [siteId]: _drop, ...rest } = m
+      return rest
+    })
+    const result = await listAssetsForSiteAction(siteId)
+    setAssetsSiteLoading((m) => ({ ...m, [siteId]: false }))
+    if (!result.success) {
+      setAssetsSiteError((m) => ({ ...m, [siteId]: result.error }))
+      return
+    }
+    setAssetsBySite((m) => ({ ...m, [siteId]: result.assets }))
   }
 
   // ── Group-level status ─────────────────────────────────────────────
@@ -256,17 +317,58 @@ function Preview({
   const needsResolution = (g: PreviewGroup): boolean =>
     g.matchSource === 'fuzzy' || g.matchSource === 'none'
 
-  // A group can commit when: site is resolved, frequency is known, assets
-  // match & no dup WOs, AND the job plan either auto-matches or the user
-  // has provided a resolution (accept/nominate/create).
+  // How many rows in a group are unresolved (unmatched AND no row resolution).
+  function unresolvedRowCount(g: PreviewGroup): number {
+    let n = 0
+    for (const a of g.assets) {
+      if (a.resolvedAssetId) continue
+      const key = `${g.key}:${a.rowNumber}`
+      if (!rowResolutions[key]) n++
+    }
+    return n
+  }
+
+  // How many unmatched rows in this group have been decided (link/create/skip).
+  function resolvedRowCount(g: PreviewGroup): number {
+    let n = 0
+    for (const a of g.assets) {
+      if (a.resolvedAssetId) continue
+      const key = `${g.key}:${a.rowNumber}`
+      if (rowResolutions[key]) n++
+    }
+    return n
+  }
+
+  const totalRowsToReview = workingGroups.reduce(
+    (n, g) => n + unresolvedRowCount(g),
+    0,
+  )
+  const totalRowsResolved = workingGroups.reduce(
+    (n, g) => n + resolvedRowCount(g),
+    0,
+  )
+
+  // Count skipped rows across working groups (row-level skip).
+  const totalRowsSkipped = workingGroups.reduce((n, g) => {
+    let c = 0
+    for (const a of g.assets) {
+      const key = `${g.key}:${a.rowNumber}`
+      if (rowResolutions[key]?.action === 'skip') c++
+    }
+    return n + c
+  }, 0)
+
+  // A group can commit when: site is resolved, frequency is known, job plan
+  // either auto-matches or user-resolved (accept/nominate/create), no dup WOs,
+  // and every unmatched row either auto-resolves or has a row resolution.
   const unresolvedAfterUserChoice = workingGroups.filter((g) => {
     const r = resolutions[g.key]
     const planSettled = !needsResolution(g) || (r && r.action !== 'skip')
     const siteOk = !!g.siteId
     const freqOk = !!g.frequency
-    const assetsOk = g.unmatchedAssetCount === 0
+    const rowsOk = unresolvedRowCount(g) === 0
     const woOk = g.duplicateWorkOrderCount === 0
-    return !(planSettled && siteOk && freqOk && assetsOk && woOk)
+    return !(planSettled && siteOk && freqOk && rowsOk && woOk)
   }).length
 
   const canCommit =
@@ -278,7 +380,7 @@ function Preview({
   return (
     <div className="space-y-4">
       {/* Summary strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Stat label="Rows parsed" value={preview.parsedRowCount.toString()} />
         <Stat
           label="Groups"
@@ -300,10 +402,43 @@ function Preview({
           tone={duplicateWOs > 0 ? 'warn' : 'ok'}
         />
         <Stat
+          label="Rows to review"
+          value={
+            totalRowsResolved > 0 || totalRowsSkipped > 0
+              ? `${totalRowsToReview} (of ${totalRowsToReview + totalRowsResolved} · ${totalRowsSkipped} skipped)`
+              : totalRowsToReview.toString()
+          }
+          tone={totalRowsToReview > 0 ? 'warn' : 'ok'}
+        />
+        <Stat
           label="Groups needing review"
           value={unresolvedAfterUserChoice.toString()}
           tone={unresolvedAfterUserChoice > 0 ? 'warn' : 'ok'}
         />
+      </div>
+
+      {/* Review-only filter */}
+      <div className="flex items-center gap-3 text-xs">
+        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showOnlyReview}
+            onChange={(e) => setShowOnlyReview(e.target.checked)}
+            className="accent-eq-sky"
+          />
+          <span className="text-eq-ink">
+            Show only items that need review{' '}
+            <span className="text-eq-grey">
+              (hide auto-matched rows and settled groups)
+            </span>
+          </span>
+        </label>
+        {showOnlyReview && totalRowsToReview === 0 && unresolvedAfterUserChoice === 0 && (
+          <span className="text-green-700 inline-flex items-center gap-1">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Nothing left to review — ready to commit.
+          </span>
+        )}
       </div>
 
       {/* Parse errors */}
@@ -375,26 +510,72 @@ function Preview({
             </span>
           )}
         </h2>
-        {preview.groups.map((g) => (
-          <GroupCard
-            key={g.key}
-            group={g}
-            resolution={resolutions[g.key] ?? null}
-            setResolution={(r) => setResolution(g.key, r)}
-            plans={plans}
-            plansLoading={plansLoading}
-            plansError={plansError}
-            onRequestPlans={ensurePlansLoaded}
-          />
-        ))}
+        {(() => {
+          // When showOnlyReview is on, hide groups that have nothing to review —
+          // no unresolved plan AND no unresolved rows AND no dup WOs.
+          const visible = preview.groups.filter((g) => {
+            if (!showOnlyReview) return true
+            const r = resolutions[g.key]
+            if (r?.action === 'skip') return false
+            const planNeedsChoice = needsResolution(g) && !r
+            const rowsNeedChoice = unresolvedRowCount(g) > 0
+            const dupWO = g.duplicateWorkOrderCount > 0
+            return planNeedsChoice || rowsNeedChoice || dupWO
+          })
+
+          if (visible.length === 0 && showOnlyReview) {
+            return (
+              <p className="text-xs text-eq-grey italic">
+                All groups and rows are resolved. Uncheck &ldquo;Show only items that need review&rdquo;
+                to see the full list.
+              </p>
+            )
+          }
+
+          return visible.map((g) => (
+            <GroupCard
+              key={g.key}
+              group={g}
+              resolution={resolutions[g.key] ?? null}
+              setResolution={(r) => setResolution(g.key, r)}
+              plans={plans}
+              plansLoading={plansLoading}
+              plansError={plansError}
+              onRequestPlans={ensurePlansLoaded}
+              rowResolutions={rowResolutions}
+              setRowResolution={setRowResolution}
+              assetsForSite={g.siteId ? (assetsBySite[g.siteId] ?? null) : null}
+              assetsLoading={g.siteId ? !!assetsSiteLoading[g.siteId] : false}
+              assetsError={g.siteId ? (assetsSiteError[g.siteId] ?? null) : null}
+              onRequestAssets={() => g.siteId ? ensureAssetsLoadedForSite(g.siteId) : Promise.resolve()}
+              showOnlyReview={showOnlyReview}
+            />
+          ))
+        })()}
       </div>
 
       {/* Commit bar */}
       <div className="sticky bottom-0 bg-white border-t border-gray-200 -mx-4 md:-mx-0 px-4 md:px-0 py-3 flex items-center justify-between gap-3">
         <p className="text-xs text-eq-grey">
           {canCommit
-            ? `Ready to commit — ${workingGroups.length} check${workingGroups.length === 1 ? '' : 's'} · ${totalAssets} asset${totalAssets === 1 ? '' : 's'}${skippedCount > 0 ? ` · ${skippedCount} skipped` : ''}.`
-            : 'Resolve the flagged items above before committing.'}
+            ? (() => {
+                const parts: string[] = []
+                parts.push(
+                  `${workingGroups.length} check${workingGroups.length === 1 ? '' : 's'}`,
+                )
+                if (totalRowsResolved > 0) {
+                  const bits: string[] = []
+                  const linked = Object.values(rowResolutions).filter((r) => r.action === 'link').length
+                  const created = Object.values(rowResolutions).filter((r) => r.action === 'create').length
+                  if (linked > 0) bits.push(`${linked} linked`)
+                  if (created > 0) bits.push(`${created} to create`)
+                  if (totalRowsSkipped > 0) bits.push(`${totalRowsSkipped} skipped`)
+                  if (bits.length > 0) parts.push(bits.join(' · '))
+                }
+                if (skippedCount > 0) parts.push(`${skippedCount} group${skippedCount === 1 ? '' : 's'} skipped`)
+                return `Ready to commit — ${parts.join(' · ')}.`
+              })()
+            : `Resolve the flagged items above before committing${totalRowsToReview > 0 ? ` (${totalRowsToReview} row${totalRowsToReview === 1 ? '' : 's'} need${totalRowsToReview === 1 ? 's' : ''} a decision)` : ''}.`}
         </p>
         <Button
           size="sm"
@@ -426,6 +607,14 @@ function CommitSuccess({
           {summary.checksCreated === 1 ? '' : 's'} · {summary.checkAssetsCreated} assets ·{' '}
           {summary.checkItemsCreated} tasks.
         </p>
+        {(summary.rowsLinked > 0 || summary.rowsCreated > 0 || summary.rowsSkipped > 0) && (
+          <p className="text-xs mt-1">
+            Row resolutions applied:
+            {summary.rowsLinked > 0 && ` ${summary.rowsLinked} linked ·`}
+            {summary.rowsCreated > 0 && ` ${summary.rowsCreated} assets created ·`}
+            {summary.rowsSkipped > 0 && ` ${summary.rowsSkipped} skipped`}
+          </p>
+        )}
       </Banner>
 
       <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
@@ -488,6 +677,13 @@ function GroupCard({
   plansLoading,
   plansError,
   onRequestPlans,
+  rowResolutions,
+  setRowResolution,
+  assetsForSite,
+  assetsLoading,
+  assetsError,
+  onRequestAssets,
+  showOnlyReview,
 }: {
   group: PreviewGroup
   resolution: GroupResolution | null
@@ -496,8 +692,24 @@ function GroupCard({
   plansLoading: boolean
   plansError: string | null
   onRequestPlans: () => Promise<void>
+  rowResolutions: RowResolutionsMap
+  setRowResolution: (rowKey: string, resolution: RowResolution | null) => void
+  assetsForSite: AssetOption[] | null
+  assetsLoading: boolean
+  assetsError: string | null
+  onRequestAssets: () => Promise<void>
+  showOnlyReview: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  // Auto-expand groups that still have something needing review so the user
+  // can act without hunting. Fuzzy/none plan matches OR unresolved rows.
+  const unresolvedRowsInGroup = group.assets.filter(
+    (a) => !a.resolvedAssetId && !rowResolutions[`${group.key}:${a.rowNumber}`],
+  ).length
+  const autoExpand =
+    group.matchSource === 'fuzzy' ||
+    group.matchSource === 'none' ||
+    unresolvedRowsInGroup > 0
+  const [open, setOpen] = useState(autoExpand)
 
   const needsResolution =
     group.matchSource === 'fuzzy' || group.matchSource === 'none'
@@ -507,7 +719,7 @@ function GroupCard({
     !group.siteId ||
     (needsResolution && !resolution) ||
     !group.frequency ||
-    group.unmatchedAssetCount > 0 ||
+    unresolvedRowsInGroup > 0 ||
     group.duplicateWorkOrderCount > 0
 
   return (
@@ -614,7 +826,7 @@ function GroupCard({
             </div>
           )}
 
-          <div className="overflow-auto max-h-96">
+          <div className="overflow-auto max-h-[32rem]">
             <table className="min-w-full text-xs">
               <thead className="bg-white sticky top-0 z-10 border-b border-gray-200">
                 <tr className="text-left text-eq-grey uppercase tracking-wide">
@@ -624,41 +836,360 @@ function GroupCard({
                   <th className="px-3 py-2 font-bold">Description</th>
                   <th className="px-3 py-2 font-bold">Location</th>
                   <th className="px-3 py-2 font-bold">EQ Asset</th>
+                  <th className="px-3 py-2 font-bold w-1"></th>
                 </tr>
               </thead>
               <tbody>
-                {group.assets.map((a) => (
-                  <tr key={a.rowNumber} className="border-t border-gray-100 bg-white">
-                    <td className="px-3 py-1.5 text-eq-grey">{a.rowNumber}</td>
-                    <td className="px-3 py-1.5 font-mono">
-                      {a.workOrder}
-                      {a.duplicateWorkOrder && (
-                        <span className="ml-1.5 text-amber-700">(dup)</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-1.5 font-mono">{a.maximoAssetId}</td>
-                    <td className="px-3 py-1.5 text-eq-ink">{a.description || '—'}</td>
-                    <td className="px-3 py-1.5 text-eq-grey">{a.location ?? '—'}</td>
-                    <td className="px-3 py-1.5">
-                      {a.resolvedAssetId ? (
-                        <span className="inline-flex items-center gap-1 text-green-700">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          {a.resolvedAssetName ?? a.resolvedAssetId}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-amber-700">
-                          <AlertTriangle className="w-3.5 h-3.5" />
-                          no match
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {(() => {
+                  const visibleRows = group.assets.filter((a) => {
+                    if (!showOnlyReview) return true
+                    // When filtering: only show rows that still need a decision.
+                    if (a.resolvedAssetId) return false
+                    if (rowResolutions[`${group.key}:${a.rowNumber}`]) return false
+                    return true
+                  })
+                  if (visibleRows.length === 0) {
+                    return (
+                      <tr className="border-t border-gray-100 bg-white">
+                        <td
+                          colSpan={7}
+                          className="px-3 py-3 text-center text-eq-grey italic"
+                        >
+                          No rows need review in this group.
+                        </td>
+                      </tr>
+                    )
+                  }
+                  return visibleRows.map((a) => {
+                    const rowKey = `${group.key}:${a.rowNumber}`
+                    const rr = rowResolutions[rowKey] ?? null
+                    return (
+                      <RowRow
+                        key={a.rowNumber}
+                        asset={a}
+                        rowKey={rowKey}
+                        rowResolution={rr}
+                        setRowResolution={setRowResolution}
+                        assetsForSite={assetsForSite}
+                        assetsLoading={assetsLoading}
+                        assetsError={assetsError}
+                        onRequestAssets={onRequestAssets}
+                        siteId={group.siteId}
+                      />
+                    )
+                  })
+                })()}
               </tbody>
             </table>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Per-row row component ───────────────────────────────────────────────
+
+function RowRow({
+  asset,
+  rowKey,
+  rowResolution,
+  setRowResolution,
+  assetsForSite,
+  assetsLoading,
+  assetsError,
+  onRequestAssets,
+  siteId,
+}: {
+  asset: {
+    rowNumber: number
+    workOrder: string
+    maximoAssetId: string
+    description: string
+    location: string | null
+    resolvedAssetId: string | null
+    resolvedAssetName: string | null
+    duplicateWorkOrder: boolean
+    warnings: string[]
+  }
+  rowKey: string
+  rowResolution: RowResolution | null
+  setRowResolution: (rowKey: string, resolution: RowResolution | null) => void
+  assetsForSite: AssetOption[] | null
+  assetsLoading: boolean
+  assetsError: string | null
+  onRequestAssets: () => Promise<void>
+  siteId: string | null
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const linked =
+    rowResolution?.action === 'link'
+      ? assetsForSite?.find((x) => x.id === rowResolution.assetId) ?? null
+      : null
+
+  const showActions = !asset.resolvedAssetId
+  const bg =
+    rowResolution?.action === 'skip'
+      ? 'bg-gray-50 text-eq-grey'
+      : rowResolution
+        ? 'bg-eq-ice/40'
+        : !asset.resolvedAssetId
+          ? 'bg-amber-50/40'
+          : 'bg-white'
+
+  return (
+    <>
+      <tr className={`border-t border-gray-100 ${bg}`}>
+        <td className="px-3 py-1.5 text-eq-grey align-top">{asset.rowNumber}</td>
+        <td className="px-3 py-1.5 font-mono align-top">
+          {asset.workOrder}
+          {asset.duplicateWorkOrder && (
+            <span className="ml-1.5 text-amber-700">(dup)</span>
+          )}
+        </td>
+        <td className="px-3 py-1.5 font-mono align-top">{asset.maximoAssetId}</td>
+        <td className="px-3 py-1.5 text-eq-ink align-top">{asset.description || '—'}</td>
+        <td className="px-3 py-1.5 text-eq-grey align-top">{asset.location ?? '—'}</td>
+        <td className="px-3 py-1.5 align-top">
+          {asset.resolvedAssetId ? (
+            <span className="inline-flex items-center gap-1 text-green-700">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {asset.resolvedAssetName ?? asset.resolvedAssetId}
+            </span>
+          ) : rowResolution?.action === 'link' && linked ? (
+            <span className="inline-flex items-center gap-1 text-green-700">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Linked — {linked.name}
+            </span>
+          ) : rowResolution?.action === 'link' ? (
+            <span className="inline-flex items-center gap-1 text-green-700">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Linked
+            </span>
+          ) : rowResolution?.action === 'create' ? (
+            <span className="inline-flex items-center gap-1 text-eq-deep">
+              <Plus className="w-3.5 h-3.5" />
+              Will create — {asset.description || asset.maximoAssetId}
+            </span>
+          ) : rowResolution?.action === 'skip' ? (
+            <span className="inline-flex items-center gap-1 text-eq-grey">
+              <SkipForward className="w-3.5 h-3.5" />
+              Skipped
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-amber-700">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              no match
+            </span>
+          )}
+        </td>
+        <td className="px-3 py-1.5 align-top whitespace-nowrap">
+          {showActions && (
+            <div className="inline-flex items-center gap-1">
+              <RowActionButton
+                active={rowResolution?.action === 'link'}
+                icon={<Search className="w-3 h-3" />}
+                onClick={async () => {
+                  if (!siteId) return
+                  if (rowResolution?.action === 'link') {
+                    setRowResolution(rowKey, null)
+                    setPickerOpen(false)
+                    return
+                  }
+                  await onRequestAssets()
+                  setPickerOpen(true)
+                }}
+              >
+                Link
+              </RowActionButton>
+              <RowActionButton
+                active={rowResolution?.action === 'create'}
+                icon={<Plus className="w-3 h-3" />}
+                onClick={() => {
+                  if (rowResolution?.action === 'create') {
+                    setRowResolution(rowKey, null)
+                  } else {
+                    setRowResolution(rowKey, { action: 'create' })
+                    setPickerOpen(false)
+                  }
+                }}
+              >
+                Create
+              </RowActionButton>
+              <RowActionButton
+                active={rowResolution?.action === 'skip'}
+                tone="muted"
+                icon={<SkipForward className="w-3 h-3" />}
+                onClick={() => {
+                  if (rowResolution?.action === 'skip') {
+                    setRowResolution(rowKey, null)
+                  } else {
+                    setRowResolution(rowKey, { action: 'skip' })
+                    setPickerOpen(false)
+                  }
+                }}
+              >
+                Skip
+              </RowActionButton>
+              {rowResolution && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRowResolution(rowKey, null)
+                    setPickerOpen(false)
+                  }}
+                  className="ml-1 text-[10px] text-eq-grey hover:text-eq-deep underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+        </td>
+      </tr>
+      {pickerOpen && rowResolution?.action !== 'create' && rowResolution?.action !== 'skip' && (
+        <tr className="border-t border-gray-100 bg-white">
+          <td colSpan={7} className="px-3 py-2">
+            <AssetPicker
+              assets={assetsForSite}
+              loading={assetsLoading}
+              error={assetsError}
+              selectedId={rowResolution?.action === 'link' ? rowResolution.assetId : null}
+              onPick={(assetId) => {
+                setRowResolution(rowKey, { action: 'link', assetId })
+                setPickerOpen(false)
+              }}
+              onCancel={() => setPickerOpen(false)}
+            />
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function RowActionButton({
+  active,
+  tone = 'primary',
+  icon,
+  children,
+  onClick,
+}: {
+  active: boolean
+  tone?: 'primary' | 'muted'
+  icon: React.ReactNode
+  children: React.ReactNode
+  onClick: () => void
+}) {
+  const base =
+    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium transition-colors'
+  const cls = active
+    ? tone === 'muted'
+      ? 'bg-gray-600 text-white border-gray-600'
+      : 'bg-eq-sky text-white border-eq-sky'
+    : 'bg-white text-eq-ink border-gray-300 hover:border-eq-sky hover:text-eq-deep'
+  return (
+    <button type="button" onClick={onClick} className={`${base} ${cls}`}>
+      {icon}
+      {children}
+    </button>
+  )
+}
+
+// ── Asset picker (searchable) ───────────────────────────────────────────
+
+function AssetPicker({
+  assets,
+  loading,
+  error,
+  selectedId,
+  onPick,
+  onCancel,
+}: {
+  assets: AssetOption[] | null
+  loading: boolean
+  error: string | null
+  selectedId: string | null
+  onPick: (assetId: string) => void
+  onCancel: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const filtered = useMemo(() => {
+    if (!assets) return []
+    const q = query.trim().toLowerCase()
+    if (!q) return assets.slice(0, 100)
+    return assets
+      .filter((a) => {
+        const name = a.name.toLowerCase()
+        const mx = (a.maximoId ?? '').toLowerCase()
+        const loc = (a.location ?? '').toLowerCase()
+        return name.includes(q) || mx.includes(q) || loc.includes(q)
+      })
+      .slice(0, 100)
+  }, [assets, query])
+
+  return (
+    <div className="border border-gray-200 rounded-md overflow-hidden">
+      <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-gray-200 bg-white">
+        <Search className="w-3.5 h-3.5 text-eq-grey shrink-0" />
+        <input
+          type="text"
+          placeholder="Search asset by name, Maximo ID, or location…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="flex-1 bg-transparent text-xs text-eq-ink placeholder-eq-grey/70 focus:outline-none"
+          autoFocus
+        />
+        {loading && <span className="text-[10px] text-eq-grey">loading…</span>}
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-[11px] text-eq-grey hover:text-eq-deep inline-flex items-center gap-1"
+        >
+          <X className="w-3 h-3" /> Cancel
+        </button>
+      </div>
+      {error && (
+        <div className="px-3 py-2 text-xs text-red-700 bg-red-50">{error}</div>
+      )}
+      <div className="max-h-48 overflow-auto bg-white">
+        {assets === null ? (
+          <div className="px-3 py-3 text-xs text-eq-grey">Loading assets…</div>
+        ) : filtered.length === 0 ? (
+          <div className="px-3 py-3 text-xs text-eq-grey">
+            No matching assets at this site.
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {filtered.map((a) => {
+              const isPicked = a.id === selectedId
+              return (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    onClick={() => onPick(a.id)}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-eq-ice/50 ${
+                      isPicked ? 'bg-eq-ice/70' : ''
+                    }`}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-eq-deep shrink-0">
+                        {a.maximoId ?? '—'}
+                      </span>
+                      <span className="text-eq-ink truncate">{a.name}</span>
+                      {a.location && (
+                        <span className="text-eq-grey text-[10px] ml-auto truncate shrink">
+                          {a.location}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }
