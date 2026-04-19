@@ -170,7 +170,7 @@ export function Sidebar({ active, onNavigate, jobCtx }: Props) {
       {!collapsed && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-12 select-none opacity-[0.06]"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-32 select-none opacity-[0.06]"
         >
           <EqMark variant="white" size={90} fit="tight" aria-hidden />
         </div>
