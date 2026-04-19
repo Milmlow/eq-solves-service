@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { Workbook } from 'exceljs'
 import {
   parseWorkbook,
   stripSitePrefix,
   splitJobPlanCode,
   mapFrequencySuffix,
   FREQUENCY_SUFFIX_MAP,
+  EXPECTED_HEADERS,
+  DATA_SHEET_NAME,
 } from '@/lib/import/delta-wo-parser'
 
 const FIXTURE = join(__dirname, 'fixtures', 'WO_Aug_2025_Delta.xlsx')
@@ -240,5 +243,87 @@ describe('parseWorkbook — WO Aug 2025_Delta.xlsx fixture', () => {
     const totalInGroups = groups.reduce((sum, g) => sum + g.rows.length, 0)
     expect(totalInGroups).toBe(rows.length)
     expect(totalInGroups).toBe(250)
+  })
+})
+
+// ── Sheet selection ────────────────────────────────────────────────────
+//
+// The real-world Maximo export ships a pivot tab (Sheet1) as the active /
+// first sheet, with the actual work-order data on a sibling tab named
+// "List of Work Orders". The fixture only contains the data tab, so prior
+// to 2026-04-19 the parser silently picked the data sheet by index. This
+// suite exercises the multi-sheet scenarios using in-memory workbooks.
+
+async function buildBuffer(build: (wb: Workbook) => void): Promise<Buffer> {
+  const wb = new Workbook()
+  build(wb)
+  const ab = await wb.xlsx.writeBuffer()
+  return Buffer.from(ab as ArrayBuffer)
+}
+
+function writeHeaderedDataSheet(wb: Workbook, name: string) {
+  const ws = wb.addWorksheet(name)
+  ws.addRow([...EXPECTED_HEADERS])
+  ws.addRow([
+    'AU01-SY3',
+    '3962180',
+    'SY3-A1-TPL-01',
+    'ELEC \\ TRNSFMR',
+    'N',
+    'SY3-GF16',
+    '1731',
+    'PM',
+    'INPRG',
+    'LVACB-A',
+    new Date(Date.UTC(2025, 7, 20)),
+    new Date(Date.UTC(2025, 6, 17)),
+  ])
+}
+
+describe('parseWorkbook — sheet selection', () => {
+  it('finds the data tab when an unrelated sheet is first/active', async () => {
+    const buf = await buildBuffer((wb) => {
+      // Mimic the live Aug 2025 file: pivot first, data tab second.
+      const pivot = wb.addWorksheet('Sheet1')
+      pivot.addRow([null]) // empty header row — the original failure mode
+      pivot.addRow(['Row Labels'])
+      pivot.addRow(['LVACB-A'])
+      writeHeaderedDataSheet(wb, DATA_SHEET_NAME)
+    })
+
+    const result = await parseWorkbook(buf)
+
+    expect(result.errors).toEqual([])
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0].siteCode).toBe('SY3')
+  })
+
+  it('falls back to header scan when DATA_SHEET_NAME is absent', async () => {
+    const buf = await buildBuffer((wb) => {
+      wb.addWorksheet('Pivot') // empty pivot
+      writeHeaderedDataSheet(wb, 'WO Data') // non-standard name, but valid headers
+    })
+
+    const result = await parseWorkbook(buf)
+
+    expect(result.errors).toEqual([])
+    expect(result.rows).toHaveLength(1)
+  })
+
+  it('returns a clear workbook-level error when no sheet has the right headers', async () => {
+    const buf = await buildBuffer((wb) => {
+      const ws = wb.addWorksheet('Sheet1')
+      ws.addRow(['Some', 'Other', 'Spreadsheet'])
+      ws.addRow(['1', '2', '3'])
+    })
+
+    const result = await parseWorkbook(buf)
+
+    expect(result.rows).toEqual([])
+    expect(result.groups).toEqual([])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].rowNumber).toBe(0)
+    expect(result.errors[0].message).toMatch(/Could not find the work-order data tab/)
+    expect(result.errors[0].message).toContain('"Sheet1"')
   })
 })

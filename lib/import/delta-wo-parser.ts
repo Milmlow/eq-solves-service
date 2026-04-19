@@ -11,7 +11,7 @@
  * or a unit test.
  */
 
-import { Workbook } from 'exceljs'
+import { Workbook, Worksheet } from 'exceljs'
 
 // ── Frequency suffix → EQ frequency enum ────────────────────────────
 // Keys match the enum values used by maintenance_checks.frequency in the
@@ -120,6 +120,14 @@ export const EXPECTED_HEADERS = [
   'Reported Date',
 ] as const
 
+/**
+ * The name Maximo gives the data tab in the monthly Delta export. When the
+ * file also contains pivot/summary tabs (the common real-world case — see
+ * `WO Aug 2025_Delta.xlsx`, which ships `Sheet1` as an active pivot), we
+ * want to land on the headered tab regardless of sheet order.
+ */
+export const DATA_SHEET_NAME = 'List of Work Orders'
+
 // ── Pure helpers (exported for unit testing) ────────────────────────
 
 /**
@@ -159,6 +167,43 @@ export function mapFrequencySuffix(suffix: string): FrequencyEnum | null {
   return FREQUENCY_SUFFIX_MAP[key] ?? null
 }
 
+/**
+ * Read row 1 of a worksheet as trimmed strings, padded out to
+ * EXPECTED_HEADERS length so callers can index without bounds checks.
+ */
+function readHeaderRow(ws: Worksheet): string[] {
+  const headerRow = ws.getRow(1)
+  const out: string[] = []
+  for (let c = 1; c <= EXPECTED_HEADERS.length; c++) {
+    const raw = headerRow.getCell(c).value
+    out.push(raw == null ? '' : String(raw).trim())
+  }
+  return out
+}
+
+/** True when row 1 of `ws` matches every expected Delta column header. */
+function headersMatch(ws: Worksheet): boolean {
+  const actual = readHeaderRow(ws)
+  return EXPECTED_HEADERS.every((h, i) => actual[i] === h)
+}
+
+/**
+ * Pick the sheet that holds the work-order data. Maximo exports usually
+ * land on `List of Work Orders`, but the file may also include pivot tabs
+ * (`Sheet1`, etc.) that get marked active. Order of preference:
+ *   1. Sheet named exactly DATA_SHEET_NAME, if present
+ *   2. First sheet whose row 1 matches EXPECTED_HEADERS
+ *   3. null — caller emits a workbook-level error
+ */
+export function findDataSheet(wb: Workbook): Worksheet | null {
+  const named = wb.getWorksheet(DATA_SHEET_NAME)
+  if (named) return named
+  for (const ws of wb.worksheets) {
+    if (headersMatch(ws)) return ws
+  }
+  return null
+}
+
 /** Compose the stable group key used for deduplication. */
 export function groupKey(
   siteCode: string,
@@ -186,8 +231,7 @@ export async function parseWorkbook(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await wb.xlsx.load(source as any)
 
-  const ws = wb.worksheets[0]
-  if (!ws) {
+  if (wb.worksheets.length === 0) {
     return {
       rows: [],
       groups: [],
@@ -195,20 +239,37 @@ export async function parseWorkbook(
     }
   }
 
+  const ws = findDataSheet(wb)
+  if (!ws) {
+    const available = wb.worksheets.map((w) => `"${w.name}"`).join(', ')
+    return {
+      rows: [],
+      groups: [],
+      errors: [
+        {
+          rowNumber: 0,
+          message:
+            `Could not find the work-order data tab. Expected a sheet named ` +
+            `"${DATA_SHEET_NAME}" (or any sheet whose row 1 starts with ` +
+            `"${EXPECTED_HEADERS[0]}, ${EXPECTED_HEADERS[1]}, ${EXPECTED_HEADERS[2]}…"). ` +
+            `Available sheets: ${available}.`,
+        },
+      ],
+    }
+  }
+
   const errors: ParseError[] = []
 
   // ── Header validation ──────────────────────────────────────────────
-  const headerRow = ws.getRow(1)
-  const actualHeaders: string[] = []
-  for (let c = 1; c <= EXPECTED_HEADERS.length; c++) {
-    const raw = headerRow.getCell(c).value
-    actualHeaders.push(raw == null ? '' : String(raw).trim())
-  }
+  // findDataSheet guarantees a match when the sheet was located by header
+  // scan, but the named-sheet path (DATA_SHEET_NAME) could still have a
+  // mangled row 1 — validate explicitly so the user gets a precise error.
+  const actualHeaders = readHeaderRow(ws)
   for (let i = 0; i < EXPECTED_HEADERS.length; i++) {
     if (actualHeaders[i] !== EXPECTED_HEADERS[i]) {
       errors.push({
         rowNumber: 1,
-        message: `Column ${i + 1} header mismatch: expected "${EXPECTED_HEADERS[i]}", got "${actualHeaders[i] || '(empty)'}"`,
+        message: `Column ${i + 1} header mismatch on sheet "${ws.name}": expected "${EXPECTED_HEADERS[i]}", got "${actualHeaders[i] || '(empty)'}"`,
       })
     }
   }
