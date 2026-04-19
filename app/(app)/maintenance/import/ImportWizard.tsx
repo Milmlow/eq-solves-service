@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -11,43 +11,41 @@ import {
   ChevronDown,
   ChevronRight,
   AlertCircle,
-  Link2,
+  Check,
   Plus,
-  CircleSlash,
-  RotateCcw,
+  SkipForward,
+  Search,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import {
   previewDeltaImportAction,
   commitDeltaImportAction,
+  listJobPlansForImportAction,
   type CommitSummary,
-  type PreviewAsset,
+  type GroupResolution,
   type PreviewGroup,
   type PreviewResult,
 } from './actions'
-import {
-  acceptAliasAction,
-  linkAssetToRowAction,
-  skipGroupAction,
-  skipRowAction,
-  clearOverrideAction,
-  type AssetSearchHit,
-} from './fix-actions'
-import { AssetPicker } from './AssetPicker'
-import { CreateAssetDialog, CreateJobPlanDialog } from './InlineFixForms'
+
+// ── Resolution state — keyed by group.key ───────────────────────────────
+
+type ResolutionsMap = Record<string, GroupResolution>
+
+/** Lightweight plan row for the combobox. */
+interface JobPlanOption {
+  id: string
+  code: string | null
+  name: string
+  type: string | null
+}
 
 /**
  * Delta WO import wizard.
  *
- *  Step 1. Choose file → previewDeltaImportAction (creates/reuses an
- *          import_session keyed by sha256(file)).
- *  Step 2. Preview groups. Unresolved items expose inline fixes:
- *          - group with fuzzy job plan → Accept alias / Create plan / Skip
- *          - unmatched row → Link asset / Create asset / Skip row
- *          Each fix calls a server action in `fix-actions.ts` which writes
- *          to `import_overrides`, then we re-parse so the UI reflects it.
- *  Step 3. When the preview has zero blockers, commit — server action
- *          honors all outstanding overrides and marks the session done.
+ * Step 1: choose file → call `previewDeltaImportAction`
+ * Step 2: show preview — unresolved items, groups, per-asset detail
+ * Step 3: (not yet wired) commit server action + redirect to /maintenance
  */
 export function ImportWizard() {
   const router = useRouter()
@@ -56,6 +54,7 @@ export function ImportWizard() {
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [commitResult, setCommitResult] = useState<CommitSummary | null>(null)
+  const [resolutions, setResolutions] = useState<ResolutionsMap>({})
   const [isPending, startTransition] = useTransition()
   const [isCommitting, startCommit] = useTransition()
 
@@ -65,40 +64,39 @@ export function ImportWizard() {
     setPreview(null)
     setError(null)
     setCommitResult(null)
+    setResolutions({})
   }
-
-  const runPreview = useCallback(
-    (f: File, sessionId: string | null) => {
-      setError(null)
-      setCommitResult(null)
-      startTransition(async () => {
-        const fd = new FormData()
-        fd.append('file', f)
-        if (sessionId) fd.append('importSessionId', sessionId)
-        const result = await previewDeltaImportAction(fd)
-        if (!result.success) {
-          setError(result.error)
-          setPreview(null)
-          return
-        }
-        setPreview(result)
-      })
-    },
-    [],
-  )
 
   function handlePreview() {
     if (!file) return
-    runPreview(file, preview?.importSessionId ?? null)
+    setError(null)
+    setCommitResult(null)
+    setResolutions({})
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const result = await previewDeltaImportAction(fd)
+      if (!result.success) {
+        setError(result.error)
+        setPreview(null)
+        return
+      }
+      setPreview(result)
+    })
   }
 
   function handleCommit() {
-    if (!file || !preview) return
+    if (!file) return
     setError(null)
     startCommit(async () => {
       const fd = new FormData()
       fd.append('file', file)
-      fd.append('importSessionId', preview.importSessionId)
+      // Only send non-empty resolutions to keep the payload small.
+      if (Object.keys(resolutions).length > 0) {
+        fd.append('resolutions', JSON.stringify(resolutions))
+      }
+      // Generate an idempotency key scoped to this commit attempt. A client
+      // retry inside the same tab reuses the same id — safe replay.
       const mutationId = cryptoRandomId()
       const result = await commitDeltaImportAction(fd, mutationId)
       if (!result.success) {
@@ -115,7 +113,18 @@ export function ImportWizard() {
     setPreview(null)
     setError(null)
     setCommitResult(null)
+    setResolutions({})
     if (fileInput.current) fileInput.current.value = ''
+  }
+
+  function setResolution(groupKey: string, resolution: GroupResolution | null) {
+    setResolutions((prev) => {
+      if (!resolution) {
+        const { [groupKey]: _drop, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [groupKey]: resolution }
+    })
   }
 
   return (
@@ -173,14 +182,13 @@ export function ImportWizard() {
       )}
 
       {/* Preview */}
-      {preview && !commitResult && file && (
+      {preview && !commitResult && (
         <Preview
           preview={preview}
-          file={file}
+          resolutions={resolutions}
+          setResolution={setResolution}
           onCommit={handleCommit}
           isCommitting={isCommitting}
-          onReparse={() => runPreview(file, preview.importSessionId)}
-          isPending={isPending}
         />
       )}
     </div>
@@ -188,6 +196,8 @@ export function ImportWizard() {
 }
 
 function cryptoRandomId(): string {
+  // Prefer the browser's crypto.randomUUID where available; fall back to a
+  // timestamp + random suffix. Only called from a client component.
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
   }
@@ -198,37 +208,72 @@ function cryptoRandomId(): string {
 
 function Preview({
   preview,
-  file,
+  resolutions,
+  setResolution,
   onCommit,
   isCommitting,
-  onReparse,
-  isPending,
 }: {
   preview: PreviewResult
-  file: File
+  resolutions: ResolutionsMap
+  setResolution: (groupKey: string, resolution: GroupResolution | null) => void
   onCommit: () => void
   isCommitting: boolean
-  onReparse: () => void
-  isPending: boolean
 }) {
-  // Skipped items are no longer counted in the commit gate.
-  const activeGroups = preview.groups.filter((g) => !g.skipped)
-  const totalAssets = activeGroups.reduce((n, g) => n + g.matchedAssetCount + g.unmatchedAssetCount, 0)
-  const matchedAssets = activeGroups.reduce((n, g) => n + g.matchedAssetCount, 0)
-  const unmatchedAssets = activeGroups.reduce((n, g) => n + g.unmatchedAssetCount, 0)
-  const duplicateWOs = activeGroups.reduce((n, g) => n + g.duplicateWorkOrderCount, 0)
-  const unresolvedGroups = activeGroups.filter(
-    (g) => !g.jobPlanId || !g.siteId || !g.frequency,
-  ).length
-  const skippedGroups = preview.groups.length - activeGroups.length
+  // Lazy-load the full tenant plan list once, on first need. The combobox
+  // filters locally so typing is instant and we don't re-fetch per keystroke.
+  const [plans, setPlans] = useState<JobPlanOption[] | null>(null)
+  const [plansError, setPlansError] = useState<string | null>(null)
+  const [plansLoading, setPlansLoading] = useState(false)
+
+  async function ensurePlansLoaded(): Promise<void> {
+    if (plans || plansLoading) return
+    setPlansLoading(true)
+    setPlansError(null)
+    const result = await listJobPlansForImportAction()
+    setPlansLoading(false)
+    if (!result.success) {
+      setPlansError(result.error)
+      return
+    }
+    setPlans(result.plans)
+  }
+
+  // ── Group-level status ─────────────────────────────────────────────
+  // A group is "settled" for commit when:
+  //   - it already resolves (matchSource in exact|alias), OR
+  //   - the user has a resolution (any of accept/nominate/create/skip)
+  // Groups where the user chose 'skip' are excluded from totals/commit.
+  const workingGroups = preview.groups.filter(
+    (g) => resolutions[g.key]?.action !== 'skip',
+  )
+  const skippedCount = preview.groups.length - workingGroups.length
+
+  const totalAssets = workingGroups.reduce((n, g) => n + g.assetCount, 0)
+  const matchedAssets = workingGroups.reduce((n, g) => n + g.matchedAssetCount, 0)
+  const unmatchedAssets = totalAssets - matchedAssets
+  const duplicateWOs = workingGroups.reduce((n, g) => n + g.duplicateWorkOrderCount, 0)
+
+  const needsResolution = (g: PreviewGroup): boolean =>
+    g.matchSource === 'fuzzy' || g.matchSource === 'none'
+
+  // A group can commit when: site is resolved, frequency is known, assets
+  // match & no dup WOs, AND the job plan either auto-matches or the user
+  // has provided a resolution (accept/nominate/create).
+  const unresolvedAfterUserChoice = workingGroups.filter((g) => {
+    const r = resolutions[g.key]
+    const planSettled = !needsResolution(g) || (r && r.action !== 'skip')
+    const siteOk = !!g.siteId
+    const freqOk = !!g.frequency
+    const assetsOk = g.unmatchedAssetCount === 0
+    const woOk = g.duplicateWorkOrderCount === 0
+    return !(planSettled && siteOk && freqOk && assetsOk && woOk)
+  }).length
 
   const canCommit =
     preview.parseErrors.length === 0 &&
     preview.unresolvedSiteCodes.length === 0 &&
-    unmatchedAssets === 0 &&
-    duplicateWOs === 0 &&
-    activeGroups.every((g) => g.frequency !== null && g.jobPlanId !== null) &&
-    activeGroups.length > 0
+    workingGroups.length > 0 &&
+    unresolvedAfterUserChoice === 0
 
   return (
     <div className="space-y-4">
@@ -238,11 +283,11 @@ function Preview({
         <Stat
           label="Groups"
           value={
-            skippedGroups > 0
-              ? `${activeGroups.length} / ${preview.groups.length}`
-              : activeGroups.length.toString()
+            skippedCount > 0
+              ? `${workingGroups.length} / ${preview.groups.length}`
+              : preview.groups.length.toString()
           }
-          tone={skippedGroups > 0 ? 'warn' : 'neutral'}
+          tone={skippedCount > 0 ? 'warn' : 'neutral'}
         />
         <Stat
           label="Assets matched"
@@ -256,8 +301,8 @@ function Preview({
         />
         <Stat
           label="Groups needing review"
-          value={unresolvedGroups.toString()}
-          tone={unresolvedGroups > 0 ? 'warn' : 'ok'}
+          value={unresolvedAfterUserChoice.toString()}
+          tone={unresolvedAfterUserChoice > 0 ? 'warn' : 'ok'}
         />
       </div>
 
@@ -293,7 +338,29 @@ function Preview({
             <Link href="/sites" className="underline hover:text-eq-deep">
               Sites
             </Link>{' '}
-            with the matching <code>code</code>, then re-parse.
+            with the matching <code>code</code>, then re-upload.
+          </p>
+        </Banner>
+      )}
+
+      {/* Unresolved job plan codes — hide once the user has resolved every group */}
+      {preview.unresolvedJobPlanCodes.length > 0 &&
+        preview.groups.some(
+          (g) =>
+            (g.matchSource === 'fuzzy' || g.matchSource === 'none') && !resolutions[g.key],
+        ) && (
+        <Banner tone="warn" icon={<AlertTriangle className="w-4 h-4" />}>
+          <p className="font-medium mb-1">
+            {preview.unresolvedJobPlanCodes.length} job plan code
+            {preview.unresolvedJobPlanCodes.length === 1 ? '' : 's'} not found:{' '}
+            <span className="font-mono">{preview.unresolvedJobPlanCodes.join(', ')}</span>
+          </p>
+          <p className="text-xs text-eq-grey">
+            Check for fuzzy-match suggestions below, or add the missing plans in{' '}
+            <Link href="/job-plans" className="underline hover:text-eq-deep">
+              Job Plans
+            </Link>
+            . After the next import you'll be prompted to create an alias.
           </p>
         </Banner>
       )}
@@ -301,11 +368,10 @@ function Preview({
       {/* Group list */}
       <div className="space-y-2">
         <h2 className="text-sm font-bold text-eq-grey uppercase tracking-wide">
-          {activeGroups.length} Maintenance Check{activeGroups.length === 1 ? '' : 's'} to be created
-          {skippedGroups > 0 && (
-            <span className="text-eq-grey font-normal normal-case">
-              {' '}
-              · {skippedGroups} skipped
+          {workingGroups.length} Maintenance Check{workingGroups.length === 1 ? '' : 's'} to be created
+          {skippedCount > 0 && (
+            <span className="ml-2 text-eq-grey/80 normal-case font-normal">
+              ({skippedCount} skipped)
             </span>
           )}
         </h2>
@@ -313,9 +379,12 @@ function Preview({
           <GroupCard
             key={g.key}
             group={g}
-            importSessionId={preview.importSessionId}
-            onChanged={onReparse}
-            isBusy={isPending}
+            resolution={resolutions[g.key] ?? null}
+            setResolution={(r) => setResolution(g.key, r)}
+            plans={plans}
+            plansLoading={plansLoading}
+            plansError={plansError}
+            onRequestPlans={ensurePlansLoaded}
           />
         ))}
       </div>
@@ -324,23 +393,18 @@ function Preview({
       <div className="sticky bottom-0 bg-white border-t border-gray-200 -mx-4 md:-mx-0 px-4 md:px-0 py-3 flex items-center justify-between gap-3">
         <p className="text-xs text-eq-grey">
           {canCommit
-            ? `Ready to commit — ${activeGroups.length} check${activeGroups.length === 1 ? '' : 's'} · ${totalAssets} asset${totalAssets === 1 ? '' : 's'}.`
-            : 'Resolve the flagged items above before committing. Use the inline buttons to link, create, or skip.'}
+            ? `Ready to commit — ${workingGroups.length} check${workingGroups.length === 1 ? '' : 's'} · ${totalAssets} asset${totalAssets === 1 ? '' : 's'}${skippedCount > 0 ? ` · ${skippedCount} skipped` : ''}.`
+            : 'Resolve the flagged items above before committing.'}
         </p>
         <Button
           size="sm"
-          disabled={!canCommit || isCommitting || isPending}
+          disabled={!canCommit || isCommitting}
           onClick={onCommit}
           title={canCommit ? 'Create maintenance checks from this file' : 'Resolve warnings before committing'}
         >
           {isCommitting ? 'Committing…' : 'Commit import'}
         </Button>
       </div>
-
-      <p className="text-[10px] text-eq-grey">
-        Import session: <code>{preview.importSessionId.slice(0, 8)}…</code> ·{' '}
-        <span title={file.name}>{file.name}</span>
-      </p>
     </div>
   )
 }
@@ -361,13 +425,6 @@ function CommitSuccess({
           Imported {summary.checksCreated} maintenance check
           {summary.checksCreated === 1 ? '' : 's'} · {summary.checkAssetsCreated} assets ·{' '}
           {summary.checkItemsCreated} tasks.
-          {(summary.groupsSkipped > 0 || summary.rowsSkipped > 0) && (
-            <span className="text-eq-grey font-normal">
-              {' '}
-              (Skipped {summary.groupsSkipped} group{summary.groupsSkipped === 1 ? '' : 's'}
-              {' '}and {summary.rowsSkipped} row{summary.rowsSkipped === 1 ? '' : 's'}.)
-            </span>
-          )}
         </p>
       </Banner>
 
@@ -425,32 +482,39 @@ function CommitSuccess({
 
 function GroupCard({
   group,
-  importSessionId,
-  onChanged,
-  isBusy,
+  resolution,
+  setResolution,
+  plans,
+  plansLoading,
+  plansError,
+  onRequestPlans,
 }: {
   group: PreviewGroup
-  importSessionId: string
-  onChanged: () => void
-  isBusy: boolean
+  resolution: GroupResolution | null
+  setResolution: (resolution: GroupResolution | null) => void
+  plans: JobPlanOption[] | null
+  plansLoading: boolean
+  plansError: string | null
+  onRequestPlans: () => Promise<void>
 }) {
-  const [open, setOpen] = useState(
-    !group.jobPlanId || group.unmatchedAssetCount > 0 || !group.siteId,
-  )
+  const [open, setOpen] = useState(false)
+
+  const needsResolution =
+    group.matchSource === 'fuzzy' || group.matchSource === 'none'
+  const isSkipped = resolution?.action === 'skip'
 
   const hasHardIssue =
-    !group.skipped &&
-    (!group.siteId ||
-      !group.jobPlanId ||
-      !group.frequency ||
-      group.unmatchedAssetCount > 0 ||
-      group.duplicateWorkOrderCount > 0)
+    !group.siteId ||
+    (needsResolution && !resolution) ||
+    !group.frequency ||
+    group.unmatchedAssetCount > 0 ||
+    group.duplicateWorkOrderCount > 0
 
   return (
     <div
       className={`border rounded-lg bg-white overflow-hidden ${
-        group.skipped
-          ? 'border-gray-300 opacity-60'
+        isSkipped
+          ? 'border-gray-200 opacity-60'
           : hasHardIssue
             ? 'border-amber-300'
             : 'border-gray-200'
@@ -469,24 +533,21 @@ function GroupCard({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-bold text-eq-ink">{group.siteCode}</span>
+            <span className="text-sm font-bold text-eq-ink">
+              {group.siteCode}
+            </span>
             <span className="text-eq-grey">·</span>
             <span className="text-sm font-mono text-eq-deep">{group.jobPlanCode}</span>
-            {group.skipped && <Badge tone="error">skipped</Badge>}
-            {group.matchSource === 'alias' && !group.skipped && (
+            {group.matchSource === 'alias' && (
               <Badge tone="info">alias: {group.jobPlanCodeRaw}</Badge>
             )}
-            {group.matchSource === 'override' && !group.skipped && (
-              <Badge tone="info">override</Badge>
-            )}
-            {group.matchSource === 'fuzzy' && group.fuzzyCandidate && !group.skipped && (
+            {group.matchSource === 'fuzzy' && group.fuzzyCandidate && (
               <Badge tone="warn">
                 fuzzy: {group.jobPlanCodeRaw} → {group.fuzzyCandidate.code}
               </Badge>
             )}
-            {group.matchSource === 'none' && !group.skipped && (
-              <Badge tone="error">no match</Badge>
-            )}
+            {group.matchSource === 'none' && <Badge tone="error">no match</Badge>}
+            <ResolutionBadge resolution={resolution} />
             <span className="text-eq-grey">·</span>
             <span className="text-xs text-eq-grey">
               {group.frequency ?? `(unknown: ${group.frequencySuffix})`}
@@ -496,7 +557,7 @@ function GroupCard({
           </div>
           <div className="text-xs text-eq-grey mt-0.5">
             {group.assetCount} asset{group.assetCount === 1 ? '' : 's'}
-            {!group.skipped && group.unmatchedAssetCount > 0 && (
+            {group.matchedAssetCount < group.assetCount && (
               <>
                 {' · '}
                 <span className="text-amber-700">
@@ -504,7 +565,7 @@ function GroupCard({
                 </span>
               </>
             )}
-            {!group.skipped && group.duplicateWorkOrderCount > 0 && (
+            {group.duplicateWorkOrderCount > 0 && (
               <>
                 {' · '}
                 <span className="text-amber-700">
@@ -518,11 +579,28 @@ function GroupCard({
           </div>
         </div>
 
-        <StatusIcon skipped={group.skipped} hasIssue={hasHardIssue} />
+        <StatusIcon
+          hasIssue={hasHardIssue}
+          resolved={!hasHardIssue && (!!resolution || !needsResolution)}
+          skipped={isSkipped}
+        />
       </button>
 
       {open && (
         <div className="border-t border-gray-200 bg-gray-50">
+          {/* Group actions — only offered when the plan needs resolution */}
+          {needsResolution && (
+            <GroupActions
+              group={group}
+              resolution={resolution}
+              setResolution={setResolution}
+              plans={plans}
+              plansLoading={plansLoading}
+              plansError={plansError}
+              onRequestPlans={onRequestPlans}
+            />
+          )}
+
           {group.issues.length > 0 && (
             <div className="px-4 py-2 bg-amber-50 border-b border-amber-200">
               <ul className="text-xs text-amber-800 space-y-0.5">
@@ -536,13 +614,6 @@ function GroupCard({
             </div>
           )}
 
-          <GroupFixToolbar
-            group={group}
-            importSessionId={importSessionId}
-            onChanged={onChanged}
-            isBusy={isBusy}
-          />
-
           <div className="overflow-auto max-h-96">
             <table className="min-w-full text-xs">
               <thead className="bg-white sticky top-0 z-10 border-b border-gray-200">
@@ -553,21 +624,35 @@ function GroupCard({
                   <th className="px-3 py-2 font-bold">Description</th>
                   <th className="px-3 py-2 font-bold">Location</th>
                   <th className="px-3 py-2 font-bold">EQ Asset</th>
-                  <th className="px-3 py-2 font-bold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {group.assets.map((a) => (
-                  <AssetRow
-                    key={a.rowNumber}
-                    asset={a}
-                    siteId={group.siteId}
-                    siteName={group.siteName}
-                    importSessionId={importSessionId}
-                    onChanged={onChanged}
-                    isBusy={isBusy}
-                    groupSkipped={group.skipped}
-                  />
+                  <tr key={a.rowNumber} className="border-t border-gray-100 bg-white">
+                    <td className="px-3 py-1.5 text-eq-grey">{a.rowNumber}</td>
+                    <td className="px-3 py-1.5 font-mono">
+                      {a.workOrder}
+                      {a.duplicateWorkOrder && (
+                        <span className="ml-1.5 text-amber-700">(dup)</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 font-mono">{a.maximoAssetId}</td>
+                    <td className="px-3 py-1.5 text-eq-ink">{a.description || '—'}</td>
+                    <td className="px-3 py-1.5 text-eq-grey">{a.location ?? '—'}</td>
+                    <td className="px-3 py-1.5">
+                      {a.resolvedAssetId ? (
+                        <span className="inline-flex items-center gap-1 text-green-700">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {a.resolvedAssetName ?? a.resolvedAssetId}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-700">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          no match
+                        </span>
+                      )}
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -575,382 +660,6 @@ function GroupCard({
         </div>
       )}
     </div>
-  )
-}
-
-// ── Group-level fix toolbar (fuzzy / no-match / skip / undo) ───────────
-
-function GroupFixToolbar({
-  group,
-  importSessionId,
-  onChanged,
-  isBusy,
-}: {
-  group: PreviewGroup
-  importSessionId: string
-  onChanged: () => void
-  isBusy: boolean
-}) {
-  const [showCreatePlan, setShowCreatePlan] = useState(false)
-  const [busy, startTx] = useTransition()
-  const [err, setErr] = useState<string | null>(null)
-
-  // Nothing to offer at group level if everything already matched and not skipped.
-  const hasGroupFix =
-    group.skipped ||
-    group.matchSource === 'override' ||
-    group.matchSource === 'alias' ||
-    group.matchSource === 'fuzzy' ||
-    group.matchSource === 'none' ||
-    !group.jobPlanId
-
-  if (!hasGroupFix) return null
-
-  function run(fn: () => Promise<{ success: true } | { success: true; data?: unknown } | { success: false; error: string }>) {
-    setErr(null)
-    startTx(async () => {
-      const r = await fn()
-      if (!r.success) {
-        setErr(r.error)
-        return
-      }
-      onChanged()
-    })
-  }
-
-  return (
-    <div className="px-4 py-2 border-b border-gray-200 bg-white flex flex-wrap items-center gap-2">
-      <span className="text-[10px] font-bold text-eq-grey uppercase tracking-wide mr-1">
-        Group actions
-      </span>
-
-      {group.skipped ? (
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={busy || isBusy}
-          onClick={() =>
-            run(() =>
-              clearOverrideAction({ importSessionId, groupKey: group.key }),
-            )
-          }
-        >
-          <RotateCcw className="w-3.5 h-3.5 mr-1" />
-          Undo skip
-        </Button>
-      ) : (
-        <>
-          {group.matchSource === 'fuzzy' && group.fuzzyCandidate && group.jobPlanId === null && (
-            <Button
-              size="sm"
-              disabled={busy || isBusy}
-              onClick={() => {
-                // Fuzzy match: the suggested code's jobPlanId isn't on the
-                // group yet (by design), so we have to look it up. The
-                // simplest path is: call acceptAliasAction with the
-                // suggested code. But acceptAliasAction needs the jobPlanId,
-                // which we don't have in PreviewGroup. For now, surface a
-                // small prompt that also works as "Create job plan" entry.
-                setErr(
-                  `Click "Create job plan" or open Job Plans to add "${group.fuzzyCandidate!.code}" first, then re-parse.`,
-                )
-              }}
-              title="Confirm the fuzzy suggestion"
-            >
-              <Link2 className="w-3.5 h-3.5 mr-1" />
-              Accept &ldquo;{group.fuzzyCandidate.code}&rdquo;
-            </Button>
-          )}
-          {group.matchSource === 'override' && (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy || isBusy}
-              onClick={() =>
-                run(() =>
-                  clearOverrideAction({ importSessionId, groupKey: group.key }),
-                )
-              }
-            >
-              <RotateCcw className="w-3.5 h-3.5 mr-1" />
-              Undo
-            </Button>
-          )}
-          {(!group.jobPlanId || group.matchSource === 'fuzzy') && (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy || isBusy}
-              onClick={() => setShowCreatePlan(true)}
-            >
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              Create job plan
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy || isBusy}
-            onClick={() =>
-              run(() => skipGroupAction({ importSessionId, groupKey: group.key }))
-            }
-          >
-            <CircleSlash className="w-3.5 h-3.5 mr-1" />
-            Skip group
-          </Button>
-        </>
-      )}
-
-      {err && <span className="text-xs text-red-600 ml-2">{err}</span>}
-
-      {/* Also offer accept-alias when fuzzy, once we have a concrete jpId */}
-      {group.matchSource === 'fuzzy' && group.fuzzyCandidate && group.jobPlanId && (
-        <Button
-          size="sm"
-          disabled={busy || isBusy}
-          onClick={() =>
-            run(() =>
-              acceptAliasAction({
-                importSessionId,
-                groupKey: group.key,
-                externalCode: group.jobPlanCodeRaw,
-                jobPlanId: group.jobPlanId!,
-              }),
-            )
-          }
-        >
-          <Link2 className="w-3.5 h-3.5 mr-1" />
-          Accept alias {group.jobPlanCodeRaw} → {group.fuzzyCandidate.code}
-        </Button>
-      )}
-
-      {showCreatePlan && (
-        <CreateJobPlanDialog
-          onClose={() => setShowCreatePlan(false)}
-          importSessionId={importSessionId}
-          groupKey={group.key}
-          defaults={{ code: group.jobPlanCodeRaw, name: group.jobPlanCodeRaw }}
-          onCreated={() => {
-            setShowCreatePlan(false)
-            onChanged()
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
-// ── Asset row with inline fixes ─────────────────────────────────────────
-
-function AssetRow({
-  asset,
-  siteId,
-  siteName,
-  importSessionId,
-  onChanged,
-  isBusy,
-  groupSkipped,
-}: {
-  asset: PreviewAsset
-  siteId: string | null
-  siteName: string | null
-  importSessionId: string
-  onChanged: () => void
-  isBusy: boolean
-  groupSkipped: boolean
-}) {
-  const [showPicker, setShowPicker] = useState(false)
-  const [showCreate, setShowCreate] = useState(false)
-  const [busy, startTx] = useTransition()
-  const [err, setErr] = useState<string | null>(null)
-
-  function run(fn: () => Promise<{ success: true } | { success: true; data?: unknown } | { success: false; error: string }>) {
-    setErr(null)
-    startTx(async () => {
-      const r = await fn()
-      if (!r.success) {
-        setErr(r.error)
-        return
-      }
-      onChanged()
-    })
-  }
-
-  function handlePick(hit: AssetSearchHit) {
-    setShowPicker(false)
-    run(() =>
-      linkAssetToRowAction({
-        importSessionId,
-        rowNumber: asset.rowNumber,
-        assetId: hit.id,
-      }),
-    )
-  }
-
-  const rowCls = asset.skipped
-    ? 'border-t border-gray-100 bg-gray-100 text-eq-grey line-through'
-    : 'border-t border-gray-100 bg-white'
-
-  return (
-    <>
-      <tr className={rowCls}>
-        <td className="px-3 py-1.5 text-eq-grey">{asset.rowNumber}</td>
-        <td className="px-3 py-1.5 font-mono">
-          {asset.workOrder}
-          {asset.duplicateWorkOrder && (
-            <span className="ml-1.5 text-amber-700">(dup)</span>
-          )}
-        </td>
-        <td className="px-3 py-1.5 font-mono">{asset.maximoAssetId}</td>
-        <td className="px-3 py-1.5 text-eq-ink">{asset.description || '—'}</td>
-        <td className="px-3 py-1.5 text-eq-grey">{asset.location ?? '—'}</td>
-        <td className="px-3 py-1.5">
-          {asset.skipped ? (
-            <span className="inline-flex items-center gap-1 text-eq-grey">
-              <CircleSlash className="w-3.5 h-3.5" />
-              skipped
-            </span>
-          ) : asset.resolvedAssetId ? (
-            <span className="inline-flex items-center gap-1 text-green-700">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              {asset.resolvedAssetName ?? asset.resolvedAssetId}
-              {asset.resolvedFrom === 'override' && (
-                <span className="text-[10px] uppercase tracking-wide text-eq-deep ml-1">
-                  (override)
-                </span>
-              )}
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-amber-700">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              no match
-            </span>
-          )}
-        </td>
-        <td className="px-3 py-1.5 text-right whitespace-nowrap">
-          {groupSkipped ? (
-            <span className="text-[10px] text-eq-grey">group skipped</span>
-          ) : asset.skipped ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy || isBusy}
-              onClick={() =>
-                run(() =>
-                  clearOverrideAction({
-                    importSessionId,
-                    rowNumber: asset.rowNumber,
-                  }),
-                )
-              }
-            >
-              <RotateCcw className="w-3.5 h-3.5 mr-1" />
-              Undo
-            </Button>
-          ) : (
-            <div className="inline-flex items-center gap-1">
-              {(!asset.resolvedAssetId || asset.resolvedFrom === 'override') && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy || isBusy || !siteId}
-                    onClick={() => setShowPicker(true)}
-                    title={!siteId ? 'Site not resolved yet' : 'Link to an existing EQ asset'}
-                  >
-                    <Link2 className="w-3.5 h-3.5 mr-1" />
-                    Link
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy || isBusy || !siteId}
-                    onClick={() => setShowCreate(true)}
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
-                    Create
-                  </Button>
-                </>
-              )}
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={busy || isBusy}
-                onClick={() =>
-                  run(() =>
-                    skipRowAction({
-                      importSessionId,
-                      rowNumber: asset.rowNumber,
-                    }),
-                  )
-                }
-              >
-                <CircleSlash className="w-3.5 h-3.5 mr-1" />
-                Skip
-              </Button>
-              {asset.resolvedFrom === 'override' && (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy || isBusy}
-                  onClick={() =>
-                    run(() =>
-                      clearOverrideAction({
-                        importSessionId,
-                        rowNumber: asset.rowNumber,
-                      }),
-                    )
-                  }
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </Button>
-              )}
-            </div>
-          )}
-        </td>
-      </tr>
-      {err && (
-        <tr className="bg-red-50">
-          <td colSpan={7} className="px-3 py-1 text-xs text-red-700">
-            {err}
-          </td>
-        </tr>
-      )}
-      {asset.warnings.length > 0 && !asset.skipped && (
-        <tr className="bg-amber-50/40">
-          <td colSpan={7} className="px-3 py-1 text-[10px] text-amber-800">
-            {asset.warnings.join(' · ')}
-          </td>
-        </tr>
-      )}
-      {showPicker && (
-        <AssetPicker
-          onClose={() => setShowPicker(false)}
-          siteId={siteId}
-          siteName={siteName}
-          initialQuery={asset.maximoAssetId}
-          onPick={handlePick}
-        />
-      )}
-      {showCreate && (
-        <CreateAssetDialog
-          onClose={() => setShowCreate(false)}
-          importSessionId={importSessionId}
-          rowNumber={asset.rowNumber}
-          siteId={siteId}
-          siteName={siteName}
-          defaults={{
-            maximoId: asset.maximoAssetId,
-            description: asset.description,
-            location: asset.location,
-          }}
-          onCreated={() => {
-            setShowCreate(false)
-            onChanged()
-          }}
-        />
-      )}
-    </>
   )
 }
 
@@ -1010,7 +719,7 @@ function Badge({
   tone,
   children,
 }: {
-  tone: 'info' | 'warn' | 'error'
+  tone: 'info' | 'warn' | 'error' | 'ok' | 'muted'
   children: React.ReactNode
 }) {
   const cls =
@@ -1018,22 +727,431 @@ function Badge({
       ? 'bg-eq-ice text-eq-deep border-eq-sky/30'
       : tone === 'warn'
         ? 'bg-amber-50 text-amber-800 border-amber-200'
-        : 'bg-red-50 text-red-800 border-red-200'
+        : tone === 'error'
+          ? 'bg-red-50 text-red-800 border-red-200'
+          : tone === 'ok'
+            ? 'bg-green-50 text-green-800 border-green-200'
+            : 'bg-gray-100 text-gray-600 border-gray-200'
   return (
     <span
-      className={`inline-flex items-center text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 border rounded ${cls}`}
+      className={`inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 border rounded ${cls}`}
     >
       {children}
     </span>
   )
 }
 
-function StatusIcon({ hasIssue, skipped }: { hasIssue: boolean; skipped?: boolean }) {
-  if (skipped) return <CircleSlash className="w-4 h-4 text-eq-grey shrink-0" />
-  return hasIssue ? (
-    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-  ) : (
-    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+function StatusIcon({
+  hasIssue,
+  resolved,
+  skipped,
+}: {
+  hasIssue: boolean
+  resolved?: boolean
+  skipped?: boolean
+}) {
+  if (skipped) return <SkipForward className="w-4 h-4 text-eq-grey shrink-0" />
+  if (resolved) return <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+  if (hasIssue) return <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+  return <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+}
+
+// ── Resolution badge — surfaced on the group header ─────────────────────
+
+function ResolutionBadge({ resolution }: { resolution: GroupResolution | null }) {
+  if (!resolution) return null
+  switch (resolution.action) {
+    case 'accept':
+      return <Badge tone="ok">accepted</Badge>
+    case 'nominate':
+      return <Badge tone="ok">nominated</Badge>
+    case 'create':
+      return (
+        <Badge tone="ok">
+          will create <span className="font-mono">{resolution.code}</span>
+        </Badge>
+      )
+    case 'skip':
+      return <Badge tone="muted">skipped</Badge>
+  }
+}
+
+// ── Group actions row ───────────────────────────────────────────────────
+
+function GroupActions({
+  group,
+  resolution,
+  setResolution,
+  plans,
+  plansLoading,
+  plansError,
+  onRequestPlans,
+}: {
+  group: PreviewGroup
+  resolution: GroupResolution | null
+  setResolution: (resolution: GroupResolution | null) => void
+  plans: JobPlanOption[] | null
+  plansLoading: boolean
+  plansError: string | null
+  onRequestPlans: () => Promise<void>
+}) {
+  // Which inline sub-form is currently showing.
+  const [mode, setMode] = useState<'none' | 'nominate' | 'create'>('none')
+
+  // Keep mode in sync with an externally-applied resolution.
+  useEffect(() => {
+    if (!resolution) setMode('none')
+    else if (resolution.action === 'nominate') setMode('nominate')
+    else if (resolution.action === 'create') setMode('create')
+    else setMode('none')
+  }, [resolution])
+
+  const acceptCandidate = group.fuzzyCandidate
+  const canAccept = !!acceptCandidate
+
+  return (
+    <div className="px-4 py-3 bg-eq-ice/40 border-b border-eq-sky/30 space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-bold text-eq-grey uppercase tracking-wide">
+          Group actions
+        </span>
+
+        {canAccept && (
+          <ActionButton
+            active={resolution?.action === 'accept'}
+            onClick={() => {
+              setMode('none')
+              setResolution(resolution?.action === 'accept' ? null : { action: 'accept' })
+            }}
+            icon={<Check className="w-3.5 h-3.5" />}
+          >
+            Accept "{acceptCandidate!.code}"
+          </ActionButton>
+        )}
+
+        <ActionButton
+          active={resolution?.action === 'nominate'}
+          onClick={async () => {
+            await onRequestPlans()
+            if (resolution?.action === 'nominate') {
+              setResolution(null)
+              setMode('none')
+            } else {
+              setMode('nominate')
+            }
+          }}
+          icon={<Search className="w-3.5 h-3.5" />}
+        >
+          Nominate existing
+        </ActionButton>
+
+        <ActionButton
+          active={resolution?.action === 'create'}
+          onClick={() => {
+            if (resolution?.action === 'create') {
+              setResolution(null)
+              setMode('none')
+            } else {
+              setMode('create')
+            }
+          }}
+          icon={<Plus className="w-3.5 h-3.5" />}
+        >
+          Create job plan
+        </ActionButton>
+
+        <ActionButton
+          active={resolution?.action === 'skip'}
+          tone="muted"
+          onClick={() => {
+            setMode('none')
+            setResolution(resolution?.action === 'skip' ? null : { action: 'skip' })
+          }}
+          icon={<SkipForward className="w-3.5 h-3.5" />}
+        >
+          Skip group
+        </ActionButton>
+
+        {resolution && (
+          <button
+            type="button"
+            onClick={() => {
+              setResolution(null)
+              setMode('none')
+            }}
+            className="ml-auto text-[11px] text-eq-grey hover:text-eq-deep underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Inline sub-forms */}
+      {mode === 'nominate' && (
+        <PlanCombobox
+          plans={plans}
+          plansLoading={plansLoading}
+          plansError={plansError}
+          onRequestPlans={onRequestPlans}
+          selectedId={resolution?.action === 'nominate' ? resolution.jobPlanId : null}
+          onPick={(planId) => setResolution({ action: 'nominate', jobPlanId: planId })}
+        />
+      )}
+
+      {mode === 'create' && (
+        <CreatePlanInline
+          defaultCode={group.jobPlanCodeRaw}
+          current={resolution?.action === 'create' ? resolution : null}
+          onApply={(code, name, type) =>
+            setResolution({ action: 'create', code, name, type: type || null })
+          }
+          onClear={() => setResolution(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Action button ───────────────────────────────────────────────────────
+
+function ActionButton({
+  active,
+  tone = 'primary',
+  icon,
+  children,
+  onClick,
+}: {
+  active: boolean
+  tone?: 'primary' | 'muted'
+  icon: React.ReactNode
+  children: React.ReactNode
+  onClick: () => void
+}) {
+  const base =
+    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors'
+  const cls = active
+    ? tone === 'muted'
+      ? 'bg-gray-600 text-white border-gray-600'
+      : 'bg-eq-sky text-white border-eq-sky'
+    : 'bg-white text-eq-ink border-gray-300 hover:border-eq-sky hover:text-eq-deep'
+  return (
+    <button type="button" onClick={onClick} className={`${base} ${cls}`}>
+      {icon}
+      {children}
+    </button>
+  )
+}
+
+// ── Plan combobox (searchable dropdown for Nominate) ────────────────────
+
+function PlanCombobox({
+  plans,
+  plansLoading,
+  plansError,
+  onRequestPlans,
+  selectedId,
+  onPick,
+}: {
+  plans: JobPlanOption[] | null
+  plansLoading: boolean
+  plansError: string | null
+  onRequestPlans: () => Promise<void>
+  selectedId: string | null
+  onPick: (planId: string) => void
+}) {
+  const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    void onRequestPlans()
+  }, [onRequestPlans])
+
+  const filtered = useMemo(() => {
+    if (!plans) return []
+    const q = query.trim().toLowerCase()
+    if (!q) return plans.slice(0, 50)
+    return plans
+      .filter((p) => {
+        const code = (p.code ?? '').toLowerCase()
+        const name = p.name.toLowerCase()
+        const type = (p.type ?? '').toLowerCase()
+        return code.includes(q) || name.includes(q) || type.includes(q)
+      })
+      .slice(0, 50)
+  }, [plans, query])
+
+  const selected = plans?.find((p) => p.id === selectedId) ?? null
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+      <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-gray-200">
+        <Search className="w-3.5 h-3.5 text-eq-grey shrink-0" />
+        <input
+          type="text"
+          placeholder="Search by code, name, or type…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="flex-1 bg-transparent text-xs text-eq-ink placeholder-eq-grey/70 focus:outline-none"
+          autoFocus
+        />
+        {plansLoading && <span className="text-[10px] text-eq-grey">loading…</span>}
+      </div>
+
+      {plansError && (
+        <div className="px-3 py-2 text-xs text-red-700 bg-red-50">{plansError}</div>
+      )}
+
+      {selected && (
+        <div className="px-3 py-1.5 flex items-center gap-2 bg-eq-ice/70 border-b border-eq-sky/30">
+          <Check className="w-3.5 h-3.5 text-green-700" />
+          <span className="text-xs">
+            <span className="font-mono text-eq-deep">{selected.code ?? '—'}</span>
+            <span className="text-eq-grey"> — </span>
+            <span className="text-eq-ink">{selected.name}</span>
+          </span>
+        </div>
+      )}
+
+      <div className="max-h-48 overflow-auto">
+        {filtered.length === 0 ? (
+          <div className="px-3 py-3 text-xs text-eq-grey">
+            {plans === null ? 'Loading plans…' : 'No matching plans.'}
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {filtered.map((p) => {
+              const isPicked = p.id === selectedId
+              return (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => onPick(p.id)}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-eq-ice/50 ${
+                      isPicked ? 'bg-eq-ice/70' : ''
+                    }`}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-eq-deep shrink-0">
+                        {p.code ?? '—'}
+                      </span>
+                      <span className="text-eq-ink truncate">{p.name}</span>
+                      {p.type && (
+                        <span className="text-eq-grey text-[10px] ml-auto truncate shrink">
+                          {p.type}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Inline "Create new plan" form ───────────────────────────────────────
+
+function CreatePlanInline({
+  defaultCode,
+  current,
+  onApply,
+  onClear,
+}: {
+  defaultCode: string
+  current: Extract<GroupResolution, { action: 'create' }> | null
+  onApply: (code: string, name: string, type: string) => void
+  onClear: () => void
+}) {
+  const [code, setCode] = useState(current?.code ?? defaultCode)
+  const [name, setName] = useState(current?.name ?? '')
+  const [type, setType] = useState(current?.type ?? '')
+
+  const dirty =
+    !current ||
+    current.code !== code.trim() ||
+    current.name !== name.trim() ||
+    (current.type ?? '') !== type.trim()
+
+  const canApply = code.trim().length > 0 && name.trim().length > 0
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-md p-3 space-y-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <FieldInput
+          label="Code"
+          value={code}
+          onChange={setCode}
+          mono
+          placeholder="e.g. LTSWBD"
+        />
+        <FieldInput
+          label="Name"
+          value={name}
+          onChange={setName}
+          placeholder="e.g. Low Tension Switchboard"
+        />
+        <FieldInput
+          label="Type (optional)"
+          value={type}
+          onChange={setType}
+          placeholder="e.g. Annual"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          disabled={!canApply || !dirty}
+          onClick={() => onApply(code.trim(), name.trim(), type.trim())}
+        >
+          {current ? 'Update' : 'Apply'}
+        </Button>
+        {current && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] text-eq-grey hover:text-eq-deep inline-flex items-center gap-1"
+          >
+            <X className="w-3 h-3" /> Discard
+          </button>
+        )}
+        <p className="ml-auto text-[11px] text-eq-grey">
+          A tenant-global plan will be created (no items — add later under Job Plans).
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function FieldInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  mono,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  mono?: boolean
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] font-bold text-eq-grey uppercase tracking-wide mb-0.5">
+        {label}
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:border-eq-sky ${
+          mono ? 'font-mono' : ''
+        }`}
+      />
+    </label>
   )
 }
 
