@@ -4,6 +4,22 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-19 — Maintenance bulk-delete fix + card title polish
+
+Merged to `main`.
+
+### Fixed
+- **Bulk delete on `/maintenance` blocked by FK constraint** — `report_deliveries.maintenance_check_id` had `ON DELETE NO ACTION`, so any bulk delete that caught a check with an emailed-report history failed with `violates foreign key constraint report_deliveries_maintenance_check_id_fkey`. Migration `0055_report_deliveries_cascade_on_check_delete.sql` swaps it to `ON DELETE CASCADE`, matching the behaviour of `check_assets` and `maintenance_check_items`. `defects.check_id` stays on `SET NULL` — defect records outlive the check that spawned them.
+
+### Changed
+- **Site-grouped kanban card title** — on `/maintenance` → Site view, the card title was the job plan code (e.g. `E1.3`) which duplicated information you can already see at a glance. Title is now the due date's month + year (`August 2025`) and the job plan code moves down to a tag row alongside frequency + dark-site flag, rendered in the EQ ice/deep palette. Site is already the card header, so the title now answers "*when*" while the tags answer "*what kind*".
+
+### Files Touched
+- Created: `supabase/migrations/0055_report_deliveries_cascade_on_check_delete.sql`
+- Modified: `app/(app)/maintenance/SiteGroupedView.tsx`
+
+---
+
 ## 2026-04-19 — Bulletproof user invite/creation flow
 
 Merged to `main`.

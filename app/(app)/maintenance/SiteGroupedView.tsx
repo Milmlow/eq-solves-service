@@ -56,6 +56,20 @@ function formatFrequency(f: string | null | undefined): string {
   return f.replace('_', '-').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// Card title on the site-grouped kanban: the site is already the card header,
+// and the job plan is shown as its own tag below — so the headline should be
+// the time-discriminator (month + year of due date). Falls back to custom_name
+// when there's no due date.
+function formatCheckTitle(dueIso: string | null | undefined, customName: string | null | undefined): string {
+  if (dueIso) {
+    const d = new Date(dueIso + 'T00:00:00Z')
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+    }
+  }
+  return customName ?? '—'
+}
+
 function daysBetween(aIso: string, bIso: string): number {
   const a = new Date(aIso + 'T00:00:00Z').getTime()
   const b = new Date(bIso + 'T00:00:00Z').getTime()
@@ -452,7 +466,8 @@ function CheckCard({
     return `Due ${formatDate(due)}`
   })()
 
-  const name = check.custom_name ?? check.job_plans?.name ?? '—'
+  const title = formatCheckTitle(check.due_date as string | null, check.custom_name as string | null)
+  const jobPlanCode = check.job_plans?.name ?? null
   const frequency = formatFrequency(check.frequency as string | null)
   const wo = (check.maximo_wo_number as string | null) ?? null
   const pm = (check.maximo_pm_number as string | null) ?? null
@@ -481,10 +496,15 @@ function CheckCard({
       )}
 
       <p className="font-semibold text-sm text-eq-ink mb-1.5 line-clamp-2 group-hover:text-eq-sky pr-6">
-        {name}
+        {title}
       </p>
 
       <div className="flex items-center gap-1 mb-1.5 flex-wrap">
+        {jobPlanCode && (
+          <span className="px-1.5 py-0.5 rounded bg-eq-ice text-eq-deep text-[10px] font-semibold uppercase tracking-wide">
+            {jobPlanCode}
+          </span>
+        )}
         {frequency && (
           <span className="px-1.5 py-0.5 rounded bg-gray-100 text-eq-grey text-[10px] font-medium uppercase tracking-wide">
             {frequency}
