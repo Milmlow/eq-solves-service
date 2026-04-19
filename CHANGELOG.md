@@ -4,6 +4,23 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-19 — Cycle-grouped maintenance kanban
+
+Merged to `main`.
+
+### Changed
+- **Site kanban now aggregates by *cycle*, not by individual check** — one Excel import was spawning 13 job-plan rows for the same site/month and painting 13 cards on the kanban, which made a single month's workload look like a dashboard emergency. Cards now group by `(site_id, frequency, start_month)` — every check that's part of "SY3 · Annual · August 2025" rolls into one card. Card surface shows only **Frequency**, **Month Started**, a count pill (how many job plans the cycle covers), progress bar (summed items), and aggregate status. The job plans stay hidden until you click the card, at which point a modal opens with the per-check breakdown (job plan code, status, due date, assignee, WO/PM, progress) — each row clickable through to `/maintenance/[id]`.
+- **Aggregate status is worst-wins** — overdue > in_progress > scheduled > complete > cancelled. One overdue child paints the cycle red; a cycle only lands in Complete when every child is complete. We also re-apply an overdue classification at render-time for any check whose `due_date` has passed but whose status column hasn't been refreshed, so the kanban stays truthful even if the nightly job hasn't run.
+- **Site section header** adds a cycle count alongside the check count, so you can see at a glance that e.g. SY3 is "1 cycle · 13 checks" (not 13 independent things going wrong).
+
+### Why
+Royce: *"Each card must only be Site — basically we create a 'check' and that's all we want to see on the summary. In this order: Site, Frequency, Month Started. The job plan should only be shown once you click on that card to reveal what's happening that month. We do not want a cluttered dashboard for one maintenance check — currently we have 13 checks scheduled created from one Excel — it's not scalable."*
+
+### Files Touched
+- Modified: `app/(app)/maintenance/SiteGroupedView.tsx` (full refactor — new `CycleGroup` type, new `CycleCard` + `CycleDetailModal` + `CycleChildRow` components, cycle-aware aggregation)
+
+---
+
 ## 2026-04-19 — Maintenance bulk-delete fix + card title polish
 
 Merged to `main`.
@@ -12,7 +29,7 @@ Merged to `main`.
 - **Bulk delete on `/maintenance` blocked by FK constraint** — `report_deliveries.maintenance_check_id` had `ON DELETE NO ACTION`, so any bulk delete that caught a check with an emailed-report history failed with `violates foreign key constraint report_deliveries_maintenance_check_id_fkey`. Migration `0055_report_deliveries_cascade_on_check_delete.sql` swaps it to `ON DELETE CASCADE`, matching the behaviour of `check_assets` and `maintenance_check_items`. `defects.check_id` stays on `SET NULL` — defect records outlive the check that spawned them.
 
 ### Changed
-- **Site-grouped kanban card title** — on `/maintenance` → Site view, the card title was the job plan code (e.g. `E1.3`) which duplicated information you can already see at a glance. Title is now the due date's month + year (`August 2025`) and the job plan code moves down to a tag row alongside frequency + dark-site flag, rendered in the EQ ice/deep palette. Site is already the card header, so the title now answers "*when*" while the tags answer "*what kind*".
+- **Site-grouped kanban card title** — on `/maintenance` → Site view, the card title was the job plan code (e.g. `E1.3`) which duplicated information you can already see at a glance. Title is now the due date's month + year (`August 2025`) and the job plan code moves down to a tag row alongside frequency + dark-site flag, rendered in the EQ ice/deep palette. Site is already the card header, so the title now answers "*when*" while the tags answer "*what kind*". *(Superseded by the cycle-grouped refactor later the same day.)*
 
 ### Files Touched
 - Created: `supabase/migrations/0055_report_deliveries_cascade_on_check_delete.sql`
