@@ -8,6 +8,7 @@ import { headers } from 'next/headers'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin } from '@/lib/utils/roles'
+import { getSiteUrl } from '@/lib/utils/site-url'
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -164,12 +165,15 @@ export async function inviteUserAction(formData: FormData): Promise<{ ok: true; 
 
   const admin = createAdminClient()
   const h = await headers()
-  const hostHdr = h.get('origin') ?? h.get('host') ?? ''
-  const origin = hostHdr.startsWith('http') ? hostHdr : `https://${hostHdr}`
+  const requestOrigin = h.get('origin') ?? h.get('host') ?? null
+  // Prefer NEXT_PUBLIC_SITE_URL / Netlify URL over the request header so
+  // invites sent from a local dev build don't leak http://localhost:3000
+  // into production emails. Request origin is the fallback, not the default.
+  const origin = getSiteUrl(requestOrigin)
   // Route through the PKCE callback so the code is exchanged for a session
-  // cookie before the user lands on the reset-password page. Matches the
-  // forgot-password flow.
-  const redirectTo = `${origin}/auth/callback?next=/auth/reset-password`
+  // cookie before the user lands on the accept-invite page. New users get
+  // a branded welcome screen; only password resets land on /reset-password.
+  const redirectTo = `${origin}/auth/callback?next=/auth/accept-invite`
 
   try {
     // --- 1. Resolve the auth user (invite if new, look up if existing) --------
@@ -254,12 +258,13 @@ export async function resendInviteAction(formData: FormData) {
 
   const admin = createAdminClient()
   const h = await headers()
-  const hostHdr = h.get('origin') ?? h.get('host') ?? ''
-  const origin = hostHdr.startsWith('http') ? hostHdr : `https://${hostHdr}`
-  // Route through the PKCE callback so the code is exchanged for a session
-  // cookie before the user lands on the reset-password page. Matches the
-  // forgot-password flow.
-  const redirectTo = `${origin}/auth/callback?next=/auth/reset-password`
+  const requestOrigin = h.get('origin') ?? h.get('host') ?? null
+  const origin = getSiteUrl(requestOrigin)
+  // Resend still routes through /auth/accept-invite — if the user hasn't
+  // finished setup yet the welcome flow is the right destination. Existing
+  // users whose password was already set will simply land on accept-invite
+  // in a valid session and can re-save or navigate away.
+  const redirectTo = `${origin}/auth/callback?next=/auth/accept-invite`
 
   const { data: profile } = await admin
     .from('profiles')
@@ -460,3 +465,4 @@ export async function setRoleAction(formData: FormData) {
   revalidatePath('/admin/users')
   return { ok: true }
 }
+  

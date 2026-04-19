@@ -27,13 +27,16 @@ suffix) for any `redirectTo` passed from the app.
 
 ```
 https://eq-solves-service.netlify.app/auth/callback
+https://eq-solves-service.netlify.app/auth/accept-invite
 https://eq-solves-service.netlify.app/auth/reset-password
 https://eq-solves-service.netlify.app/auth/signin
 https://eq-solves-service.netlify.app/auth/mfa
 https://eq-solves-service.netlify.app/auth/enroll-mfa
 https://*--eq-solves-service.netlify.app/auth/callback
+https://*--eq-solves-service.netlify.app/auth/accept-invite
 https://*--eq-solves-service.netlify.app/auth/reset-password
 http://localhost:3000/auth/callback
+http://localhost:3000/auth/accept-invite
 http://localhost:3000/auth/reset-password
 ```
 
@@ -94,10 +97,13 @@ You've been invited to EQ Solves Service
               <td style="padding:28px 32px 8px 32px;">
                 <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:600;color:#1A1A2E;letter-spacing:-0.01em;">You've been invited</h1>
                 <p style="margin:0 0 16px 0;font-size:15px;line-height:1.55;color:#1A1A2E;">
-                  You've been invited to create an account on <strong>EQ Solves Service</strong> — the maintenance management platform for electrical contractors.
+                  You&rsquo;ve been invited to <strong>EQ Solves Service</strong> &mdash; the maintenance management platform for electrical contractors.
                 </p>
-                <p style="margin:0 0 24px 0;font-size:15px;line-height:1.55;color:#1A1A2E;">
-                  Click the button below to set your password and sign in. The link is single-use and expires in 24 hours.
+                <p style="margin:0 0 16px 0;font-size:15px;line-height:1.55;color:#1A1A2E;">
+                  Click the button below to confirm your details, set a password, and you&rsquo;re in. The whole thing takes about 30 seconds.
+                </p>
+                <p style="margin:0 0 24px 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
+                  This link is single-use and expires in 24 hours.
                 </p>
               </td>
             </tr>
@@ -106,7 +112,7 @@ You've been invited to EQ Solves Service
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="background-color:#3DA8D8;border-radius:6px;">
-                      <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Accept invitation</a>
+                      <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Set up my account</a>
                     </td>
                   </tr>
                 </table>
@@ -221,15 +227,19 @@ heading + body copy.
 ## 4. After changing config — smoke test
 
 1. `/admin/users` → invite a fresh test user (e.g. `royce+test@eq.solutions`).
-2. Open the email — the "Accept invitation" URL must start with
-   `https://eq-solves-service.netlify.app/auth/callback?code=…&next=/auth/reset-password`,
+2. Open the email — the "Set up my account" URL must start with
+   `https://eq-solves-service.netlify.app/auth/callback?code=…&next=/auth/accept-invite`,
    NOT `http://localhost:3000`.
-3. Click the link. You should land on `/auth/reset-password` with the form
-   enabled (no "Auth session missing" banner).
-4. Set a password. The server action should log you in and redirect to
-   `/dashboard`.
-5. Sign out, request **Forgot password** from the sign-in page, repeat — same
-   flow, same result.
+3. Click the link. You should land on `/auth/accept-invite` with a welcome
+   header ("Welcome, {first name}."), the tenant + role you assigned, a
+   3-step rail, and the password form enabled (no "Auth session missing"
+   banner).
+4. Fill in full name (if not pre-filled), set a password (live strength
+   meter turns green at 10+ chars with mixed case / digits / symbols),
+   confirm, submit. You should be signed in and redirected to `/dashboard`.
+5. Sign out, request **Forgot password** from the sign-in page — that flow
+   still lands on `/auth/reset-password` (generic "set a new password"
+   copy). Same session bootstrap logic, different page.
 
 If any of these fail, the first thing to check is the Redirect URLs allowlist
 (missing entries fail silently with a generic error on the callback page).

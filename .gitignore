@@ -54,3 +54,6 @@ deploy-*.zip
 
 # null-byte-strip backups (one-time cleanup 2026-04-18)
 *.corrupt.bak
+
+# Local Netlify folder
+.netlify
