@@ -15,8 +15,7 @@ import { formatDate, formatSiteLabel } from '@/lib/utils/format'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, JobPlan, Site, Profile } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Calendar, LayoutGrid, List, MapPin } from 'lucide-react'
-import { KanbanBoard } from './KanbanBoard'
+import { List, MapPin } from 'lucide-react'
 import { SiteGroupedView } from './SiteGroupedView'
 
 type CheckRow = MaintenanceCheck & {
@@ -71,7 +70,7 @@ export function MaintenanceList({
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
-  const [view, setView] = useState<'table' | 'kanban' | 'sites'>('sites')
+  const [view, setView] = useState<'table' | 'sites'>('sites')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const columns: DataTableColumn<CheckRow>[] = [
@@ -139,7 +138,7 @@ export function MaintenanceList({
           ]}
         />
         <div className="flex gap-2 ml-4 shrink-0">
-          {/* View Toggle */}
+          {/* View Toggle — site-first only */}
           <div className="flex gap-1 bg-gray-100 rounded-md p-1">
             <button
               onClick={() => setView('sites')}
@@ -148,7 +147,7 @@ export function MaintenanceList({
                   ? 'bg-white text-eq-sky shadow-sm'
                   : 'text-eq-grey hover:text-eq-deep'
               }`}
-              title="Site view"
+              title="Site view (kanban per site)"
             >
               <MapPin className="w-4 h-4" />
             </button>
@@ -162,17 +161,6 @@ export function MaintenanceList({
               title="Table view"
             >
               <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setView('kanban')}
-              className={`p-2 rounded transition-colors ${
-                view === 'kanban'
-                  ? 'bg-white text-eq-sky shadow-sm'
-                  : 'text-eq-grey hover:text-eq-deep'
-              }`}
-              title="Kanban view"
-            >
-              <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
 
@@ -209,13 +197,6 @@ export function MaintenanceList({
               />
               <Pagination page={page} totalPages={totalPages} />
             </>
-          ) : view === 'kanban' ? (
-            <KanbanBoard
-              checks={checks}
-              itemsMap={itemsMap}
-              onCheckClick={(c) => router.push(`/maintenance/${c.id}`)}
-              isAdmin={isAdmin}
-            />
           ) : (
             <SiteGroupedView
               checks={checks}

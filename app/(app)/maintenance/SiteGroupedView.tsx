@@ -67,29 +67,32 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-type StatusKey = 'overdue' | 'in_progress' | 'scheduled' | 'complete' | 'cancelled'
-
-const STATUS_ORDER: StatusKey[] = ['overdue', 'in_progress', 'scheduled', 'complete', 'cancelled']
-const STATUS_LABEL: Record<StatusKey, string> = {
-  overdue: 'Overdue',
-  in_progress: 'In Progress',
+// Kanban columns mirror the global kanban order: Scheduled, In Progress, Overdue, Complete
+type KanbanCol = 'scheduled' | 'in_progress' | 'overdue' | 'complete'
+const KANBAN_COLS: KanbanCol[] = ['scheduled', 'in_progress', 'overdue', 'complete']
+const KANBAN_LABEL: Record<KanbanCol, string> = {
   scheduled: 'Scheduled',
+  in_progress: 'In Progress',
+  overdue: 'Overdue',
   complete: 'Complete',
-  cancelled: 'Cancelled',
 }
-const STATUS_HEADER_CLASS: Record<StatusKey, string> = {
-  overdue: 'text-red-700',
+const KANBAN_HEADER_TEXT: Record<KanbanCol, string> = {
+  scheduled: 'text-gray-600',
   in_progress: 'text-eq-deep',
-  scheduled: 'text-gray-700',
+  overdue: 'text-red-600',
   complete: 'text-green-700',
-  cancelled: 'text-gray-500',
 }
-const STATUS_DOT_CLASS: Record<StatusKey, string> = {
-  overdue: 'bg-red-500',
-  in_progress: 'bg-eq-sky',
+const KANBAN_HEADER_BG: Record<KanbanCol, string> = {
+  scheduled: 'bg-gray-50',
+  in_progress: 'bg-eq-ice',
+  overdue: 'bg-red-50',
+  complete: 'bg-green-50',
+}
+const KANBAN_DOT: Record<KanbanCol, string> = {
   scheduled: 'bg-gray-400',
+  in_progress: 'bg-eq-sky',
+  overdue: 'bg-red-500',
   complete: 'bg-green-500',
-  cancelled: 'bg-gray-300',
 }
 
 interface SiteGroup {
@@ -98,8 +101,8 @@ interface SiteGroup {
   siteCode: string | null
   customerName: string | null
   checks: CheckRow[]
-  byStatus: Record<StatusKey, CheckRow[]>
-  counts: Record<StatusKey, number>
+  byCol: Record<KanbanCol, CheckRow[]>
+  counts: Record<KanbanCol, number>
   totalItems: number
   completedItems: number
   nextDue: string | null
@@ -135,8 +138,8 @@ export function SiteGroupedView({ checks, itemsMap, sites, onCheckClick, isAdmin
           siteCode,
           customerName,
           checks: [],
-          byStatus: { overdue: [], in_progress: [], scheduled: [], complete: [], cancelled: [] },
-          counts: { overdue: 0, in_progress: 0, scheduled: 0, complete: 0, cancelled: 0 },
+          byCol: { scheduled: [], in_progress: [], overdue: [], complete: [] },
+          counts: { scheduled: 0, in_progress: 0, overdue: 0, complete: 0 },
           totalItems: 0,
           completedItems: 0,
           nextDue: null,
@@ -146,11 +149,16 @@ export function SiteGroupedView({ checks, itemsMap, sites, onCheckClick, isAdmin
       const g = map.get(siteId)!
       g.checks.push(check)
 
-      const status = (check.status as CheckStatus) as StatusKey
-      if (status in g.byStatus) {
-        g.byStatus[status].push(check)
-        g.counts[status] += 1
-      }
+      const status = check.status as CheckStatus
+      // Map status into the 4 kanban columns — cancelled falls into complete lane like the global kanban
+      let col: KanbanCol
+      if (status === 'scheduled') col = 'scheduled'
+      else if (status === 'in_progress') col = 'in_progress'
+      else if (status === 'overdue') col = 'overdue'
+      else col = 'complete' // complete + cancelled
+
+      g.byCol[col].push(check)
+      g.counts[col] += 1
 
       g.totalItems += check.item_count ?? 0
       g.completedItems += check.completed_count ?? 0
@@ -167,8 +175,8 @@ export function SiteGroupedView({ checks, itemsMap, sites, onCheckClick, isAdmin
     }
 
     for (const g of map.values()) {
-      for (const key of STATUS_ORDER) {
-        g.byStatus[key].sort((a, b) => ((a.due_date as string) ?? '').localeCompare((b.due_date as string) ?? ''))
+      for (const key of KANBAN_COLS) {
+        g.byCol[key].sort((a, b) => ((a.due_date as string) ?? '').localeCompare((b.due_date as string) ?? ''))
       }
     }
 
@@ -323,7 +331,7 @@ function SiteSection({
         </div>
 
         <div className="flex items-center gap-2 ml-auto text-xs shrink-0 flex-wrap justify-end max-w-[50%]">
-          {STATUS_ORDER.map((key) => {
+          {KANBAN_COLS.map((key) => {
             const n = group.counts[key]
             if (!n) return null
             return (
@@ -331,8 +339,8 @@ function SiteSection({
                 key={key}
                 className="px-2 py-0.5 rounded-full bg-white border border-gray-200 flex items-center gap-1.5 text-eq-ink"
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT_CLASS[key]}`} />
-                {n} {STATUS_LABEL[key].toLowerCase()}
+                <span className={`w-1.5 h-1.5 rounded-full ${KANBAN_DOT[key]}`} />
+                {n} {KANBAN_LABEL[key].toLowerCase()}
               </span>
             )
           })}
@@ -340,64 +348,56 @@ function SiteSection({
       </button>
 
       {open && (
-        <div className="p-4 space-y-4">
-          {STATUS_ORDER.map((key) => {
-            const items = group.byStatus[key]
-            if (items.length === 0) return null
-            return (
-              <StatusSection
-                key={key}
-                status={key}
-                checks={items}
+        <div className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {KANBAN_COLS.map((col) => (
+              <KanbanColumn
+                key={col}
+                col={col}
+                checks={group.byCol[col]}
                 itemsMap={itemsMap}
                 onCheckClick={onCheckClick}
                 isAdmin={isAdmin}
-                defaultOpen={key !== 'complete' && key !== 'cancelled'}
               />
-            )
-          })}
+            ))}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function StatusSection({
-  status,
+function KanbanColumn({
+  col,
   checks,
   itemsMap,
   onCheckClick,
   isAdmin,
-  defaultOpen,
 }: {
-  status: StatusKey
+  col: KanbanCol
   checks: CheckRow[]
   itemsMap: Record<string, MaintenanceCheckItem[]>
   onCheckClick: (check: CheckRow) => void
   isAdmin: boolean
-  defaultOpen: boolean
 }) {
-  const [open, setOpen] = useState(defaultOpen)
-
   return (
-    <div>
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 text-left py-1.5 border-b border-gray-100"
-      >
-        {open ? <ChevronDown className="w-3.5 h-3.5 text-eq-grey" /> : <ChevronRight className="w-3.5 h-3.5 text-eq-grey" />}
-        <span className={`w-2 h-2 rounded-full ${STATUS_DOT_CLASS[status]}`} />
-        <span className={`text-xs font-semibold uppercase tracking-wide ${STATUS_HEADER_CLASS[status]}`}>
-          {STATUS_LABEL[status]}
-        </span>
-        <span className="text-xs text-eq-grey">
+    <div className="flex flex-col">
+      <div className={`p-3 rounded-lg ${KANBAN_HEADER_BG[col]} border border-gray-200 mb-3`}>
+        <h4 className={`font-semibold text-xs uppercase tracking-wide ${KANBAN_HEADER_TEXT[col]}`}>
+          {KANBAN_LABEL[col]}
+        </h4>
+        <p className="text-[11px] text-eq-grey mt-0.5">
           {checks.length} check{checks.length !== 1 ? 's' : ''}
-        </span>
-      </button>
+        </p>
+      </div>
 
-      {open && (
-        <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {checks.map((check) => (
+      <div className="flex flex-col gap-2">
+        {checks.length === 0 ? (
+          <div className="border-2 border-dashed border-gray-200 rounded-lg p-3 text-center">
+            <p className="text-[11px] text-eq-grey">No checks</p>
+          </div>
+        ) : (
+          checks.map((check) => (
             <CheckCard
               key={check.id}
               check={check}
@@ -405,9 +405,9 @@ function StatusSection({
               onClick={() => onCheckClick(check)}
               isAdmin={isAdmin}
             />
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   )
 }
@@ -464,7 +464,7 @@ function CheckCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onClick() }}
-      className="relative text-left p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200 hover:border-eq-sky group cursor-pointer"
+      className="relative text-left p-3 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-all duration-200 hover:border-eq-sky group cursor-pointer"
     >
       {isAdmin && (
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -480,11 +480,11 @@ function CheckCard({
         </div>
       )}
 
-      <p className="font-semibold text-sm text-eq-ink mb-2 line-clamp-2 group-hover:text-eq-sky pr-8">
+      <p className="font-semibold text-sm text-eq-ink mb-1.5 line-clamp-2 group-hover:text-eq-sky pr-6">
         {name}
       </p>
 
-      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+      <div className="flex items-center gap-1 mb-1.5 flex-wrap">
         {frequency && (
           <span className="px-1.5 py-0.5 rounded bg-gray-100 text-eq-grey text-[10px] font-medium uppercase tracking-wide">
             {frequency}
@@ -499,34 +499,34 @@ function CheckCard({
       </div>
 
       {dueLabel && (
-        <p className={`text-xs mb-1 flex items-center gap-1 ${isOverdue ? 'text-red-600 font-semibold' : 'text-eq-grey'}`}>
+        <p className={`text-[11px] mb-1 flex items-center gap-1 ${isOverdue ? 'text-red-600 font-semibold' : 'text-eq-grey'}`}>
           <CalendarClock className="w-3 h-3" />
           {dueLabel}
         </p>
       )}
 
-      <p className="text-xs text-eq-grey mb-1 flex items-center gap-1">
+      <p className="text-[11px] text-eq-grey mb-1 flex items-center gap-1">
         <User className="w-3 h-3" />
         {check.assignee_name ?? 'Unassigned'}
       </p>
 
       {(wo || pm) && (
-        <p className="text-xs text-eq-grey mb-2 flex items-center gap-1 font-mono">
+        <p className="text-[11px] text-eq-grey mb-1.5 flex items-center gap-1 font-mono">
           <FileText className="w-3 h-3" />
           {wo ? `WO ${wo}` : `PM ${pm}`}
         </p>
       )}
 
-      <div className="mb-3 mt-2">
+      <div className="mb-2 mt-1.5">
         <div className="flex items-center justify-between mb-1">
-          <p className="text-xs font-semibold text-eq-grey">Progress</p>
-          <p className="text-xs font-semibold text-eq-grey">
+          <p className="text-[11px] font-semibold text-eq-grey">Progress</p>
+          <p className="text-[11px] font-semibold text-eq-grey">
             {completedCount}/{total}
           </p>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-1.5">
+        <div className="w-full bg-gray-200 rounded-full h-1">
           <div
-            className="bg-eq-sky h-1.5 rounded-full transition-all"
+            className="bg-eq-sky h-1 rounded-full transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -534,7 +534,7 @@ function CheckCard({
 
       <div className="flex items-center justify-between">
         <StatusBadge status={statusToBadge(status)} />
-        <Eye className="w-4 h-4 text-eq-grey opacity-0 group-hover:opacity-100 transition-opacity" />
+        <Eye className="w-3.5 h-3.5 text-eq-grey opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
     </div>
   )
