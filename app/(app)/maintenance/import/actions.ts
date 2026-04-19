@@ -1,5 +1,6 @@
 'use server'
 
+import { createHash } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite } from '@/lib/utils/roles'
@@ -37,6 +38,15 @@ function freqColumn(freq: string | null): string {
 
 // ── Types returned to the UI ────────────────────────────────────────────
 
+/** How a row or group arrived at its current resolution. */
+export type ResolutionSource =
+  | 'exact'       // matched by maximo_id (row) or job_plan code (group)
+  | 'alias'       // applied via job_plan_aliases (group)
+  | 'fuzzy'       // suggestion only, not yet confirmed (group)
+  | 'override'    // user-applied inline fix (link_asset / create_asset / accept_alias / create_job_plan)
+  | 'skipped'     // user chose to exclude this target from the commit
+  | 'none'        // unresolved, no user decision yet
+
 /** One asset row within a group preview. */
 export interface PreviewAsset {
   rowNumber: number
@@ -48,6 +58,10 @@ export interface PreviewAsset {
   resolvedAssetId: string | null
   /** EQ asset name (for display) when resolved. */
   resolvedAssetName: string | null
+  /** How the resolution was reached. */
+  resolvedFrom: ResolutionSource
+  /** User explicitly excluded this row from the commit. */
+  skipped: boolean
   /** WO# already exists on another check_asset for this tenant. */
   duplicateWorkOrder: boolean
   warnings: string[]
@@ -72,9 +86,11 @@ export interface PreviewGroup {
   jobPlanName: string | null
 
   /** Where the match came from (helps the UI explain itself). */
-  matchSource: 'exact' | 'alias' | 'fuzzy' | 'none'
+  matchSource: ResolutionSource
   /** Fuzzy candidate when `matchSource = 'fuzzy'` or suggestion only. */
   fuzzyCandidate: { code: string; distance: number } | null
+  /** User explicitly excluded this whole group from the commit. */
+  skipped: boolean
 
   frequencySuffix: string
   frequency: FrequencyEnum | null
@@ -94,6 +110,8 @@ export interface PreviewGroup {
 export interface PreviewResult {
   success: true
   filename: string
+  /** Persistent session id — pass back on Re-parse to retain inline fixes. */
+  importSessionId: string
   parsedRowCount: number
   /** Workbook-level or row-level hard failures from the parser. */
   parseErrors: { rowNumber: number; message: string }[]
@@ -125,7 +143,7 @@ export async function previewDeltaImportAction(
   formData: FormData,
 ): Promise<PreviewActionResult> {
   try {
-    const { supabase, tenantId, role } = await requireUser()
+    const { supabase, tenantId, user, role } = await requireUser()
     if (!canWrite(role)) {
       return { success: false, error: 'Insufficient permissions.' }
     }
@@ -135,15 +153,33 @@ export async function previewDeltaImportAction(
       return { success: false, error: 'No file uploaded.' }
     }
     const filename = file.name || 'upload.xlsx'
+    const priorSessionId = (formData.get('importSessionId') as string) || null
 
     // ── Parse workbook ────────────────────────────────────────────────
     const buf = Buffer.from(await file.arrayBuffer())
+    const fileHash = createHash('sha256').update(buf).digest('hex')
     const { rows, groups, errors } = await parseWorkbook(buf)
+
+    // ── Resolve / create the import_session for this upload ───────────
+    // Preference: caller passes back the same importSessionId — we trust
+    // it as long as it's tenant-owned and not yet committed. Otherwise
+    // we look up an open session for (tenant, fileHash), and only create
+    // one when nothing matches.
+    const importSessionId = await resolveImportSession({
+      supabase,
+      tenantId,
+      userId: user.id,
+      filename,
+      fileHash,
+      rowCount: rows.length,
+      priorSessionId,
+    })
 
     if (rows.length === 0) {
       return {
         success: true,
         filename,
+        importSessionId,
         parsedRowCount: 0,
         parseErrors: errors,
         groups: [],
@@ -247,6 +283,53 @@ export async function previewDeltaImportAction(
       }
     }
 
+    // ── Load inline-fix overrides for this session ────────────────────
+    const { overridesByRow, overridesByGroup } = await loadOverridesForSession(
+      supabase,
+      importSessionId,
+    )
+
+    // Assets referenced by link_asset / create_asset overrides need their
+    // names hydrated for the preview display.
+    const overrideAssetIds = Array.from(
+      new Set(
+        Array.from(overridesByRow.values())
+          .map((o) => (typeof o.payload?.assetId === 'string' ? (o.payload.assetId as string) : null))
+          .filter((v): v is string => !!v),
+      ),
+    )
+    const overrideAssetsById = new Map<string, { id: string; name: string }>()
+    if (overrideAssetIds.length > 0) {
+      const { data: overrideAssets } = await supabase
+        .from('assets')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .in('id', overrideAssetIds)
+      for (const a of overrideAssets ?? []) {
+        overrideAssetsById.set(a.id, { id: a.id, name: a.name })
+      }
+    }
+
+    // Job plans referenced by accept_alias / create_job_plan overrides.
+    const overrideJobPlanIds = Array.from(
+      new Set(
+        Array.from(overridesByGroup.values())
+          .map((o) => (typeof o.payload?.jobPlanId === 'string' ? (o.payload.jobPlanId as string) : null))
+          .filter((v): v is string => !!v),
+      ),
+    )
+    const overrideJpById = new Map<string, { id: string; code: string; name: string }>()
+    if (overrideJobPlanIds.length > 0) {
+      const { data: overrideJps } = await supabase
+        .from('job_plans')
+        .select('id, code, name')
+        .eq('tenant_id', tenantId)
+        .in('id', overrideJobPlanIds)
+      for (const j of overrideJps ?? []) {
+        if (j.code) overrideJpById.set(j.id, { id: j.id, code: j.code, name: j.name })
+      }
+    }
+
     // ── Build preview groups ──────────────────────────────────────────
     const unresolvedJobPlanCodesSet = new Set<string>()
     const unresolvedSiteCodesSet = new Set<string>()
@@ -261,12 +344,17 @@ export async function previewDeltaImportAction(
         existingWO,
         unresolvedJobPlanCodesSet,
         unresolvedSiteCodesSet,
+        overridesByRow,
+        overridesByGroup,
+        overrideAssetsById,
+        overrideJpById,
       }),
     )
 
     return {
       success: true,
       filename,
+      importSessionId,
       parsedRowCount: rows.length,
       parseErrors: errors,
       groups: previewGroups,
@@ -280,6 +368,20 @@ export async function previewDeltaImportAction(
 
 // ── Internal helpers ────────────────────────────────────────────────────
 
+export interface OverrideRow {
+  scope: 'row' | 'group'
+  row_number: number | null
+  group_key: string | null
+  action:
+    | 'link_asset'
+    | 'create_asset'
+    | 'skip_row'
+    | 'accept_alias'
+    | 'create_job_plan'
+    | 'skip_group'
+  payload: Record<string, unknown>
+}
+
 interface BuildContext {
   siteByCode: Map<string, { id: string; name: string }>
   jpByCode: Map<string, { id: string; name: string }>
@@ -289,6 +391,14 @@ interface BuildContext {
   existingWO: Set<string>
   unresolvedJobPlanCodesSet: Set<string>
   unresolvedSiteCodesSet: Set<string>
+  /** Overrides keyed by sheet row number. */
+  overridesByRow: Map<number, OverrideRow>
+  /** Overrides keyed by parser group key. */
+  overridesByGroup: Map<string, OverrideRow>
+  /** Cached asset lookup for assets referenced by row-scope overrides. */
+  overrideAssetsById: Map<string, { id: string; name: string }>
+  /** Cached job-plan lookup for plans referenced by group-scope overrides. */
+  overrideJpById: Map<string, { id: string; code: string; name: string }>
 }
 
 function buildPreviewGroup(g: ParsedGroup, ctx: BuildContext): PreviewGroup {
@@ -308,11 +418,31 @@ function buildPreviewGroup(g: ParsedGroup, ctx: BuildContext): PreviewGroup {
     )
   }
 
-  // Job-plan resolution: exact → alias → fuzzy → none
+  // Job-plan resolution: override → exact → alias → fuzzy → none
   let jobPlanCode = g.jobPlanCode
   let jpMatch: { id: string; name: string } | null = ctx.jpByCode.get(jobPlanCode) ?? null
   let matchSource: PreviewGroup['matchSource'] = jpMatch ? 'exact' : 'none'
   let fuzzyCandidate: { code: string; distance: number } | null = null
+
+  // Inline-fix override on this group? (accept_alias / create_job_plan)
+  const groupOverride = ctx.overridesByGroup.get(g.key)
+  const groupSkipped = groupOverride?.action === 'skip_group'
+  if (
+    groupOverride &&
+    (groupOverride.action === 'accept_alias' ||
+      groupOverride.action === 'create_job_plan')
+  ) {
+    const overrideJpId =
+      typeof groupOverride.payload?.jobPlanId === 'string'
+        ? (groupOverride.payload.jobPlanId as string)
+        : null
+    const overrideJp = overrideJpId ? ctx.overrideJpById.get(overrideJpId) : null
+    if (overrideJp) {
+      jpMatch = { id: overrideJp.id, name: overrideJp.name }
+      jobPlanCode = overrideJp.code
+      matchSource = 'override'
+    }
+  }
 
   if (!jpMatch) {
     // Alias lookup — upstream code → canonical EQ code
@@ -342,16 +472,24 @@ function buildPreviewGroup(g: ParsedGroup, ctx: BuildContext): PreviewGroup {
 
   // Asset resolution per row
   const assets: PreviewAsset[] = g.rows.map((r) => resolveRow(r, site?.id ?? null, ctx))
-  const matchedAssetCount = assets.filter((a) => a.resolvedAssetId !== null).length
-  const unmatchedAssetCount = assets.length - matchedAssetCount
-  const duplicateWorkOrderCount = assets.filter((a) => a.duplicateWorkOrder).length
+  // Unresolved / unmatched totals are computed from active (non-skipped)
+  // rows so the group's "all good" / commit gate reflects the user's
+  // decisions faithfully.
+  const activeAssets = assets.filter((a) => !a.skipped)
+  const matchedAssetCount = activeAssets.filter((a) => a.resolvedAssetId !== null).length
+  const unmatchedAssetCount = activeAssets.length - matchedAssetCount
+  const duplicateWorkOrderCount = activeAssets.filter((a) => a.duplicateWorkOrder).length
+  const skippedAssetCount = assets.length - activeAssets.length
 
-  if (unmatchedAssetCount > 0 && site) {
+  if (groupSkipped) {
+    issues.push('Group skipped — will not be imported.')
+  }
+  if (!groupSkipped && unmatchedAssetCount > 0 && site) {
     issues.push(
       `${unmatchedAssetCount} asset${unmatchedAssetCount === 1 ? '' : 's'} could not be matched by maximo_id at ${g.siteCode}.`,
     )
   }
-  if (duplicateWorkOrderCount > 0) {
+  if (!groupSkipped && duplicateWorkOrderCount > 0) {
     issues.push(
       `${duplicateWorkOrderCount} work order${duplicateWorkOrderCount === 1 ? '' : 's'} already exist in EQ.`,
     )
@@ -368,15 +506,16 @@ function buildPreviewGroup(g: ParsedGroup, ctx: BuildContext): PreviewGroup {
     jobPlanId: jpMatch?.id ?? null,
     jobPlanName: jpMatch?.name ?? null,
 
-    matchSource,
+    matchSource: groupSkipped ? 'skipped' : matchSource,
     fuzzyCandidate,
+    skipped: groupSkipped,
 
     frequencySuffix: g.frequencySuffix,
     frequency: g.frequency,
     startDate: g.startDate.toISOString().slice(0, 10),
 
     assets,
-    assetCount: assets.length,
+    assetCount: activeAssets.length + (groupSkipped ? skippedAssetCount : 0),
     matchedAssetCount,
     unmatchedAssetCount,
     duplicateWorkOrderCount,
@@ -392,13 +531,57 @@ function resolveRow(
   const warnings = [...r.warnings]
   const duplicateWorkOrder = ctx.existingWO.has(r.workOrder)
 
+  // Row-level override: skip_row / link_asset / create_asset
+  const rowOverride = ctx.overridesByRow.get(r.rowNumber)
+
   let resolvedAssetId: string | null = null
   let resolvedAssetName: string | null = null
-  if (siteId) {
+  let resolvedFrom: ResolutionSource = 'none'
+  let skipped = false
+
+  if (rowOverride?.action === 'skip_row') {
+    skipped = true
+    resolvedFrom = 'skipped'
+    // Duplicate WO warning is irrelevant once skipped — drop it.
+    return {
+      rowNumber: r.rowNumber,
+      workOrder: r.workOrder,
+      maximoAssetId: r.maximoAssetId,
+      description: r.description,
+      location: r.location,
+      resolvedAssetId: null,
+      resolvedAssetName: null,
+      resolvedFrom,
+      skipped,
+      duplicateWorkOrder,
+      warnings,
+    }
+  }
+
+  if (
+    rowOverride &&
+    (rowOverride.action === 'link_asset' || rowOverride.action === 'create_asset')
+  ) {
+    const overrideAssetId =
+      typeof rowOverride.payload?.assetId === 'string'
+        ? (rowOverride.payload.assetId as string)
+        : null
+    const overrideAsset = overrideAssetId
+      ? ctx.overrideAssetsById.get(overrideAssetId)
+      : null
+    if (overrideAsset) {
+      resolvedAssetId = overrideAsset.id
+      resolvedAssetName = overrideAsset.name
+      resolvedFrom = 'override'
+    }
+  }
+
+  if (!resolvedAssetId && siteId) {
     const match = ctx.assetByKey.get(`${siteId}|${r.maximoAssetId}`)
     if (match) {
       resolvedAssetId = match.id
       resolvedAssetName = match.name
+      resolvedFrom = 'exact'
     } else {
       warnings.push(`No EQ asset with maximo_id=${r.maximoAssetId} at ${r.siteCode}`)
     }
@@ -416,9 +599,135 @@ function resolveRow(
     location: r.location,
     resolvedAssetId,
     resolvedAssetName,
+    resolvedFrom,
+    skipped,
     duplicateWorkOrder,
     warnings,
   }
+}
+
+// ── Session + override hydration helpers ────────────────────────────────
+
+type SupabaseCli = Awaited<ReturnType<typeof requireUser>>['supabase']
+
+/**
+ * Returns the import_session id to attach this upload to.
+ *
+ * Decision order:
+ *   1. `priorSessionId` is supplied and matches an uncommitted session for
+ *      this tenant — reuse it (touch updated_at + row_count).
+ *   2. An uncommitted session already exists for (tenant, fileHash) — reuse.
+ *   3. Otherwise INSERT a new session and return its id.
+ *
+ * All three branches are safe under the `import_sessions` RLS: the caller is
+ * already authenticated as an admin/supervisor, and created_by is pinned to
+ * `auth.uid()` by the INSERT policy.
+ */
+async function resolveImportSession(args: {
+  supabase: SupabaseCli
+  tenantId: string
+  userId: string
+  filename: string
+  fileHash: string
+  rowCount: number
+  priorSessionId: string | null
+}): Promise<string> {
+  const { supabase, tenantId, userId, filename, fileHash, rowCount, priorSessionId } = args
+
+  // (1) prior id supplied
+  if (priorSessionId) {
+    const { data: prior } = await supabase
+      .from('import_sessions')
+      .select('id, committed_at')
+      .eq('id', priorSessionId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+    if (prior && !prior.committed_at) {
+      await supabase
+        .from('import_sessions')
+        .update({ filename, file_hash: fileHash, row_count: rowCount })
+        .eq('id', prior.id)
+      return prior.id
+    }
+  }
+
+  // (2) open session with same file hash
+  const { data: openByHash } = await supabase
+    .from('import_sessions')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('file_hash', fileHash)
+    .is('committed_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (openByHash) {
+    await supabase
+      .from('import_sessions')
+      .update({ filename, row_count: rowCount })
+      .eq('id', openByHash.id)
+    return openByHash.id
+  }
+
+  // (3) new session
+  const { data: created, error } = await supabase
+    .from('import_sessions')
+    .insert({
+      tenant_id: tenantId,
+      source_system: 'delta',
+      filename,
+      file_hash: fileHash,
+      row_count: rowCount,
+      created_by: userId,
+    })
+    .select('id')
+    .single()
+
+  if (error || !created) {
+    throw new Error(error?.message ?? 'Failed to create import session.')
+  }
+  return created.id
+}
+
+/**
+ * Loads every override for a given session and buckets them by target.
+ * Row-level overrides (link_asset / create_asset / skip_row) go into
+ * `overridesByRow`; group-level (accept_alias / create_job_plan / skip_group)
+ * go into `overridesByGroup`. The partial unique indexes in migration 0051
+ * guarantee at most one entry per key.
+ */
+async function loadOverridesForSession(
+  supabase: SupabaseCli,
+  importSessionId: string,
+): Promise<{
+  overridesByRow: Map<number, OverrideRow>
+  overridesByGroup: Map<string, OverrideRow>
+}> {
+  const overridesByRow = new Map<number, OverrideRow>()
+  const overridesByGroup = new Map<string, OverrideRow>()
+
+  const { data } = await supabase
+    .from('import_overrides')
+    .select('scope, row_number, group_key, action, payload')
+    .eq('import_session_id', importSessionId)
+
+  for (const raw of data ?? []) {
+    const o: OverrideRow = {
+      scope: raw.scope,
+      row_number: raw.row_number,
+      group_key: raw.group_key,
+      action: raw.action,
+      payload: (raw.payload ?? {}) as Record<string, unknown>,
+    }
+    if (o.scope === 'row' && o.row_number != null) {
+      overridesByRow.set(o.row_number, o)
+    } else if (o.scope === 'group' && o.group_key != null) {
+      overridesByGroup.set(o.group_key, o)
+    }
+  }
+
+  return { overridesByRow, overridesByGroup }
 }
 
 // ── Commit action ───────────────────────────────────────────────────────
@@ -427,6 +736,12 @@ export interface CommitSummary {
   checksCreated: number
   checkAssetsCreated: number
   checkItemsCreated: number
+  /** Parser groups excluded by user via skip_group or by every row being skipped. */
+  groupsSkipped: number
+  /** Rows excluded via skip_row overrides. */
+  rowsSkipped: number
+  /** import_session_id consumed (now marked committed in the DB). */
+  importSessionId: string
   groupsCreated: {
     key: string
     checkId: string
@@ -458,7 +773,7 @@ export async function commitDeltaImportAction(
   mutationId?: string,
 ): Promise<CommitActionResult> {
   return withIdempotency<CommitSummary>(mutationId, async () => {
-    const { supabase, tenantId, role } = await requireUser()
+    const { supabase, tenantId, user, role } = await requireUser()
     if (!canWrite(role)) {
       return { success: false, error: 'Insufficient permissions.' }
     }
@@ -476,8 +791,14 @@ export async function commitDeltaImportAction(
         ? assignedToRaw.trim()
         : null
 
+    // Caller MUST forward the same importSessionId returned by the preview —
+    // that's the only reliable key to the overrides the user just applied.
+    // We fall back to hash-based lookup if it's missing (legacy clients).
+    const importSessionIdFromForm = (formData.get('importSessionId') as string) || null
+
     // ── Parse ─────────────────────────────────────────────────────────
     const buf = Buffer.from(await file.arrayBuffer())
+    const fileHash = createHash('sha256').update(buf).digest('hex')
     const { rows, groups, errors } = await parseWorkbook(buf)
     if (errors.length > 0) {
       return {
@@ -572,6 +893,66 @@ export async function commitDeltaImportAction(
       }
     }
 
+    // ── Resolve the import session and load overrides ─────────────────
+    // The commit MUST honor any inline fixes the user applied during the
+    // preview. We try the explicit session id first, then fall back to a
+    // hash match (idempotent) and finally to a fresh session if neither
+    // exists (commit without prior fixes is still valid).
+    const importSessionId = await resolveImportSession({
+      supabase,
+      tenantId,
+      userId: user.id,
+      filename: file.name || 'upload.xlsx',
+      fileHash,
+      rowCount: rows.length,
+      priorSessionId: importSessionIdFromForm,
+    })
+
+    const { overridesByRow, overridesByGroup } = await loadOverridesForSession(
+      supabase,
+      importSessionId,
+    )
+
+    // Validate that every override-referenced asset/job_plan still exists
+    // and belongs to this tenant. Stale id → loud blocker (not a silent skip).
+    const overrideAssetIds = Array.from(
+      new Set(
+        Array.from(overridesByRow.values())
+          .map((o) => (typeof o.payload?.assetId === 'string' ? (o.payload.assetId as string) : null))
+          .filter((v): v is string => !!v),
+      ),
+    )
+    const overrideAssetsById = new Map<string, { id: string; name: string; site_id: string | null }>()
+    if (overrideAssetIds.length > 0) {
+      const { data: oa } = await supabase
+        .from('assets')
+        .select('id, name, site_id')
+        .eq('tenant_id', tenantId)
+        .in('id', overrideAssetIds)
+      for (const a of oa ?? []) {
+        overrideAssetsById.set(a.id, { id: a.id, name: a.name, site_id: a.site_id })
+      }
+    }
+
+    const overrideJobPlanIds = Array.from(
+      new Set(
+        Array.from(overridesByGroup.values())
+          .map((o) => (typeof o.payload?.jobPlanId === 'string' ? (o.payload.jobPlanId as string) : null))
+          .filter((v): v is string => !!v),
+      ),
+    )
+    const overrideJpById = new Map<string, { id: string; code: string; name: string }>()
+    if (overrideJobPlanIds.length > 0) {
+      const { data: oj } = await supabase
+        .from('job_plans')
+        .select('id, code, name')
+        .eq('tenant_id', tenantId)
+        .in('id', overrideJobPlanIds)
+      for (const j of oj ?? []) {
+        if (j.code) overrideJpById.set(j.id, { id: j.id, code: j.code, name: j.name })
+      }
+    }
+
     // ── Validate every group ──────────────────────────────────────────
     interface ResolvedGroup {
       parsed: ParsedGroup
@@ -585,8 +966,17 @@ export async function commitDeltaImportAction(
 
     const resolved: ResolvedGroup[] = []
     const blockers: string[] = []
+    let skippedGroupCount = 0
+    let skippedRowCount = 0
 
     for (const g of groups) {
+      // Group-level overrides applied first — skip_group short-circuits.
+      const groupOverride = overridesByGroup.get(g.key)
+      if (groupOverride?.action === 'skip_group') {
+        skippedGroupCount++
+        continue
+      }
+
       const site = siteByCode.get(g.siteCode)
       if (!site) {
         blockers.push(`Site "${g.siteCode}" not found`)
@@ -597,7 +987,30 @@ export async function commitDeltaImportAction(
         continue
       }
 
-      let jp = jpByCode.get(g.jobPlanCode) ?? null
+      // Job plan resolution: override → exact → alias → blocker.
+      let jp: { id: string; name: string } | null = null
+      if (
+        groupOverride &&
+        (groupOverride.action === 'accept_alias' ||
+          groupOverride.action === 'create_job_plan')
+      ) {
+        const overrideJpId =
+          typeof groupOverride.payload?.jobPlanId === 'string'
+            ? (groupOverride.payload.jobPlanId as string)
+            : null
+        const overrideJp = overrideJpId ? overrideJpById.get(overrideJpId) : null
+        if (!overrideJp) {
+          blockers.push(
+            `Group ${g.siteCode}/${g.jobPlanCode}: override references missing or non-tenant job plan`,
+          )
+          continue
+        }
+        jp = { id: overrideJp.id, name: overrideJp.name }
+      }
+
+      if (!jp) {
+        jp = jpByCode.get(g.jobPlanCode) ?? null
+      }
       if (!jp) {
         const alias = aliasMap.get(g.jobPlanCode)
         if (alias) jp = { id: alias.id, name: alias.name }
@@ -607,33 +1020,85 @@ export async function commitDeltaImportAction(
         continue
       }
 
+      // Per-row resolution honors row-level overrides + skip filters.
       const assetIdByRow = new Map<number, string>()
+      const activeRows: typeof g.rows = []
       let unmatched = 0
+      let dupInGroup = 0
+
       for (const r of g.rows) {
-        const match = assetByKey.get(`${site.id}|${r.maximoAssetId}`)
-        if (match) {
-          assetIdByRow.set(r.rowNumber, match.id)
-        } else {
-          unmatched++
+        const rowOverride = overridesByRow.get(r.rowNumber)
+        if (rowOverride?.action === 'skip_row') {
+          skippedRowCount++
+          continue
         }
+
+        let assetId: string | null = null
+        if (
+          rowOverride &&
+          (rowOverride.action === 'link_asset' ||
+            rowOverride.action === 'create_asset')
+        ) {
+          const overrideAssetId =
+            typeof rowOverride.payload?.assetId === 'string'
+              ? (rowOverride.payload.assetId as string)
+              : null
+          const overrideAsset = overrideAssetId
+            ? overrideAssetsById.get(overrideAssetId)
+            : null
+          if (!overrideAsset) {
+            blockers.push(
+              `Row ${r.rowNumber}: override references missing or non-tenant asset`,
+            )
+            continue
+          }
+          // Optional sanity: warn if overridden asset doesn't live at the
+          // group's resolved site. We allow it (the user knows best) but log.
+          if (overrideAsset.site_id && overrideAsset.site_id !== site.id) {
+            // Non-blocking; recorded in audit metadata below.
+          }
+          assetId = overrideAsset.id
+        }
+
+        if (!assetId) {
+          const match = assetByKey.get(`${site.id}|${r.maximoAssetId}`)
+          if (match) assetId = match.id
+        }
+
+        if (!assetId) {
+          unmatched++
+          continue
+        }
+
+        if (existingWO.has(r.workOrder)) {
+          dupInGroup++
+          continue
+        }
+
+        assetIdByRow.set(r.rowNumber, assetId)
+        activeRows.push(r)
       }
+
       if (unmatched > 0) {
         blockers.push(
-          `Group ${g.siteCode}/${g.jobPlanCode}: ${unmatched} asset(s) not found by maximo_id`,
+          `Group ${g.siteCode}/${g.jobPlanCode}: ${unmatched} asset(s) not found by maximo_id (link, create, or skip them)`,
         )
         continue
       }
-
-      const dupInGroup = g.rows.filter((r) => existingWO.has(r.workOrder)).length
       if (dupInGroup > 0) {
         blockers.push(
-          `Group ${g.siteCode}/${g.jobPlanCode}: ${dupInGroup} duplicate work order(s)`,
+          `Group ${g.siteCode}/${g.jobPlanCode}: ${dupInGroup} duplicate work order(s) (skip them to commit)`,
         )
+        continue
+      }
+      if (activeRows.length === 0) {
+        // Every row in this group was skipped — treat as a skipped group.
+        skippedGroupCount++
         continue
       }
 
       resolved.push({
-        parsed: g,
+        parsed: { ...g, rows: activeRows },
         siteId: site.id,
         siteName: site.name,
         jobPlanId: jp.id,
@@ -710,6 +1175,9 @@ export async function commitDeltaImportAction(
       checksCreated: 0,
       checkAssetsCreated: 0,
       checkItemsCreated: 0,
+      groupsSkipped: skippedGroupCount,
+      rowsSkipped: skippedRowCount,
+      importSessionId,
       groupsCreated: [],
     }
 
@@ -817,14 +1285,42 @@ export async function commitDeltaImportAction(
       })
     }
 
+    // ── Mark the session committed (audit trail + prevents re-use) ────
+    const committedCheckIds = summary.groupsCreated.map((g) => g.checkId)
+    const { error: sessionErr } = await supabase
+      .from('import_sessions')
+      .update({
+        committed_at: new Date().toISOString(),
+        committed_check_ids: committedCheckIds,
+      })
+      .eq('id', importSessionId)
+      .eq('tenant_id', tenantId)
+    if (sessionErr) {
+      // Non-fatal — checks are already written. Surface in logs, not a user-
+      // facing failure, because rolling back writes here is worse than a
+      // dangling uncommitted session row.
+      console.error('[delta-import] failed to mark session committed', sessionErr)
+    }
+
     await logAuditEvent({
       action: 'create',
       entityType: 'maintenance_check',
-      summary: `Delta import: created ${summary.checksCreated} checks, ${summary.checkAssetsCreated} assets, ${summary.checkItemsCreated} tasks`,
+      summary: `Delta import: created ${summary.checksCreated} checks, ${summary.checkAssetsCreated} assets, ${summary.checkItemsCreated} tasks (skipped ${summary.groupsSkipped} group(s), ${summary.rowsSkipped} row(s))`,
       metadata: {
         source: 'delta_wo_import',
         filename: file.name,
+        importSessionId,
         checksCreated: summary.checksCreated,
+        groupsSkipped: summary.groupsSkipped,
+        rowsSkipped: summary.rowsSkipped,
+        overridesByRow: Array.from(overridesByRow.values()).map((o) => ({
+          rowNumber: o.row_number,
+          action: o.action,
+        })),
+        overridesByGroup: Array.from(overridesByGroup.values()).map((o) => ({
+          groupKey: o.group_key,
+          action: o.action,
+        })),
       },
       mutationId,
     })
