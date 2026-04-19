@@ -4,10 +4,17 @@
 --             "create asset for row 245", "skip row 246", "skip this group")
 --            across Re-parse uploads of the same workbook, so the user can
 --            resolve issues one by one without losing progress.
--- Applied:   [pending — apply via Supabase MCP or `supabase db push` once merged]
+-- Applied:   2026-04-19 to project urjhmkhbgaxrofurpbgc via Supabase MCP.
 -- Rollback:
 --   DROP TABLE public.import_overrides CASCADE;
 --   DROP TABLE public.import_sessions CASCADE;
+--
+-- Convention note: uses `tenant_id = ANY(public.get_user_tenant_ids())`
+-- directly (matches 0044–0049). An earlier draft wrapped the function call
+-- in `(select …)` for the planner-cache trick from 0027, but that makes
+-- Postgres treat the call as a row-returning subquery and blew up with
+-- `operator does not exist: uuid = uuid[]`. The un-wrapped form still
+-- benefits from the function being STABLE.
 
 BEGIN;
 
@@ -108,26 +115,26 @@ ALTER TABLE public.import_sessions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS import_sessions_select ON public.import_sessions;
 CREATE POLICY import_sessions_select
   ON public.import_sessions FOR SELECT TO authenticated
-  USING (tenant_id = ANY ((select public.get_user_tenant_ids())));
+  USING (tenant_id = ANY(public.get_user_tenant_ids()));
 
 DROP POLICY IF EXISTS import_sessions_insert ON public.import_sessions;
 CREATE POLICY import_sessions_insert
   ON public.import_sessions FOR INSERT TO authenticated
   WITH CHECK (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY(public.get_user_tenant_ids())
     AND public.get_user_role(tenant_id) IN ('super_admin','admin','supervisor')
-    AND created_by = (select auth.uid())
+    AND created_by = auth.uid()
   );
 
 DROP POLICY IF EXISTS import_sessions_update ON public.import_sessions;
 CREATE POLICY import_sessions_update
   ON public.import_sessions FOR UPDATE TO authenticated
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY(public.get_user_tenant_ids())
     AND public.get_user_role(tenant_id) IN ('super_admin','admin','supervisor')
   )
   WITH CHECK (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY(public.get_user_tenant_ids())
     AND public.get_user_role(tenant_id) IN ('super_admin','admin','supervisor')
   );
 
@@ -135,7 +142,7 @@ DROP POLICY IF EXISTS import_sessions_delete ON public.import_sessions;
 CREATE POLICY import_sessions_delete
   ON public.import_sessions FOR DELETE TO authenticated
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY(public.get_user_tenant_ids())
     AND public.is_tenant_admin(tenant_id)
   );
 
@@ -148,15 +155,15 @@ ALTER TABLE public.import_overrides ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS import_overrides_select ON public.import_overrides;
 CREATE POLICY import_overrides_select
   ON public.import_overrides FOR SELECT TO authenticated
-  USING (tenant_id = ANY ((select public.get_user_tenant_ids())));
+  USING (tenant_id = ANY(public.get_user_tenant_ids()));
 
 DROP POLICY IF EXISTS import_overrides_insert ON public.import_overrides;
 CREATE POLICY import_overrides_insert
   ON public.import_overrides FOR INSERT TO authenticated
   WITH CHECK (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY(public.get_user_tenant_ids())
     AND public.get_user_role(tenant_id) IN ('super_admin','admin','supervisor')
-    AND created_by = (select auth.uid())
+    AND created_by = auth.uid()
   );
 
 -- Overrides are replaceable via UPDATE so the client can swap a `skip_row`
@@ -165,11 +172,11 @@ DROP POLICY IF EXISTS import_overrides_update ON public.import_overrides;
 CREATE POLICY import_overrides_update
   ON public.import_overrides FOR UPDATE TO authenticated
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY(public.get_user_tenant_ids())
     AND public.get_user_role(tenant_id) IN ('super_admin','admin','supervisor')
   )
   WITH CHECK (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY(public.get_user_tenant_ids())
     AND public.get_user_role(tenant_id) IN ('super_admin','admin','supervisor')
   );
 
@@ -177,7 +184,7 @@ DROP POLICY IF EXISTS import_overrides_delete ON public.import_overrides;
 CREATE POLICY import_overrides_delete
   ON public.import_overrides FOR DELETE TO authenticated
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY(public.get_user_tenant_ids())
     AND public.get_user_role(tenant_id) IN ('super_admin','admin','supervisor')
   );
 
