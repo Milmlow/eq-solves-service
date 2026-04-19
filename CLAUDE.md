@@ -48,11 +48,11 @@ Excel batch fill: export pre-populated .xlsx per site, fill offline, import back
 
 Site-level Asset Collection view: expandable cards per CB with all collection fields.
 
-ACB toolbar button order (left to right): Import, Export, Breaker Details, Start All. "Start All" batch-creates tests for every untested asset at the site.
+ACB toolbar button order (left to right): Import, Export, Breaker Details, Create Check. "Create Check" opens a manual asset picker — tick the breakers to cover and confirm, which spins up a check container with one ACB test record per selected asset.
 
 ## NSX Testing Module
 
-3-step workflow framework at `/testing/nsx` mirroring ACB. Site-based asset loading filtered by NSX / MCCB job plan (name containing 'NSX' or code `LVNSX`/`MCCB`), falls back to all site assets if no matching plan. Step 1 Asset Collection is a full form (brand, breaker type, serial, current In, trip unit model, poles, fixed/withdrawable/plug_in, protection settings); Steps 2 & 3 are scaffolded placeholders pending field-set finalisation. State via `step1/2/3_status` columns on `nsx_tests` (migration 0026).
+3-step workflow at `/testing/nsx` mirroring ACB. Site-based asset loading filtered by NSX / MCCB job plan (name containing 'NSX' or code `LVNSX`/`MCCB`), falls back to all site assets if no matching plan. Step 1 Asset Collection is a full form (brand, breaker type, serial, current In, trip unit model, poles, fixed/withdrawable/plug_in, protection settings); Step 2 Visual & Functional is the full 23-item inspection across 5 sections matching ACB; Step 3 Electrical Testing covers contact resistance R/W/B, IR closed/open, temperature, secondary injection and maintenance completion — same shape as ACB. State via `step1/2/3_status` columns on `nsx_tests` (migration 0026). NSX toolbar mirrors ACB: Import, Export, Breaker Details, Create Check.
 
 ## Testing Summary
 
