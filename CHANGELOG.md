@@ -4,6 +4,34 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-19 — Bulletproof user invite/creation flow
+
+Merged to `main`.
+
+### Fixed
+- **"Database error saving new user" on invite** — root cause: `handle_new_user()` trigger from migration 0046 referenced a non-existent `ts.created_at` column on `tenant_settings`, which caused the insert into `auth.users` to roll back. Supabase Auth surfaced this as a generic "Database error" to the invite API.
+- **`supabase/migrations/0053_bulletproof_user_creation.sql`** — rewrote `handle_new_user()` to (a) only upsert `public.profiles` (never fail the auth insert), (b) wrap the body in `EXCEPTION WHEN OTHERS` so any future schema drift logs a warning instead of breaking signup, (c) default role to `technician`, promote `dev@eq.solutions` and `royce@eq.solutions` to `super_admin` automatically. Tenant-assignment logic moved out of the trigger and into the server action where it belongs. Backfill fixes demo-user role (`'user'` → `'super_admin'`) and demotes any stale `'user'` rows to `'technician'`.
+- **Invite email pointed at `localhost`** — `inviteUserAction` and `resendInviteAction` now send `redirectTo = ${origin}/auth/callback?next=/auth/reset-password` so the PKCE code is exchanged before the user lands on the reset page. Matches the forgot-password flow and prevents the "Auth session missing" error on reset.
+
+### Added
+- **Client-side hash-token fallback on reset page** — if the user arrives via the implicit flow (`#access_token=…&refresh_token=…`), `ResetPasswordForm` now calls `supabase.auth.setSession()` to materialise the session cookie before submit, then strips the hash from the URL so a refresh can't replay the tokens. `sessionReady` state gates the submit button until a valid session exists.
+- **Orphan repair UI on `/admin/users`** — users with a `profiles` row but no `tenant_members` row now show a "No tenant" amber badge with an Attach button that wires them into the current tenant via `repairUserTenantAction`. Resend button re-sends the invite email via `resendInviteAction`.
+- **`repairUserTenantAction` / `resendInviteAction`** — idempotent server actions for common admin operations. Both use the standard `requireUser()` → role check → Zod → mutation → audit-log → `revalidatePath()` pattern.
+
+### Changed
+- **`app/(app)/admin/users/actions.ts`** — split into helper functions: `requireTenantAdmin()`, `findAuthUserByEmail()`, `upsertProfile()`, `upsertTenantMembership()`, `friendlyAuthError()`. `inviteUserAction` is now authoritative and idempotent — safe to retry, handles new + existing + orphaned users without branching the caller.
+- **`app/(app)/admin/users/page.tsx`** — replaced the (broken) `profiles.select('tenant_members(...)')` join with two parallel queries stitched in app code. There's no FK between `profiles` and `tenant_members` (both FK to `auth.users`), so the PostgREST join fails silently. Stitched join exposes `has_tenant_membership` per row for the orphan UI.
+
+### Operational follow-ups (not code)
+- Supabase dashboard → Auth → URL Configuration → set Site URL to `https://eq-solves-service.netlify.app` and add the Netlify URL + any preview branches to Redirect URLs allowlist.
+- Invite/reset email templates still need an EQ-branded refresh (separate session).
+
+### Files Touched
+- Created: `supabase/migrations/0053_bulletproof_user_creation.sql`
+- Modified: `app/(app)/admin/users/actions.ts`, `app/(app)/admin/users/page.tsx`, `app/(app)/admin/users/UsersTable.tsx`, `app/(app)/admin/users/InviteUserForm.tsx`, `app/(auth)/auth/reset-password/ResetPasswordForm.tsx`
+
+---
+
 ## 2026-04-19 — Delta/Equinix Maximo work-order Excel import
 
 Merged to `main`.

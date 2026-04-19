@@ -166,7 +166,10 @@ export async function inviteUserAction(formData: FormData): Promise<{ ok: true; 
   const h = await headers()
   const hostHdr = h.get('origin') ?? h.get('host') ?? ''
   const origin = hostHdr.startsWith('http') ? hostHdr : `https://${hostHdr}`
-  const redirectTo = `${origin}/auth/reset-password`
+  // Route through the PKCE callback so the code is exchanged for a session
+  // cookie before the user lands on the reset-password page. Matches the
+  // forgot-password flow.
+  const redirectTo = `${origin}/auth/callback?next=/auth/reset-password`
 
   try {
     // --- 1. Resolve the auth user (invite if new, look up if existing) --------
@@ -253,7 +256,10 @@ export async function resendInviteAction(formData: FormData) {
   const h = await headers()
   const hostHdr = h.get('origin') ?? h.get('host') ?? ''
   const origin = hostHdr.startsWith('http') ? hostHdr : `https://${hostHdr}`
-  const redirectTo = `${origin}/auth/reset-password`
+  // Route through the PKCE callback so the code is exchanged for a session
+  // cookie before the user lands on the reset-password page. Matches the
+  // forgot-password flow.
+  const redirectTo = `${origin}/auth/callback?next=/auth/reset-password`
 
   const { data: profile } = await admin
     .from('profiles')
