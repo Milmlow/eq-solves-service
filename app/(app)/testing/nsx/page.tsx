@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -33,6 +33,7 @@ const MONTHS = [
 ] as const
 
 export default function NsxTestingPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const urlSiteId = searchParams.get('site_id') ?? ''
   const urlAssetId = searchParams.get('asset_id') ?? ''
@@ -122,13 +123,21 @@ export default function NsxTestingPage() {
     setNoAssets(false)
     const assetIds = assetsData.map((a) => a.id)
 
+    // Fetch tests newest-first so the per-asset Map holds the latest test —
+    // assets that have been tested multiple times now show their most recent
+    // run instead of an arbitrary historical row.
     const { data: testsData } = await supabase
       .from('nsx_tests')
       .select('*')
       .in('asset_id', assetIds)
       .eq('is_active', true)
+      .order('created_at', { ascending: false })
 
-    const testMap = new Map((testsData ?? []).map((t) => [t.asset_id, t as NsxTest]))
+    const testMap = new Map<string, NsxTest>()
+    for (const t of (testsData ?? []) as NsxTest[]) {
+      // First occurrence wins thanks to desc order — keeps the latest test.
+      if (!testMap.has(t.asset_id)) testMap.set(t.asset_id, t)
+    }
 
     const combined: (Asset & { nsx_test?: NsxTest })[] = assetsData.map((asset) => ({
       ...(asset as Asset),
@@ -205,7 +214,9 @@ export default function NsxTestingPage() {
     }
   }
 
-  // Create Check handler
+  // Create Check handler — on success, route straight to the Testing Summary
+  // with the new check auto-expanded. Previously we silently closed the form
+  // and reloaded the asset list, which looked to Simon like "nothing happened".
   async function handleCreateCheck() {
     setCreatingCheck(true)
     setCheckError(null)
@@ -219,13 +230,13 @@ export default function NsxTestingPage() {
         year: checkYear,
         asset_ids: Array.from(selectedAssetIds),
       })
-      if (result.success) {
+      if (result.success && result.checkId) {
         setShowCreateCheck(false)
         setSelectedAssetIds(new Set())
-        await loadSiteData()
-      } else {
-        setCheckError(result.error ?? 'Failed to create check.')
+        router.push(`/testing/summary?created=${result.checkId}`)
+        return
       }
+      setCheckError(result.error ?? 'Failed to create check.')
     } catch {
       setCheckError('An unexpected error occurred.')
     }
@@ -241,9 +252,26 @@ export default function NsxTestingPage() {
     })
   }
 
+  // An asset is "available" for a new check when it has no active test or
+  // its latest test is fully complete. Only in-progress tests block
+  // re-selection so users can re-run annual/semi-annual cycles on breakers
+  // that have been tested previously.
+  function isTestComplete(t: NsxTest | undefined): boolean {
+    if (!t) return false
+    return (
+      t.step1_status === 'complete' &&
+      t.step2_status === 'complete' &&
+      t.step3_status === 'complete'
+    )
+  }
+
+  function isAssetAvailable(a: Asset & { nsx_test?: NsxTest }): boolean {
+    return !a.nsx_test || isTestComplete(a.nsx_test)
+  }
+
   function selectAllAssets() {
-    const untested = assets.filter((a) => !a.nsx_test).map((a) => a.id)
-    setSelectedAssetIds(new Set(untested))
+    const available = assets.filter(isAssetAvailable).map((a) => a.id)
+    setSelectedAssetIds(new Set(available))
   }
 
   function deselectAllAssets() {
@@ -314,8 +342,8 @@ export default function NsxTestingPage() {
 
   // ── Create Check view ──
   if (showCreateCheck && selectedSite) {
-    const untestedAssets = assets.filter((a) => !a.nsx_test)
-    const testedAssets = assets.filter((a) => !!a.nsx_test)
+    const availableAssets = assets.filter(isAssetAvailable)
+    const inProgressAssets = assets.filter((a) => !isAssetAvailable(a))
     const siteName = sites.find((s) => s.id === selectedSite)?.name ?? 'Site'
 
     return (
@@ -384,15 +412,15 @@ export default function NsxTestingPage() {
             <h3 className="text-sm font-bold text-eq-ink">Select Assets</h3>
             <div className="flex gap-2">
               <Button size="sm" variant="secondary" onClick={selectAllAssets}>
-                Select All Untested
+                Select All Available
               </Button>
               <Button size="sm" variant="secondary" onClick={deselectAllAssets}>
                 Deselect All
               </Button>
             </div>
           </div>
-          {untestedAssets.length === 0 && testedAssets.length > 0 && (
-            <p className="text-sm text-eq-grey mb-3">All assets at this site already have active tests.</p>
+          {availableAssets.length === 0 && inProgressAssets.length > 0 && (
+            <p className="text-sm text-eq-grey mb-3">All assets at this site have an in-progress test. Finish or archive them before starting a new check.</p>
           )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -401,7 +429,7 @@ export default function NsxTestingPage() {
                   <th className="text-left py-2 px-3 w-10">
                     <input
                       type="checkbox"
-                      checked={untestedAssets.length > 0 && untestedAssets.every((a) => selectedAssetIds.has(a.id))}
+                      checked={availableAssets.length > 0 && availableAssets.every((a) => selectedAssetIds.has(a.id))}
                       onChange={(e) => e.target.checked ? selectAllAssets() : deselectAllAssets()}
                       className="rounded border-gray-300"
                     />
@@ -413,29 +441,36 @@ export default function NsxTestingPage() {
                 </tr>
               </thead>
               <tbody>
-                {untestedAssets.map((asset) => (
-                  <tr
-                    key={asset.id}
-                    className={`border-b border-gray-100 cursor-pointer transition-colors ${selectedAssetIds.has(asset.id) ? 'bg-eq-ice' : 'hover:bg-gray-50'}`}
-                    onClick={() => toggleAssetSelection(asset.id)}
-                  >
-                    <td className="py-2 px-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedAssetIds.has(asset.id)}
-                        onChange={() => toggleAssetSelection(asset.id)}
-                        className="rounded border-gray-300"
-                      />
-                    </td>
-                    <td className="py-2 px-3 font-medium text-eq-ink">{asset.name}</td>
-                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
-                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
-                    <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">Available</span>
-                    </td>
-                  </tr>
-                ))}
-                {testedAssets.map((asset) => (
+                {availableAssets.map((asset) => {
+                  const hasComplete = isTestComplete(asset.nsx_test)
+                  return (
+                    <tr
+                      key={asset.id}
+                      className={`border-b border-gray-100 cursor-pointer transition-colors ${selectedAssetIds.has(asset.id) ? 'bg-eq-ice' : 'hover:bg-gray-50'}`}
+                      onClick={() => toggleAssetSelection(asset.id)}
+                    >
+                      <td className="py-2 px-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedAssetIds.has(asset.id)}
+                          onChange={() => toggleAssetSelection(asset.id)}
+                          className="rounded border-gray-300"
+                        />
+                      </td>
+                      <td className="py-2 px-3 font-medium text-eq-ink">{asset.name}</td>
+                      <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
+                      <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
+                      <td className="py-2 px-3">
+                        {hasComplete ? (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-50 text-green-700">Previous: Complete</span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">Available</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {inProgressAssets.map((asset) => (
                   <tr key={asset.id} className="border-b border-gray-100 opacity-50">
                     <td className="py-2 px-3">
                       <input type="checkbox" disabled className="rounded border-gray-300" />
@@ -444,7 +479,7 @@ export default function NsxTestingPage() {
                     <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
                     <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
                     <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-50 text-amber-600">Test Exists</span>
+                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-50 text-amber-600">In Progress</span>
                     </td>
                   </tr>
                 ))}

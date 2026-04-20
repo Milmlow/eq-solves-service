@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { Card } from '@/components/ui/Card'
 import { formatDate } from '@/lib/utils/format'
-import { ChevronDown, ChevronRight, Archive } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, Archive } from 'lucide-react'
 import Link from 'next/link'
 import { archiveTestingCheckAction } from '../check-actions'
 
@@ -64,10 +64,31 @@ function typeTag(type: string) {
   )
 }
 
-export function CheckSummaryTable({ checks }: { checks: CheckRow[] }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+export function CheckSummaryTable({
+  checks,
+  createdCheckId,
+}: {
+  checks: CheckRow[]
+  createdCheckId?: string
+}) {
+  // Seed expansion with the newly-created check so the user lands on the
+  // Summary page and immediately sees what was just added (fix for Simon's
+  // "Creating a check list doesn't seem to do anything" feedback).
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => (createdCheckId ? new Set([createdCheckId]) : new Set())
+  )
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [showCreatedBanner, setShowCreatedBanner] = useState<boolean>(!!createdCheckId)
+  const createdRowRef = useRef<HTMLTableRowElement | null>(null)
+
+  // Scroll the newly-created row into view once it's mounted.
+  useEffect(() => {
+    if (!createdCheckId || !createdRowRef.current) return
+    createdRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [createdCheckId])
+
+  const createdCheck = createdCheckId ? checks.find(c => c.id === createdCheckId) : undefined
 
   function toggleExpand(id: string) {
     setExpanded((prev) => {
@@ -97,6 +118,24 @@ export function CheckSummaryTable({ checks }: { checks: CheckRow[] }) {
 
   return (
     <Card className="overflow-hidden p-0">
+      {showCreatedBanner && createdCheck && (
+        <div className="px-4 py-3 bg-green-50 border-b border-green-200 flex items-start gap-3">
+          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-green-800">Check created</p>
+            <p className="text-xs text-green-700 mt-0.5">
+              &ldquo;{createdCheck.name}&rdquo; is now tracked below with {createdCheck.total_assets} asset{createdCheck.total_assets === 1 ? '' : 's'}.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCreatedBanner(false)}
+            className="text-green-700 hover:text-green-900 text-xs font-medium"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {error && (
         <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-xs text-red-700">{error}</div>
       )}
@@ -124,7 +163,8 @@ export function CheckSummaryTable({ checks }: { checks: CheckRow[] }) {
                 <>
                   <tr
                     key={check.id}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    ref={check.id === createdCheckId ? createdRowRef : undefined}
+                    className={`hover:bg-gray-50 cursor-pointer ${check.id === createdCheckId ? 'bg-green-50' : ''}`}
                     onClick={() => toggleExpand(check.id)}
                   >
                     <td className="px-4 py-3">

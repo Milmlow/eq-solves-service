@@ -261,6 +261,11 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
   }
 
   // ── 6-Month Trend table (detailed only) ──
+  // Explicit column widths (sum to 100) — matches the shape of the
+  // Compliance-by-Site table above. Earlier revisions left widths
+  // undefined here which, on some docx/Word paths, forced the renderer
+  // to fall back to content-based sizing and produced a malformed
+  // column set in the .docx XML. Keep the widths explicit.
   if (isDetailed && input.months.length > 0) {
     sections.push(sectionHeading('6-Month Trend'))
     const trendTable = new Table({
@@ -269,21 +274,21 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
         new TableRow({
           tableHeader: true,
           children: [
-            headerCell('Month', colour),
-            headerCell('Tests', colour),
-            headerCell('Pass', colour),
-            headerCell('Checks', colour),
-            headerCell('Complete', colour),
+            headerCell('Month', colour, 20),
+            headerCell('Tests', colour, 20),
+            headerCell('Pass', colour, 20),
+            headerCell('Checks', colour, 20),
+            headerCell('Complete', colour, 20),
           ],
         }),
         ...input.months.map((mo) =>
           new TableRow({
             children: [
-              dataCell(mo.label),
-              dataCell(String(mo.tests), { align: AlignmentType.RIGHT }),
-              dataCell(String(mo.pass), { align: AlignmentType.RIGHT, color: '00AA00' }),
-              dataCell(String(mo.checks), { align: AlignmentType.RIGHT }),
-              dataCell(String(mo.complete), { align: AlignmentType.RIGHT, color: '00AA00' }),
+              dataCell(mo.label ?? ''),
+              dataCell(String(mo.tests ?? 0), { align: AlignmentType.RIGHT }),
+              dataCell(String(mo.pass ?? 0), { align: AlignmentType.RIGHT, color: '00AA00' }),
+              dataCell(String(mo.checks ?? 0), { align: AlignmentType.RIGHT }),
+              dataCell(String(mo.complete ?? 0), { align: AlignmentType.RIGHT, color: '00AA00' }),
             ],
           })
         ),

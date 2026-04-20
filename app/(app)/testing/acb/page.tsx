@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -29,6 +29,7 @@ const MONTHS = [
 ] as const
 
 export default function AcbTestingPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const urlSiteId = searchParams.get('site_id') ?? ''
   const urlAssetId = searchParams.get('asset_id') ?? ''
@@ -124,13 +125,22 @@ export default function AcbTestingPage() {
     const assetIds = assetsData.map(a => a.id)
     const testsWithAssets: (Asset & { acb_test?: AcbTest })[] = []
 
+    // Fetch tests newest-first so the per-asset Map holds the latest test per
+    // breaker — previous versions picked an arbitrary row, which caused the
+    // main list to stutter between historical and current tests after an
+    // asset had been run more than once.
     const { data: testsData } = await supabase
       .from('acb_tests')
       .select('*')
       .in('asset_id', assetIds)
       .eq('is_active', true)
+      .order('created_at', { ascending: false })
 
-    const testMap = new Map((testsData ?? []).map(t => [t.asset_id, t]))
+    const testMap = new Map<string, AcbTest>()
+    for (const t of (testsData ?? []) as AcbTest[]) {
+      // First occurrence wins thanks to desc order — keeps the latest test.
+      if (!testMap.has(t.asset_id)) testMap.set(t.asset_id, t)
+    }
 
     for (const asset of assetsData) {
       testsWithAssets.push({
@@ -241,7 +251,9 @@ export default function AcbTestingPage() {
     setImporting(false)
   }
 
-  // Create Check handler
+  // Create Check handler — on success, route straight to the Testing Summary
+  // with the new check auto-expanded. Previously we silently closed the form
+  // and reloaded the asset list, which looked to Simon like "nothing happened".
   async function handleCreateCheck() {
     setCreatingCheck(true)
     setCheckError(null)
@@ -255,13 +267,13 @@ export default function AcbTestingPage() {
         year: checkYear,
         asset_ids: Array.from(selectedAssetIds),
       })
-      if (result.success) {
+      if (result.success && result.checkId) {
         setShowCreateCheck(false)
         setSelectedAssetIds(new Set())
-        await loadSiteData()
-      } else {
-        setCheckError(result.error ?? 'Failed to create check.')
+        router.push(`/testing/summary?created=${result.checkId}`)
+        return
       }
+      setCheckError(result.error ?? 'Failed to create check.')
     } catch {
       setCheckError('An unexpected error occurred.')
     }
@@ -278,10 +290,27 @@ export default function AcbTestingPage() {
     })
   }
 
+  // An asset is "available" for a new check when it has no active test or
+  // its latest test is fully complete — completed tests are historical and
+  // shouldn't block re-running the breaker in a fresh maintenance event.
+  // Only an actively in-progress test blocks selection to avoid duplicate WIP.
+  function isTestComplete(t: AcbTest | undefined): boolean {
+    if (!t) return false
+    return (
+      t.step1_status === 'complete' &&
+      t.step2_status === 'complete' &&
+      t.step3_status === 'complete'
+    )
+  }
+
+  function isAssetAvailable(a: Asset & { acb_test?: AcbTest }): boolean {
+    return !a.acb_test || isTestComplete(a.acb_test)
+  }
+
   function selectAllAssets() {
-    // Only select untested assets
-    const untested = assets.filter(a => !a.acb_test).map(a => a.id)
-    setSelectedAssetIds(new Set(untested))
+    // Select every available asset — no active test or last test is complete.
+    const available = assets.filter(isAssetAvailable).map(a => a.id)
+    setSelectedAssetIds(new Set(available))
   }
 
   function deselectAllAssets() {
@@ -383,8 +412,8 @@ export default function AcbTestingPage() {
 
   // ── Create Check view ──
   if (showCreateCheck && selectedSite) {
-    const untestedAssets = assets.filter(a => !a.acb_test)
-    const testedAssets = assets.filter(a => !!a.acb_test)
+    const availableAssets = assets.filter(isAssetAvailable)
+    const inProgressAssets = assets.filter(a => !isAssetAvailable(a))
     const siteName = sites.find(s => s.id === selectedSite)?.name ?? 'Site'
 
     return (
@@ -453,15 +482,15 @@ export default function AcbTestingPage() {
             <h3 className="text-sm font-bold text-eq-ink">Select Assets</h3>
             <div className="flex gap-2">
               <Button size="sm" variant="secondary" onClick={selectAllAssets}>
-                Select All Untested
+                Select All Available
               </Button>
               <Button size="sm" variant="secondary" onClick={deselectAllAssets}>
                 Deselect All
               </Button>
             </div>
           </div>
-          {untestedAssets.length === 0 && testedAssets.length > 0 && (
-            <p className="text-sm text-eq-grey mb-3">All assets at this site already have active tests.</p>
+          {availableAssets.length === 0 && inProgressAssets.length > 0 && (
+            <p className="text-sm text-eq-grey mb-3">All assets at this site have an in-progress test. Finish or archive them before starting a new check.</p>
           )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -470,7 +499,7 @@ export default function AcbTestingPage() {
                   <th className="text-left py-2 px-3 w-10">
                     <input
                       type="checkbox"
-                      checked={untestedAssets.length > 0 && untestedAssets.every(a => selectedAssetIds.has(a.id))}
+                      checked={availableAssets.length > 0 && availableAssets.every(a => selectedAssetIds.has(a.id))}
                       onChange={(e) => e.target.checked ? selectAllAssets() : deselectAllAssets()}
                       className="rounded border-gray-300"
                     />
@@ -482,29 +511,36 @@ export default function AcbTestingPage() {
                 </tr>
               </thead>
               <tbody>
-                {untestedAssets.map(asset => (
-                  <tr
-                    key={asset.id}
-                    className={`border-b border-gray-100 cursor-pointer transition-colors ${selectedAssetIds.has(asset.id) ? 'bg-eq-ice' : 'hover:bg-gray-50'}`}
-                    onClick={() => toggleAssetSelection(asset.id)}
-                  >
-                    <td className="py-2 px-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedAssetIds.has(asset.id)}
-                        onChange={() => toggleAssetSelection(asset.id)}
-                        className="rounded border-gray-300"
-                      />
-                    </td>
-                    <td className="py-2 px-3 font-medium text-eq-ink">{asset.name}</td>
-                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
-                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
-                    <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">Available</span>
-                    </td>
-                  </tr>
-                ))}
-                {testedAssets.map(asset => (
+                {availableAssets.map(asset => {
+                  const hasComplete = isTestComplete(asset.acb_test)
+                  return (
+                    <tr
+                      key={asset.id}
+                      className={`border-b border-gray-100 cursor-pointer transition-colors ${selectedAssetIds.has(asset.id) ? 'bg-eq-ice' : 'hover:bg-gray-50'}`}
+                      onClick={() => toggleAssetSelection(asset.id)}
+                    >
+                      <td className="py-2 px-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedAssetIds.has(asset.id)}
+                          onChange={() => toggleAssetSelection(asset.id)}
+                          className="rounded border-gray-300"
+                        />
+                      </td>
+                      <td className="py-2 px-3 font-medium text-eq-ink">{asset.name}</td>
+                      <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
+                      <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
+                      <td className="py-2 px-3">
+                        {hasComplete ? (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-50 text-green-700">Previous: Complete</span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">Available</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {inProgressAssets.map(asset => (
                   <tr key={asset.id} className="border-b border-gray-100 opacity-50">
                     <td className="py-2 px-3">
                       <input type="checkbox" disabled className="rounded border-gray-300" />
@@ -513,7 +549,7 @@ export default function AcbTestingPage() {
                     <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
                     <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
                     <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-50 text-amber-600">Test Exists</span>
+                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-50 text-amber-600">In Progress</span>
                     </td>
                   </tr>
                 ))}

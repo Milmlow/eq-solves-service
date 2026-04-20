@@ -15,6 +15,15 @@ import { canWrite } from '@/lib/utils/roles'
 import { computeMaintenanceCompliance, computeComplianceBySite } from '@/lib/analytics/site-health'
 
 export async function GET(request: NextRequest) {
+  // Wrap the whole handler so any thrown error surfaces as a JSON
+  // response with a useful message instead of an HTML 500 — which the
+  // client sees as the opaque "Download failed" alert (fix for Item 3
+  // of Simon's 2026-04 feedback: "Compliance Report Detailed — download
+  // fails with no diagnosable error"). The detailed complexity was the
+  // reported failure but any query-time exception hit the same generic
+  // alert, so hardening the whole path is worth more than chasing a
+  // single branch we can't reproduce locally.
+  try {
   const { searchParams } = request.nextUrl
   const customerId = searchParams.get('customer_id') ?? ''
   const siteId = searchParams.get('site_id') ?? ''
@@ -170,8 +179,10 @@ export async function GET(request: NextRequest) {
       tests: 0, pass: 0, checks: 0, complete: 0,
     })
   }
-  const monthIdx = (date: string) => {
+  const monthIdx = (date: string | null | undefined) => {
+    if (!date) return -1
     const d = new Date(date)
+    if (Number.isNaN(d.getTime())) return -1
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     return months.findIndex((m) => m.key === key)
   }
@@ -219,4 +230,13 @@ export async function GET(request: NextRequest) {
       'Content-Disposition': `attachment; filename="${filename}"`,
     },
   })
+  } catch (err) {
+    // Log the real error server-side (Netlify function logs) and surface
+    // a diagnostic message to the client. Previously any thrown error
+    // turned into an HTML 500, the client's `res.json()` blew up, and
+    // the fallback "Download failed" alert left us with nothing to fix.
+    const message = err instanceof Error ? err.message : 'Unknown error generating compliance report'
+    console.error('[compliance-report] generation failed:', err)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }

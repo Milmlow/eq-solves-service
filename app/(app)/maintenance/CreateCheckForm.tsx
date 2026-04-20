@@ -62,7 +62,11 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
   const [siteId, setSiteId] = useState('')
   const [frequency, setFrequency] = useState('')
   const [isDarkSite, setIsDarkSite] = useState(false)
-  const [jobPlanId, setJobPlanId] = useState('')
+  // Multi-plan filter (Simon 2026-04 feedback item 9 — "ability to add
+  // multiple JCs"). Empty set means "all plans". One id ≡ legacy single
+  // dropdown. Two or more hits the new .in('job_plan_id', …) path in
+  // previewCheckAssetsAction + createCheckAction.
+  const [jobPlanIds, setJobPlanIds] = useState<Set<string>>(new Set())
   const [manualMode, setManualMode] = useState(false)
   const [manualMaximoIds, setManualMaximoIds] = useState('')
 
@@ -88,7 +92,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
     setSiteId('')
     setFrequency('')
     setIsDarkSite(false)
-    setJobPlanId('')
+    setJobPlanIds(new Set())
     setManualMode(false)
     setManualMaximoIds('')
     setPreviewAssets([])
@@ -98,12 +102,27 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
     setSuccess(false)
   }, [])
 
+  function toggleJobPlan(id: string) {
+    setJobPlanIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    setHasPreview(false)
+  }
+
   async function handlePreview() {
     if (!siteId || !frequency) return
     setPreviewing(true)
     setError(null)
 
-    const result = await previewCheckAssetsAction(siteId, frequency, isDarkSite, jobPlanId || null)
+    const result = await previewCheckAssetsAction(
+      siteId,
+      frequency,
+      isDarkSite,
+      Array.from(jobPlanIds),
+    )
     setPreviewing(false)
 
     if (result.success) {
@@ -123,6 +142,10 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
 
     const formData = new FormData(e.currentTarget)
     formData.set('is_dark_site', isDarkSite ? 'true' : 'false')
+    // Serialise the multi-plan filter as JSON. The server action reads
+    // `job_plan_ids`, falling back to the legacy `job_plan_id` input if
+    // absent (see actions.ts handling).
+    formData.set('job_plan_ids', JSON.stringify(Array.from(jobPlanIds)))
 
     // If manual mode, we need to resolve Maximo IDs to asset UUIDs on the server
     // For now, pass the preview asset IDs
@@ -233,22 +256,56 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
           </div>
         )}
 
-        {/* Job Plan Filter (optional) */}
+        {/* Job Plan Filter (optional, multi-select) */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Job Plan (optional filter)</label>
-          <select
-            name="job_plan_id"
-            value={jobPlanId}
-            onChange={(e) => { setJobPlanId(e.target.value); setHasPreview(false) }}
-            className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
-          >
-            <option value="">All job plans</option>
-            {jobPlans.map((jp) => (
-              <option key={jp.id} value={jp.id}>
-                {jp.name}{jp.code ? ` (${jp.code})` : ''}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">
+              Job Plans (optional filter)
+            </label>
+            <div className="flex items-center gap-2 text-[11px]">
+              {jobPlanIds.size > 0 && (
+                <>
+                  <span className="text-eq-grey">{jobPlanIds.size} selected</span>
+                  <button
+                    type="button"
+                    onClick={() => { setJobPlanIds(new Set()); setHasPreview(false) }}
+                    className="text-eq-sky hover:text-eq-deep font-medium"
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          {jobPlans.length === 0 ? (
+            <p className="text-xs text-eq-grey italic px-2 py-1.5">No job plans available for this tenant.</p>
+          ) : (
+            <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white divide-y divide-gray-50">
+              {jobPlans.map((jp) => {
+                const checked = jobPlanIds.has(jp.id)
+                return (
+                  <label
+                    key={jp.id}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-eq-ink hover:bg-gray-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleJobPlan(jp.id)}
+                      className="rounded border-gray-300 text-eq-sky focus:ring-eq-sky"
+                    />
+                    <span className="flex-1">
+                      {jp.name}
+                      {jp.code ? <span className="text-eq-grey ml-1">({jp.code})</span> : null}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          <p className="text-[11px] text-eq-grey mt-1">
+            Leave all unchecked to include every job plan at the site.
+          </p>
         </div>
 
         {/* Preview Button */}

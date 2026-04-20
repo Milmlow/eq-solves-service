@@ -49,15 +49,27 @@ function freqColumn(freq: string): string {
 /**
  * Preview which assets would be included in a check.
  * Used by the form to show a preview before creating.
+ *
+ * `jobPlanFilter` accepts either a single id (legacy) or an array of ids
+ * (Simon 2026-04 feedback item 9 — multiple JCs per check). An empty
+ * array or null means "no plan filter, return all site assets".
  */
 export async function previewCheckAssetsAction(
   siteId: string,
   frequency: string,
   isDarkSite: boolean,
-  jobPlanId?: string | null,
+  jobPlanFilter?: string | string[] | null,
 ) {
   try {
     const { supabase } = await requireUser()
+
+    // Normalise to an array. Dedupe defensively — the form can round-trip
+    // the same id if the user toggles a checkbox quickly.
+    const jobPlanIds = Array.isArray(jobPlanFilter)
+      ? [...new Set(jobPlanFilter.filter(Boolean))]
+      : jobPlanFilter
+        ? [jobPlanFilter]
+        : []
 
     let query = supabase
       .from('assets')
@@ -69,8 +81,10 @@ export async function previewCheckAssetsAction(
       query = query.eq('dark_site_test', true)
     }
 
-    if (jobPlanId) {
-      query = query.eq('job_plan_id', jobPlanId)
+    if (jobPlanIds.length === 1) {
+      query = query.eq('job_plan_id', jobPlanIds[0])
+    } else if (jobPlanIds.length > 1) {
+      query = query.in('job_plan_id', jobPlanIds)
     }
 
     const { data: assets } = await query.order('name')
@@ -140,11 +154,30 @@ export async function createCheckAction(formData: FormData) {
     const manualIdsRaw = formData.get('manual_asset_ids') as string | null
     const manualAssetIds = manualIdsRaw ? JSON.parse(manualIdsRaw) as string[] : undefined
 
+    // Parse job_plan_ids JSON array (Simon 2026-04 feedback item 9 —
+    // multi-JC support). Falls back to legacy single-id field.
+    const jobPlanIdsRaw = formData.get('job_plan_ids') as string | null
+    let jobPlanIds: string[] = []
+    if (jobPlanIdsRaw) {
+      try {
+        const parsedIds = JSON.parse(jobPlanIdsRaw)
+        if (Array.isArray(parsedIds)) jobPlanIds = parsedIds.filter((x): x is string => typeof x === 'string')
+      } catch {
+        return { success: false, error: 'Invalid job_plan_ids payload.' }
+      }
+    }
+    const legacyJobPlanId = (formData.get('job_plan_id') as string | null) || null
+    if (jobPlanIds.length === 0 && legacyJobPlanId) jobPlanIds = [legacyJobPlanId]
+
     const raw = {
       site_id: formData.get('site_id'),
       frequency: formData.get('frequency'),
       is_dark_site: formData.get('is_dark_site') === 'true',
-      job_plan_id: formData.get('job_plan_id') || null,
+      // Only stamp a single job_plan_id on the check record when the user
+      // picked exactly one plan. Multi-plan checks leave this null — the
+      // real filter lives in the items/assets we copy in below.
+      job_plan_id: jobPlanIds.length === 1 ? jobPlanIds[0] : null,
+      job_plan_ids: jobPlanIds,
       custom_name: formData.get('custom_name') || null,
       start_date: formData.get('start_date'),
       due_date: formData.get('due_date'),
@@ -158,7 +191,10 @@ export async function createCheckAction(formData: FormData) {
     const parsed = CreateMaintenanceCheckSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
-    const { manual_asset_ids: parsedManualIds, ...checkData } = parsed.data
+    // Strip fields we don't want to persist on the maintenance_checks row.
+    // `job_plan_ids` is a filter hint for asset selection below; it's not
+    // a column on the DB table.
+    const { manual_asset_ids: parsedManualIds, job_plan_ids: parsedJobPlanIds, ...checkData } = parsed.data
     const freq = parsed.data.frequency
 
     // Auto-generate name as "Site - Month - Year" if not provided
@@ -199,8 +235,14 @@ export async function createCheckAction(formData: FormData) {
       if (parsed.data.is_dark_site) {
         assetQuery = assetQuery.eq('dark_site_test', true)
       }
-      if (parsed.data.job_plan_id) {
-        assetQuery = assetQuery.eq('job_plan_id', parsed.data.job_plan_id)
+      // Multi-plan filter. Single id → .eq (uses idx_assets_job_plan_id);
+      // multiple → .in. Zero ids means "no plan filter" (all assets at
+      // the site). See lib/validations/maintenance-check.ts for shape.
+      const planIds = parsedJobPlanIds ?? []
+      if (planIds.length === 1) {
+        assetQuery = assetQuery.eq('job_plan_id', planIds[0])
+      } else if (planIds.length > 1) {
+        assetQuery = assetQuery.in('job_plan_id', planIds)
       }
     }
 

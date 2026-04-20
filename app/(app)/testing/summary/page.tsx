@@ -31,12 +31,13 @@ function acbStatus(test: { step1_status: string | null; step2_status: string | n
 export default async function TestingSummaryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ site_id?: string; kind?: string; status?: string; from?: string; to?: string }>
+  searchParams: Promise<{ site_id?: string; kind?: string; status?: string; from?: string; to?: string; created?: string }>
 }) {
   const params = await searchParams
   const siteId = params.site_id ?? ''
   const kindFilter = params.kind ?? ''
   const statusFilter = params.status ?? ''
+  const createdCheckId = params.created ?? ''
 
   const supabase = await createClient()
 
@@ -230,7 +231,7 @@ export default async function TestingSummaryPage({
       </Card>
 
       {/* Checks table */}
-      <CheckSummaryTable checks={checkRows} />
+      <CheckSummaryTable checks={checkRows} createdCheckId={createdCheckId || undefined} />
     </div>
   )
 }

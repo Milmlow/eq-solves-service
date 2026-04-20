@@ -8,7 +8,14 @@ export const CreateMaintenanceCheckSchema = z.object({
   site_id: z.string().uuid('Valid site is required'),
   frequency: z.enum(MAINTENANCE_FREQUENCIES, { error: 'Frequency is required' }),
   is_dark_site: z.boolean().optional().default(false),
+  // Legacy single-plan filter. Kept for backwards compatibility — older
+  // callers (import wizard, API) still send one id. When `job_plan_ids`
+  // is also provided, the array wins.
   job_plan_id: z.string().uuid().nullable().optional(),
+  // Multi-plan filter (Simon 2026-04 feedback item 9 "add multiple JCs").
+  // An empty or missing array means "all plans"; one or more uuids narrow
+  // the asset filter via `in (...)`.
+  job_plan_ids: z.array(z.string().uuid()).optional(),
   custom_name: z.string().max(200).nullable().optional(),
   start_date: z.string().min(1, 'Start date is required'),
   due_date: z.string().min(1, 'Due date is required'),
