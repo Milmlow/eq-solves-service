@@ -160,13 +160,32 @@ const VF_CHECKLIST: { name: string; order: number; section: string }[] = [
 ]
 
 // Electrical testing labels
-const ET_CONTACT_PHASES = ['Red Phase', 'Blue Phase', 'White Phase']
-const ET_IR_CLOSED = [
-  'Red > White', 'Red > Earth', 'Blue > Neutral',
-  'Red > Blue', 'White > Earth', 'Red > Neutral',
-  'White > Blue', 'Blue > Earth', 'White > Neutral',
+// Display labels shown in the report; storage keys are the short codes saved by
+// the workflow (Contact Resistance Red/White/Blue/Neutral; IR Closed R-W, R-B, …;
+// IR Open R-R, W-W, B-B, N-N).
+const ET_CONTACT_PHASES: Array<{ display: string; key: string }> = [
+  { display: 'Red Phase', key: 'Contact Resistance Red' },
+  { display: 'White Phase', key: 'Contact Resistance White' },
+  { display: 'Blue Phase', key: 'Contact Resistance Blue' },
+  { display: 'Neutral', key: 'Contact Resistance Neutral' },
 ]
-const ET_IR_OPEN = ['Red > Red', 'White > White', 'Blue > Blue', 'Neutral > Neutral']
+const ET_IR_CLOSED: Array<{ display: string; key: string }> = [
+  { display: 'Red > White', key: 'IR Closed R-W' },
+  { display: 'Red > Blue', key: 'IR Closed R-B' },
+  { display: 'White > Blue', key: 'IR Closed W-B' },
+  { display: 'Red > Earth', key: 'IR Closed R-E' },
+  { display: 'White > Earth', key: 'IR Closed W-E' },
+  { display: 'Blue > Earth', key: 'IR Closed B-E' },
+  { display: 'Red > Neutral', key: 'IR Closed R-N' },
+  { display: 'White > Neutral', key: 'IR Closed W-N' },
+  { display: 'Blue > Neutral', key: 'IR Closed B-N' },
+]
+const ET_IR_OPEN: Array<{ display: string; key: string }> = [
+  { display: 'Red > Red', key: 'IR Open R-R' },
+  { display: 'White > White', key: 'IR Open W-W' },
+  { display: 'Blue > Blue', key: 'IR Open B-B' },
+  { display: 'Neutral > Neutral', key: 'IR Open N-N' },
+]
 
 // Protection test rows
 const PROTECTION_ROWS = ['Short time', 'Instantaneous', 'Long time']
@@ -211,11 +230,20 @@ function formatDateDDMMYYYY(dateStr: string): string {
   }
 }
 
-/** Look up a reading value by label (case-insensitive, fuzzy prefix) */
+/** Look up a reading value by label (case-insensitive).
+ *  Strips the stored category prefix (`Electrical:`, `Visual:`, `Collection:`)
+ *  before comparing, so callers can pass raw labels without worrying about
+ *  namespacing. Falls back to exact match, then startsWith. */
 function findReading(readings: AcbReportReading[], label: string): AcbReportReading | undefined {
-  const lower = label.toLowerCase()
-  return readings.find((r) => r.label.toLowerCase() === lower) ??
-    readings.find((r) => r.label.toLowerCase().startsWith(lower))
+  const target = label.toLowerCase().trim()
+  const stripPrefix = (s: string): string =>
+    s.toLowerCase().replace(/^(electrical|visual|collection):\s*/, '').trim()
+  return (
+    readings.find((r) => stripPrefix(r.label) === target) ??
+    readings.find((r) => r.label.toLowerCase() === target) ??
+    readings.find((r) => stripPrefix(r.label).startsWith(target)) ??
+    readings.find((r) => r.label.toLowerCase().startsWith(target))
+  )
 }
 
 /** Map CB detail attribute name to value from test record + readings */
@@ -386,16 +414,15 @@ function buildElectricalTestingSection(test: AcbReportTest): (Paragraph | Table)
     children: [new TextRun({ text: `${test.assetName} - Electrical Testing`, bold: true, size: 22, font: 'Plus Jakarta Sans' })],
   }))
 
-  // -- Main Contact Resistance --
-  const contactColW = Math.floor(CONTENT_WIDTH / 3)
-  const contactRows = [
-    new TableRow({
-      children: ET_CONTACT_PHASES.map((phase) => {
-        const rdg = findReading(test.readings, `Contact Resistance ${phase}`) ?? findReading(test.readings, phase)
-        return cell(`${phase}: ${rdg ? rdg.value : ''}`, contactColW)
-      }),
+  // -- Main Contact Resistance -- (4 cols: Red, White, Blue, Neutral)
+  const contactColW = Math.floor(CONTENT_WIDTH / 4)
+  const contactColWidths = [contactColW, contactColW, contactColW, contactColW]
+  const contactRow = new TableRow({
+    children: ET_CONTACT_PHASES.map((phase) => {
+      const rdg = findReading(test.readings, phase.key)
+      return cell(rdg ? rdg.value : '', contactColW)
     }),
-  ]
+  })
 
   children.push(new Paragraph({
     spacing: { before: 120, after: 60 },
@@ -403,31 +430,30 @@ function buildElectricalTestingSection(test: AcbReportTest): (Paragraph | Table)
   }))
 
   children.push(new Table({
-    width: { size: contactColW * 3, type: WidthType.DXA },
-    columnWidths: [contactColW, contactColW, contactColW],
+    width: { size: contactColW * 4, type: WidthType.DXA },
+    columnWidths: contactColWidths,
     rows: [
       new TableRow({
-        children: ET_CONTACT_PHASES.map((p) => headerCell(p, contactColW)),
+        children: ET_CONTACT_PHASES.map((p) => headerCell(p.display, contactColW)),
       }),
-      ...contactRows,
+      contactRow,
     ],
   }))
 
-  // -- Insulation Resistance Closed --
+  // -- Insulation Resistance Closed -- (3 cols × 3 rows = 9 combos)
   const irColW = Math.floor(CONTENT_WIDTH / 3)
   children.push(new Paragraph({
     spacing: { before: 160, after: 60 },
     children: [new TextRun({ text: 'Insulation Resistance - Closed', bold: true, size: 18, font: 'Plus Jakarta Sans' })],
   }))
 
-  // 3 columns, 3 rows
   const irClosedTableRows: TableRow[] = []
   for (let row = 0; row < 3; row++) {
     const rowCells = [0, 1, 2].map((col) => {
-      const label = ET_IR_CLOSED[row * 3 + col]
-      if (!label) return cell('', irColW)
-      const rdg = findReading(test.readings, `IR Closed ${label}`) ?? findReading(test.readings, label)
-      return cell(`${label}: ${rdg ? rdg.value : ''}`, irColW)
+      const combo = ET_IR_CLOSED[row * 3 + col]
+      if (!combo) return cell('', irColW)
+      const rdg = findReading(test.readings, combo.key)
+      return cell(`${combo.display}: ${rdg ? rdg.value : ''}`, irColW)
     })
     irClosedTableRows.push(new TableRow({ children: rowCells }))
   }
@@ -438,28 +464,24 @@ function buildElectricalTestingSection(test: AcbReportTest): (Paragraph | Table)
     rows: irClosedTableRows,
   }))
 
-  // -- Insulation Resistance Open --
-  const irOpenColW = Math.floor(CONTENT_WIDTH / 2)
+  // -- Insulation Resistance Open -- (4 cols × 1 row = R-R, W-W, B-B, N-N)
+  const irOpenColW = Math.floor(CONTENT_WIDTH / 4)
   children.push(new Paragraph({
     spacing: { before: 160, after: 60 },
     children: [new TextRun({ text: 'Insulation Resistance - Open', bold: true, size: 18, font: 'Plus Jakarta Sans' })],
   }))
 
-  const irOpenTableRows: TableRow[] = []
-  for (let row = 0; row < 2; row++) {
-    const rowCells = [0, 1].map((col) => {
-      const label = ET_IR_OPEN[row * 2 + col]
-      if (!label) return cell('', irOpenColW)
-      const rdg = findReading(test.readings, `IR Open ${label}`) ?? findReading(test.readings, label)
-      return cell(`${label}: ${rdg ? rdg.value : ''}`, irOpenColW)
-    })
-    irOpenTableRows.push(new TableRow({ children: rowCells }))
-  }
+  const irOpenRow = new TableRow({
+    children: ET_IR_OPEN.map((combo) => {
+      const rdg = findReading(test.readings, combo.key)
+      return cell(`${combo.display}: ${rdg ? rdg.value : ''}`, irOpenColW)
+    }),
+  })
 
   children.push(new Table({
-    width: { size: irOpenColW * 2, type: WidthType.DXA },
-    columnWidths: [irOpenColW, irOpenColW],
-    rows: irOpenTableRows,
+    width: { size: irOpenColW * 4, type: WidthType.DXA },
+    columnWidths: [irOpenColW, irOpenColW, irOpenColW, irOpenColW],
+    rows: [irOpenRow],
   }))
 
   // -- Secondary Injection + Operation Counter After --

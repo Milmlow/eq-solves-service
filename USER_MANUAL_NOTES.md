@@ -496,7 +496,7 @@ The cover page shows the site name, year, and the date the report was generated.
 
 ### Tips
 
-- Make sure readings are entered with clear labels that match the template sections (e.g. "Contact Resistance Red Phase", "IR Closed Red > White"). The report matches readings by label
+- Make sure readings are entered with clear labels that match the template sections (e.g. "Contact Resistance Red", "IR Closed R-W"). The report matches readings by label
 - CB details (make, model, serial) come from the ACB test record itself. Protection settings come from readings
 - Only active ACB tests are included in the report
 

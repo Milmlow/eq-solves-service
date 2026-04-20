@@ -59,11 +59,13 @@ const VISUAL_ITEMS = [
 ]
 
 /* ─── Electrical test item definitions ─── */
-const CONTACT_RESISTANCE_PHASES = ['Red', 'White', 'Blue'] as const
+const CONTACT_RESISTANCE_PHASES = ['Red', 'White', 'Blue', 'Neutral'] as const
 const IR_CLOSED_COMBOS = [
-  'R-E', 'W-E', 'B-E', 'R-W', 'R-B', 'W-B', 'All-E',
+  'R-W', 'R-B', 'W-B',
+  'R-E', 'W-E', 'B-E',
+  'R-N', 'W-N', 'B-N',
 ] as const
-const IR_OPEN_COMBOS = ['R-E', 'W-E', 'B-E', 'All-E'] as const
+const IR_OPEN_COMBOS = ['R-R', 'W-W', 'B-B', 'N-N'] as const
 
 /* ─── Helper components ─── */
 function InputField({ label, value, onChange, placeholder, className, type = 'text' }: {
@@ -585,12 +587,6 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
     return map
   })
 
-  // Temperature
-  const [temperature, setTemperature] = useState(() => {
-    const r = readings.find(rd => rd.label === 'Electrical: Temperature')
-    return r?.value || ''
-  })
-
   // Secondary injection
   const [secondaryInjection, setSecondaryInjection] = useState<'pass' | 'fail' | 'na'>(() => {
     const r = readings.find(rd => rd.label === 'Electrical: Secondary Injection')
@@ -614,8 +610,10 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
     return r.is_pass === true ? 'pass' : r.is_pass === false ? 'fail' : 'na'
   })
 
-  // 30% variance warning for contact resistance
-  const contactValues = Object.values(contactRes).map(v => parseFloat(v)).filter(v => !isNaN(v))
+  // 30% variance warning for contact resistance — phases only (exclude Neutral)
+  const contactValues = (['Red', 'White', 'Blue'] as const)
+    .map(p => parseFloat(contactRes[p] ?? ''))
+    .filter(v => !isNaN(v))
   const contactVarianceWarning = useMemo(() => {
     if (contactValues.length < 2) return false
     const avg = contactValues.reduce((a, b) => a + b, 0) / contactValues.length
@@ -648,11 +646,6 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
       if (irOpen[combo]) {
         allReadings.push({ label: `IR Open ${combo}`, value: irOpen[combo], unit: 'MΩ' })
       }
-    }
-
-    // Temperature
-    if (temperature) {
-      allReadings.push({ label: 'Temperature', value: temperature, unit: '°C' })
     }
 
     // Secondary injection
@@ -696,7 +689,7 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
       {/* Contact Resistance */}
       <div>
         <h3 className="font-medium text-eq-ink mb-3">Contact Resistance (µΩ)</h3>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           {CONTACT_RESISTANCE_PHASES.map(phase => (
             <InputField
               key={phase}
@@ -719,7 +712,7 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
       {/* IR Closed */}
       <div className="border-t pt-4">
         <h3 className="font-medium text-eq-ink mb-3">Insulation Resistance — Closed (MΩ)</h3>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {IR_CLOSED_COMBOS.map(combo => (
             <InputField
               key={combo}
@@ -747,14 +740,6 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
               type="number"
             />
           ))}
-        </div>
-      </div>
-
-      {/* Temperature */}
-      <div className="border-t pt-4">
-        <h3 className="font-medium text-eq-ink mb-3">Temperature</h3>
-        <div className="grid grid-cols-4 gap-3">
-          <InputField label="Temperature (°C)" value={temperature} onChange={setTemperature} placeholder="°C" type="number" />
         </div>
       </div>
 

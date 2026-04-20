@@ -85,15 +85,17 @@ export default async function TestingSummaryPage({
         const st = acbStatus(t)
         if (st === 'complete') completedCount++
         else if (st === 'in-progress') inProgressCount++
+        const assetId = asset?.id ?? (t.asset_id as string)
+        const siteQ = check.site_id ? `&site_id=${check.site_id}` : ''
         assets.push({
-          id: asset?.id ?? t.asset_id as string,
+          id: assetId,
           test_id: t.id as string,
           asset_name: asset?.name ?? '—',
           asset_type: asset?.asset_type ?? '',
           serial_number: asset?.serial_number ?? null,
           progress: pct,
           status: st,
-          detail_href: '/testing/acb',
+          detail_href: `/testing/acb?asset_id=${assetId}${siteQ}`,
         })
       }
     } else if (check.check_type === 'nsx') {
@@ -111,15 +113,17 @@ export default async function TestingSummaryPage({
         const st = acbStatus(t)
         if (st === 'complete') completedCount++
         else if (st === 'in-progress') inProgressCount++
+        const assetId = asset?.id ?? (t.asset_id as string)
+        const siteQ = check.site_id ? `&site_id=${check.site_id}` : ''
         assets.push({
-          id: asset?.id ?? t.asset_id as string,
+          id: assetId,
           test_id: t.id as string,
           asset_name: asset?.name ?? '—',
           asset_type: asset?.asset_type ?? '',
           serial_number: asset?.serial_number ?? null,
           progress: pct,
           status: st,
-          detail_href: '/testing/nsx',
+          detail_href: `/testing/nsx?asset_id=${assetId}${siteQ}`,
         })
       }
     }

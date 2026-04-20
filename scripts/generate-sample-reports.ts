@@ -64,27 +64,28 @@ type Elec = { label: string; value: string; unit: string | null; isPass: boolean
 
 function electricalReadings(variant: 'pass-a' | 'pass-b' | 'defect'): Elec[] {
   const cr = variant === 'pass-a'
-    ? ['42', '44', '43']
+    ? ['42', '44', '43', '40']
     : variant === 'pass-b'
-      ? ['41', '45', '44']
-      : ['71', '46', '45']
+      ? ['41', '45', '44', '42']
+      : ['71', '46', '45', '41']
   return [
-    { label: 'Contact Resistance Red Phase', value: cr[0], unit: 'µΩ', isPass: variant !== 'defect', sortOrder: 300 },
-    { label: 'Contact Resistance White Phase', value: cr[1], unit: 'µΩ', isPass: true, sortOrder: 301 },
-    { label: 'Contact Resistance Blue Phase', value: cr[2], unit: 'µΩ', isPass: true, sortOrder: 302 },
-    { label: 'IR Closed Red > White', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 310 },
-    { label: 'IR Closed Red > Earth', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 311 },
-    { label: 'IR Closed Blue > Neutral', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 312 },
-    { label: 'IR Closed Red > Blue', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 313 },
-    { label: 'IR Closed White > Earth', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 314 },
-    { label: 'IR Closed Red > Neutral', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 315 },
-    { label: 'IR Closed White > Blue', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 316 },
-    { label: 'IR Closed Blue > Earth', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 317 },
-    { label: 'IR Closed White > Neutral', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 318 },
-    { label: 'IR Open Red > Red', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 320 },
-    { label: 'IR Open White > White', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 321 },
-    { label: 'IR Open Blue > Blue', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 322 },
-    { label: 'IR Open Neutral > Neutral', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 323 },
+    { label: 'Contact Resistance Red', value: cr[0], unit: 'µΩ', isPass: variant !== 'defect', sortOrder: 300 },
+    { label: 'Contact Resistance White', value: cr[1], unit: 'µΩ', isPass: true, sortOrder: 301 },
+    { label: 'Contact Resistance Blue', value: cr[2], unit: 'µΩ', isPass: true, sortOrder: 302 },
+    { label: 'Contact Resistance Neutral', value: cr[3], unit: 'µΩ', isPass: true, sortOrder: 303 },
+    { label: 'IR Closed R-W', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 310 },
+    { label: 'IR Closed R-B', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 311 },
+    { label: 'IR Closed W-B', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 312 },
+    { label: 'IR Closed R-E', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 313 },
+    { label: 'IR Closed W-E', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 314 },
+    { label: 'IR Closed B-E', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 315 },
+    { label: 'IR Closed R-N', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 316 },
+    { label: 'IR Closed W-N', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 317 },
+    { label: 'IR Closed B-N', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 318 },
+    { label: 'IR Open R-R', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 320 },
+    { label: 'IR Open W-W', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 321 },
+    { label: 'IR Open B-B', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 322 },
+    { label: 'IR Open N-N', value: '>1000', unit: 'MΩ', isPass: true, sortOrder: 323 },
     { label: 'Secondary Injection', value: 'Test complete - within spec', unit: '', isPass: true, sortOrder: 330 },
     { label: 'Operation Counter - After', value: '1251', unit: '', isPass: true, sortOrder: 335 },
     { label: 'Protection Short time', value: '4000 A / 200 ms', unit: '', isPass: true, sortOrder: 340 },

@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -32,8 +33,12 @@ const MONTHS = [
 ] as const
 
 export default function NsxTestingPage() {
+  const searchParams = useSearchParams()
+  const urlSiteId = searchParams.get('site_id') ?? ''
+  const urlAssetId = searchParams.get('asset_id') ?? ''
+
   const [sites, setSites] = useState<SitePick[]>([])
-  const [selectedSite, setSelectedSite] = useState<string>('')
+  const [selectedSite, setSelectedSite] = useState<string>(urlSiteId)
   const [assets, setAssets] = useState<(Asset & { nsx_test?: NsxTest })[]>([])
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
   const [selectedTestReadings, setSelectedTestReadings] = useState<NsxTestReading[]>([])
@@ -161,6 +166,28 @@ export default function NsxTestingPage() {
   useEffect(() => {
     loadSiteData()
   }, [selectedSite])
+
+  // Deep-link support: auto-select asset when URL has ?asset_id=… so the
+  // Open button from /testing/summary lands directly inside the workflow.
+  useEffect(() => {
+    if (!urlAssetId || selectedAsset || assets.length === 0) return
+    if (assets.some(a => a.id === urlAssetId)) {
+      setSelectedAsset(urlAssetId)
+    }
+  }, [urlAssetId, assets, selectedAsset])
+
+  // If URL has ?asset_id=… but no site_id, resolve site from the asset.
+  useEffect(() => {
+    if (!urlAssetId || selectedSite) return
+    (async () => {
+      const { data } = await supabase
+        .from('assets')
+        .select('site_id')
+        .eq('id', urlAssetId)
+        .single()
+      if (data?.site_id) setSelectedSite(data.site_id as string)
+    })()
+  }, [urlAssetId, selectedSite, supabase])
 
   async function handleStartTest(asset: Asset) {
     setCreating(asset.id)

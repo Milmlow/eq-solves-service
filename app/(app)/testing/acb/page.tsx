@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -28,8 +29,12 @@ const MONTHS = [
 ] as const
 
 export default function AcbTestingPage() {
+  const searchParams = useSearchParams()
+  const urlSiteId = searchParams.get('site_id') ?? ''
+  const urlAssetId = searchParams.get('asset_id') ?? ''
+
   const [sites, setSites] = useState<SitePick[]>([])
-  const [selectedSite, setSelectedSite] = useState<string>('')
+  const [selectedSite, setSelectedSite] = useState<string>(urlSiteId)
   const [assets, setAssets] = useState<(Asset & { acb_test?: AcbTest })[]>([])
   const [readings, setReadings] = useState<Record<string, AcbTestReading[]>>({})
   const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
@@ -161,6 +166,31 @@ export default function AcbTestingPage() {
   useEffect(() => {
     loadSiteData()
   }, [selectedSite])
+
+  // Deep-link support: if the URL has ?asset_id=… and it matches a loaded
+  // asset, auto-select it so the Open button from /testing/summary lands
+  // directly inside the ACB workflow for that breaker. Only runs once per
+  // URL param, hence the guard on selectedAsset.
+  useEffect(() => {
+    if (!urlAssetId || selectedAsset || assets.length === 0) return
+    if (assets.some(a => a.id === urlAssetId)) {
+      setSelectedAsset(urlAssetId)
+    }
+  }, [urlAssetId, assets, selectedAsset])
+
+  // If URL has ?asset_id=… but no site_id, resolve the site from the asset
+  // and populate selectedSite so loadSiteData picks up the right list.
+  useEffect(() => {
+    if (!urlAssetId || selectedSite) return
+    (async () => {
+      const { data } = await supabase
+        .from('assets')
+        .select('site_id')
+        .eq('id', urlAssetId)
+        .single()
+      if (data?.site_id) setSelectedSite(data.site_id as string)
+    })()
+  }, [urlAssetId, selectedSite, supabase])
 
   // Create test and open workflow
   async function handleStartTest(asset: Asset) {
