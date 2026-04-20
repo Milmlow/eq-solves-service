@@ -269,36 +269,33 @@ export async function resendInviteAction(formData: FormData) {
 
   if (!profile?.email) return { error: 'User has no email on file.' }
 
-  // Decide which link type to generate based on the user's current state:
-  //   - Confirmed (they've already set a password) → send password recovery.
-  //     Lands on /auth/reset-password.
-  //   - Not confirmed (pending invite, never clicked the first link) → re-issue
-  //     the invite. Lands on /auth/accept-invite.
-  // Previously this called inviteUserByEmail for every case, which fails with
-  // 422 email_exists the moment the user row exists in auth.users — i.e. every
-  // time after the first send. generateLink is the correct API for resends.
+  // Decide the destination based on the user's current state:
+  //   - Confirmed (they've already set a password) → /auth/reset-password.
+  //   - Not confirmed (pending invite, never clicked the first link) →
+  //     /auth/accept-invite (welcome rail + password setup).
+  //
+  // We deliver via the PUBLIC /auth/v1/recover endpoint (resetPasswordForEmail)
+  // — NOT admin.generateLink. Why:
+  //   - admin.inviteUserByEmail 422s on email_exists for every resend.
+  //   - admin.generateLink returns the action_link but does NOT trigger SMTP
+  //     delivery; it's meant for custom email flows. Our test on 2026-04-20
+  //     confirmed this: the admin call returned 200 and updated recovery_sent_at,
+  //     but no email reached Resend.
+  //   - /auth/v1/recover (public) hits the mailer and delivers via the project's
+  //     configured SMTP (Resend, in our case). It's rate-limited to one request
+  //     per email per 60s, which is fine for admin Resend clicks.
+  // Trade-off: the email subject will be "Reset your password" for both
+  // confirmed and not-yet-confirmed users. Acceptable for now; can iterate
+  // with a custom Resend API call + our own template later if needed.
   const authUser = await findAuthUserByEmail(admin, profile.email)
   const isConfirmed = !!authUser?.email_confirmed_at
   const nextPath = isConfirmed ? '/auth/reset-password' : '/auth/accept-invite'
   const redirectTo = `${origin}/auth/callback?next=${nextPath}`
 
-  // Split the call — the Supabase SDK types for `recovery` only accept
-  // `{ redirectTo }` in options, whereas `invite` additionally accepts `data`.
-  // Keeping these branches separate satisfies the type system cleanly.
-  const { error } = isConfirmed
-    ? await admin.auth.admin.generateLink({
-        type: 'recovery',
-        email: profile.email,
-        options: { redirectTo },
-      })
-    : await admin.auth.admin.generateLink({
-        type: 'invite',
-        email: profile.email,
-        options: {
-          redirectTo,
-          data: { full_name: profile.full_name ?? '' },
-        },
-      })
+  const publicClient = await createClient()
+  const { error } = await publicClient.auth.resetPasswordForEmail(profile.email, {
+    redirectTo,
+  })
   if (error) return { error: friendlyAuthError(error.message) }
 
   await logAuditEvent({

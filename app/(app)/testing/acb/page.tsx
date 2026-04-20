@@ -398,7 +398,18 @@ export default function AcbTestingPage() {
           <h1 className="text-3xl font-bold text-eq-sky mt-2">{selectedAssetData?.name}</h1>
           <p className="text-eq-grey text-sm mt-1">3-step testing workflow</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => setSelectedAsset(null)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            // Clear local selection AND strip asset_id from the URL. Without
+            // the URL clear the deep-link useEffect re-selects the asset the
+            // moment selectedAsset flips to null, so Back does nothing.
+            setSelectedAsset(null)
+            const qs = selectedSite ? `?site_id=${selectedSite}` : ''
+            router.replace(`/testing/acb${qs}`)
+          }}
+        >
           Back to Asset List
         </Button>
         <AcbWorkflow
