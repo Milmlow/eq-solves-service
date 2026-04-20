@@ -22,7 +22,14 @@ interface Profile {
 
 function fmtDate(s: string | null) {
   if (!s) return '—'
-  return new Date(s).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+  // Pin timeZone so server (UTC) and client (AEST) render the same string.
+  // Without this, `last_login_at` values near midnight UTC trigger React
+  // hydration error #418 because the server renders one day and the browser
+  // another.
+  return new Date(s).toLocaleDateString('en-AU', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    timeZone: 'Australia/Sydney',
+  })
 }
 
 export function UsersTable({
@@ -191,8 +198,11 @@ export function UsersTable({
                       onClick={() => toggleActive(u.id, !u.is_active)}
                       disabled={pending || isSelf}
                       className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                      title={u.is_active
+                        ? 'Disable sign-in across ALL tenants — different from Remove (current tenant only)'
+                        : 'Re-enable sign-in across all tenants'}
                     >
-                      {u.is_active ? 'Deactivate' : 'Reactivate'}
+                      {u.is_active ? 'Disable account' : 'Enable account'}
                     </button>
                     <button
                       type="button"

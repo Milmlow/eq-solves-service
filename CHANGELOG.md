@@ -4,6 +4,35 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-21 — User-admin hot-fix: hydration, defensive role update, MFA observability, UX copy
+
+Merged to `main`.
+
+### Fixed
+- **React hydration error #418 on `/admin/users`** — the `fmtDate` helper called `toLocaleDateString('en-AU', …)` with no `timeZone`, so the Netlify function (UTC) and the Sydney browser (AEST) rendered different day strings for any `last_login_at` near midnight UTC. Pinned `timeZone: 'Australia/Sydney'` in every client-rendered date formatter: `UsersTable`, `ArchiveTable`, `PmCalendarView`, and the shared `lib/utils/format` helpers (`formatDate`, `formatDateTime`). Server-only formatters (reports, compliance, email) were left alone — they don't hydrate.
+- **`setRoleAction` could mutate soft-removed memberships** — the `UPDATE tenant_members` statement didn't filter `is_active`, so a crafted request could update a dead row. The UI already disables the role dropdown for NO TENANT users, but the filter belongs server-side. Added `.eq('is_active', true)`.
+
+### Added
+- **MFA observability** — emit `mfa_challenge_verified` / `mfa_challenge_failed` from `app/(auth)/auth/mfa/actions.ts`, and `mfa_redirect` from `proxy.ts` whenever the AAL gate bounces a user to `/auth/mfa`. Two redirects in ~30s for the same user = suspected loop; visible in PostHog now instead of anecdotally reproduced.
+
+### Changed
+- **Button copy on `/admin/users`** — "Deactivate" / "Reactivate" renamed to "Disable account" / "Enable account". Tooltip now distinguishes the two destructive verbs: "Disable" blocks sign-in across ALL tenants; "Remove" takes a user out of this tenant only (reversible via Attach / re-invite). Page sub-heading rewritten accordingly.
+
+### Context
+Triage report: `/PowerApps project/user-process-deep-dive-2026-04-21.md`. The P0 (royce.milmlow@sks.com.au tenant_members reactivation) was applied via SQL before this commit — no code change for that.
+
+### Files Touched
+- Modified: `app/(app)/admin/users/UsersTable.tsx` (fmtDate timezone, button copy)
+- Modified: `app/(app)/admin/users/page.tsx` (sub-heading copy)
+- Modified: `app/(app)/admin/users/actions.ts` (setRoleAction is_active filter)
+- Modified: `app/(app)/admin/archive/ArchiveTable.tsx` (fmtDate timezone)
+- Modified: `app/(app)/pm-calendar/PmCalendarView.tsx` (formatDate timezone)
+- Modified: `lib/utils/format.ts` (formatDate + formatDateTime timezone)
+- Modified: `app/(auth)/auth/mfa/actions.ts` (PostHog events on verify + fail)
+- Modified: `proxy.ts` (PostHog event on AAL redirect)
+
+---
+
 ## 2026-04-19 — Cycle-grouped maintenance kanban
 
 Merged to `main`.

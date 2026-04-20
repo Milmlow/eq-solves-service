@@ -90,7 +90,12 @@ export function formatNsxTestResult(result: NsxTestResult): string {
 
 export function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
-  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+  // Pin timeZone so server (UTC) and client (AEST) render the same string —
+  // avoids React hydration mismatch (error #418) on late-evening UTC dates.
+  return d.toLocaleDateString('en-AU', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    timeZone: 'Australia/Sydney',
+  })
 }
 
 export function formatDateTime(dateStr: string): string {
@@ -98,6 +103,7 @@ export function formatDateTime(dateStr: string): string {
   return d.toLocaleDateString('en-AU', {
     day: '2-digit', month: 'short', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'Australia/Sydney',
   })
 }
 

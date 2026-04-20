@@ -472,6 +472,9 @@ export async function setRoleAction(formData: FormData) {
     .update({ role })
     .eq('tenant_id', tenantId)
     .eq('user_id', userId)
+    // Defensive: never mutate a soft-removed row. The UI already disables
+    // the role dropdown for NO TENANT users, but the filter belongs server-side.
+    .eq('is_active', true)
   if (tErr) return { error: tErr.message }
 
   await logAuditEvent({

@@ -6,6 +6,7 @@
  */
 import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
+import { trackServer } from '@/lib/analytics-server'
 
 // Next.js 16 renamed `middleware.ts` → `proxy.ts` with a `proxy()` export.
 // This file refreshes the Supabase session on every request, enforces
@@ -55,6 +56,9 @@ export async function proxy(request: NextRequest) {
   //   nextLevel === 'aal2' && currentLevel === 'aal1'  -> must challenge existing factor
   //   nextLevel === 'aal1' && currentLevel === 'aal1'  -> no factor enrolled yet
   if (aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2' && !isAalExempt) {
+    // Fire-and-forget observability: makes the MFA loop visible if it recurs.
+    // Two of these within ~30s for the same user = suspected loop.
+    trackServer(user.id, 'mfa_redirect', { from: pathname }).catch(() => {})
     const url = request.nextUrl.clone()
     url.pathname = '/auth/mfa'
     return NextResponse.redirect(url)

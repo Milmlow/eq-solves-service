@@ -55,7 +55,7 @@ export default async function AdminUsersPage() {
         <div>
           <h1 className="text-2xl font-bold text-eq-ink">Users</h1>
           <p className="text-sm text-eq-grey mt-1">
-            Invite, deactivate, and manage roles. Users are never deleted — only deactivated.
+            Invite, disable, and manage roles. <strong className="font-semibold">Remove</strong> takes a user out of this tenant only — they can be re-attached. <strong className="font-semibold">Disable account</strong> blocks sign-in across all tenants. Nothing is ever hard-deleted.
           </p>
         </div>
       </div>

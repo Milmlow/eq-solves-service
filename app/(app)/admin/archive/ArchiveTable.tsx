@@ -17,7 +17,12 @@ export interface ArchiveRow {
 
 function fmtDate(s: string | null) {
   if (!s) return '—'
-  return new Date(s).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })
+  // Pin timeZone so server (UTC) and client (AEST) render the same string —
+  // prevents React hydration mismatch (error #418) on late-evening UTC dates.
+  return new Date(s).toLocaleDateString('en-AU', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    timeZone: 'Australia/Sydney',
+  })
 }
 
 function fmtCountdown(days: number | null): { label: string; tone: 'grey' | 'amber' | 'red' | 'green' } {
