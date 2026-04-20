@@ -88,11 +88,15 @@ function Clear-StaleLock {
 }
 
 function Invoke-GitSafe {
-    param([string[]]$Args)
+    # NOTE: do NOT name the param $Args - that's a PowerShell automatic variable
+    # and it will be silently replaced with the function's unbound-args array
+    # (which is empty when callers splat explicitly), so `git @Args` becomes
+    # `git` with no args and git just prints its usage text.
+    param([string[]]$GitArgs)
     Clear-StaleLock
-    & git @Args
+    & git @GitArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "git $($Args -join ' ') failed with exit code $LASTEXITCODE"
+        throw "git $($GitArgs -join ' ') failed with exit code $LASTEXITCODE"
     }
 }
 
