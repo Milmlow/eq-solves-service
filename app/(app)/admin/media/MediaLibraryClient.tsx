@@ -12,7 +12,10 @@ type MediaSurface = 'light' | 'dark' | 'any'
 interface MediaItem {
   id: string
   name: string
+  /** Legacy single-valued — still present on rows; mirrored from categories[0]. */
   category: string
+  /** Multi-category tags (migration 0056). Preferred for display + filtering. */
+  categories?: string[] | null
   entity_type: string | null
   entity_id: string | null
   surface?: MediaSurface | null
@@ -29,12 +32,18 @@ interface Props {
   sites: { id: string; name: string }[]
 }
 
-const CATEGORIES: { value: MediaCategory; label: string }[] = [
-  { value: 'customer_logo', label: 'Customer Logo' },
-  { value: 'site_photo', label: 'Site Photo' },
-  { value: 'report_image', label: 'Report Image' },
-  { value: 'general', label: 'General' },
+const CATEGORIES: { value: MediaCategory; label: string; hint: string }[] = [
+  { value: 'customer_logo', label: 'Customer Logo', hint: 'Shown against customer records' },
+  { value: 'site_photo', label: 'Site Photo', hint: 'Used on site cards + report covers' },
+  { value: 'report_image', label: 'Report Image', hint: 'Appears in report logo slots' },
+  { value: 'general', label: 'General', hint: 'App banner, email headers, misc.' },
 ]
+
+/** Normalise: prefer categories[] when populated, fall back to single category. */
+function cats(item: Pick<MediaItem, 'category' | 'categories'>): string[] {
+  if (item.categories && item.categories.length > 0) return item.categories
+  return item.category ? [item.category] : []
+}
 
 export function MediaLibraryClient({ media: initialMedia, customers, sites }: Props) {
   const [media, setMedia] = useState(initialMedia)
@@ -43,9 +52,9 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
   const [filterEntity, setFilterEntity] = useState<string>('')
   const [searchTerm, setSearchTerm] = useState('')
 
-  // Upload form state
+  // Upload form state — categories is now a Set for multi-select.
   const [uploadName, setUploadName] = useState('')
-  const [uploadCategory, setUploadCategory] = useState<MediaCategory>('general')
+  const [uploadCategories, setUploadCategories] = useState<Set<MediaCategory>>(new Set(['general']))
   const [uploadEntityType, setUploadEntityType] = useState<string>('')
   const [uploadEntityId, setUploadEntityId] = useState<string>('')
   const [uploadSurface, setUploadSurface] = useState<MediaSurface>('any')
@@ -54,23 +63,29 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Deleting state
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Edit modal state
   const [editing, setEditing] = useState<MediaItem | null>(null)
   const [editName, setEditName] = useState('')
-  const [editCategory, setEditCategory] = useState<MediaCategory>('general')
+  const [editCategories, setEditCategories] = useState<Set<MediaCategory>>(new Set())
   const [editEntityType, setEditEntityType] = useState<string>('')
   const [editEntityId, setEditEntityId] = useState<string>('')
   const [editSurface, setEditSurface] = useState<MediaSurface>('any')
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
+  function toggleInSet<T>(set: Set<T>, value: T): Set<T> {
+    const next = new Set(set)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    return next
+  }
+
   function openEdit(item: MediaItem) {
     setEditing(item)
     setEditName(item.name)
-    setEditCategory(item.category as MediaCategory)
+    setEditCategories(new Set(cats(item) as MediaCategory[]))
     setEditEntityType(item.entity_type ?? '')
     setEditEntityId(item.entity_id ?? '')
     setEditSurface((item.surface ?? 'any') as MediaSurface)
@@ -89,11 +104,16 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
       setEditError('Name is required.')
       return
     }
+    if (editCategories.size === 0) {
+      setEditError('Select at least one category.')
+      return
+    }
     setSavingEdit(true)
     setEditError(null)
+    const categoriesArr = Array.from(editCategories) as MediaCategory[]
     const result = await updateMediaAction(editing.id, {
       name: trimmed,
-      category: editCategory,
+      categories: categoriesArr,
       entity_type: editEntityType || null,
       entity_id: editEntityId || null,
       surface: editSurface,
@@ -103,14 +123,14 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
       setEditError(result.error ?? 'Update failed.')
       return
     }
-    // Update local state so the grid reflects changes without a full reload
     setMedia((prev) =>
       prev.map((m) =>
         m.id === editing.id
           ? {
               ...m,
               name: trimmed,
-              category: editCategory,
+              category: categoriesArr[0],
+              categories: categoriesArr,
               entity_type: editEntityType || null,
               entity_id: editEntityId || null,
               surface: editSurface,
@@ -121,9 +141,9 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
     closeEdit()
   }
 
-  // Filtered media
-  const filtered = media.filter(item => {
-    if (filterCategory && item.category !== filterCategory) return false
+  // Filtered media — category filter now matches if ANY of the item's categories equal the filter.
+  const filtered = media.filter((item) => {
+    if (filterCategory && !cats(item).includes(filterCategory)) return false
     if (filterEntity) {
       if (filterEntity.startsWith('customer:')) {
         if (item.entity_type !== 'customer' || item.entity_id !== filterEntity.replace('customer:', '')) return false
@@ -131,19 +151,28 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
         if (item.entity_type !== 'site' || item.entity_id !== filterEntity.replace('site:', '')) return false
       }
     }
-    if (searchTerm && !item.name.toLowerCase().includes(searchTerm.toLowerCase()) && !item.file_name.toLowerCase().includes(searchTerm.toLowerCase())) return false
+    if (
+      searchTerm &&
+      !item.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+      !item.file_name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+      return false
     return true
   })
 
   async function handleUpload() {
     if (!uploadFile || !uploadName.trim()) return
+    if (uploadCategories.size === 0) {
+      setUploadError('Select at least one category.')
+      return
+    }
     setUploading(true)
     setUploadError(null)
 
     const formData = new FormData()
     formData.append('file', uploadFile)
     formData.append('name', uploadName.trim())
-    formData.append('category', uploadCategory)
+    for (const c of uploadCategories) formData.append('categories', c)
     formData.append('surface', uploadSurface)
     if (uploadEntityType) formData.append('entity_type', uploadEntityType)
     if (uploadEntityId) formData.append('entity_id', uploadEntityId)
@@ -156,9 +185,8 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
       return
     }
 
-    // Reset form and refresh
     setUploadName('')
-    setUploadCategory('general')
+    setUploadCategories(new Set(['general']))
     setUploadEntityType('')
     setUploadEntityId('')
     setUploadSurface('any')
@@ -166,7 +194,6 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
     if (fileRef.current) fileRef.current.value = ''
     setShowUpload(false)
 
-    // Optimistic: add to local state (will be refreshed on next server load)
     window.location.reload()
   }
 
@@ -176,7 +203,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
     const result = await deleteMediaAction(id)
     setDeletingId(null)
     if (result.success) {
-      setMedia(prev => prev.filter(m => m.id !== id))
+      setMedia((prev) => prev.filter((m) => m.id !== id))
     }
   }
 
@@ -188,8 +215,8 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
   }
 
   const entityOptions = [
-    ...customers.map(c => ({ value: `customer:${c.id}`, label: `Customer: ${c.name}`, type: 'customer', id: c.id })),
-    ...sites.map(s => ({ value: `site:${s.id}`, label: `Site: ${s.name}`, type: 'site', id: s.id })),
+    ...customers.map((c) => ({ value: `customer:${c.id}`, label: `Customer: ${c.name}`, type: 'customer', id: c.id })),
+    ...sites.map((s) => ({ value: `site:${s.id}`, label: `Site: ${s.name}`, type: 'site', id: s.id })),
   ]
 
   return (
@@ -203,28 +230,33 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
               type="text"
               placeholder="Search images…"
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
             />
           </div>
           <select
             value={filterCategory}
-            onChange={e => setFilterCategory(e.target.value)}
+            onChange={(e) => setFilterCategory(e.target.value)}
             className="text-sm border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-eq-sky"
+            title="Filter by category — matches items tagged with this category"
           >
             <option value="">All Categories</option>
-            {CATEGORIES.map(c => (
-              <option key={c.value} value={c.value}>{c.label}</option>
+            {CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
             ))}
           </select>
           <select
             value={filterEntity}
-            onChange={e => setFilterEntity(e.target.value)}
+            onChange={(e) => setFilterEntity(e.target.value)}
             className="text-sm border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-eq-sky"
           >
             <option value="">All Entities</option>
-            {entityOptions.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+            {entityOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </div>
@@ -243,35 +275,16 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
               <input
                 type="text"
                 value={uploadName}
-                onChange={e => setUploadName(e.target.value)}
+                onChange={(e) => setUploadName(e.target.value)}
                 placeholder="e.g. Equinix Logo, SY1 Front Entrance"
                 className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-eq-grey mb-1">Category</label>
-              <select
-                value={uploadCategory}
-                onChange={e => {
-                  const cat = e.target.value as MediaCategory
-                  setUploadCategory(cat)
-                  // Auto-set entity type from category
-                  if (cat === 'customer_logo') setUploadEntityType('customer')
-                  else if (cat === 'site_photo') setUploadEntityType('site')
-                  else setUploadEntityType('')
-                }}
-                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
-              >
-                {CATEGORIES.map(c => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
               <label className="block text-xs font-medium text-eq-grey mb-1">Surface</label>
               <select
                 value={uploadSurface}
-                onChange={e => setUploadSurface(e.target.value as MediaSurface)}
+                onChange={(e) => setUploadSurface(e.target.value as MediaSurface)}
                 className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
               >
                 <option value="any">Any surface (works on light + dark)</option>
@@ -280,43 +293,94 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
               </select>
               <p className="text-xs text-eq-grey mt-0.5">Tag so the picker shows the right variant for each slot.</p>
             </div>
-            {(uploadCategory === 'customer_logo' || uploadEntityType === 'customer') && (
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-eq-grey mb-1">Categories *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {CATEGORIES.map((c) => {
+                  const checked = uploadCategories.has(c.value)
+                  return (
+                    <label
+                      key={c.value}
+                      className={`flex items-start gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors ${
+                        checked ? 'border-eq-sky bg-eq-ice/40' : 'border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = toggleInSet(uploadCategories, c.value)
+                          setUploadCategories(next)
+                          // Auto-pin entity type if a specifically-scoped category is ticked.
+                          if (c.value === 'customer_logo' && next.has('customer_logo')) {
+                            setUploadEntityType('customer')
+                          } else if (c.value === 'site_photo' && next.has('site_photo')) {
+                            setUploadEntityType('site')
+                          }
+                        }}
+                        className="mt-0.5 accent-eq-sky"
+                      />
+                      <span>
+                        <span className="block text-xs font-medium text-eq-ink">{c.label}</span>
+                        <span className="block text-[10px] text-eq-grey">{c.hint}</span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] text-eq-grey mt-1">
+                Tip: tag one image with several categories to reuse it across slots (e.g. SKS White logo tagged with
+                both General and Report Image so it can sit in the app banner and the dark-background report logo
+                slot).
+              </p>
+            </div>
+            {(uploadCategories.has('customer_logo') || uploadEntityType === 'customer') && (
               <div>
                 <label className="block text-xs font-medium text-eq-grey mb-1">Customer</label>
                 <select
                   value={uploadEntityId}
-                  onChange={e => { setUploadEntityType('customer'); setUploadEntityId(e.target.value) }}
+                  onChange={(e) => {
+                    setUploadEntityType('customer')
+                    setUploadEntityId(e.target.value)
+                  }}
                   className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
                 >
                   <option value="">Select customer…</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
                   ))}
                 </select>
               </div>
             )}
-            {(uploadCategory === 'site_photo' || uploadEntityType === 'site') && (
+            {(uploadCategories.has('site_photo') || uploadEntityType === 'site') && (
               <div>
                 <label className="block text-xs font-medium text-eq-grey mb-1">Site</label>
                 <select
                   value={uploadEntityId}
-                  onChange={e => { setUploadEntityType('site'); setUploadEntityId(e.target.value) }}
+                  onChange={(e) => {
+                    setUploadEntityType('site')
+                    setUploadEntityId(e.target.value)
+                  }}
                   className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
                 >
                   <option value="">Select site…</option>
-                  {sites.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
+                  {sites.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
                   ))}
                 </select>
               </div>
             )}
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-xs font-medium text-eq-grey mb-1">Image File *</label>
               <input
                 ref={fileRef}
                 type="file"
                 accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
                 className="w-full text-sm file:mr-2 file:py-1 file:px-3 file:rounded-md file:border file:border-gray-200 file:text-xs file:font-medium file:bg-white file:text-eq-deep hover:file:bg-eq-ice"
               />
               <p className="text-xs text-eq-grey mt-0.5">PNG, JPG, SVG, WebP. Max 2 MB.</p>
@@ -328,7 +392,11 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
             </p>
           )}
           <div className="flex items-center gap-2 mt-3">
-            <Button size="sm" disabled={uploading || !uploadFile || !uploadName.trim()} onClick={handleUpload}>
+            <Button
+              size="sm"
+              disabled={uploading || !uploadFile || !uploadName.trim() || uploadCategories.size === 0}
+              onClick={handleUpload}
+            >
               {uploading ? 'Uploading…' : 'Upload Image'}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => setShowUpload(false)}>
@@ -350,63 +418,79 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
         </Card>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {filtered.map(item => (
-            <Card key={item.id} className="p-0 overflow-hidden group relative">
-              {/* Clickable area opens edit modal. Delete button stops propagation. */}
-              <button
-                type="button"
-                onClick={() => openEdit(item)}
-                className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-eq-sky rounded-lg"
-                title="Click to edit properties"
-              >
-                {/* Image preview — dark surface rows render on dark bg so white marks are visible */}
-                <div className={`aspect-square flex items-center justify-center overflow-hidden ${item.surface === 'dark' ? 'bg-eq-ink' : 'bg-gray-50'}`}>
-                  {item.content_type?.startsWith('image/svg') ? (
-                    <img src={item.file_url} alt={item.name} className="max-w-full max-h-full object-contain p-2" />
-                  ) : (
-                    <img src={item.file_url} alt={item.name} className="w-full h-full object-cover" />
-                  )}
-                </div>
-
-                {/* Info */}
-                <div className="p-2">
-                  <p className="text-xs font-medium text-eq-ink truncate" title={item.name}>{item.name}</p>
-                  <div className="flex items-center justify-between mt-1 gap-1">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-eq-ice text-eq-deep font-medium truncate">
-                      {CATEGORIES.find(c => c.value === item.category)?.label ?? item.category}
-                    </span>
-                    {item.surface && item.surface !== 'any' && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${item.surface === 'dark' ? 'bg-eq-ink text-white' : 'bg-gray-100 text-eq-grey'}`}>
-                        {item.surface}
-                      </span>
+          {filtered.map((item) => {
+            const itemCats = cats(item)
+            return (
+              <Card key={item.id} className="p-0 overflow-hidden group relative">
+                <button
+                  type="button"
+                  onClick={() => openEdit(item)}
+                  className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-eq-sky rounded-lg"
+                  title="Click to edit properties"
+                >
+                  <div
+                    className={`aspect-square flex items-center justify-center overflow-hidden ${
+                      item.surface === 'dark' ? 'bg-eq-ink' : 'bg-gray-50'
+                    }`}
+                  >
+                    {item.content_type?.startsWith('image/svg') ? (
+                      <img src={item.file_url} alt={item.name} className="max-w-full max-h-full object-contain p-2" />
+                    ) : (
+                      <img src={item.file_url} alt={item.name} className="w-full h-full object-cover" />
                     )}
-                    <span className="text-[10px] text-eq-grey">{formatSize(item.file_size)}</span>
                   </div>
-                  {item.entity_type && item.entity_id && (
-                    <p className="text-[10px] text-eq-grey mt-1 truncate">
-                      {item.entity_type === 'customer'
-                        ? customers.find(c => c.id === item.entity_id)?.name ?? 'Unknown'
-                        : sites.find(s => s.id === item.entity_id)?.name ?? 'Unknown'}
-                    </p>
-                  )}
-                </div>
-              </button>
 
-              {/* Delete overlay */}
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(item.id) }}
-                disabled={deletingId === item.id}
-                className="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/80 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
-                title="Remove"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </Card>
-          ))}
+                  <div className="p-2">
+                    <p className="text-xs font-medium text-eq-ink truncate" title={item.name}>
+                      {item.name}
+                    </p>
+                    <div className="flex items-center flex-wrap gap-1 mt-1">
+                      {itemCats.map((c) => (
+                        <span
+                          key={c}
+                          className="text-[10px] px-1.5 py-0.5 rounded-full bg-eq-ice text-eq-deep font-medium truncate"
+                        >
+                          {CATEGORIES.find((cc) => cc.value === c)?.label ?? c}
+                        </span>
+                      ))}
+                      {item.surface && item.surface !== 'any' && (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                            item.surface === 'dark' ? 'bg-eq-ink text-white' : 'bg-gray-100 text-eq-grey'
+                          }`}
+                        >
+                          {item.surface}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-eq-grey mt-1">{formatSize(item.file_size)}</p>
+                    {item.entity_type && item.entity_id && (
+                      <p className="text-[10px] text-eq-grey mt-0.5 truncate">
+                        {item.entity_type === 'customer'
+                          ? customers.find((c) => c.id === item.entity_id)?.name ?? 'Unknown'
+                          : sites.find((s) => s.id === item.entity_id)?.name ?? 'Unknown'}
+                      </p>
+                    )}
+                  </div>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDelete(item.id)
+                  }}
+                  disabled={deletingId === item.id}
+                  className="absolute top-1.5 right-1.5 p-1 rounded-md bg-white/80 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                  title="Remove"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </Card>
+            )
+          })}
         </div>
       )}
 
-      {/* Stats footer */}
       <p className="text-xs text-eq-grey text-right">
         {filtered.length} of {media.length} image{media.length !== 1 ? 's' : ''}
       </p>
@@ -414,17 +498,10 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
       {/* Edit Media Modal */}
       {editing && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={closeEdit}>
-          <div
-            className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-bold text-eq-ink">Edit Media Properties</h3>
-              <button
-                onClick={closeEdit}
-                className="p-1 rounded-md hover:bg-gray-100 text-eq-grey"
-                title="Close"
-              >
+              <button onClick={closeEdit} className="p-1 rounded-md hover:bg-gray-100 text-eq-grey" title="Close">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -434,10 +511,23 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                 <img src={editing.file_url} alt={editing.name} className="max-w-full max-h-full object-contain" />
               </div>
               <div className="text-xs text-eq-grey flex-1 space-y-0.5">
-                <p className="truncate"><span className="font-medium text-eq-ink">File:</span> {editing.file_name}</p>
-                <p><span className="font-medium text-eq-ink">Size:</span> {formatSize(editing.file_size)}</p>
-                <p><span className="font-medium text-eq-ink">Type:</span> {editing.content_type ?? '—'}</p>
-                <a href={editing.file_url} target="_blank" rel="noopener noreferrer" className="text-eq-sky hover:underline block mt-1">Open original ↗</a>
+                <p className="truncate">
+                  <span className="font-medium text-eq-ink">File:</span> {editing.file_name}
+                </p>
+                <p>
+                  <span className="font-medium text-eq-ink">Size:</span> {formatSize(editing.file_size)}
+                </p>
+                <p>
+                  <span className="font-medium text-eq-ink">Type:</span> {editing.content_type ?? '—'}
+                </p>
+                <a
+                  href={editing.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-eq-sky hover:underline block mt-1"
+                >
+                  Open original ↗
+                </a>
               </div>
             </div>
 
@@ -452,21 +542,39 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-eq-grey mb-1">Category</label>
-                <select
-                  value={editCategory}
-                  onChange={(e) => {
-                    const cat = e.target.value as MediaCategory
-                    setEditCategory(cat)
-                    if (cat === 'customer_logo') setEditEntityType('customer')
-                    else if (cat === 'site_photo') setEditEntityType('site')
-                  }}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
-                  ))}
-                </select>
+                <label className="block text-xs font-medium text-eq-grey mb-1">Categories *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {CATEGORIES.map((c) => {
+                    const checked = editCategories.has(c.value)
+                    return (
+                      <label
+                        key={c.value}
+                        className={`flex items-start gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors ${
+                          checked ? 'border-eq-sky bg-eq-ice/40' : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            const next = toggleInSet(editCategories, c.value)
+                            setEditCategories(next)
+                            if (c.value === 'customer_logo' && next.has('customer_logo')) {
+                              setEditEntityType('customer')
+                            } else if (c.value === 'site_photo' && next.has('site_photo')) {
+                              setEditEntityType('site')
+                            }
+                          }}
+                          className="mt-0.5 accent-eq-sky"
+                        />
+                        <span>
+                          <span className="block text-xs font-medium text-eq-ink">{c.label}</span>
+                          <span className="block text-[10px] text-eq-grey">{c.hint}</span>
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-eq-grey mb-1">Surface</label>
@@ -485,7 +593,10 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                 <div className="flex gap-2">
                   <select
                     value={editEntityType}
-                    onChange={(e) => { setEditEntityType(e.target.value); setEditEntityId('') }}
+                    onChange={(e) => {
+                      setEditEntityType(e.target.value)
+                      setEditEntityId('')
+                    }}
                     className="px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-eq-sky"
                   >
                     <option value="">None</option>
@@ -500,7 +611,9 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                     >
                       <option value="">Select customer…</option>
                       {customers.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
                       ))}
                     </select>
                   )}
@@ -512,7 +625,9 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
                     >
                       <option value="">Select site…</option>
                       {sites.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
                       ))}
                     </select>
                   )}
@@ -530,7 +645,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
               <Button size="sm" variant="secondary" onClick={closeEdit} disabled={savingEdit}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleSaveEdit} disabled={savingEdit || !editName.trim()}>
+              <Button size="sm" onClick={handleSaveEdit} disabled={savingEdit || !editName.trim() || editCategories.size === 0}>
                 {savingEdit ? 'Saving…' : 'Save Changes'}
               </Button>
             </div>

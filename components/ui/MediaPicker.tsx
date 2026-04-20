@@ -42,7 +42,10 @@ interface MediaOption {
   id: string
   name: string
   file_url: string
+  /** Legacy single-valued — mirrored from categories[0]. */
   category: string
+  /** Multi-category tags — migration 0056. May be null on very old rows. */
+  categories: string[] | null
   content_type: string | null
   surface: MediaSurface
 }
@@ -75,11 +78,14 @@ export function MediaPicker({
       const supabase = createClient()
       let query = supabase
         .from('media_library')
-        .select('id, name, file_url, category, content_type, surface')
+        .select('id, name, file_url, category, categories, content_type, surface')
         .eq('is_active', true)
         .order('name')
 
-      if (category) query = query.eq('category', category)
+      // Multi-category match: an item shows up whenever one of its tagged
+      // categories matches the requested one. `contains` maps to Postgres `@>`
+      // — true when categories array contains the single requested value.
+      if (category) query = query.contains('categories', [category])
       if (entityType) query = query.eq('entity_type', entityType)
       if (entityId) query = query.eq('entity_id', entityId)
       // Surface filter — 'any' rows always render on both light + dark pickers.
@@ -171,7 +177,9 @@ export function MediaPicker({
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-eq-ink truncate">{opt.name}</p>
                     <p className="text-[10px] text-eq-grey">
-                      {opt.category.replace('_', ' ')}
+                      {((opt.categories && opt.categories.length > 0) ? opt.categories : [opt.category])
+                        .map((c) => c.replace('_', ' '))
+                        .join(' · ')}
                       {opt.surface && opt.surface !== 'any' && (
                         <span className="ml-1 px-1 py-px rounded bg-gray-100 text-eq-grey">
                           {opt.surface}

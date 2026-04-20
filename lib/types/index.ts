@@ -434,7 +434,14 @@ export interface MediaItem {
   id: string
   tenant_id: string
   name: string
+  /**
+   * Legacy single-valued category — kept in sync with categories[0] by a DB
+   * trigger (migration 0056). Read from `categories` for new code; this field
+   * is only here for backwards compat until it's dropped.
+   */
   category: MediaCategory
+  /** Multi-category tags — added in migration 0056. Always non-empty. */
+  categories: MediaCategory[]
   entity_type: 'customer' | 'site' | null
   entity_id: string | null
   file_url: string

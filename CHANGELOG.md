@@ -4,6 +4,39 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-21 — Multi-category media + Powered-by-EQ pill repositioning
+
+Merged to `main`.
+
+### Added
+- **Multi-category tagging on `media_library`** (migration `0056_media_library_multi_category`). A single asset can now belong to multiple categories at once — e.g. the SKS White logo can sit in both the app banner picker (General) and the dark-background report logo slot (Report Image) without uploading the file twice.
+  - New `categories text[] NOT NULL DEFAULT '{}'` column with a `CHECK` constraining every element to the existing four-value vocabulary.
+  - GIN index `idx_media_library_categories_gin` for `@>` / `&&` containment lookups.
+  - `BEFORE INSERT/UPDATE` trigger `sync_media_library_category()` mirrors `categories[1]` into the legacy `category` column so the old code path keeps working until the column is dropped in a later migration. Trigger has `search_path = public` pinned to satisfy the security advisor.
+  - Backfill: `categories := ARRAY[category]` for every existing row.
+- `MediaItem` type now exposes `categories: MediaCategory[]` alongside the legacy `category` field.
+
+### Changed
+- **`/admin/media` upload + edit modals** — the single category `<select>` is now a checkbox group of all four categories, each with a one-line hint describing where it gets used. Submit disables until at least one box is ticked. Auto-pin of `entity_type` (customer / site) still triggers when a specifically-scoped box is ticked.
+- **Media grid card** now renders a pill per assigned category (was: one pill).
+- **`MediaPicker` filter** — the per-category dropdowns elsewhere in the app (CustomerForm, SiteForm, ReportSettingsForm) now match via array containment (`.contains('categories', [cat])`) instead of single-value equality, so multi-tagged assets surface in every relevant picker.
+- **`/admin/media` category filter** matches "items tagged with this category" rather than "items whose primary category equals this".
+- **EqAttribution pill repositioned** (`bottom-14 right-4` → `bottom-14 left-4`) and softened (smaller logo, lower opacity, hover-to-full). Bottom-right slot was colliding with the Cowork assistant launcher and obscuring it. Component docstring updated to make clear that position/opacity may move to avoid floating-UI collisions, but the element itself stays — IP attribution unchanged.
+
+### Files Touched
+- New: `supabase/migrations/0056_media_library_multi_category.sql`
+- Modified: `lib/types/index.ts` (categories array on MediaItem)
+- Modified: `app/(app)/admin/media/actions.ts` (categories[] parsing + persistence)
+- Modified: `app/(app)/admin/media/MediaLibraryClient.tsx` (checkbox UI on Upload + Edit, multi-pill grid)
+- Modified: `components/ui/MediaPicker.tsx` (array-contains filter, multi-category label)
+- Modified: `components/ui/EqAttribution.tsx` (left side, softened, updated docstring)
+
+### Verified
+- `tsc --noEmit` clean.
+- Supabase advisors: zero ERROR-level findings; only the pre-existing five WARNs (briefs/estimates/notifications anon-insert + public logos bucket listing). The trigger function's `search_path` is now pinned, no new warns introduced.
+
+---
+
 ## 2026-04-21 — User-admin hot-fix: hydration, defensive role update, MFA observability, UX copy
 
 Merged to `main`.
