@@ -9,6 +9,7 @@ import { Sidebar } from '@/components/ui/Sidebar'
 import { HelpWidget } from '@/components/ui/HelpWidget'
 import { EqFooter } from '@/components/ui/EqFooter'
 import { DemoBanner } from '@/components/ui/DemoBanner'
+import { AnalyticsIdentify } from '@/components/ui/AnalyticsIdentify'
 import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
@@ -22,6 +23,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let showOnboarding = false
   let userName: string | null = null
   let tenantName: string | null = null
+  // Captured for AnalyticsIdentify — client-side PostHog + Clarity identify
+  // runs after render with these values, so the server-known tenant + role
+  // are what appear in events (no race with client-side auth fetch).
+  let analyticsTenantId: string | null = null
+  let analyticsRole: string | null = null
 
   if (user) {
     // Fetch ALL active memberships with their tenant's setup state.
@@ -78,6 +84,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       const membership = completed ?? rows[0]
 
       isAdmin = membership.role === 'super_admin' || membership.role === 'admin'
+      analyticsTenantId = membership.tenant_id
+      analyticsRole = membership.role
 
       // Only show the onboarding wizard if EVERY tenant this user belongs to
       // is un-onboarded. A super_admin/admin attached to even one completed
@@ -134,6 +142,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <HelpWidget />
       {showOnboarding && (
         <OnboardingWizard userName={userName} companyName={tenantName} />
+      )}
+      {user && analyticsTenantId && analyticsRole && (
+        <AnalyticsIdentify
+          userId={user.id}
+          tenantId={isDemoSession ? 'demo-fixture' : analyticsTenantId}
+          role={analyticsRole}
+          appEnv={isDemoSession ? 'demo' : (process.env.NEXT_PUBLIC_APP_ENV ?? 'beta')}
+        />
       )}
     </div>
   )

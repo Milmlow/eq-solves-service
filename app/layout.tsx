@@ -6,6 +6,7 @@
  */
 import type { Metadata } from "next";
 import { EqAttribution } from "@/components/ui/EqAttribution";
+import { Providers } from "./providers";
 import "./globals.css";
 
 // Publisher is the brand (EQ). Author is the legal entity (CDC Solutions Pty Ltd).
@@ -30,8 +31,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full">
-        {children}
-        <EqAttribution />
+        <Providers>
+          {children}
+          <EqAttribution />
+        </Providers>
       </body>
     </html>
   );
