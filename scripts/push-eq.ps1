@@ -1,13 +1,13 @@
-# push-eq.ps1 — safe git push helper for eq-solves-service
+# push-eq.ps1 - safe git push helper for eq-solves-service
 #
 # Why this exists:
-#   The working tree is touched by several processes — Cowork sessions,
+#   The working tree is touched by several processes - Cowork sessions,
 #   coworkr-svc file sync, editors, occasional AV scans. Any of them can
 #   leave .git/index.lock behind when they exit badly, and when a second
 #   process pushes to origin while you're composing a commit locally, a
 #   plain `git push` gets rejected ("fetch first").
 #
-#   This script wraps the add → commit → push flow with:
+#   This script wraps the add -> commit -> push flow with:
 #     1. Stale-lock auto-clear (safe: only if no git.exe is actually running
 #        AND the lock file is older than 3 seconds)
 #     2. Auto pull --rebase if the remote has moved since your last fetch
@@ -58,7 +58,7 @@ function Clear-StaleLock {
     $lockPath = Join-Path (Get-Location) '.git\index.lock'
     if (-not (Test-Path $lockPath)) { return }
 
-    # If a real git.exe is running, don't touch the lock — it's legitimately held.
+    # If a real git.exe is running, don't touch the lock - it's legitimately held.
     $gitProcs = Get-Process -Name git -ErrorAction SilentlyContinue
     if ($gitProcs) {
         Write-Warn "index.lock exists AND a git.exe process is running (PID $($gitProcs.Id -join ', ')). Waiting..."
@@ -73,7 +73,7 @@ function Clear-StaleLock {
         }
     }
 
-    # No git process, but lock exists — check the age. If it's brand new (<2s)
+    # No git process, but lock exists - check the age. If it's brand new (<2s)
     # some other tool may be writing; give it a moment.
     $lockFile = Get-Item $lockPath
     $ageSeconds = ((Get-Date) - $lockFile.LastWriteTime).TotalSeconds
@@ -116,7 +116,7 @@ try {
     $baseHash   = (& git merge-base $Branch "$Remote/$Branch").Trim()
 
     if ($remoteHash -ne $localHash -and $remoteHash -ne $baseHash) {
-        Write-Step "Remote has moved — rebasing onto $Remote/$Branch"
+        Write-Step "Remote has moved - rebasing onto $Remote/$Branch"
         Invoke-GitSafe @('pull', '--rebase', $Remote, $Branch)
         Write-OK 'Rebase complete.'
     } else {
@@ -141,7 +141,7 @@ try {
         # Only commit if something is actually staged
         $staged = (& git diff --cached --name-only)
         if (-not $staged) {
-            Write-Warn 'Nothing staged after add — skipping commit.'
+            Write-Warn 'Nothing staged after add - skipping commit.'
         } else {
             Write-Step 'Committing'
             Invoke-GitSafe @('commit', '-m', $Message)

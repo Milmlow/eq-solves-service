@@ -260,11 +260,6 @@ export async function resendInviteAction(formData: FormData) {
   const h = await headers()
   const requestOrigin = h.get('origin') ?? h.get('host') ?? null
   const origin = getSiteUrl(requestOrigin)
-  // Resend still routes through /auth/accept-invite — if the user hasn't
-  // finished setup yet the welcome flow is the right destination. Existing
-  // users whose password was already set will simply land on accept-invite
-  // in a valid session and can re-save or navigate away.
-  const redirectTo = `${origin}/auth/callback?next=/auth/accept-invite`
 
   const { data: profile } = await admin
     .from('profiles')
@@ -274,17 +269,43 @@ export async function resendInviteAction(formData: FormData) {
 
   if (!profile?.email) return { error: 'User has no email on file.' }
 
-  const { error } = await admin.auth.admin.inviteUserByEmail(profile.email, {
-    redirectTo,
-    data: { full_name: profile.full_name ?? '' },
-  })
+  // Decide which link type to generate based on the user's current state:
+  //   - Confirmed (they've already set a password) → send password recovery.
+  //     Lands on /auth/reset-password.
+  //   - Not confirmed (pending invite, never clicked the first link) → re-issue
+  //     the invite. Lands on /auth/accept-invite.
+  // Previously this called inviteUserByEmail for every case, which fails with
+  // 422 email_exists the moment the user row exists in auth.users — i.e. every
+  // time after the first send. generateLink is the correct API for resends.
+  const authUser = await findAuthUserByEmail(admin, profile.email)
+  const isConfirmed = !!authUser?.email_confirmed_at
+  const nextPath = isConfirmed ? '/auth/reset-password' : '/auth/accept-invite'
+  const redirectTo = `${origin}/auth/callback?next=${nextPath}`
+
+  // Split the call — the Supabase SDK types for `recovery` only accept
+  // `{ redirectTo }` in options, whereas `invite` additionally accepts `data`.
+  // Keeping these branches separate satisfies the type system cleanly.
+  const { error } = isConfirmed
+    ? await admin.auth.admin.generateLink({
+        type: 'recovery',
+        email: profile.email,
+        options: { redirectTo },
+      })
+    : await admin.auth.admin.generateLink({
+        type: 'invite',
+        email: profile.email,
+        options: {
+          redirectTo,
+          data: { full_name: profile.full_name ?? '' },
+        },
+      })
   if (error) return { error: friendlyAuthError(error.message) }
 
   await logAuditEvent({
     action: 'update',
     entityType: 'user',
     entityId: userId,
-    summary: `Resent invite to ${profile.email}`,
+    summary: `Resent ${isConfirmed ? 'password reset' : 'invite'} to ${profile.email}`,
   })
   revalidatePath('/admin/users')
   return { ok: true }
