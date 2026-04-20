@@ -5,6 +5,16 @@ sign-in flow to work against production (`https://eq-solves-service.netlify.app`
 
 Project: `urjhmkhbgaxrofurpbgc` (eq-solves-service-dev — treat as prod for now).
 
+> **2026-04-20 — important change.** The invite and recovery email templates
+> now use `{{ .TokenHash }}` routed through `/auth/callback?token_hash=…&type=…`
+> instead of the old `{{ .ConfirmationURL }}`. The old template returned the
+> session in a URL **fragment** (`#access_token=…`), which a Next.js server
+> route cannot read — users who clicked the invite link landed on `/auth/signin`
+> with a generic error instead of `/auth/accept-invite`. The token_hash flow is
+> server-side (calls `supabase.auth.verifyOtp()` from the callback route) and
+> works end-to-end. If you ever revert this — yes, the invite flow will break
+> again.
+
 ---
 
 ## 1. Site URL + Redirect allowlist
@@ -112,13 +122,13 @@ You've been invited to EQ Solves Service
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="background-color:#3DA8D8;border-radius:6px;">
-                      <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Set up my account</a>
+                      <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/auth/accept-invite" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Set up my account</a>
                     </td>
                   </tr>
                 </table>
                 <p style="margin:20px 0 0 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
                   Or copy this URL into your browser:<br/>
-                  <span style="word-break:break-all;color:#2986B4;">{{ .ConfirmationURL }}</span>
+                  <span style="word-break:break-all;color:#2986B4;">{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=invite&amp;next=/auth/accept-invite</span>
                 </p>
               </td>
             </tr>
@@ -180,13 +190,13 @@ Reset your EQ Solves Service password
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="background-color:#3DA8D8;border-radius:6px;">
-                      <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Reset password</a>
+                      <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/auth/reset-password" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Reset password</a>
                     </td>
                   </tr>
                 </table>
                 <p style="margin:20px 0 0 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
                   Or copy this URL into your browser:<br/>
-                  <span style="word-break:break-all;color:#2986B4;">{{ .ConfirmationURL }}</span>
+                  <span style="word-break:break-all;color:#2986B4;">{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next=/auth/reset-password</span>
                 </p>
               </td>
             </tr>
@@ -228,12 +238,14 @@ heading + body copy.
 
 1. `/admin/users` → invite a fresh test user (e.g. `royce+test@eq.solutions`).
 2. Open the email — the "Set up my account" URL must start with
-   `https://eq-solves-service.netlify.app/auth/callback?code=…&next=/auth/accept-invite`,
-   NOT `http://localhost:3000`.
+   `https://eq-solves-service.netlify.app/auth/callback?token_hash=…&type=invite&next=/auth/accept-invite`,
+   NOT `http://localhost:3000` and NOT pointing at `<project>.supabase.co/auth/v1/verify`.
 3. Click the link. You should land on `/auth/accept-invite` with a welcome
    header ("Welcome, {first name}."), the tenant + role you assigned, a
    3-step rail, and the password form enabled (no "Auth session missing"
-   banner).
+   banner). If you bounce back to `/auth/signin?error=…` instead, the email
+   template is still on the old `{{ .ConfirmationURL }}` shape — see the
+   2026-04-20 note at the top of this runbook.
 4. Fill in full name (if not pre-filled), set a password (live strength
    meter turns green at 10+ chars with mixed case / digits / symbols),
    confirm, submit. You should be signed in and redirected to `/dashboard`.
