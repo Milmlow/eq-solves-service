@@ -48,7 +48,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
 
         <div className="relative z-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={WHITE_LOGO_URL} alt={productName} className="h-20 w-auto" />
+          <img src={WHITE_LOGO_URL} alt={productName} className="h-32 w-auto" />
         </div>
 
         <div className="space-y-4 relative z-10">

@@ -109,6 +109,9 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Match all paths except Next internals and static assets.
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    // PDF / DOCX are excluded so sample reports in /public/samples serve
+    // straight from the CDN without a Supabase session round-trip (which
+    // would otherwise bounce unauthenticated visitors back to /auth/signin).
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|pdf|docx)$).*)',
   ],
 }
