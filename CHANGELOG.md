@@ -4,6 +4,35 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-21 — EqAttribution removed, route progress bar, C1 + C2 fixes
+
+Merged to `main`.
+
+### Removed
+- **`EqAttribution` "Powered by EQ" sticky pill** pulled from the UI. The floating badge kept colliding with the Cowork assistant launcher, scroll-to-top, and other floating UI even after moving to bottom-left and softening the opacity. Ownership attribution is now carried entirely by `EqFooter` (copyright + ABN line in the global footer) and the `<head>` metadata in `app/layout.tsx`. The component file is kept as a no-op `return null` stub for one commit so any stray imports don't blow up — slated for `git rm` in the same commit that lands this changelog entry.
+
+### Added
+- **`components/ui/RouteProgress.tsx`** — a dependency-free global top-of-page progress bar that animates across whenever a same-origin navigation fires. Intercepts link clicks (capture-phase) and form submits so the bar appears the instant the user clicks, then commits to 100% + fades when the new route's `pathname` / `searchParams` change. 10-second failsafe clears the bar if a navigation errors. Respects `prefers-reduced-motion`. Mounted once in `app/layout.tsx` inside `<Providers />` so it's alive for every route including auth pages. Fixes the "did it freeze or just slow?" UX on server-rendered pages (admin/users, /reports, /testing/summary).
+
+### Fixed
+- **C1 — `/admin/users` was listing every profile in the database** regardless of tenant. An SKS admin could see Demo / Equinix / other-tenant users on the list, which was both confusing (actions against them silently no-op'd) and a tenant-isolation breach at the UI layer (RLS still blocked the data, but visibility alone was a leak). Rewrote `app/(app)/admin/users/page.tsx` to query `tenant_members` scoped to the acting user's tenant first and fetch `profiles` only for those `user_ids`. Soft-removed members are still surfaced so the "Attach" affordance works for re-inviting them, but they render with a "Removed" pill instead of "No tenant" and Resend / Remove are disabled until re-attached.
+- **C2 — invite acceptance silently revived removed users.** If an admin "Removed" a user (soft-deleted their `tenant_members` row) but the user still had an old invite email, clicking the link would land them in `/auth/callback` → session established → `acceptInviteAction` → password set → dashboard, bypassing the removal entirely. `app/(auth)/auth/accept-invite/actions.ts` now checks for at least one active `tenant_members` row before setting the password. If none exists, we sign the user out, audit-log the blocked attempt, and return *"Your access to this organisation has been removed. Ask an administrator to re-attach your account before signing in."* The removal stays — we deliberately do NOT upsert/revive a soft-deleted membership here because the removal was an intentional admin decision.
+
+### Files Touched
+- New: `components/ui/RouteProgress.tsx`
+- Modified: `app/layout.tsx` (swap `<EqAttribution />` → `<RouteProgress />`)
+- Modified: `components/ui/EqAttribution.tsx` (stubbed as no-op pending `git rm`)
+- Modified: `app/(app)/admin/users/page.tsx` (tenant-scoped query + `is_active_in_tenant` flag)
+- Modified: `app/(app)/admin/users/UsersTable.tsx` ("Removed" pill, Attach button only for removed memberships, disabled Resend/Remove/Role-change while removed)
+- Modified: `app/(auth)/auth/accept-invite/actions.ts` (refuse silent revive, sign out on block)
+
+### Verified
+- `tsc --noEmit` clean.
+- `/admin/users` page.tsx only issues queries bounded by `tenant_id = requireUser().tenantId` + `user_id IN (memberIds)` — no global `profiles` scan remains.
+- `acceptInviteAction` fails closed on DB lookup error (returns user-friendly message, does not set password).
+
+---
+
 ## 2026-04-21 — Multi-category media + Powered-by-EQ pill repositioning
 
 Merged to `main`.

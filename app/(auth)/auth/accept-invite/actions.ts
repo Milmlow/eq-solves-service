@@ -21,6 +21,14 @@ const AcceptInviteSchema = z.object({
  * safely use the service-role admin API to set the password — this bypasses
  * the AAL1/MFA restriction on updateUser({password}) that catches us on the
  * plain password reset flow too.
+ *
+ * C2 (2026-04-21): Refuse silent revive. If the user accepting the invite
+ * has NO active `tenant_members` row in any tenant, we stop here — an admin
+ * may have removed their access after the invite email was sent, and the
+ * invite link itself shouldn't be a backdoor around that removal. We sign
+ * them out and return an error; the admin can re-attach them via the admin
+ * UI. (We deliberately do NOT upsert/revive a removed membership here — the
+ * removal was an intentional admin decision.)
  */
 export async function acceptInviteAction(formData: FormData) {
   const parsed = AcceptInviteSchema.safeParse({
@@ -44,6 +52,42 @@ export async function acceptInviteAction(formData: FormData) {
   }
 
   const admin = createAdminClient()
+
+  // C2 gate: refuse if the user has no ACTIVE tenant_members row anywhere.
+  // A stale invite link from a removed user should NOT give them access
+  // back — even if they knew the URL before the removal happened.
+  const { data: activeMemberships, error: membershipErr } = await admin
+    .from('tenant_members')
+    .select('tenant_id')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .limit(1)
+
+  if (membershipErr) {
+    // Fail closed on a DB error rather than let them through without a check.
+    return { error: 'Could not verify your access. Please try again in a moment.' }
+  }
+
+  if (!activeMemberships || activeMemberships.length === 0) {
+    // Sign them out so the cookie session is torn down and they land on
+    // /auth/signin cleanly rather than looping through /auth/no-tenant.
+    await supabase.auth.signOut()
+    // Best-effort audit — helps an admin spot the attempt.
+    try {
+      await logAuditEvent({
+        action: 'update',
+        entityType: 'user',
+        entityId: user.id,
+        summary: 'Blocked invite acceptance — user has no active tenant membership',
+      })
+    } catch {
+      /* non-fatal */
+    }
+    return {
+      error:
+        'Your access to this organisation has been removed. Ask an administrator to re-attach your account before signing in.',
+    }
+  }
 
   // 1. Set the password.
   const { error: pwErr } = await admin.auth.admin.updateUserById(user.id, { password })

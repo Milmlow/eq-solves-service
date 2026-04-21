@@ -5,7 +5,7 @@
  * Proprietary and confidential. All rights reserved.
  */
 import type { Metadata } from "next";
-import { EqAttribution } from "@/components/ui/EqAttribution";
+import { RouteProgress } from "@/components/ui/RouteProgress";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -32,8 +32,8 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full">
         <Providers>
+          <RouteProgress />
           {children}
-          <EqAttribution />
         </Providers>
       </body>
     </html>

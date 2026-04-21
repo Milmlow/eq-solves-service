@@ -14,7 +14,14 @@ interface Profile {
   email: string
   full_name: string | null
   role: string
+  /** Account-level: signs them out across all tenants if false. */
   is_active: boolean
+  /**
+   * Tenant-level: false means their `tenant_members` row in the current
+   * tenant is soft-deleted. They keep showing up on this page so the admin
+   * can re-attach them via the "Attach" button.
+   */
+  is_active_in_tenant: boolean
   last_login_at: string | null
   created_at: string
   has_tenant_membership: boolean
@@ -132,18 +139,23 @@ export function UsersTable({
         <tbody className="divide-y divide-gray-100">
           {users.map((u) => {
             const isSelf = u.id === currentUserId
+            // `has_tenant_membership` is true only for ACTIVE tenant members.
+            // A row with `is_active_in_tenant === false` represents a user who
+            // was previously in this tenant but has been soft-removed — keep
+            // them on screen so the admin can re-attach them.
             const noTenant = !u.has_tenant_membership
+            const removedFromTenant = !u.is_active_in_tenant
             return (
-              <tr key={u.id} className={u.is_active ? '' : 'bg-gray-50/50'}>
+              <tr key={u.id} className={u.is_active && !removedFromTenant ? '' : 'bg-gray-50/50'}>
                 <td className="px-4 py-3 text-eq-ink font-medium">{u.email}</td>
                 <td className="px-4 py-3 text-eq-grey">{u.full_name || '—'}</td>
                 <td className="px-4 py-3">
                   <select
                     value={u.role}
-                    disabled={pending || isSelf || noTenant}
+                    disabled={pending || isSelf || removedFromTenant}
                     onChange={(e) => changeRole(u.id, e.target.value)}
                     className="h-8 px-2 border border-gray-200 rounded text-xs text-eq-ink bg-white disabled:opacity-50"
-                    title={noTenant ? 'Attach this user to the tenant first' : undefined}
+                    title={removedFromTenant ? 'Attach this user to the tenant first' : undefined}
                   >
                     <option value="super_admin">Super Admin</option>
                     <option value="admin">Admin</option>
@@ -153,9 +165,12 @@ export function UsersTable({
                   </select>
                 </td>
                 <td className="px-4 py-3">
-                  {noTenant ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-amber-50 text-amber-700">
-                      No tenant
+                  {removedFromTenant ? (
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-amber-50 text-amber-700"
+                      title="This user was previously a member of this tenant but has been removed. Use Attach to re-add them."
+                    >
+                      Removed
                     </span>
                   ) : (
                     <span
@@ -173,13 +188,13 @@ export function UsersTable({
                 <td className="px-4 py-3 text-eq-grey text-xs">{fmtDate(u.last_login_at)}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-3">
-                    {noTenant && (
+                    {removedFromTenant && (
                       <button
                         type="button"
                         onClick={() => repairUser(u.id, u.full_name || u.email, u.role)}
                         disabled={pending}
                         className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                        title="Attach this user to the current tenant"
+                        title="Re-attach this user to the current tenant"
                       >
                         Attach
                       </button>
@@ -187,9 +202,11 @@ export function UsersTable({
                     <button
                       type="button"
                       onClick={() => resendInvite(u.id, u.full_name || u.email)}
-                      disabled={pending}
+                      disabled={pending || removedFromTenant}
                       className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                      title="Resend the invite / password reset email"
+                      title={removedFromTenant
+                        ? 'Attach the user first before resending an invite'
+                        : 'Resend the invite / password reset email'}
                     >
                       Resend
                     </button>
@@ -207,7 +224,7 @@ export function UsersTable({
                     <button
                       type="button"
                       onClick={() => removeFromTenant(u.id, u.full_name || u.email)}
-                      disabled={pending || isSelf || noTenant}
+                      disabled={pending || isSelf || removedFromTenant}
                       className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
                       title="Remove this user from the current tenant (reversible)"
                     >
@@ -221,7 +238,7 @@ export function UsersTable({
           {users.length === 0 && (
             <tr>
               <td colSpan={6} className="px-4 py-8 text-center text-eq-grey text-sm">
-                No users yet.
+                No users in this tenant yet — invite someone above to get started.
               </td>
             </tr>
           )}
