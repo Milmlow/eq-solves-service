@@ -64,6 +64,14 @@ export function ImportPage() {
           .replace(/^-+|-+$/g, '')
 
       for (const cls of parsed.classifications) {
+        // Ensure the classifications row exists first — classification_fields
+        // FKs on classifications(code), so a brand-new code from a template
+        // would otherwise fail the field upsert with a FK violation.
+        const { error: cErr } = await supabase
+          .from('classifications')
+          .upsert({ code: cls } as never, { onConflict: 'code', ignoreDuplicates: true })
+        if (cErr) throw new Error(`Classification upsert failed for ${cls}: ${cErr.message}`)
+
         const fields = parsed.fieldsByClassification[cls] ?? []
         if (fields.length > 0) {
           const fieldRows = fields.map((f) => ({
