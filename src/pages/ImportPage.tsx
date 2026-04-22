@@ -33,11 +33,23 @@ export function ImportPage() {
   const stepIndex = stage === 'idle' ? 0 : stage === 'preview' ? 1 : stage === 'done' ? 2 : stage === 'creating' ? 2 : 0
 
   const onFile = async (f: File) => {
+    console.info('[import] file selected', { name: f.name, size: f.size, type: f.type })
     setFile(f)
     setStage('parsing')
     setError(null)
     try {
+      console.info('[import] parseTemplate start')
       const p = await parseTemplate(f)
+      console.info('[import] parseTemplate done', {
+        assets: p.assets.length,
+        classifications: p.classifications,
+        detectedSite: p.detectedSite,
+        detectedClassification: p.detectedClassification,
+        warnings: p.warnings,
+        fieldsByClassification: Object.fromEntries(
+          Object.entries(p.fieldsByClassification).map(([k, v]) => [k, v.length]),
+        ),
+      })
       setParsed(p)
       setSiteCode(p.detectedSite ?? '')
       if (p.detectedSite && p.detectedClassification) {
@@ -45,13 +57,26 @@ export function ImportPage() {
       }
       setStage('preview')
     } catch (err: any) {
+      console.error('[import] parse failed', err)
       setError(err?.message ?? String(err))
       setStage('error')
     }
   }
 
   const create = async () => {
-    if (!parsed || !siteCode.trim()) return
+    if (!parsed || !siteCode.trim()) {
+      console.warn('[import] create aborted — no parsed template or site code', {
+        hasParsed: !!parsed,
+        siteCode,
+      })
+      return
+    }
+    console.info('[import] create start', {
+      classifications: parsed.classifications,
+      assets: parsed.assets.length,
+      siteCode,
+      clientCode,
+    })
     setStage('creating')
     setError(null)
     try {
@@ -63,16 +88,28 @@ export function ImportPage() {
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-+|-+$/g, '')
 
+      if (parsed.classifications.length === 0) {
+        throw new Error(
+          'No classifications were detected in the template. The "Classification" column in Assets (col 12) appears to be blank for every row.',
+        )
+      }
+
       for (const cls of parsed.classifications) {
+        console.info(`[import] → classification ${cls}: upserting`)
         // Ensure the classifications row exists first — classification_fields
         // FKs on classifications(code), so a brand-new code from a template
         // would otherwise fail the field upsert with a FK violation.
         const { error: cErr } = await supabase
           .from('classifications')
           .upsert({ code: cls } as never, { onConflict: 'code', ignoreDuplicates: true })
-        if (cErr) throw new Error(`Classification upsert failed for ${cls}: ${cErr.message}`)
+        if (cErr) {
+          console.error('[import] classifications upsert error', cErr)
+          throw new Error(`Classification upsert failed for ${cls}: ${cErr.message}`)
+        }
+        console.info(`[import] ✓ classification ${cls} upserted`)
 
         const fields = parsed.fieldsByClassification[cls] ?? []
+        console.info(`[import] → ${cls}: ${fields.length} fields to upsert`)
         if (fields.length > 0) {
           const fieldRows = fields.map((f) => ({
             classification_code: cls,
@@ -89,7 +126,11 @@ export function ImportPage() {
           const { error: fErr } = await supabase
             .from('classification_fields')
             .upsert(fieldRows as never, { onConflict: 'classification_code,spec_id' })
-          if (fErr) throw new Error(`Field upsert failed for ${cls}: ${fErr.message}`)
+          if (fErr) {
+            console.error('[import] classification_fields upsert error', fErr)
+            throw new Error(`Field upsert failed for ${cls}: ${fErr.message}`)
+          }
+          console.info(`[import] ✓ ${fields.length} fields upserted for ${cls}`)
         }
 
         const baseSlug = makeSlug(siteCode.trim(), cls)
@@ -113,9 +154,14 @@ export function ImportPage() {
           template_filename: parsed.templateFilename,
           active: true,
         }
+        console.info(`[import] → inserting job`, jobRow)
         const jobResp = await supabase.from('jobs').insert(jobRow as never).select('id, slug').single()
-        if (jobResp.error) throw new Error(`Job creation failed: ${jobResp.error.message}`)
+        if (jobResp.error) {
+          console.error('[import] job insert error', jobResp.error)
+          throw new Error(`Job creation failed: ${jobResp.error.message}`)
+        }
         const newJob = jobResp.data as { id: string; slug: string | null }
+        console.info(`[import] ✓ job created`, newJob)
         createdIds.push(newJob.id)
         createdSlugs.push(newJob.slug)
 
@@ -128,6 +174,7 @@ export function ImportPage() {
         }
 
         const clsAssets = parsed.assets.filter((a) => a.classification_code === cls)
+        console.info(`[import] → ${cls}: ${clsAssets.length} assets to insert`)
         if (clsAssets.length > 0) {
           const assetRows = clsAssets.map((a) => ({
             job_id: newJob.id,
@@ -147,15 +194,21 @@ export function ImportPage() {
             const { error: aErr } = await supabase
               .from('assets')
               .insert(assetRows.slice(i, i + CHUNK) as never)
-            if (aErr) throw new Error(`Asset insert failed: ${aErr.message}`)
+            if (aErr) {
+              console.error('[import] asset insert error', aErr)
+              throw new Error(`Asset insert failed: ${aErr.message}`)
+            }
           }
+          console.info(`[import] ✓ ${clsAssets.length} assets inserted for ${cls}`)
         }
       }
 
+      console.info('[import] ALL DONE', { createdIds, createdSlugs })
       setCreatedJobIds(createdIds)
       setCreatedJobSlugs(createdSlugs)
       setStage('done')
     } catch (err: any) {
+      console.error('[import] create failed', err)
       setError(err?.message ?? String(err))
       setStage('error')
     }
