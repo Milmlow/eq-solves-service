@@ -20,6 +20,7 @@ import { AttachmentList } from '@/components/ui/AttachmentList'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
 import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Printer, Send } from 'lucide-react'
 import Link from 'next/link'
+import { events as analyticsEvents } from '@/lib/analytics'
 import { SendReportModal } from './SendReportModal'
 import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
 import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
@@ -86,6 +87,11 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
+
+    analyticsEvents.reportGenerated({
+      report_type: `pm_asset_${complexity}`,
+      asset_count: checkAssets.length,
+    })
   }
 
   const canAct = canWriteRole || isAssigned
@@ -162,7 +168,18 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     setError(null); setLoading(true)
     const result = await completeCheckAction(check.id)
     setLoading(false)
-    if (!result.success) setError(result.error ?? 'Failed to complete.')
+    if (!result.success) {
+      setError(result.error ?? 'Failed to complete.')
+      return
+    }
+    const startedMs = check.started_at ? new Date(check.started_at).getTime() : null
+    const durationSeconds = startedMs ? Math.max(0, Math.round((Date.now() - startedMs) / 1000)) : 0
+    const defectsFound = items.filter((i) => i.result === 'fail').length
+    analyticsEvents.checkCompleted({
+      check_type: check.job_plans?.name ?? 'general',
+      duration_seconds: durationSeconds,
+      defects_found: defectsFound,
+    })
   }
 
   async function handleDelete() {

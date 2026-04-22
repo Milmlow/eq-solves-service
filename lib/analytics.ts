@@ -91,4 +91,23 @@ export const events = {
 
   archivedCheckToggled: (p: { new_state: boolean }) =>
     track('archived_check_toggled', p),
+
+  // ─── Supervisor digest (admin-triggered from /calendar) ───
+  // `supervisor_digest_previewed` fires on the admin Preview button; no
+  // email is sent. `supervisor_digest_sent` fires on the manual Send Now
+  // button and reflects the per-supervisor delivery status reported by
+  // Resend. The daily cron run also writes to supervisor_digests in
+  // Postgres, so these events capture the admin surface only.
+  supervisorDigestPreviewed: (p: {
+    supervisor_count: number
+    total_entries: number
+    with_entries_count: number
+  }) => track('supervisor_digest_previewed', p),
+
+  supervisorDigestSent: (p: {
+    supervisor_count: number
+    sent_count: number
+    skipped_count: number
+    errored_count: number
+  }) => track('supervisor_digest_sent', p),
 };

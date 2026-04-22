@@ -102,8 +102,16 @@ export interface ParseResult {
 // ── Constants ───────────────────────────────────────────────────────
 
 /**
- * Expected column headers in the Delta work-order export. Header row is
- * validated on parse; mismatch returns a workbook-level error with no rows.
+ * Canonical header order in the Delta work-order export. Used by the test
+ * suite as the reference shape; not used for runtime validation.
+ *
+ * Real-world exports vary by classification — Equinix Maximo ships:
+ *   - ACB Breaker exports: 14 cols, adds `CR Required` and `Qualifications Required`
+ *   - HV / LV / PDU exports: 11 cols, drops `History` entirely
+ *
+ * The parser tolerates these shapes by resolving cells against
+ * REQUIRED_HEADERS via column-name lookup, ignoring extras and missing
+ * optional columns.
  */
 export const EXPECTED_HEADERS = [
   'Site',
@@ -118,6 +126,35 @@ export const EXPECTED_HEADERS = [
   'Job Plan',
   'Target Start',
   'Reported Date',
+] as const
+
+/**
+ * Headers that MUST be present (in any column position) for a sheet to
+ * count as a valid work-order data sheet. Missing any of these is a
+ * workbook-level error.
+ */
+export const REQUIRED_HEADERS = [
+  'Site',
+  'Work Order',
+  'Description',
+  'Asset',
+  'Job Plan',
+  'Target Start',
+] as const
+
+/**
+ * Headers we recognise but don't require. Missing-OK; extra unknown
+ * columns are silently ignored.
+ */
+export const OPTIONAL_HEADERS = [
+  'Classification',
+  'History',
+  'Location',
+  'Work Type',
+  'Status',
+  'Reported Date',
+  'CR Required',
+  'Qualifications Required',
 ] as const
 
 /**
@@ -168,38 +205,60 @@ export function mapFrequencySuffix(suffix: string): FrequencyEnum | null {
 }
 
 /**
- * Read row 1 of a worksheet as trimmed strings, padded out to
- * EXPECTED_HEADERS length so callers can index without bounds checks.
+ * Read row 1 of a worksheet as trimmed strings. Returns one entry per
+ * non-empty column; trailing empties are dropped.
  */
 function readHeaderRow(ws: Worksheet): string[] {
   const headerRow = ws.getRow(1)
+  // exceljs `actualCellCount` is the count of populated cells; use the
+  // larger of that and EXPECTED_HEADERS so we never under-read on sparse
+  // sheets, and never over-read on long sheets with junk far to the right.
+  const lastCol = Math.max(headerRow.actualCellCount, EXPECTED_HEADERS.length)
   const out: string[] = []
-  for (let c = 1; c <= EXPECTED_HEADERS.length; c++) {
+  for (let c = 1; c <= lastCol; c++) {
     const raw = headerRow.getCell(c).value
     out.push(raw == null ? '' : String(raw).trim())
   }
   return out
 }
 
-/** True when row 1 of `ws` matches every expected Delta column header. */
-function headersMatch(ws: Worksheet): boolean {
-  const actual = readHeaderRow(ws)
-  return EXPECTED_HEADERS.every((h, i) => actual[i] === h)
+/**
+ * Build a map of header name → 1-indexed column number. Header lookups
+ * are case-sensitive and exact (matches the strings in REQUIRED_HEADERS /
+ * OPTIONAL_HEADERS). Unknown columns are still indexed so per-row warnings
+ * can reference them by name.
+ */
+function buildHeaderMap(ws: Worksheet): Map<string, number> {
+  const headers = readHeaderRow(ws)
+  const map = new Map<string, number>()
+  headers.forEach((h, i) => {
+    if (h && !map.has(h)) map.set(h, i + 1)
+  })
+  return map
+}
+
+/** True when every REQUIRED_HEADERS entry has a column on `ws`. */
+function hasRequiredHeaders(ws: Worksheet): boolean {
+  const map = buildHeaderMap(ws)
+  return REQUIRED_HEADERS.every((h) => map.has(h))
 }
 
 /**
  * Pick the sheet that holds the work-order data. Maximo exports usually
  * land on `List of Work Orders`, but the file may also include pivot tabs
  * (`Sheet1`, etc.) that get marked active. Order of preference:
- *   1. Sheet named exactly DATA_SHEET_NAME, if present
- *   2. First sheet whose row 1 matches EXPECTED_HEADERS
+ *   1. Sheet named exactly DATA_SHEET_NAME, if it has the required headers
+ *   2. First sheet whose row 1 contains all REQUIRED_HEADERS
  *   3. null — caller emits a workbook-level error
+ *
+ * The named-sheet match still requires headers to validate so a renamed
+ * pivot tab named `List of Work Orders` doesn't fool us.
  */
 export function findDataSheet(wb: Workbook): Worksheet | null {
   const named = wb.getWorksheet(DATA_SHEET_NAME)
-  if (named) return named
+  if (named && hasRequiredHeaders(named)) return named
   for (const ws of wb.worksheets) {
-    if (headersMatch(ws)) return ws
+    if (hasRequiredHeaders(ws)) return ws
   }
   return null
 }
@@ -250,8 +309,8 @@ export async function parseWorkbook(
           rowNumber: 0,
           message:
             `Could not find the work-order data tab. Expected a sheet named ` +
-            `"${DATA_SHEET_NAME}" (or any sheet whose row 1 starts with ` +
-            `"${EXPECTED_HEADERS[0]}, ${EXPECTED_HEADERS[1]}, ${EXPECTED_HEADERS[2]}…"). ` +
+            `"${DATA_SHEET_NAME}" (or any sheet whose row 1 contains all of ` +
+            `${REQUIRED_HEADERS.map((h) => `"${h}"`).join(', ')}). ` +
             `Available sheets: ${available}.`,
         },
       ],
@@ -261,19 +320,20 @@ export async function parseWorkbook(
   const errors: ParseError[] = []
 
   // ── Header validation ──────────────────────────────────────────────
-  // findDataSheet guarantees a match when the sheet was located by header
-  // scan, but the named-sheet path (DATA_SHEET_NAME) could still have a
-  // mangled row 1 — validate explicitly so the user gets a precise error.
-  const actualHeaders = readHeaderRow(ws)
-  for (let i = 0; i < EXPECTED_HEADERS.length; i++) {
-    if (actualHeaders[i] !== EXPECTED_HEADERS[i]) {
-      errors.push({
-        rowNumber: 1,
-        message: `Column ${i + 1} header mismatch on sheet "${ws.name}": expected "${EXPECTED_HEADERS[i]}", got "${actualHeaders[i] || '(empty)'}"`,
-      })
-    }
-  }
-  if (errors.length > 0) {
+  // findDataSheet guarantees REQUIRED_HEADERS are present, but we
+  // re-resolve the map here to drive cell access by header name. This is
+  // what lets the parser tolerate Equinix's per-classification column
+  // shapes (CR Required / Qualifications Required on ACB, no History on
+  // PDU/HV/LV).
+  const headerMap = buildHeaderMap(ws)
+  const missing = REQUIRED_HEADERS.filter((h) => !headerMap.has(h))
+  if (missing.length > 0) {
+    errors.push({
+      rowNumber: 1,
+      message:
+        `Sheet "${ws.name}" is missing required column(s): ${missing.map((m) => `"${m}"`).join(', ')}. ` +
+        `Found columns: ${Array.from(headerMap.keys()).map((k) => `"${k}"`).join(', ')}.`,
+    })
     return { rows: [], groups: [], errors }
   }
 
@@ -285,12 +345,17 @@ export async function parseWorkbook(
     const row = ws.getRow(rowNumber)
     if (!row.hasValues) continue
 
-    const cell = (col: number): unknown => {
+    /**
+     * Resolve a header name to its cell value on the current row. Returns
+     * null when the column doesn't exist on this sheet (optional column),
+     * or when the cell is empty. exceljs hyperlink/richText shapes expose
+     * `.text` — unwrap so callers see plain strings.
+     */
+    const cell = (header: string): unknown => {
+      const col = headerMap.get(header)
+      if (!col) return null
       const v = row.getCell(col).value
       if (v === null || v === undefined || v === '') return null
-      // exceljs hyperlink / richText objects expose `.text`. The exceljs
-      // union covers formula / error shapes too, so we reach them through
-      // `unknown` to appease the structural check.
       const obj = v as unknown as Record<string, unknown>
       if (typeof v === 'object' && v !== null && 'text' in obj) {
         return obj.text
@@ -298,17 +363,17 @@ export async function parseWorkbook(
       return v
     }
 
-    const site = String(cell(1) ?? '').trim()
-    const workOrder = String(cell(2) ?? '').trim()
-    const description = String(cell(3) ?? '').trim()
-    const classificationRaw = cell(4)
+    const site = String(cell('Site') ?? '').trim()
+    const workOrder = String(cell('Work Order') ?? '').trim()
+    const description = String(cell('Description') ?? '').trim()
+    const classificationRaw = cell('Classification')
     const classification = classificationRaw ? String(classificationRaw).trim() : null
-    const locationRaw = cell(6)
+    const locationRaw = cell('Location')
     const location = locationRaw ? String(locationRaw).trim() : null
-    const assetRaw = cell(7)
+    const assetRaw = cell('Asset')
     const maximoAssetId = assetRaw != null ? String(assetRaw).trim() : ''
-    const jobPlanRaw = String(cell(10) ?? '').trim()
-    const targetRaw = cell(11)
+    const jobPlanRaw = String(cell('Job Plan') ?? '').trim()
+    const targetRaw = cell('Target Start')
     const targetStart = targetRaw instanceof Date ? targetRaw : null
 
     // Hard-fail rows with missing critical fields.

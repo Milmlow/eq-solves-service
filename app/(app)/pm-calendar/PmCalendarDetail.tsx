@@ -101,13 +101,14 @@ export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEd
           </div>
         )}
 
-        {/* Future notification config preview */}
-        {(entry.reminder_days_before?.length > 0 || entry.notification_recipients?.length > 0) && (
+        {/* Notification config + last-sent timestamp */}
+        {(entry.reminder_days_before?.length > 0 || entry.notification_recipients?.length > 0 || entry.last_notified_at) && (
           <div>
-            <div className="text-xs text-eq-grey font-medium uppercase mb-1">Notifications (Future)</div>
-            <div className="text-xs text-eq-grey">
-              {entry.reminder_days_before?.length > 0 && <div>Reminders: {entry.reminder_days_before.join(', ')} days before</div>}
-              {entry.notification_recipients?.length > 0 && <div>Recipients: {entry.notification_recipients.join(', ')}</div>}
+            <div className="text-xs text-eq-grey font-medium uppercase mb-1">Notifications</div>
+            <div className="text-xs text-eq-grey space-y-0.5">
+              {entry.reminder_days_before?.length > 0 && <div>Reminders: {entry.reminder_days_before.join(', ')} days before (picked up by the supervisor digest)</div>}
+              {entry.notification_recipients?.length > 0 && <div>Cc recipients: {entry.notification_recipients.join(', ')}</div>}
+              {entry.last_notified_at && <div>Last included in a digest: {formatDateTime(entry.last_notified_at)}</div>}
             </div>
           </div>
         )}

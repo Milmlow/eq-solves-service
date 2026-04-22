@@ -5,6 +5,7 @@
  * Proprietary and confidential. All rights reserved.
  */
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { RouteProgress } from "@/components/ui/RouteProgress";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -32,7 +33,12 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full">
         <Providers>
-          <RouteProgress />
+          {/* RouteProgress reads useSearchParams() — must live inside a Suspense
+              boundary so statically-prerenderable pages (e.g. /acb-testing) don't
+              bail out of static generation during the Next build. */}
+          <Suspense fallback={null}>
+            <RouteProgress />
+          </Suspense>
           {children}
         </Providers>
       </body>

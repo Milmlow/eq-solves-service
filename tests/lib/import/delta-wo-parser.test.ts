@@ -280,6 +280,137 @@ function writeHeaderedDataSheet(wb: Workbook, name: string) {
   ])
 }
 
+// ── Equinix Maximo column-shape tolerance ──────────────────────────────
+//
+// Equinix ships per-classification exports with varying column shapes:
+//   - ACB Breaker (14 cols):  adds `CR Required` between Classification
+//                             and History; adds `Qualifications Required`
+//                             at the end.
+//   - HV / LV / PDU (11 cols): omits History entirely.
+//
+// The parser must resolve cells by header name so it tolerates both
+// extra and missing optional columns. REQUIRED_HEADERS must always be
+// present.
+
+describe('parseWorkbook — Equinix column-shape variants', () => {
+  it('parses an ACB-shaped sheet (14 cols, adds CR Required + Qualifications Required)', async () => {
+    const buf = await buildBuffer((wb) => {
+      const ws = wb.addWorksheet(DATA_SHEET_NAME)
+      ws.addRow([
+        'Site', 'Work Order', 'Description', 'Classification',
+        'CR Required',                  // extra col, between Classification and History
+        'History', 'Location', 'Asset', 'Work Type', 'Status',
+        'Job Plan', 'Target Start', 'Reported Date',
+        'Qualifications Required',      // extra col at the end
+      ])
+      ws.addRow([
+        'AU01-SY6', '4406940', 'SY6-BLK2-MSB-2-3_ACB-INCOMING MAINS',
+        'ELEC \\ BREAKER',
+        'N',
+        'N', 'SY6-GF-27', '1140', 'PM', 'INPRG',
+        'LVACB-A', new Date(Date.UTC(2026, 4, 20)), new Date(Date.UTC(2026, 1, 15)),
+        'N',
+      ])
+    })
+
+    const result = await parseWorkbook(buf)
+
+    expect(result.errors).toEqual([])
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0]).toMatchObject({
+      siteCode: 'SY6',
+      workOrder: '4406940',
+      maximoAssetId: '1140',
+      jobPlanCode: 'LVACB',
+      frequencySuffix: 'A',
+      frequency: 'annual',
+      classification: 'ELEC \\ BREAKER',
+      location: 'SY6-GF-27',
+    })
+  })
+
+  it('parses an HV/LV/PDU-shaped sheet (11 cols, no History column)', async () => {
+    const buf = await buildBuffer((wb) => {
+      const ws = wb.addWorksheet(DATA_SHEET_NAME)
+      ws.addRow([
+        'Site', 'Work Order', 'Description', 'Classification',
+        // History intentionally absent
+        'Location', 'Asset', 'Work Type', 'Status',
+        'Job Plan', 'Target Start', 'Reported Date',
+      ])
+      ws.addRow([
+        'AU01-SY6', '4385845', 'SY6-HV-DB-A 48VDC BATTERY CHARGER',
+        'ELEC \\ BATT-LA',
+        'SY6-GF-10', '1008', 'PM', 'INPRG',
+        'BTCHGR-Q', new Date(Date.UTC(2026, 4, 11)), new Date(Date.UTC(2026, 1, 15)),
+      ])
+    })
+
+    const result = await parseWorkbook(buf)
+
+    expect(result.errors).toEqual([])
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0]).toMatchObject({
+      siteCode: 'SY6',
+      workOrder: '4385845',
+      maximoAssetId: '1008',
+      jobPlanCode: 'BTCHGR',
+      frequencySuffix: 'Q',
+      frequency: 'quarterly',
+      location: 'SY6-GF-10',
+    })
+  })
+
+  it('rejects a sheet missing a REQUIRED column (e.g. no Asset)', async () => {
+    const buf = await buildBuffer((wb) => {
+      const ws = wb.addWorksheet(DATA_SHEET_NAME)
+      ws.addRow([
+        'Site', 'Work Order', 'Description', 'Classification', 'Location',
+        // Asset intentionally absent — required
+        'Work Type', 'Status', 'Job Plan', 'Target Start', 'Reported Date',
+      ])
+      ws.addRow([
+        'AU01-SY6', '1', 'desc', 'cls', 'loc', 'PM', 'INPRG',
+        'LVACB-A', new Date(Date.UTC(2026, 4, 20)), new Date(),
+      ])
+    })
+
+    const result = await parseWorkbook(buf)
+
+    // findDataSheet rejects the only sheet because Asset is missing,
+    // so the failure is a workbook-level "no data tab" error.
+    expect(result.rows).toEqual([])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].rowNumber).toBe(0)
+    expect(result.errors[0].message).toMatch(/Could not find the work-order data tab/)
+  })
+
+  it('tolerates columns in non-canonical order', async () => {
+    const buf = await buildBuffer((wb) => {
+      const ws = wb.addWorksheet(DATA_SHEET_NAME)
+      // Reorder: Job Plan first, Site last — header lookup must still work
+      ws.addRow([
+        'Job Plan', 'Asset', 'Work Order', 'Description',
+        'Target Start', 'Site',
+      ])
+      ws.addRow([
+        'LVACB-A', '1140', '4406940', 'SY6-BLK2-MSB-2-3_ACB',
+        new Date(Date.UTC(2026, 4, 20)), 'AU01-SY6',
+      ])
+    })
+
+    const result = await parseWorkbook(buf)
+
+    expect(result.errors).toEqual([])
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0]).toMatchObject({
+      siteCode: 'SY6',
+      jobPlanCode: 'LVACB',
+      maximoAssetId: '1140',
+    })
+  })
+})
+
 describe('parseWorkbook — sheet selection', () => {
   it('finds the data tab when an unrelated sheet is first/active', async () => {
     const buf = await buildBuffer((wb) => {

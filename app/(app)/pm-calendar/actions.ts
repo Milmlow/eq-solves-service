@@ -1,10 +1,12 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { CreatePmCalendarSchema, UpdatePmCalendarSchema } from '@/lib/validations/pm-calendar'
+import { runSupervisorDigests, type SupervisorRunResult } from '@/lib/calendar/supervisor-digest'
 
 // ===== Helper: compute AU FY quarter & year from a date =====
 function computeAuFyQuarter(dateStr: string): { quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4'; financial_year: string } {
@@ -51,8 +53,8 @@ export async function createPmCalendarAction(formData: FormData) {
       contractor_materials_cost: formData.get('contractor_materials_cost') || 0,
       assigned_to: formData.get('assigned_to') || null,
       status: formData.get('status') || 'scheduled',
-      reminder_days_before: [],
-      notification_recipients: [],
+      reminder_days_before: parseDaysList(formData.get('reminder_days_before') as string | null),
+      notification_recipients: parseEmailList(formData.get('notification_recipients') as string | null),
       email_template: null,
     }
 
@@ -99,6 +101,8 @@ export async function updatePmCalendarAction(id: string, formData: FormData) {
       contractor_materials_cost: formData.get('contractor_materials_cost') || 0,
       assigned_to: formData.get('assigned_to') || null,
       status: formData.get('status') || 'scheduled',
+      reminder_days_before: parseDaysList(formData.get('reminder_days_before') as string | null),
+      notification_recipients: parseEmailList(formData.get('notification_recipients') as string | null),
     }
 
     const parsed = UpdatePmCalendarSchema.safeParse(raw)
@@ -451,4 +455,120 @@ export async function importPmCalendarCsvAction(
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }
+}
+
+// ===== Helpers: parse comma/space-separated form fields =====
+
+function parseDaysList(raw: string | null | undefined): number[] {
+  if (!raw) return []
+  return raw
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => parseInt(s, 10))
+    .filter((n) => Number.isFinite(n) && n > 0)
+}
+
+function parseEmailList(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  return raw
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+// ===== SUPERVISOR DIGEST: PREVIEW =====
+//
+// Admin-only. Returns counts per supervisor without sending email or
+// writing to supervisor_digests. Use this to sanity-check who would
+// receive what before flipping the cron live.
+
+export async function previewSupervisorDigestAction(
+  options: { supervisorUserId?: string } = {},
+): Promise<{
+  success: boolean
+  error?: string
+  results?: SupervisorRunResult[]
+}> {
+  try {
+    const { tenantId, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
+
+    const appUrl = await resolveAppUrl()
+    const results = await runSupervisorDigests({
+      triggerSource: 'preview',
+      tenantId,
+      supervisorUserId: options.supervisorUserId,
+      appUrl,
+    })
+
+    return { success: true, results }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+// ===== SUPERVISOR DIGEST: SEND NOW =====
+//
+// Admin-only. Sends today's digest to every supervisor in the current
+// tenant (or to a single supervisor when supervisorUserId is provided).
+// Use cases: smoke-test the email after wiring Resend, or send an
+// out-of-band digest before a long weekend.
+
+export async function sendSupervisorDigestNowAction(
+  options: { supervisorUserId?: string } = {},
+): Promise<{
+  success: boolean
+  error?: string
+  sent?: number
+  skipped?: number
+  errored?: number
+  results?: SupervisorRunResult[]
+}> {
+  try {
+    const { tenantId, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
+
+    const appUrl = await resolveAppUrl()
+    const results = await runSupervisorDigests({
+      triggerSource: 'manual',
+      tenantId,
+      supervisorUserId: options.supervisorUserId,
+      appUrl,
+    })
+
+    const sent = results.filter((r) => r.status === 'sent').length
+    const skipped = results.filter((r) => r.status === 'skipped_empty' || r.status === 'skipped_no_email').length
+    const errored = results.filter((r) => r.status === 'error').length
+
+    await logAuditEvent({
+      action: 'send',
+      entityType: 'supervisor_digest',
+      summary: `Sent supervisor digest manually — ${sent} sent, ${skipped} skipped, ${errored} errored`,
+    })
+
+    revalidatePath('/calendar')
+    return { success: true, sent, skipped, errored, results }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+// Resolve the public URL the digest links should point at. Prefers
+// NEXT_PUBLIC_SITE_URL (the existing Netlify env var), falls back through
+// NEXT_PUBLIC_APP_URL / APP_URL for forward-compat, then the request
+// origin so dev works without env config.
+async function resolveAppUrl(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+  if (process.env.APP_URL) return process.env.APP_URL
+  try {
+    const h = await headers()
+    const host = h.get('host')
+    const proto = h.get('x-forwarded-proto') ?? 'https'
+    if (host) return `${proto}://${host}`
+  } catch {
+    // headers() throws outside a request scope — fall through
+  }
+  return 'https://eq-solves-service.netlify.app'
 }

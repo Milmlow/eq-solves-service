@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Download } from 'lucide-react'
 import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
 import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 interface GenerateReportButtonProps {
   customerId: string
@@ -41,6 +42,14 @@ export function GenerateReportButton({ customerId, siteId, from, to, filterDescr
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
+
+    // Asset count is unknown at this layer (compliance reports are
+    // multi-site/multi-asset rollups); pass 0 and let downstream filter
+    // by complexity tier.
+    analyticsEvents.reportGenerated({
+      report_type: `compliance_${complexity}`,
+      asset_count: 0,
+    })
   }
 
   return (

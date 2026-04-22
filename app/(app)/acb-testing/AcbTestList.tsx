@@ -19,6 +19,7 @@ type SiteOption = Pick<Site, 'id' | 'name'> & {
 import { FileText } from 'lucide-react'
 import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
 import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 type TestRow = AcbTest & {
   assets?: { name: string; asset_type: string } | null
@@ -78,6 +79,12 @@ export function AcbTestList({
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
+
+    const assetCount = tests.filter((t) => (t as { site_id?: string }).site_id === reportSiteId).length
+    analyticsEvents.reportGenerated({
+      report_type: `acb_${complexity}`,
+      asset_count: assetCount,
+    })
   }
 
   const columns: DataTableColumn<TestRow>[] = [

@@ -10,10 +10,18 @@ import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { PmCalendarForm } from './PmCalendarForm'
 import { PmCalendarDetail } from './PmCalendarDetail'
-import { seedPmCalendarAction, togglePmCalendarActiveAction, importPmCalendarCsvAction } from './actions'
-import { CalendarDays, List, LayoutGrid, Loader2, Archive, Upload } from 'lucide-react'
+import {
+  seedPmCalendarAction,
+  togglePmCalendarActiveAction,
+  importPmCalendarCsvAction,
+  previewSupervisorDigestAction,
+  sendSupervisorDigestNowAction,
+} from './actions'
+import type { SupervisorRunResult } from '@/lib/calendar/supervisor-digest'
+import { CalendarDays, List, LayoutGrid, Loader2, Archive, Upload, Mail, Eye } from 'lucide-react'
 import { CsvExportButton } from '@/components/ui/CsvExportButton'
 import { parseCsv } from '@/lib/utils/csv'
+import { events as analyticsEvents } from '@/lib/analytics'
 import type { PmCalendarEntry, Site, PmCalendarCategory, AuFyQuarter } from '@/lib/types'
 import { formatSiteLabel } from '@/lib/utils/format'
 
@@ -54,6 +62,25 @@ function CategoryBadge({ category }: { category: string }) {
   return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{category}</span>
 }
 
+function DigestStatusBadge({ status, error }: { status: SupervisorRunResult['status']; error?: string }) {
+  const config: Record<SupervisorRunResult['status'], { cls: string; label: string }> = {
+    sent: { cls: 'bg-green-100 text-green-700', label: 'Sent' },
+    preview: { cls: 'bg-blue-100 text-blue-700', label: 'Preview' },
+    skipped_empty: { cls: 'bg-gray-100 text-gray-600', label: 'Skipped — empty' },
+    skipped_no_email: { cls: 'bg-amber-100 text-amber-700', label: 'Skipped — no Resend key' },
+    error: { cls: 'bg-red-100 text-red-700', label: 'Error' },
+  }
+  const c = config[status]
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${c.cls}`}
+      title={status === 'error' ? error : undefined}
+    >
+      {c.label}
+    </span>
+  )
+}
+
 function statusToBadge(status: string): 'active' | 'not-started' | 'complete' | 'inactive' {
   const map: Record<string, 'active' | 'not-started' | 'complete' | 'inactive'> = {
     scheduled: 'not-started',
@@ -71,6 +98,27 @@ function formatDate(dateStr: string) {
     day: '2-digit', month: 'short', year: 'numeric',
     timeZone: 'Australia/Sydney',
   })
+}
+
+/**
+ * Classify an entry's start_time relative to now for visual cues on the
+ * list view. Entries that are completed/cancelled are always 'none' so we
+ * don't nag users about finished work.
+ */
+function timingBucket(
+  startTimeIso: string,
+  status: string,
+): 'overdue' | 'today' | 'upcoming' | 'none' {
+  if (status === 'completed' || status === 'cancelled') return 'none'
+  const now = new Date()
+  const start = new Date(startTimeIso)
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
+  const sevenDays = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+  if (start < todayStart) return 'overdue'
+  if (start < todayEnd) return 'today'
+  if (start < sevenDays) return 'upcoming'
+  return 'none'
 }
 
 
@@ -96,6 +144,12 @@ export function PmCalendarView({
   const [detailEntry, setDetailEntry] = useState<EntryRow | null>(null)
   const [seeding, setSeeding] = useState(false)
   const [seedMsg, setSeedMsg] = useState<string | null>(null)
+
+  // Supervisor digest state
+  const [digestBusy, setDigestBusy] = useState<'preview' | 'send' | null>(null)
+  const [digestResults, setDigestResults] = useState<SupervisorRunResult[] | null>(null)
+  const [digestMode, setDigestMode] = useState<'preview' | 'send' | null>(null)
+  const [digestError, setDigestError] = useState<string | null>(null)
 
   // View toggle
   function setView(v: 'list' | 'calendar' | 'quarterly') {
@@ -123,8 +177,12 @@ export function PmCalendarView({
     e.stopPropagation()
     if (!confirm(`Archive "${title}"? It will be hidden from the list (use the Show Archived toggle to restore).`)) return
     const result = await togglePmCalendarActiveAction(id, false)
-    if (result.success) router.refresh()
-    else alert(`Error: ${result.error}`)
+    if (result.success) {
+      analyticsEvents.archivedCheckToggled({ new_state: false })
+      router.refresh()
+    } else {
+      alert(`Error: ${result.error}`)
+    }
   }
 
   // CSV import handler
@@ -149,6 +207,60 @@ export function PmCalendarView({
       setImporting(false)
       e.target.value = ''
     }
+  }
+
+  // Supervisor digest handlers
+  async function handlePreviewDigest() {
+    setDigestBusy('preview')
+    setDigestError(null)
+    setDigestMode('preview')
+    const res = await previewSupervisorDigestAction()
+    setDigestBusy(null)
+    if (res.success) {
+      const results = res.results ?? []
+      setDigestResults(results)
+      analyticsEvents.supervisorDigestPreviewed({
+        supervisor_count: results.length,
+        total_entries: results.reduce((s, r) => s + r.total, 0),
+        with_entries_count: results.filter((r) => r.total > 0).length,
+      })
+    } else {
+      setDigestError(res.error ?? 'Preview failed.')
+      setDigestResults(null)
+    }
+  }
+
+  async function handleSendDigestNow() {
+    const count = digestResults?.filter((r) => r.total > 0).length ?? null
+    const msg = count != null
+      ? `Send the digest email now to ${count} supervisor(s) with entries? This will log to supervisor_digests and trigger Resend.`
+      : 'Send the digest email now to every supervisor in this tenant? This will log to supervisor_digests and trigger Resend.'
+    if (!confirm(msg)) return
+
+    setDigestBusy('send')
+    setDigestError(null)
+    setDigestMode('send')
+    const res = await sendSupervisorDigestNowAction()
+    setDigestBusy(null)
+    if (res.success) {
+      const results = res.results ?? []
+      setDigestResults(results)
+      analyticsEvents.supervisorDigestSent({
+        supervisor_count: results.length,
+        sent_count: res.sent ?? 0,
+        skipped_count: res.skipped ?? 0,
+        errored_count: res.errored ?? 0,
+      })
+    } else {
+      setDigestError(res.error ?? 'Send failed.')
+      setDigestResults(null)
+    }
+  }
+
+  function closeDigestPanel() {
+    setDigestResults(null)
+    setDigestError(null)
+    setDigestMode(null)
   }
 
   // Seed data handler
@@ -231,7 +343,21 @@ export function PmCalendarView({
     {
       key: 'start_time',
       header: 'Start',
-      render: (row) => <span className="text-xs">{formatDate(row.start_time)}</span>,
+      render: (row) => {
+        const bucket = timingBucket(row.start_time, row.status)
+        const cls =
+          bucket === 'overdue' ? 'text-red-600 font-semibold'
+          : bucket === 'today' ? 'text-amber-600 font-semibold'
+          : bucket === 'upcoming' ? 'text-eq-deep'
+          : ''
+        return (
+          <span className={`text-xs ${cls}`}>
+            {formatDate(row.start_time)}
+            {bucket === 'overdue' && <span className="ml-1.5 text-[10px] uppercase">overdue</span>}
+            {bucket === 'today' && <span className="ml-1.5 text-[10px] uppercase">today</span>}
+          </span>
+        )
+      },
       sortAccessor: (row) => new Date(row.start_time).getTime(),
     },
     {
@@ -347,6 +473,32 @@ export function PmCalendarView({
                 {seeding ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Seeding...</> : 'Seed Data'}
               </Button>
             )}
+            {isAdmin && (
+              <>
+                <button
+                  onClick={handlePreviewDigest}
+                  disabled={digestBusy !== null}
+                  className="inline-flex items-center h-8 px-3 text-xs font-medium rounded-md border border-gray-200 bg-white text-eq-ink hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Preview who'd receive the digest right now (no email sent)"
+                >
+                  {digestBusy === 'preview'
+                    ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                    : <Eye className="w-3.5 h-3.5 mr-1" />}
+                  Preview Digest
+                </button>
+                <button
+                  onClick={handleSendDigestNow}
+                  disabled={digestBusy !== null}
+                  className="inline-flex items-center h-8 px-3 text-xs font-medium rounded-md border border-eq-sky bg-eq-ice text-eq-deep hover:bg-eq-sky/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Send the supervisor digest now"
+                >
+                  {digestBusy === 'send'
+                    ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                    : <Mail className="w-3.5 h-3.5 mr-1" />}
+                  Send Digest Now
+                </button>
+              </>
+            )}
             {canWriteRole && (
               <label className="inline-flex items-center">
                 <input
@@ -373,6 +525,76 @@ export function PmCalendarView({
           </div>
         </div>
         {seedMsg && <p className={`text-sm ${seedMsg.startsWith('Error') ? 'text-red-500' : 'text-green-600'}`}>{seedMsg}</p>}
+        {digestError && (
+          <div className="flex items-start justify-between gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-700">{digestError}</p>
+            <button onClick={closeDigestPanel} className="text-xs text-red-600 hover:text-red-800 shrink-0">Dismiss</button>
+          </div>
+        )}
+        {digestResults && (
+          <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 bg-eq-sky/5 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-eq-deep" />
+                <h3 className="text-sm font-semibold text-eq-ink">
+                  Supervisor digest — {digestMode === 'preview' ? 'Preview' : 'Sent'}
+                </h3>
+                <span className="text-xs text-eq-grey">
+                  {digestResults.length} supervisor{digestResults.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <button onClick={closeDigestPanel} className="text-xs text-eq-grey hover:text-eq-ink">Close</button>
+            </div>
+            {digestResults.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-eq-grey italic">
+                No active supervisors found in this tenant. Assign a user the supervisor, admin, or super_admin role to enable the digest.
+              </p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-eq-grey border-b border-gray-100">
+                    <th className="px-4 py-2">Supervisor</th>
+                    <th className="px-4 py-2 text-right">Overdue</th>
+                    <th className="px-4 py-2 text-right">Today</th>
+                    <th className="px-4 py-2 text-right">This week</th>
+                    <th className="px-4 py-2 text-right">Next 7–14</th>
+                    <th className="px-4 py-2 text-right">Total</th>
+                    <th className="px-4 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {digestResults.map((r) => (
+                    <tr key={`${r.tenantId}-${r.supervisorUserId}`} className="border-b border-gray-50">
+                      <td className="px-4 py-2">
+                        <div className="font-medium text-eq-ink text-xs">{r.supervisorName ?? r.supervisorEmail}</div>
+                        {r.supervisorName && (
+                          <div className="text-[11px] text-eq-grey">{r.supervisorEmail}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs">
+                        {r.overdue > 0 ? <span className="text-red-600 font-semibold">{r.overdue}</span> : r.overdue}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs">
+                        {r.today > 0 ? <span className="text-amber-600 font-semibold">{r.today}</span> : r.today}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs">{r.thisWeek}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs">{r.nextWeek}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs font-semibold">{r.total}</td>
+                      <td className="px-4 py-2">
+                        <DigestStatusBadge status={r.status} error={r.error} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 text-[11px] text-eq-grey">
+              {digestMode === 'preview'
+                ? 'Preview only — no emails sent, no audit row written.'
+                : 'Send complete — audit rows are in supervisor_digests.'}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Summary bar */}

@@ -23,6 +23,7 @@ import type {
   CheckItemResult,
   Attachment,
 } from '@/lib/types'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 interface CheckDetailProps {
   open: boolean
@@ -88,7 +89,18 @@ export function CheckDetail({
     setLoading(true)
     const result = await completeCheckAction(check.id)
     setLoading(false)
-    if (!result.success) setError(result.error ?? 'Failed to complete.')
+    if (!result.success) {
+      setError(result.error ?? 'Failed to complete.')
+      return
+    }
+    const startedMs = check.started_at ? new Date(check.started_at).getTime() : null
+    const durationSeconds = startedMs ? Math.max(0, Math.round((Date.now() - startedMs) / 1000)) : 0
+    const defectsFound = items.filter((i) => i.result === 'fail').length
+    analyticsEvents.checkCompleted({
+      check_type: check.job_plans?.name ?? 'general',
+      duration_seconds: durationSeconds,
+      defects_found: defectsFound,
+    })
   }
 
   async function handleDelete() {

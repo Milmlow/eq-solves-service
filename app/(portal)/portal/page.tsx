@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { formatDate } from '@/lib/utils/format'
+import { PortalAnalytics } from './PortalAnalytics'
 
 /**
  * Customer portal — "Your Reports" page.
@@ -40,6 +41,7 @@ export default async function PortalPage() {
 
   return (
     <div className="space-y-6">
+      <PortalAnalytics portalType="customer_reports" />
       <div>
         <h1 className="text-xl font-bold text-eq-ink">Your Reports</h1>
         <p className="text-sm text-eq-grey mt-1">

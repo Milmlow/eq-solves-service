@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Upload, Trash2, Image as ImageIcon, Search, X } from 'lucide-react'
 import { uploadMediaAction, deleteMediaAction, updateMediaAction } from './actions'
+import { events as analyticsEvents } from '@/lib/analytics'
 import type { MediaCategory } from '@/lib/types'
 
 type MediaSurface = 'light' | 'dark' | 'any'
@@ -184,6 +185,11 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
       setUploadError(result.error ?? 'Upload failed.')
       return
     }
+
+    analyticsEvents.mediaUploaded({
+      media_type: uploadFile.type || 'unknown',
+      file_size_mb: Number((uploadFile.size / (1024 * 1024)).toFixed(3)),
+    })
 
     setUploadName('')
     setUploadCategories(new Set(['general']))

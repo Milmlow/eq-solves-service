@@ -6,6 +6,7 @@ import { SiteMapDynamic } from './SiteMapDynamic'
 import type { MapSite } from './SiteMapLeaflet'
 import type { Role } from '@/lib/types'
 import { DashboardViewToggle } from './DashboardViewToggle'
+import { DashboardAnalytics } from './DashboardAnalytics'
 
 type View = 'mine' | 'all'
 
@@ -181,6 +182,9 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
+      {/* Analytics: dashboard_viewed (fires once per mount, client-side) */}
+      <DashboardAnalytics siteCount={sitesRes.count ?? 0} openChecksCount={totalActive} />
+
       {/* Welcome header + view toggle */}
       <div className="flex items-start justify-between gap-4">
         <div>

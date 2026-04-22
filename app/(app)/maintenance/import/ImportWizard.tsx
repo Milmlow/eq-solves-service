@@ -29,6 +29,7 @@ import {
   type PreviewResult,
   type RowResolution,
 } from './actions'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 // ── Resolution state — keyed by group.key ───────────────────────────────
 
@@ -89,6 +90,7 @@ export function ImportWizard() {
     setCommitResult(null)
     setResolutions({})
     setRowResolutions({})
+    analyticsEvents.deltaImportStarted()
     startTransition(async () => {
       const fd = new FormData()
       fd.append('file', file)
@@ -124,6 +126,14 @@ export function ImportWizard() {
         return
       }
       setCommitResult(result.data ?? null)
+      const summary = result.data
+      if (summary) {
+        analyticsEvents.deltaImportCommitted({
+          rows_linked: summary.rowsLinked ?? 0,
+          rows_created: summary.rowsCreated ?? 0,
+          rows_skipped: summary.rowsSkipped ?? 0,
+        })
+      }
       router.refresh()
     })
   }

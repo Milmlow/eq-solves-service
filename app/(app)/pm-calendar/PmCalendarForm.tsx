@@ -171,6 +171,36 @@ export function PmCalendarForm({ open, onClose, entry, sites, categories, techni
           />
         </div>
 
+        {/* Notifications */}
+        <div className="border-t border-gray-200 pt-4 mt-2">
+          <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-3">Notifications</h3>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-eq-grey">Reminder days before</label>
+              <input
+                type="text"
+                name="reminder_days_before"
+                defaultValue={(entry?.reminder_days_before ?? []).join(', ')}
+                placeholder="e.g. 7, 1"
+                className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+              />
+              <p className="text-[11px] text-eq-grey">Comma-separated. Used by the supervisor digest.</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-eq-grey">Notification recipients</label>
+              <input
+                type="text"
+                name="notification_recipients"
+                defaultValue={(entry?.notification_recipients ?? []).join(', ')}
+                placeholder="ops@example.com, supervisor@example.com"
+                className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+              />
+              <p className="text-[11px] text-eq-grey">Optional cc list (in addition to assigned supervisor).</p>
+            </div>
+          </div>
+        </div>
+
         {/* Feedback */}
         {error && <p className="text-sm text-red-500">{error}</p>}
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}

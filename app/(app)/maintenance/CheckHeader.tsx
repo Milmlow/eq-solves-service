@@ -8,6 +8,7 @@ import { Download, ClipboardPaste } from 'lucide-react'
 import type { MaintenanceCheck, CheckStatus } from '@/lib/types'
 import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
 import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 function statusToBadge(status: CheckStatus) {
   const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
@@ -85,6 +86,11 @@ export function CheckHeader({
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
+
+    analyticsEvents.reportGenerated({
+      report_type: `pm_check_${complexity}`,
+      asset_count: totalCount,
+    })
   }
 
   async function handleApplyPaste() {

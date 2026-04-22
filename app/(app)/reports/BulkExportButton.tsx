@@ -5,6 +5,7 @@ import { Download } from 'lucide-react'
 import type { Site } from '@/lib/types'
 import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
 import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 interface BulkExportButtonProps {
   sites: Pick<Site, 'id' | 'name'>[]
@@ -29,6 +30,11 @@ export function BulkExportButton({ sites }: BulkExportButtonProps) {
     a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? 'reports.zip'
     a.click()
     URL.revokeObjectURL(url)
+
+    analyticsEvents.reportGenerated({
+      report_type: `bulk_zip_${complexity}`,
+      asset_count: 0,
+    })
   }
 
   return (

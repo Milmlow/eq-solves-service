@@ -4,6 +4,66 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-22 — Supervisor digest, calendar overdue colouring, PostHog events wired
+
+Pending push to `main`.
+
+### Added
+- **Migration `0057_supervisor_digests.sql`** — applied to live Supabase project `urjhmkhbgaxrofurpbgc`. Creates `supervisor_digests` audit table (one row per supervisor per scheduled run with `status` enum: `sent`, `skipped`, `errored`), plus SECURITY DEFINER helpers `list_active_supervisors()` and `pm_calendar_for_supervisor(uuid, uuid)`. RLS calls `public.get_user_tenant_ids()` directly (no `(SELECT …)` wrap — that returns `uuid[]` and the `=` operator complaint is the give-away).
+- **Netlify Scheduled Function `netlify/functions/supervisor-digest-scheduler.ts`** — fires daily at `0 21 * * *` UTC (07:00 AEST / 08:00 AEDT), POSTs to `/api/cron/supervisor-digest` with `Authorization: Bearer ${CRON_SECRET}`. Resolves app URL from `NEXT_PUBLIC_SITE_URL` first, falls back to Netlify's `URL`. `netlify.toml` gained the matching `[functions."supervisor-digest-scheduler"]` schedule block. Dev dependency `@netlify/functions` added via npm.
+- **PM Calendar admin toolbar** — admins now see "Preview Digest" + "Send Digest Now" buttons. Preview lists every active supervisor with overdue/today/this-week/next-week counts; Send Now dispatches via Resend and renders a per-supervisor delivery panel with status badges. Both actions stream PostHog events (`supervisor_digest_previewed`, `supervisor_digest_sent`).
+- **Calendar overdue colouring** — Start column now buckets entries (`overdue` red / `today` amber / `upcoming` deep blue) so admins eyeball priority at the list level.
+- **PostHog event helpers wired across the app** — `lib/analytics.ts`'s `events` object had been defined but never called. This session connected the day-one events to their flows:
+  - `dashboard_viewed` — new `app/(app)/dashboard/DashboardAnalytics.tsx` client component, mounted in `dashboard/page.tsx` with `site_count` + `open_checks_count` already computed server-side.
+  - `portal_viewed` — new `app/(portal)/portal/PortalAnalytics.tsx`, mounted in `portal/page.tsx` with `portal_type: 'customer_reports'`.
+  - `check_created` — fires after `createCheckAction` resolves in `app/(app)/maintenance/CreateCheckForm.tsx` with `kind` + `job_plan_id`.
+  - `check_completed` — fires after `completeCheckAction` resolves in both `app/(app)/maintenance/CheckDetail.tsx` and `app/(app)/maintenance/[id]/CheckDetailPage.tsx`. `duration_seconds` is computed from `check.started_at` → `Date.now()`; `defects_found` counts items with `result === 'fail'`.
+  - `report_generated` — fires after every report download succeeds: `GenerateReportButton` (compliance), `BulkExportButton` (bulk ZIP), `CheckHeader` (PM report), `CheckDetailPage` (PM asset report), `AcbTestList`, `NsxTestList`. `report_type` carries the complexity tier (e.g. `pm_asset_detailed`, `acb_summary`).
+  - `media_uploaded` — fires after `uploadMediaAction` succeeds in `MediaLibraryClient` with the original `File.type` + size in MB.
+  - `delta_import_started` / `delta_import_committed` — fires from the `ImportWizard` preview button and the commit success handler. The committed event uses `summary.rowsLinked|rowsCreated|rowsSkipped` from the `CommitSummary`.
+  - `archived_check_toggled` — fires from the calendar archive handler in `PmCalendarView.tsx` (only direction handled there is `new_state: false`; archive UIs elsewhere haven't been wired yet).
+
+### Fixed
+- **`resolveAppUrl()` env var preference** — both `app/(app)/pm-calendar/actions.ts` and `app/api/cron/supervisor-digest/route.ts` now prefer `NEXT_PUBLIC_SITE_URL` (Royce's actual Netlify env name) over the previously-assumed `NEXT_PUBLIC_APP_URL`. Falls back through request headers and a hardcoded prod URL.
+- **Migration RLS wrap gotcha** — first attempt at `0057` wrapped `public.get_user_tenant_ids()` in `(SELECT …)`, which fails with `operator does not exist: uuid = uuid[]` because the function already returns the array. Removed the wrap; advisor confirmed only 2 new INFO-level entries (unused-index on a brand-new empty table) and 0 new ERROR-level findings.
+
+### Files Touched
+- New: `supabase/migrations/0057_supervisor_digests.sql`
+- New: `netlify.toml`
+- New: `netlify/functions/supervisor-digest-scheduler.ts`
+- New: `app/(app)/dashboard/DashboardAnalytics.tsx`
+- New: `app/(portal)/portal/PortalAnalytics.tsx`
+- Modified: `lib/analytics.ts` (added `supervisorDigestPreviewed`, `supervisorDigestSent`)
+- Modified: `app/(app)/pm-calendar/PmCalendarView.tsx` (digest UI + overdue colouring)
+- Modified: `app/(app)/pm-calendar/PmCalendarDetail.tsx` (notifications copy)
+- Modified: `app/(app)/pm-calendar/actions.ts` (resolveAppUrl env preference)
+- Modified: `app/api/cron/supervisor-digest/route.ts` (resolveAppUrl env preference)
+- Modified: `app/(app)/maintenance/CreateCheckForm.tsx` (`check_created`)
+- Modified: `app/(app)/maintenance/CheckDetail.tsx` (`check_completed`)
+- Modified: `app/(app)/maintenance/[id]/CheckDetailPage.tsx` (`check_completed` + `report_generated`)
+- Modified: `app/(app)/maintenance/CheckHeader.tsx` (`report_generated`)
+- Modified: `app/(app)/reports/GenerateReportButton.tsx` (`report_generated`)
+- Modified: `app/(app)/reports/BulkExportButton.tsx` (`report_generated`)
+- Modified: `app/(app)/acb-testing/AcbTestList.tsx` (`report_generated`)
+- Modified: `app/(app)/nsx-testing/NsxTestList.tsx` (`report_generated`)
+- Modified: `app/(app)/admin/media/MediaLibraryClient.tsx` (`media_uploaded`)
+- Modified: `app/(app)/maintenance/import/ImportWizard.tsx` (`delta_import_started`, `delta_import_committed`)
+- Modified: `app/(app)/dashboard/page.tsx` (mount `DashboardAnalytics`)
+- Modified: `app/(portal)/portal/page.tsx` (mount `PortalAnalytics`)
+- Modified: `package.json` + `package-lock.json` (`@netlify/functions` dev dep)
+
+### Verified
+- `tsc --noEmit` clean across the workspace after every batch of edits.
+- Supabase advisors: 5 pre-existing WARN entries (documented exceptions), 2 new INFO-level entries on `supervisor_digests` indexes (expected for an empty table), 0 new ERROR-level findings.
+- Real-data dry run: `list_active_supervisors()` returns 7 active supervisors (1 Demo + 6 SKS); `pm_calendar_for_supervisor()` returns realistic per-supervisor entry counts; role-gating rejects non-members (0 rows for a random UUID).
+
+### Required Netlify env (already set)
+- `CRON_SECRET=TGU7PN3iIAxaMXfZyLs9nObiqHuXQd24RFLXMgkvu74=`
+- `NEXT_PUBLIC_SITE_URL` — present
+- `RESEND_API_KEY` — present (graceful no-op if absent)
+
+---
+
 ## 2026-04-21 — EqAttribution removed, route progress bar, C1 + C2 fixes
 
 Merged to `main`.

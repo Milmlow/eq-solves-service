@@ -14,6 +14,7 @@ import type { NsxTest, NsxTestReading, NsxTestResult, Asset, Site, Profile, Atta
 import { FileText } from 'lucide-react'
 import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
 import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 type TestRow = NsxTest & {
   assets?: { name: string; asset_type: string } | null
@@ -76,6 +77,12 @@ export function NsxTestList({
     a.click()
     a.remove()
     URL.revokeObjectURL(url)
+
+    const assetCount = tests.filter((t) => (t as { site_id?: string }).site_id === reportSiteId).length
+    analyticsEvents.reportGenerated({
+      report_type: `nsx_${complexity}`,
+      asset_count: assetCount,
+    })
   }
 
   const columns: DataTableColumn<TestRow>[] = [

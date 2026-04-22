@@ -8,6 +8,7 @@ import { createCheckAction, previewCheckAssetsAction } from './actions'
 import type { JobPlan, Site, Profile } from '@/lib/types'
 import { formatSiteLabel } from '@/lib/utils/format'
 import { CheckCircle2, XCircle, Scale } from 'lucide-react'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 const FREQUENCIES = [
   { value: 'monthly', label: 'Monthly' },
@@ -158,6 +159,10 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
     setLoading(false)
 
     if (result.success) {
+      analyticsEvents.checkCreated({
+        check_type: (formData.get('kind') as string) || 'general',
+        asset_type: (formData.get('job_plan_id') as string) || 'unknown',
+      })
       setSuccess(true)
       const msg = `Check created: ${result.assetCount ?? 0} assets, ${result.taskCount ?? 0} tasks`
       setTimeout(() => { onClose(); resetForm() }, 1500)
