@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -72,6 +72,43 @@ export function AssetCapture({
     () => groupFields(captured, classificationCode),
     [captured, classificationCode],
   )
+
+  // First-empty field (in visual order across groups) → where auto-focus lands
+  // when the tech opens a new asset. Skip if everything is already captured.
+  const firstEmptyFieldId = useMemo(() => {
+    for (const g of groups) {
+      for (const f of g.fields) {
+        const v = byFieldId.get(f.id)?.value
+        if (!v || v.trim() === '') return f.id
+      }
+    }
+    return null
+    // byFieldId is a new Map every render; we only want to recompute when the
+    // asset changes or when the available fields change — not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset.id, groups])
+
+  const firstEmptyRef = useRef<HTMLElement | null>(null)
+
+  // Auto-focus the first empty field whenever the asset changes.
+  useEffect(() => {
+    if (!firstEmptyFieldId) return
+    // Defer a tick so the FieldEditor has mounted its control.
+    const t = window.setTimeout(() => {
+      const el = firstEmptyRef.current
+      if (!el) return
+      // Don't steal focus if user is already typing somewhere on the page.
+      const ae = document.activeElement
+      const typingElsewhere =
+        ae &&
+        ae !== document.body &&
+        ae !== el &&
+        (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA')
+      if (typingElsewhere) return
+      el.focus()
+    }, 40)
+    return () => window.clearTimeout(t)
+  }, [asset.id, firstEmptyFieldId])
 
   const setField = (
     fieldId: number,
@@ -244,6 +281,7 @@ export function AssetCapture({
                         field={f}
                         existing={byFieldId.get(f.id)}
                         onChange={(value, opts) => setField(f.id, value, opts)}
+                        inputRef={f.id === firstEmptyFieldId ? firstEmptyRef : undefined}
                       />
                     ))}
                   </div>

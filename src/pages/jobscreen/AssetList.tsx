@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Download, Flag, Grid3x3, Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, Download, Flag, Grid3x3, MapPin, Search } from 'lucide-react'
 import type { Asset, ClassificationField } from '../../types/db'
-import { allCaptures } from '../../lib/queue'
+import { allCaptures, subscribeQueue } from '../../lib/queue'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { ProgressRing } from '../../components/ui/ProgressRing'
@@ -32,6 +32,11 @@ export function AssetList({
 }: Props) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
+  const [location, setLocation] = useState<string>('all')
+
+  // Re-render on queue changes so the sync dot + progress stay fresh.
+  const [, setTick] = useState(0)
+  useEffect(() => subscribeQueue(() => setTick((t) => t + 1)), [])
 
   const captureFieldIds = useMemo(
     () => new Set(fields.filter((f) => f.is_field_captured).map((f) => f.id)),
@@ -41,23 +46,62 @@ export function AssetList({
 
   // Compute per-asset stats from the full capture queue in one pass.
   const stats = useMemo(() => {
-    const byAsset = new Map<string, { done: number; flagged: boolean }>()
+    const byAsset = new Map<
+      string,
+      { done: number; flagged: boolean; hasPending: boolean; hasCaptures: boolean }
+    >()
     for (const cap of allCaptures()) {
       if (!captureFieldIds.has(cap.classificationFieldId)) continue
-      const s = byAsset.get(cap.assetId) ?? { done: 0, flagged: false }
+      const s =
+        byAsset.get(cap.assetId) ?? {
+          done: 0,
+          flagged: false,
+          hasPending: false,
+          hasCaptures: false,
+        }
+      s.hasCaptures = true
       if (cap.value && cap.value.trim() !== '') s.done += 1
       if (cap.flagged) s.flagged = true
+      if (!cap.synced) s.hasPending = true
       byAsset.set(cap.assetId, s)
     }
     return byAsset
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- also depends on tick via state
   }, [captureFieldIds, assets])
 
   const rows = useMemo(() => {
+    // Parent (JobScreenPage) already sorts in walking order.
     return assets.map((a) => {
-      const s = stats.get(a.id) ?? { done: 0, flagged: false }
-      return { asset: a, done: s.done, total: totalRequired, flagged: s.flagged }
+      const s = stats.get(a.id) ?? {
+        done: 0,
+        flagged: false,
+        hasPending: false,
+        hasCaptures: false,
+      }
+      return {
+        asset: a,
+        done: s.done,
+        total: totalRequired,
+        flagged: s.flagged,
+        sync:
+          !s.hasCaptures
+            ? ('none' as const)
+            : s.hasPending
+              ? ('pending' as const)
+              : ('synced' as const),
+      }
     })
   }, [assets, stats, totalRequired])
+
+  // Distinct location list for the filter dropdown.
+  const locations = useMemo(() => {
+    const set = new Set<string>()
+    for (const a of assets) {
+      const v = a.location_description?.trim()
+      if (v) set.add(v)
+    }
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [assets])
 
   const counts = useMemo(() => {
     let todo = 0,
@@ -75,6 +119,9 @@ export function AssetList({
 
   const filtered = useMemo(() => {
     let list = rows
+    if (location !== 'all') {
+      list = list.filter((r) => (r.asset.location_description ?? '') === location)
+    }
     if (query) {
       const q = query.toLowerCase()
       list = list.filter((r) => {
@@ -95,7 +142,7 @@ export function AssetList({
       })
     }
     return list
-  }, [rows, query, status])
+  }, [rows, query, status, location])
 
   return (
     <div className="flex flex-col min-h-0 border-r border-border">
@@ -113,7 +160,38 @@ export function AssetList({
           placeholder="Find by ID, description, location…"
           icon={Search}
         />
-        <div className="flex gap-1 mt-2.5 flex-wrap">
+        {locations.length > 0 && (
+          <div className="relative mt-2">
+            <MapPin
+              size={13}
+              strokeWidth={2}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+            />
+            <select
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className={cn(
+                'w-full pl-7 pr-7 py-[7px] rounded-md border border-border bg-white',
+                'text-[12px] font-sans outline-none appearance-none cursor-pointer',
+                'focus:border-sky-deep focus:shadow-focus',
+                location === 'all' ? 'text-muted' : 'text-ink',
+              )}
+            >
+              <option value="all">All locations ({locations.length})</option>
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={13}
+              strokeWidth={2}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+            />
+          </div>
+        )}
+        <div className="flex gap-1.5 mt-2.5 flex-wrap">
           <FilterChip active={status === 'all'} onClick={() => setStatus('all')} count={counts.all}>
             All
           </FilterChip>
@@ -154,6 +232,7 @@ export function AssetList({
             done={r.done}
             total={r.total}
             flagged={r.flagged}
+            sync={r.sync}
             active={r.asset.id === activeAssetId}
             onClick={() => onSelectAsset(r.asset.id)}
           />
@@ -191,8 +270,8 @@ function FilterChip({
       type="button"
       onClick={onClick}
       className={cn(
-        'px-2 py-1 rounded-full border text-[10px] font-bold uppercase tracking-[0.04em]',
-        'transition-colors duration-120 cursor-pointer',
+        'px-2.5 py-1.5 rounded-full border text-[11px] font-bold uppercase tracking-[0.04em]',
+        'min-h-[28px] transition-colors duration-120 cursor-pointer',
         active
           ? 'border-sky-deep bg-ice text-sky-deep'
           : 'border-border bg-white text-muted hover:border-sky-deep/60 hover:text-ink',
@@ -208,6 +287,7 @@ function AssetRow({
   done,
   total,
   flagged,
+  sync,
   active,
   onClick,
 }: {
@@ -215,11 +295,25 @@ function AssetRow({
   done: number
   total: number
   flagged: boolean
+  sync: 'none' | 'pending' | 'synced'
   active: boolean
   onClick: () => void
 }) {
   const complete = total > 0 && done === total
   const started = done > 0 && !complete
+
+  const syncTitle =
+    sync === 'synced'
+      ? 'All captures on this asset are synced'
+      : sync === 'pending'
+        ? 'Some captures are still queued for sync'
+        : 'No captures yet'
+  const syncClass =
+    sync === 'synced'
+      ? 'bg-ok'
+      : sync === 'pending'
+        ? 'bg-warn animate-pulse'
+        : 'bg-gray-300'
 
   return (
     <button
@@ -237,6 +331,11 @@ function AssetRow({
       <ProgressRing done={done} total={total} size={30} stroke={3} showLabel={false} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
+          <span
+            title={syncTitle}
+            aria-label={syncTitle}
+            className={cn('inline-block w-1.5 h-1.5 rounded-full shrink-0', syncClass)}
+          />
           <div className="text-[12px] font-bold font-mono text-ink truncate">
             #{asset.row_number.toString().padStart(3, '0')} · {asset.asset_id ?? asset.asset_uid ?? '—'}
           </div>

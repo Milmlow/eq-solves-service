@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Flag } from 'lucide-react'
 import type { ClassificationField } from '../../types/db'
 import type { QueuedCapture } from '../../lib/queue'
@@ -10,13 +10,17 @@ type Props = {
   onChange: (value: string | null, opts?: { flagged?: boolean; notes?: string | null }) => void
   /** Compact two-column layout (JobScreen right pane) — default true. */
   compact?: boolean
+  /** Ref forwarded to the primary input/select so parent can focus the first empty field. */
+  inputRef?: React.RefObject<HTMLElement | null>
 }
 
-export function FieldEditor({ field, existing, onChange, compact = true }: Props) {
+export function FieldEditor({ field, existing, onChange, compact = true, inputRef }: Props) {
   const current = existing?.value ?? ''
   const [draft, setDraft] = useState(current)
   const [notesOpen, setNotesOpen] = useState(Boolean(existing?.notes))
   const [notes, setNotes] = useState(existing?.notes ?? '')
+  const [flash, setFlash] = useState(false)
+  const flashTimer = useRef<number | null>(null)
   const flagged = Boolean(existing?.flagged)
 
   useEffect(() => {
@@ -24,7 +28,21 @@ export function FieldEditor({ field, existing, onChange, compact = true }: Props
     setNotes(existing?.notes ?? '')
   }, [existing?.value, existing?.notes])
 
+  useEffect(() => {
+    return () => {
+      if (flashTimer.current !== null) window.clearTimeout(flashTimer.current)
+    }
+  }, [])
+
+  const triggerFlash = () => {
+    setFlash(true)
+    if (flashTimer.current !== null) window.clearTimeout(flashTimer.current)
+    flashTimer.current = window.setTimeout(() => setFlash(false), 900)
+  }
+
   const commit = (v: string) => {
+    const prev = existing?.value ?? ''
+    if (v !== prev) triggerFlash()
     onChange(v === '' ? null : v, { notes: notes || null, flagged })
   }
 
@@ -36,7 +54,13 @@ export function FieldEditor({ field, existing, onChange, compact = true }: Props
   const hasValue = Boolean(existing?.value && existing.value !== '')
 
   return (
-    <div className={cn(flagged && 'pl-2.5 -ml-2.5 border-l-2 border-warn')}>
+    <div
+      className={cn(
+        'rounded-md transition-shadow duration-300',
+        flagged && 'pl-2.5 -ml-2.5 border-l-2 border-warn',
+        flash && 'ring-2 ring-ok/60 ring-offset-2 ring-offset-white',
+      )}
+    >
       <div className="flex items-center justify-between mb-1.5 gap-2">
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <label
@@ -72,6 +96,7 @@ export function FieldEditor({ field, existing, onChange, compact = true }: Props
         onChange={setDraft}
         onCommit={commit}
         compact={compact}
+        inputRef={inputRef}
       />
 
       {field.sample_values && !hasValue && (
@@ -115,22 +140,31 @@ function FieldControl({
   onChange,
   onCommit,
   compact,
+  inputRef,
 }: {
   field: ClassificationField
   value: string
   onChange: (v: string) => void
   onCommit: (v: string) => void
   compact: boolean
+  inputRef?: React.RefObject<HTMLElement | null>
 }) {
   if (field.data_type === 'LOV' && field.options.length > 0) {
     // Short list → tap grid (but one row in compact mode)
     if (field.options.length <= 4 && !compact) {
       return (
         <div className="grid grid-cols-2 gap-1.5">
-          {field.options.map(opt => (
+          {field.options.map((opt, i) => (
             <button
               key={opt}
               type="button"
+              ref={
+                i === 0
+                  ? (el) => {
+                      if (inputRef) (inputRef as React.MutableRefObject<HTMLElement | null>).current = el
+                    }
+                  : undefined
+              }
               onClick={() => {
                 onChange(opt)
                 onCommit(opt)
@@ -152,6 +186,7 @@ function FieldControl({
     return (
       <div className="relative">
         <select
+          ref={inputRef as React.RefObject<HTMLSelectElement> | undefined}
           value={value}
           onChange={e => {
             onChange(e.target.value)
@@ -183,6 +218,7 @@ function FieldControl({
   if (field.data_type === 'NUM' || field.data_type === 'CURRENCY') {
     return (
       <input
+        ref={inputRef as React.RefObject<HTMLInputElement> | undefined}
         type="text"
         inputMode="decimal"
         value={value}
@@ -201,6 +237,7 @@ function FieldControl({
   if (field.data_type === 'DATE') {
     return (
       <input
+        ref={inputRef as React.RefObject<HTMLInputElement> | undefined}
         type="date"
         value={value}
         onChange={e => {
@@ -219,6 +256,7 @@ function FieldControl({
   // FREETEXT / fallback
   return (
     <input
+      ref={inputRef as React.RefObject<HTMLInputElement> | undefined}
       type="text"
       value={value}
       onChange={e => onChange(e.target.value)}
