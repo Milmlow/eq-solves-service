@@ -6,6 +6,7 @@ import {
   Grid3x3,
   Download,
   Upload,
+  FileUp,
   Stethoscope,
   ChevronLeft,
   ChevronRight,
@@ -20,6 +21,7 @@ export type NavId =
   | 'assets'
   | 'admin'
   | 'export'
+  | 'reimport'
   | 'import'
   | 'debug'
 
@@ -63,9 +65,10 @@ export function Sidebar({ active, onNavigate, jobCtx }: Props) {
     {
       group: 'Job',
       items: [
-        { id: 'assets', label: 'Assets',   icon: Package,  disabled: !jobCtx },
-        { id: 'admin',  label: 'Progress', icon: Grid3x3,  disabled: !jobCtx },
-        { id: 'export', label: 'Export',   icon: Download, disabled: !jobCtx },
+        { id: 'assets',   label: 'Assets',      icon: Package,  disabled: !jobCtx },
+        { id: 'admin',    label: 'Progress',    icon: Grid3x3,  disabled: !jobCtx },
+        { id: 'reimport', label: 'Load capture', icon: FileUp,   disabled: !jobCtx },
+        { id: 'export',   label: 'Export',      icon: Download, disabled: !jobCtx },
       ],
     },
     {

@@ -176,8 +176,8 @@ export function ExportPage({ jobRef }: { jobRef: string }) {
       },
       {
         key: 'csv',
-        label: 'Flat CSV',
-        sub: 'One row per capture · asset, field, value, who, when, notes',
+        label: 'Audit log (CSV)',
+        sub: 'One row per capture · asset, field, value, who, when, source, notes',
         icon: FileText,
         available: true,
       },
@@ -235,7 +235,7 @@ export function ExportPage({ jobRef }: { jobRef: string }) {
         const { data: serverCaptures, error: sErr } = await supabase
           .from('captures')
           .select(
-            'asset_id, classification_field_id, value, captured_by, captured_at, notes, flagged',
+            'asset_id, classification_field_id, value, captured_by, captured_at, notes, flagged, source, source_file',
           )
           .in(
             'asset_id',

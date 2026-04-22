@@ -16,6 +16,7 @@ export type Route =
   | { name: 'asset'; jobRef: string; assetId: string }
   | { name: 'admin'; jobRef: string }
   | { name: 'export'; jobRef: string }
+  | { name: 'reimport'; jobRef: string }
 
 export function parseHash(hash: string): Route {
   const h = hash.replace(/^#/, '').replace(/^\/+/, '')
@@ -34,6 +35,9 @@ export function parseHash(hash: string): Route {
     }
     if (parts[2] === 'admin') {
       return { name: 'admin', jobRef }
+    }
+    if (parts[2] === 'reimport') {
+      return { name: 'reimport', jobRef }
     }
     return { name: 'job', jobRef }
   }

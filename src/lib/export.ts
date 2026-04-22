@@ -228,12 +228,17 @@ export function downloadCsv(input: {
     captured_at: string
     notes: string | null
     flagged: boolean
+    source?: string | null
+    source_file?: string | null
   }>
 }): void {
   const { job, assets, fields, captures } = input
   const assetById = new Map(assets.map((a) => [a.id, a]))
   const fieldById = new Map(fields.map((f) => [f.id, f]))
 
+  // Audit log CSV: one row per capture with full provenance. This is the
+  // auditable companion to the completed workbook — a customer (or us, months
+  // later) can trace any value back to who captured it, when, from where.
   const headers = [
     'Job',
     'Site',
@@ -245,6 +250,8 @@ export function downloadCsv(input: {
     'Value',
     'Captured By',
     'Captured At',
+    'Source',
+    'Source File',
     'Flagged',
     'Notes',
   ]
@@ -265,6 +272,8 @@ export function downloadCsv(input: {
       c.value ?? '',
       c.captured_by ?? '',
       c.captured_at,
+      c.source ?? 'web',
+      c.source_file ?? '',
       c.flagged ? 'Y' : '',
       c.notes ?? '',
     ])
