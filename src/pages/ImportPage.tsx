@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowRight,
@@ -406,9 +406,23 @@ function Stepper({
 
 function UploaderCard({ onFile }: { onFile: (f: File) => void }) {
   const [dragging, setDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const openPicker = () => inputRef.current?.click()
+
   return (
     <Card padding={0}>
-      <label
+      <div
+        onClick={openPicker}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            openPicker()
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label="Choose a spreadsheet to import"
         onDragOver={(e) => {
           e.preventDefault()
           setDragging(true)
@@ -422,6 +436,7 @@ function UploaderCard({ onFile }: { onFile: (f: File) => void }) {
         }}
         className={cn(
           'block m-5 p-10 text-center rounded-xl cursor-pointer border-2 border-dashed transition',
+          'focus:outline-none focus-visible:shadow-focus',
           dragging ? 'border-sky bg-ice' : 'border-gray-300 bg-gray-50 hover:border-sky-deep/60',
         )}
       >
@@ -433,20 +448,32 @@ function UploaderCard({ onFile }: { onFile: (f: File) => void }) {
           .xlsx or .xlsm · up to 5,000 rows. We'll extract the field list automatically.
         </div>
         <div className="inline-block">
-          <Button size="md" variant="primary" icon={FileText}>
+          <Button
+            size="md"
+            variant="primary"
+            icon={FileText}
+            onClick={(e) => {
+              // Stop the outer div's onClick from double-firing the picker.
+              e.stopPropagation()
+              openPicker()
+            }}
+          >
             Choose file
           </Button>
         </div>
         <input
+          ref={inputRef}
           type="file"
           accept=".xlsx,.xlsm"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) onFile(f)
+            // Reset so picking the same file twice still fires onChange.
+            e.target.value = ''
           }}
         />
-      </label>
+      </div>
       <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-[11px] text-muted flex items-center gap-2">
         <Info size={12} strokeWidth={2} />
         <span>
