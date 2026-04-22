@@ -4,6 +4,7 @@ import { ExportPage } from './pages/ExportPage'
 import { DebugPage } from './pages/DebugPage'
 import { AdminPage } from './pages/AdminPage'
 import { ImportPage } from './pages/ImportPage'
+import { ReimportPage } from './pages/ReimportPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { JobsListPage } from './pages/JobsListPage'
 import { JobScreenPage } from './pages/JobScreenPage'
@@ -33,7 +34,8 @@ export default function App() {
     route.name === 'job' ||
     route.name === 'asset' ||
     route.name === 'admin' ||
-    route.name === 'export'
+    route.name === 'export' ||
+    route.name === 'reimport'
       ? route.jobRef
       : null
   const { job } = useJob(currentJobRef)
@@ -81,6 +83,9 @@ export default function App() {
       case 'export':
         if (jobSeg) navigate(`/j/${jobSeg}/export`)
         break
+      case 'reimport':
+        if (jobSeg) navigate(`/j/${jobSeg}/reimport`)
+        break
       case 'import':
         navigate('/import')
         break
@@ -115,9 +120,11 @@ export default function App() {
             ? 'admin'
             : route.name === 'export'
               ? 'export'
-              : route.name === 'import'
-                ? 'import'
-                : 'debug'
+              : route.name === 'reimport'
+                ? 'reimport'
+                : route.name === 'import'
+                  ? 'import'
+                  : 'debug'
 
   // Shell wrapper helper — every v2 page goes through this.
   const Shell = ({
@@ -237,6 +244,20 @@ export default function App() {
         <Shell title="Export" subtitle={subtitle}>
           <JobGuard jobRef={route.jobRef}>
             <ExportPage jobRef={route.jobRef} />
+          </JobGuard>
+        </Shell>
+        {nameModal}
+      </>
+    )
+  }
+
+  if (route.name === 'reimport') {
+    const subtitle = job ? `${job.site_code} · ${job.classification_code}` : 'Loading…'
+    return (
+      <>
+        <Shell title="Load capture" subtitle={subtitle}>
+          <JobGuard jobRef={route.jobRef}>
+            <ReimportPage jobRef={route.jobRef} />
           </JobGuard>
         </Shell>
         {nameModal}

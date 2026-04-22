@@ -70,6 +70,8 @@ export interface Asset {
   source_row: Record<string, unknown>
 }
 
+export type CaptureSource = 'web' | 'file_reimport'
+
 export interface Capture {
   id?: string
   asset_id: string
@@ -79,6 +81,8 @@ export interface Capture {
   captured_at: string
   flagged: boolean
   notes: string | null
+  source: CaptureSource
+  source_file: string | null
 }
 
 // Supabase DB shape — wide types for now; tightened per-table once DDL lands
