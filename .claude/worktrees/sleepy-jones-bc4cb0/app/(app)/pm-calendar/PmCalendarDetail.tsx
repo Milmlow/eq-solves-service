@@ -1,0 +1,129 @@
+'use client'
+
+import { useState } from 'react'
+import { SlidePanel } from '@/components/ui/SlidePanel'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Button } from '@/components/ui/Button'
+import { togglePmCalendarActiveAction } from './actions'
+import type { PmCalendarEntry } from '@/lib/types'
+
+type EntryRow = PmCalendarEntry & { site_name: string }
+
+interface PmCalendarDetailProps {
+  open: boolean
+  onClose: () => void
+  entry: EntryRow
+  isAdmin: boolean
+  canWrite: boolean
+  onEdit: () => void
+}
+
+function statusToBadge(status: string): 'active' | 'not-started' | 'complete' | 'inactive' {
+  const map: Record<string, 'active' | 'not-started' | 'complete' | 'inactive'> = {
+    scheduled: 'not-started',
+    in_progress: 'active',
+    completed: 'complete',
+    cancelled: 'inactive',
+  }
+  return map[status] ?? 'not-started'
+}
+
+function formatDateTime(dateStr: string | null) {
+  if (!dateStr) return '—'
+  return new Date(dateStr).toLocaleString('en-AU', {
+    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}
+
+const categoryColours: Record<string, string> = {
+  'Thermal scanning': 'bg-red-100 text-red-700',
+  'Dark site test': 'bg-purple-100 text-purple-700',
+  'Emergency lighting': 'bg-amber-100 text-amber-700',
+  'Lightning protection testing': 'bg-yellow-100 text-yellow-700',
+  'Management': 'bg-gray-100 text-gray-600',
+  'RCD testing': 'bg-blue-100 text-blue-700',
+  'Test and tagging': 'bg-teal-100 text-teal-700',
+  'Quarterly maintenance': 'bg-green-100 text-green-700',
+  'WOs': 'bg-orange-100 text-orange-700',
+}
+
+export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEdit }: PmCalendarDetailProps) {
+  const [toggling, setToggling] = useState(false)
+
+  async function handleToggleActive() {
+    setToggling(true)
+    await togglePmCalendarActiveAction(entry.id, !entry.is_active)
+    setToggling(false)
+    onClose()
+  }
+
+  const cls = categoryColours[entry.category] ?? 'bg-gray-100 text-gray-600'
+
+  return (
+    <SlidePanel open={open} onClose={onClose} title={entry.title}>
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <StatusBadge status={statusToBadge(entry.status)} label={entry.status.replace('_', ' ')} />
+          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{entry.category}</span>
+          {entry.quarter && (
+            <span className="text-xs text-eq-grey bg-gray-100 px-2 py-0.5 rounded-full">{entry.quarter} — FY {entry.financial_year}</span>
+          )}
+        </div>
+
+        {/* Details grid */}
+        <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
+          <div>
+            <div className="text-xs text-eq-grey font-medium uppercase">Site</div>
+            <div className="text-eq-ink">{entry.site_name}</div>
+          </div>
+          <div>
+            <div className="text-xs text-eq-grey font-medium uppercase">Location</div>
+            <div className="text-eq-ink">{entry.location ?? '—'}</div>
+          </div>
+          <div>
+            <div className="text-xs text-eq-grey font-medium uppercase">Start</div>
+            <div className="text-eq-ink">{formatDateTime(entry.start_time)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-eq-grey font-medium uppercase">End</div>
+            <div className="text-eq-ink">{formatDateTime(entry.end_time)}</div>
+          </div>
+        </div>
+
+        {/* Description */}
+        {entry.description && (
+          <div>
+            <div className="text-xs text-eq-grey font-medium uppercase mb-1">Description</div>
+            <div className="text-sm text-eq-ink whitespace-pre-wrap bg-gray-50 rounded-md p-3 border border-gray-100">
+              {entry.description}
+            </div>
+          </div>
+        )}
+
+        {/* Future notification config preview */}
+        {(entry.reminder_days_before?.length > 0 || entry.notification_recipients?.length > 0) && (
+          <div>
+            <div className="text-xs text-eq-grey font-medium uppercase mb-1">Notifications (Future)</div>
+            <div className="text-xs text-eq-grey">
+              {entry.reminder_days_before?.length > 0 && <div>Reminders: {entry.reminder_days_before.join(', ')} days before</div>}
+              {entry.notification_recipients?.length > 0 && <div>Recipients: {entry.notification_recipients.join(', ')}</div>}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+          {canWrite && (
+            <Button size="sm" onClick={onEdit}>Edit</Button>
+          )}
+          {isAdmin && (
+            <Button size="sm" variant="secondary" onClick={handleToggleActive} disabled={toggling}>
+              {toggling ? 'Updating...' : entry.is_active ? 'Deactivate' : 'Reactivate'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </SlidePanel>
+  )
+}

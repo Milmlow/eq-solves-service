@@ -14,6 +14,7 @@ import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { generatePMCheckReport } from '@/lib/reports/pm-check-report'
 import type { PmCheckReportInput, PmCheckReportItem } from '@/lib/reports/pm-check-report'
+import { fetchLogoImage } from '@/lib/reports/report-branding'
 import { convertDocxToPdf } from '@/lib/reports/pdf-conversion'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -41,12 +42,24 @@ export async function generateAndStoreReport(
   // ── Fetch maintenance check ──
   const { data: check, error: checkError } = await supabase
     .from('maintenance_checks')
-    .select('*, job_plans(name), sites(name)')
+    .select('*, job_plans(name), sites(name, customer_id)')
     .eq('id', maintenanceCheckId)
     .single()
 
   if (checkError || !check) {
     throw new Error(`Failed to fetch maintenance check: ${checkError?.message ?? 'not found'}`)
+  }
+
+  // ── Fetch customer logo (if site has a customer) ──
+  const siteRow = check.sites as { name: string; customer_id?: string | null } | null
+  let customerLogoUrl: string | null = null
+  if (siteRow?.customer_id) {
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('logo_url')
+      .eq('id', siteRow.customer_id)
+      .maybeSingle()
+    customerLogoUrl = customer?.logo_url ?? null
   }
 
   // ── Fetch check items ──
@@ -63,12 +76,27 @@ export async function generateAndStoreReport(
   // ── Fetch tenant settings for branding ──
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour')
+    .select('product_name, primary_colour, report_company_name, report_logo_url, report_customer_logo')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
+  const companyName = tenantSettings?.report_company_name ?? null
+  const reportLogoUrl = tenantSettings?.report_logo_url ?? null
+  const showCustomerLogo = tenantSettings?.report_customer_logo ?? true
+
+  // ── Fetch tenant for fallback logo ──
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('logo_url')
+    .eq('id', tenantId)
+    .maybeSingle()
+
+  const tenantLogoUrl = reportLogoUrl || tenant?.logo_url || null
+
+  // Apply report_customer_logo toggle
+  const finalCustomerLogoUrl = showCustomerLogo ? customerLogoUrl : null
 
   // ── Resolve user display names ──
   const userIds = [
@@ -100,6 +128,12 @@ export async function generateAndStoreReport(
   const siteName = (check.sites as { name: string } | null)?.name ?? 'Unknown Site'
   const jobPlanName = (check.job_plans as { name: string } | null)?.name ?? 'Unknown Job Plan'
 
+  // ── Fetch logo images ──
+  const [tenantLogoImage, customerLogoImage] = await Promise.all([
+    fetchLogoImage(tenantLogoUrl, { maxWidth: 180, maxHeight: 60 }),
+    fetchLogoImage(finalCustomerLogoUrl, { maxWidth: 180, maxHeight: 60 }),
+  ])
+
   const input: PmCheckReportInput = {
     checkId: check.id,
     siteName,
@@ -113,6 +147,11 @@ export async function generateAndStoreReport(
     tenantProductName: productName,
     primaryColour: primaryColour.replace('#', ''),
     items: reportItems,
+    companyName: companyName ?? productName,
+    tenantLogoImage: tenantLogoImage ?? null,
+    customerLogoImage: customerLogoImage ?? null,
+    reportTypeLabel: 'Preventive Maintenance Report',
+    maximoWONumber: (check as Record<string, unknown>).maximo_wo_number as string | null,
   }
 
   // ── Generate DOCX ──

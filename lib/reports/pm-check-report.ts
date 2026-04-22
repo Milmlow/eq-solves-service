@@ -27,7 +27,10 @@ import {
   PageNumber,
   PageBreak,
   VerticalAlign,
+  ImageRun,
+  convertInchesToTwip,
 } from 'docx'
+import { buildMasthead } from '@/lib/reports/report-branding'
 
 // ---------- types ----------
 
@@ -44,6 +47,13 @@ export interface PmCheckReportInput {
   tenantProductName: string
   primaryColour: string // hex without #
   items: PmCheckReportItem[]
+
+  // Phase 1 branding updates
+  companyName?: string
+  tenantLogoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | null
+  customerLogoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | null
+  reportTypeLabel?: string
+  maximoWONumber?: string | null
 }
 
 export interface PmCheckReportItem {
@@ -120,8 +130,16 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
 
   return {
     children: [
+      // Masthead with logos
+      ...(input.customerLogoImage || input.tenantLogoImage ? [
+        buildMasthead({
+          customerLogo: input.customerLogoImage ?? undefined,
+          tenantLogo: input.tenantLogoImage ?? undefined,
+          reportTypeLabel: input.reportTypeLabel,
+        }),
+      ] : []),
       // spacer
-      new Paragraph({ spacing: { before: 4000 } }),
+      new Paragraph({ spacing: { before: 2000 } }),
       // title
       new Paragraph({
         alignment: AlignmentType.CENTER,
@@ -176,6 +194,19 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
           font: 'Plus Jakarta Sans',
         })],
       }),
+      ...(input.maximoWONumber ? [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 200 },
+          children: [new TextRun({
+            text: `Work Order: ${input.maximoWONumber}`,
+            bold: true,
+            size: 28,
+            font: 'Plus Jakarta Sans',
+            color: brand,
+          })],
+        }),
+      ] : []),
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { after: 80 },
@@ -443,7 +474,18 @@ export async function generatePMCheckReport(input: PmCheckReportInput): Promise<
           default: new Footer({
             children: [
               new Paragraph({
-                alignment: AlignmentType.CENTER,
+                alignment: AlignmentType.JUSTIFIED,
+                children: [
+                  new TextRun({
+                    text: `${input.companyName || input.tenantProductName} — Preventive Maintenance Report — rev 3.1`,
+                    size: 16,
+                    font: 'Plus Jakarta Sans',
+                    color: '999999',
+                  }),
+                ],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
                 children: [
                   new TextRun({ text: 'Page ', size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
                   new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
