@@ -116,14 +116,20 @@ export function adjustHex(hex: string, delta: number): string {
 }
 
 /**
- * Derive a tenant-flavoured "ice" surface colour from the tenant's
- * primary brand colour. Falls back to EQ Ice Blue if the brand colour
- * is missing or invalid.
+ * Resolve a tenant-flavoured "ice" surface colour.
  *
- * Use this for table header fills, card backgrounds, and other "soft
- * accent" surfaces — see S2 in the 2026-04-26 reports design audit.
+ * Resolution order:
+ *   1. Explicit `override` (the value the tenant set via Admin → Tenant
+ *      Settings → Branding → Ice Colour, picked off the logo by the
+ *      Extract Colours flow). Always wins when supplied.
+ *   2. Derived from `primaryColour` by mixing 88% with white.
+ *   3. EQ Ice Blue as last-resort default.
+ *
+ * Use for table header fills, card backgrounds, and "soft accent"
+ * surfaces.
  */
-export function tenantIce(primaryColour: string | null | undefined): string {
+export function tenantIce(primaryColour: string | null | undefined, override?: string | null): string {
+  if (override) return bareHex(override)
   if (!primaryColour) return EQ_ICE
   try {
     return mixWithWhite(primaryColour, 0.88)
@@ -133,14 +139,26 @@ export function tenantIce(primaryColour: string | null | undefined): string {
 }
 
 /**
- * Derive a tenant-flavoured "deep" accent colour. Falls back to EQ Deep
- * Blue if the brand colour is missing or invalid.
+ * Resolve a tenant-flavoured "deep" accent colour. Same resolution
+ * order as tenantIce.
  */
-export function tenantDeep(primaryColour: string | null | undefined): string {
+export function tenantDeep(primaryColour: string | null | undefined, override?: string | null): string {
+  if (override) return bareHex(override)
   if (!primaryColour) return EQ_DEEP
   try {
     return adjustHex(primaryColour, -0.18)
   } catch {
     return EQ_DEEP
   }
+}
+
+/**
+ * Resolve a tenant-flavoured ink (body text) colour. Almost always falls
+ * back to EQ_INK because explicit per-tenant ink overrides are rare —
+ * but supported for tenants whose brand has a deliberately tinted
+ * dark text (e.g. Royce's SKS Ink #26223a, slightly purple-leaning).
+ */
+export function tenantInk(override?: string | null): string {
+  if (override) return bareHex(override)
+  return EQ_INK
 }

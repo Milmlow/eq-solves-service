@@ -80,8 +80,18 @@ export interface ShellSettings {
   companyName: string
   /** Tenant product name (e.g. "EQ Solves Service"). */
   productName: string
-  /** Hex brand colour, e.g. '#3DA8D8'. */
+  /** Hex primary brand colour, e.g. '#3DA8D8'. */
   primaryColour: string
+  /**
+   * Optional tenant-set deep / ice / ink colours. When set (e.g. via the
+   * Tenant Settings → Branding → Extract Colours flow), reports use these
+   * exact values for accent surfaces, soft fills, and body text. When
+   * null/undefined, generators derive deep/ice from primaryColour and use
+   * EQ_INK for body text.
+   */
+  deepColour: string | null
+  iceColour: string | null
+  inkColour: string | null
   /** Tenant report logo (light surface — body pages). */
   tenantLogoUrl: string | null
   /** Tenant report logo (dark surface — cover page band). */
@@ -138,6 +148,9 @@ const DEFAULT_SETTINGS: ShellSettings = {
   companyName: 'EQ Solves',
   productName: 'EQ Solves Service',
   primaryColour: '#3DA8D8',
+  deepColour: null,
+  iceColour: null,
+  inkColour: null,
   tenantLogoUrl: null,
   tenantLogoOnDarkUrl: null,
   showCover: true,

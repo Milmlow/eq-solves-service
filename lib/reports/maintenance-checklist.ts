@@ -64,6 +64,18 @@ export interface MaintenanceChecklistInput {
   primaryColour?: string          // hex color for masthead
 
   /**
+   * Optional tenant-set palette overrides. When supplied (from
+   * tenant_settings.deep_colour / ice_colour / ink_colour, the values the
+   * tenant set via Admin → Tenant Settings → Branding → Extract Colours),
+   * the generator uses these exact values for accent surfaces and ice
+   * fills. When null/undefined, derives ice from primaryColour and uses
+   * EQ_INK for body text.
+   */
+  deepColour?: string | null
+  iceColour?: string | null
+  inkColour?: string | null
+
+  /**
    * Detail level (Sprint 2 — three-tier styles, mirrors Report Settings):
    *   - 'simple'   → asset register only, single page (legacy alias 'summary').
    *   - 'standard' → asset register + per-asset task headings (default for Print Report).
@@ -303,9 +315,9 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
 
 // ─────────── Asset Checklist Section ───────────
 
-function buildAssetSection(asset: ChecklistAsset, brandHex: string): (Paragraph | Table)[] {
+function buildAssetSection(asset: ChecklistAsset, brandHex: string, iceOverride: string | null = null): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = []
-  const headerFill = tenantIce(brandHex)
+  const headerFill = tenantIce(brandHex, iceOverride)
 
   // Asset header — brand-coloured so each asset block reads as part of the
   // tenant-branded document, not a generic black-on-white form.
@@ -593,6 +605,7 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
   // Build body: info block + all asset sections
   const bodyChildren: (Paragraph | Table)[] = []
   const brandHex = bareHex(input.primaryColour ?? '3DA8D8')
+  const iceOverride = input.iceColour ?? null
 
   // Header info
   bodyChildren.push(...buildInfoBlock(input))
@@ -608,7 +621,7 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
       if (i > 0) {
         bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
       }
-      bodyChildren.push(...buildAssetSection(input.assets[i], brandHex))
+      bodyChildren.push(...buildAssetSection(input.assets[i], brandHex, iceOverride))
     }
   }
 
