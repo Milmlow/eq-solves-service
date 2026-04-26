@@ -25,6 +25,7 @@ import {
   ShadingType,
   PageBreak,
   VerticalAlign,
+  ImageRun,
 } from 'docx'
 import { buildMasthead } from '@/lib/reports/report-branding'
 import {
@@ -34,6 +35,7 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY, FONT_HEADING as FONT_HEADING_TOKEN } from '@/lib/reports/typography'
+import { EQ_WHITE, bareHex } from '@/lib/reports/colours'
 
 // ─────────── Types ───────────
 
@@ -161,13 +163,71 @@ function divider(): Paragraph {
 function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = []
 
-  // Masthead with logos (Phase 1 branding update)
-  if (input.customerLogoImage || input.tenantLogoImage || input.reportTypeLabel) {
+  // Brand strip (audit Q3): a thin tenant-coloured band at the very top of
+  // page 1 with the tenant logo and report type. Body content below stays
+  // black-and-white for tick-friendly photocopying. The strip alone is
+  // enough to make the document recognisably tenant-branded without
+  // compromising printability.
+  const brandHex = bareHex(input.primaryColour ?? '3DA8D8')
+  const stripCellMargins = { top: 120, bottom: 120, left: 200, right: 200 }
+  children.push(new Table({
+    width: { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: [Math.floor(CONTENT_WIDTH * 0.6), Math.ceil(CONTENT_WIDTH * 0.4)],
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: BORDERS_NONE,
+            width: { size: Math.floor(CONTENT_WIDTH * 0.6), type: WidthType.DXA },
+            shading: { fill: brandHex, type: ShadingType.CLEAR },
+            margins: stripCellMargins,
+            verticalAlign: VerticalAlign.CENTER,
+            children: [new Paragraph({
+              children: input.tenantLogoImage
+                ? [new ImageRun({
+                    data: input.tenantLogoImage.data,
+                    transformation: { width: input.tenantLogoImage.width, height: input.tenantLogoImage.height },
+                    type: input.tenantLogoImage.type,
+                  })]
+                : [new TextRun({
+                    text: input.companyName ?? input.tenantProductName,
+                    bold: true,
+                    size: 24,
+                    color: EQ_WHITE,
+                    font: FONT_HEADING,
+                  })],
+            })],
+          }),
+          new TableCell({
+            borders: BORDERS_NONE,
+            width: { size: Math.ceil(CONTENT_WIDTH * 0.4), type: WidthType.DXA },
+            shading: { fill: brandHex, type: ShadingType.CLEAR },
+            margins: stripCellMargins,
+            verticalAlign: VerticalAlign.CENTER,
+            children: [new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [new TextRun({
+                text: input.reportTypeLabel || 'Field Run-Sheet',
+                bold: true,
+                size: 24,
+                color: EQ_WHITE,
+                font: FONT_HEADING,
+              })],
+            })],
+          }),
+        ],
+      }),
+    ],
+  }))
+  children.push(spacer(200))
+
+  // Customer logo masthead (only if customer logo present — keeps the
+  // branding clear: tenant on the strip, customer below it).
+  if (input.customerLogoImage) {
     children.push(
       buildMasthead({
-        customerLogo: input.customerLogoImage ?? undefined,
-        tenantLogo: input.tenantLogoImage ?? undefined,
-        reportTypeLabel: input.reportTypeLabel || 'Maintenance Checklist',
+        customerLogo: input.customerLogoImage,
+        reportTypeLabel: undefined,
       }),
     )
   }
