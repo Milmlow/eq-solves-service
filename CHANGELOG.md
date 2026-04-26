@@ -4,6 +4,38 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-26 — Auth: OTP-code flow for invites + password resets (Defender Safe Links bypass)
+
+Pending push to `main`. Live SKS users were getting "link expired" on every first click of password-reset and invite emails. Root cause: Microsoft Defender Safe Links pre-fetches every URL in inbound mail, which burns the one-shot Supabase token before the human can use it. The fix: stop putting any consumable token in the URL — send a 6-digit OTP code in the email body that the user types on a tokenless landing page.
+
+### Changed
+- **`/auth/forgot-password`** is now a two-step in-page flow: enter email → swaps to "enter the 6-digit code we just sent + new password". Calls `supabase.auth.verifyOtp({ type: 'recovery' })` then admin-updates the password (admin path bypasses the AAL1/MFA restriction on `updateUser({password})`, same trick as before).
+- **`/auth/reset-password`** is now a thin landing page that pre-fills email from `?email=` query param (used by the email's safe link) and renders the same code+password form as forgot-password's step 2. The legacy `ResetPasswordForm` and `resetPasswordAction` are now compatibility shims re-exporting the new ones, so nothing else in the codebase had to change.
+- **`/auth/accept-invite`** now renders a single form with email (pre-filled, read-only when `?email=` present) + 6-digit code + name + password. Server action `verifyInviteOtpAndSetupAction` does verifyOtp + C2 active-tenant gate + admin password update + profile sync + audit + redirect, all in one shot. No session is required to load the page — the OTP itself proves email ownership.
+- **`/auth/callback`** keeps PKCE code exchange for OAuth/social and tolerates legacy `?token_hash=&type=` URLs from stale emails sitting in inboxes. When the legacy token has been burned by Safe Links, redirects gracefully to `/auth/forgot-password?error=link_expired` (or `/auth/accept-invite?error=link_expired` for invites) instead of dumping users on a generic signin error.
+- **Admin `inviteUserAction`** sets `redirectTo` to `${origin}/auth/accept-invite?email={email}` — a tokenless URL Defender can pre-fetch harmlessly. The token itself is the 6-digit code in the email body.
+- **Admin `resendInviteAction`** mirrors the same pattern for both invite resends and password resets — points at `/auth/accept-invite?email=` or `/auth/reset-password?email=` directly, never through `/auth/callback`.
+- **Sign-in page** gained a `link_expired` error case that nudges the user toward the OTP flow instead of leaving them confused.
+
+### Required dashboard config (Royce — paste into Supabase before deploy)
+- **Auth → Email Templates → Invite user**: full HTML in `docs/runbooks/supabase-auth-configuration.md` §3.1. Critical: uses `{{ .Token }}` for the visible 6-digit code AND `{{ .SiteURL }}/auth/accept-invite?email={{ .Email }}` as the (safe, tokenless) link target.
+- **Auth → Email Templates → Reset password**: full HTML in §3.2. Same shape, points at `/auth/reset-password?email=`.
+- **Auth → URL Configuration → Redirect URLs**: add `/auth/forgot-password` to the allowlist (other entries unchanged — see runbook §1).
+
+### Files Touched
+- Modified: `app/(auth)/auth/forgot-password/{actions.ts,ForgotPasswordForm.tsx,page.tsx}`
+- Modified: `app/(auth)/auth/reset-password/{actions.ts,ResetPasswordForm.tsx,page.tsx}` (now shims pointing at forgot-password)
+- Modified: `app/(auth)/auth/accept-invite/{actions.ts,AcceptInviteForm.tsx,page.tsx}`
+- Modified: `app/(auth)/auth/callback/route.ts`
+- Modified: `app/(auth)/auth/signin/page.tsx`
+- Modified: `app/(app)/admin/users/actions.ts` (invite + resend redirect URLs)
+- Modified: `docs/runbooks/supabase-auth-configuration.md` (full rewrite — OTP flow now documented as canonical)
+
+### Verification
+- `npx tsc --noEmit` → 0 errors.
+
+---
+
 ## 2026-04-22 — Supervisor digest, calendar overdue colouring, PostHog events wired
 
 Pending push to `main`.

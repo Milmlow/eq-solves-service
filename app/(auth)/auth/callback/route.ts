@@ -8,26 +8,27 @@ import type { EmailOtpType } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
 /**
- * Auth callback — handles email-link returns for invite, password recovery,
- * signup confirmation, email change, and magic link.
+ * Auth callback.
  *
- * Supports two flows:
+ * As of 2026-04-26 the recovery + invite flows DO NOT route through here —
+ * the email templates carry a typed 6-digit code (`{{ .Token }}`) that the
+ * user enters on /auth/accept-invite or /auth/reset-password, and the URL
+ * in the email points directly at those pages with NO token. This change
+ * was forced by Microsoft Defender Safe Links (and equivalents on Mimecast,
+ * Proofpoint, Google Workspace, etc.) which pre-fetch every URL in inbound
+ * mail and burn one-shot tokens before the user can click them.
  *
- *   1. Server-side OTP (modern):  /auth/callback?token_hash=XXX&type=invite&next=/auth/accept-invite
- *      Email templates build this URL directly via {{ .TokenHash }}. The code
- *      here calls supabase.auth.verifyOtp() which sets the session cookie and
- *      redirects to `next`. This is the primary path and what invite /
- *      recovery emails use.
+ * This route is kept for two reasons:
  *
- *   2. PKCE code exchange (legacy): /auth/callback?code=XXX&next=/somewhere
- *      Used by OAuth / social-login flows and anywhere Supabase emits a
- *      redirect with ?code=. Kept for backwards compatibility.
- *
- *   Implicit-flow fragments (#access_token=...) are NOT supported server-side —
- *   a fragment cannot be read by a server route. Email templates must use the
- *   token_hash URL shape above; legacy templates that still emit
- *   {{ .ConfirmationURL }} will land here with no code / no token_hash and
- *   fall through to the error redirect.
+ *   1. PKCE code exchange for OAuth / social login flows that still come
+ *      through with `?code=`.
+ *   2. Backwards compatibility with stale invite / recovery emails that
+ *      were sent BEFORE the migration and might still be sitting in someone's
+ *      inbox. Those emails arrive here with `?token_hash=...&type=...`.
+ *      We attempt the OTP exchange, but if it fails (Safe Links has burned
+ *      the token), we fall through to a graceful redirect that prompts the
+ *      user to request a fresh code instead of leaving them stuck on a
+ *      generic error.
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
@@ -38,22 +39,32 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient()
 
-  // --- Modern OTP flow (invite / recovery / signup / email_change / magiclink)
+  // --- Legacy token_hash flow (stale emails from before the OTP migration) --
   if (tokenHash && rawType) {
     const type = rawType as EmailOtpType
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
     if (!error) {
       return NextResponse.redirect(new URL(next, url.origin))
     }
-    // Surface the real error via a query param so the signin page can show
-    // something more useful than the generic "callback failed".
-    console.error('[auth/callback] verifyOtp failed:', error.message)
+    console.warn('[auth/callback] legacy verifyOtp failed (likely Safe Links burned the token):', error.message)
+
+    // Steer the user back into the OTP flow instead of leaving them stranded.
+    if (type === 'invite') {
+      return NextResponse.redirect(
+        new URL('/auth/accept-invite?error=link_expired', url.origin),
+      )
+    }
+    if (type === 'recovery' || type === 'magiclink') {
+      return NextResponse.redirect(
+        new URL('/auth/forgot-password?error=link_expired', url.origin),
+      )
+    }
     return NextResponse.redirect(
-      new URL(`/auth/signin?error=${encodeURIComponent(error.message)}`, url.origin)
+      new URL(`/auth/signin?error=${encodeURIComponent(error.message)}`, url.origin),
     )
   }
 
-  // --- Legacy PKCE code exchange (social auth, etc.)
+  // --- PKCE code exchange (social login etc.) ------------------------------
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
@@ -61,16 +72,10 @@ export async function GET(request: NextRequest) {
     }
     console.error('[auth/callback] exchangeCodeForSession failed:', error.message)
     return NextResponse.redirect(
-      new URL(`/auth/signin?error=${encodeURIComponent(error.message)}`, url.origin)
+      new URL(`/auth/signin?error=${encodeURIComponent(error.message)}`, url.origin),
     )
   }
 
-  // --- Nothing to exchange. Most likely cause: an old email template is still
-  // emitting {{ .ConfirmationURL }} which sends the token in a URL fragment
-  // (implicit flow) that the server cannot see. Update the template to use
-  // {{ .TokenHash }} per docs/runbooks/supabase-auth-configuration.md.
-  console.warn('[auth/callback] no code or token_hash — likely stale email template (implicit flow)')
-  return NextResponse.redirect(
-    new URL('/auth/signin?error=invite_link_missing_token', url.origin)
-  )
+  // --- Nothing to do — direct hit, send to signin ---------------------------
+  return NextResponse.redirect(new URL('/auth/signin', url.origin))
 }

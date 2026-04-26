@@ -1,3 +1,8 @@
+/**
+ * EQ Solves Service
+ * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
+ * Proprietary and confidential. All rights reserved.
+ */
 'use server'
 
 import { z } from 'zod'
@@ -7,31 +12,44 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logAuditEvent } from '@/lib/actions/audit'
 
 const AcceptInviteSchema = z.object({
+  email: z.string().trim().toLowerCase().email({ error: 'Enter a valid email address.' }),
+  code: z.string().trim().min(6, { error: 'Enter the 6-digit code from your email.' }).max(10),
   full_name: z.string().trim().min(1, { error: 'Please enter your full name.' }).max(120),
   password: z.string().min(10, { error: 'Password must be at least 10 characters.' }),
   confirm: z.string(),
 })
 
 /**
- * Finalises invite acceptance: sets the user's password, syncs their full
- * name onto the profile, audits the event, and redirects into the app.
+ * Single-shot invite acceptance via OTP.
  *
- * The invite link has already proven email ownership by the time this runs
- * (Supabase exchanged the code for a session in /auth/callback), so we can
- * safely use the service-role admin API to set the password — this bypasses
- * the AAL1/MFA restriction on updateUser({password}) that catches us on the
- * plain password reset flow too.
+ * Why OTP instead of a clickable link: Microsoft Defender Safe Links (and
+ * other corporate email scanners) pre-fetch every URL in inbound mail to
+ * scan it. When the URL contains a one-shot Supabase token, the scanner's
+ * pre-fetch BURNS the token before the user can click it — the user then
+ * sees "invite link expired or already used" and gets locked out.
  *
- * C2 (2026-04-21): Refuse silent revive. If the user accepting the invite
- * has NO active `tenant_members` row in any tenant, we stop here — an admin
- * may have removed their access after the invite email was sent, and the
- * invite link itself shouldn't be a backdoor around that removal. We sign
- * them out and return an error; the admin can re-attach them via the admin
- * UI. (We deliberately do NOT upsert/revive a removed membership here — the
- * removal was an intentional admin decision.)
+ * The fix is to take the token out of the URL entirely. The invite email
+ * now carries a 6-digit code (`{{ .Token }}` in the Supabase template) that
+ * the user TYPES on this page along with their name and password. Scanners
+ * cannot type a code into a UI, so the token survives.
+ *
+ * Steps:
+ *   1. Validate input (Zod).
+ *   2. Verify the OTP via `verifyOtp({ type: 'invite' })` — this proves
+ *      email ownership and establishes a session.
+ *   3. C2 gate (carried over from the link flow): refuse if the user has
+ *      no active `tenant_members` row anywhere — a removed user shouldn't
+ *      regain access just because they still have the invite email.
+ *   4. Admin set password (bypasses the AAL1/MFA restriction on
+ *      updateUser({password}) — fine because step 2 already proved
+ *      email ownership).
+ *   5. Sync profile name (best-effort).
+ *   6. Audit + redirect to /dashboard.
  */
-export async function acceptInviteAction(formData: FormData) {
+export async function verifyInviteOtpAndSetupAction(formData: FormData) {
   const parsed = AcceptInviteSchema.safeParse({
+    email: formData.get('email'),
+    code: formData.get('code'),
     full_name: formData.get('full_name'),
     password: formData.get('password'),
     confirm: formData.get('confirm'),
@@ -39,45 +57,46 @@ export async function acceptInviteAction(formData: FormData) {
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
   }
-  const { full_name, password, confirm } = parsed.data
+  const { email, code, full_name, password, confirm } = parsed.data
 
   if (password !== confirm) {
     return { error: 'Passwords do not match.' }
   }
 
+  // --- 1. Verify the OTP — establishes a real session for `email` -----------
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return { error: 'Your invite link has expired. Ask your administrator to resend it.' }
+  const { data: verifyData, error: verifyErr } = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: 'invite',
+  })
+
+  if (verifyErr || !verifyData.user) {
+    return { error: friendlyOtpError(verifyErr?.message) }
   }
 
+  const userId = verifyData.user.id
   const admin = createAdminClient()
 
-  // C2 gate: refuse if the user has no ACTIVE tenant_members row anywhere.
-  // A stale invite link from a removed user should NOT give them access
-  // back — even if they knew the URL before the removal happened.
+  // --- 2. C2 gate: must have an active tenant_members row somewhere ---------
   const { data: activeMemberships, error: membershipErr } = await admin
     .from('tenant_members')
     .select('tenant_id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('is_active', true)
     .limit(1)
 
   if (membershipErr) {
-    // Fail closed on a DB error rather than let them through without a check.
     return { error: 'Could not verify your access. Please try again in a moment.' }
   }
 
   if (!activeMemberships || activeMemberships.length === 0) {
-    // Sign them out so the cookie session is torn down and they land on
-    // /auth/signin cleanly rather than looping through /auth/no-tenant.
     await supabase.auth.signOut()
-    // Best-effort audit — helps an admin spot the attempt.
     try {
       await logAuditEvent({
         action: 'update',
         entityType: 'user',
-        entityId: user.id,
+        entityId: userId,
         summary: 'Blocked invite acceptance — user has no active tenant membership',
       })
     } catch {
@@ -89,29 +108,45 @@ export async function acceptInviteAction(formData: FormData) {
     }
   }
 
-  // 1. Set the password.
-  const { error: pwErr } = await admin.auth.admin.updateUserById(user.id, { password })
+  // --- 3. Set the password --------------------------------------------------
+  const { error: pwErr } = await admin.auth.admin.updateUserById(userId, { password })
   if (pwErr) {
     return { error: pwErr.message }
   }
 
-  // 2. Sync the full name onto the profile (best-effort — don't block on failure).
+  // --- 4. Sync the full name (best-effort) ---------------------------------
   const { error: profileErr } = await admin
     .from('profiles')
     .update({ full_name })
-    .eq('id', user.id)
+    .eq('id', userId)
   if (profileErr) {
-    // Non-fatal: password is set, user can fix their name later in profile.
     console.error('accept-invite: profile name update failed', profileErr.message)
   }
 
   await logAuditEvent({
     action: 'update',
     entityType: 'user',
-    entityId: user.id,
-    summary: 'Accepted invitation and set initial password',
+    entityId: userId,
+    summary: 'Accepted invitation and set initial password (OTP flow)',
   })
 
-  // 3. Straight into the app — the user is already authenticated.
   redirect('/dashboard')
+}
+
+/**
+ * Legacy entry point kept so any stale imports from before the OTP migration
+ * still resolve. Routes through the new action under the hood.
+ */
+export const acceptInviteAction = verifyInviteOtpAndSetupAction
+
+function friendlyOtpError(msg: string | undefined): string {
+  if (!msg) return 'Could not verify the code. Please try again.'
+  const m = msg.toLowerCase()
+  if (m.includes('expired')) {
+    return 'That code has expired. Ask your administrator to resend the invite.'
+  }
+  if (m.includes('invalid') || m.includes('not found')) {
+    return 'That code is incorrect. Check your email and try again.'
+  }
+  return msg
 }

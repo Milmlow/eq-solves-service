@@ -170,10 +170,11 @@ export async function inviteUserAction(formData: FormData): Promise<{ ok: true; 
   // invites sent from a local dev build don't leak http://localhost:3000
   // into production emails. Request origin is the fallback, not the default.
   const origin = getSiteUrl(requestOrigin)
-  // Route through the PKCE callback so the code is exchanged for a session
-  // cookie before the user lands on the accept-invite page. New users get
-  // a branded welcome screen; only password resets land on /reset-password.
-  const redirectTo = `${origin}/auth/callback?next=/auth/accept-invite`
+  // 2026-04-26 OTP migration: the invite email now carries a typed 6-digit
+  // code, NOT a clickable token URL. The link in the email points at this
+  // safe, tokenless URL so Defender Safe Links can pre-fetch it harmlessly.
+  // The user types the code from the email body to verify ownership.
+  const redirectTo = `${origin}/auth/accept-invite?email=${encodeURIComponent(email)}`
 
   try {
     // --- 1. Resolve the auth user (invite if new, look up if existing) --------
@@ -289,8 +290,10 @@ export async function resendInviteAction(formData: FormData) {
   // with a custom Resend API call + our own template later if needed.
   const authUser = await findAuthUserByEmail(admin, profile.email)
   const isConfirmed = !!authUser?.email_confirmed_at
+  // 2026-04-26 OTP migration: tokenless landing URL with email pre-filled.
+  // The token itself is the 6-digit code in the email body, not in the URL.
   const nextPath = isConfirmed ? '/auth/reset-password' : '/auth/accept-invite'
-  const redirectTo = `${origin}/auth/callback?next=${nextPath}`
+  const redirectTo = `${origin}${nextPath}?email=${encodeURIComponent(profile.email)}`
 
   const publicClient = await createClient()
   const { error } = await publicClient.auth.resetPasswordForEmail(profile.email, {

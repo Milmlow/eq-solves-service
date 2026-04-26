@@ -5,15 +5,28 @@ sign-in flow to work against production (`https://eq-solves-service.netlify.app`
 
 Project: `urjhmkhbgaxrofurpbgc` (eq-solves-service-dev — treat as prod for now).
 
-> **2026-04-20 — important change.** The invite and recovery email templates
-> now use `{{ .TokenHash }}` routed through `/auth/callback?token_hash=…&type=…`
-> instead of the old `{{ .ConfirmationURL }}`. The old template returned the
-> session in a URL **fragment** (`#access_token=…`), which a Next.js server
-> route cannot read — users who clicked the invite link landed on `/auth/signin`
-> with a generic error instead of `/auth/accept-invite`. The token_hash flow is
-> server-side (calls `supabase.auth.verifyOtp()` from the callback route) and
-> works end-to-end. If you ever revert this — yes, the invite flow will break
-> again.
+> **2026-04-26 — major change. OTP CODES, NOT LINKS.** The invite and recovery
+> email templates now carry a typed 6-digit code (`{{ .Token }}`) instead of
+> a clickable token URL. Microsoft Defender Safe Links (and Mimecast,
+> Proofpoint, Google Workspace's equivalent) pre-fetch every URL in inbound
+> mail and burn one-shot Supabase tokens before the user can click them —
+> users were getting "invite link expired" on every first-attempt click.
+>
+> The new flow:
+>
+>   - Email contains a 6-digit code in the body, plus a tokenless link to
+>     `/auth/accept-invite?email=…` (or `/auth/reset-password?email=…`).
+>     Defender can pre-fetch the link as much as it likes — there's nothing
+>     to burn.
+>   - User clicks the link, lands on the page with email pre-filled, types
+>     the code from the same email, fills name/password, submits.
+>   - Server action calls `supabase.auth.verifyOtp({ type: 'invite' | 'recovery' })`
+>     to verify the code, then sets the password via the admin API.
+>
+> The previous link/`{{ .TokenHash }}` flow is still tolerated by
+> `/auth/callback` for stale emails sitting in inboxes — it will redirect
+> failed legacy attempts back into the OTP flow rather than leaving users
+> stuck on a generic error.
 
 ---
 
@@ -28,17 +41,17 @@ https://eq-solves-service.netlify.app
 
 This is the base URL that gets templated into every `{{ .SiteURL }}` placeholder
 in the email templates, and the fallback redirect when `redirectTo` isn't sent.
-Leaving this as `http://localhost:3000` is why invite emails were pointing at
-localhost.
 
 ### Redirect URLs (Additional)
-One URL per line — Supabase requires an exact match (including the `/auth/...`
-suffix) for any `redirectTo` passed from the app.
+One URL per line — Supabase requires an exact match for any `redirectTo`
+passed from the app. The OTP flow uses the page URLs directly (no callback);
+`/auth/callback` is kept for OAuth + legacy stale emails.
 
 ```
 https://eq-solves-service.netlify.app/auth/callback
 https://eq-solves-service.netlify.app/auth/accept-invite
 https://eq-solves-service.netlify.app/auth/reset-password
+https://eq-solves-service.netlify.app/auth/forgot-password
 https://eq-solves-service.netlify.app/auth/signin
 https://eq-solves-service.netlify.app/auth/mfa
 https://eq-solves-service.netlify.app/auth/enroll-mfa
@@ -50,30 +63,32 @@ http://localhost:3000/auth/accept-invite
 http://localhost:3000/auth/reset-password
 ```
 
-The two `*--eq-solves-service.netlify.app` entries cover Netlify deploy-preview
-branches (`deploy-preview-123--eq-solves-service.netlify.app`). The two
-`localhost` entries let dev builds still receive email links — remove them
-before the app goes fully commercial.
+The `*--eq-solves-service.netlify.app` entries cover Netlify deploy-preview
+branches. The `localhost` entries let dev builds receive emails — remove them
+before going commercial.
 
 Click **Save** at the bottom.
 
 ---
 
-## 2. SMTP (already done, verify)
+## 2. SMTP (Resend)
 
-Dashboard → **Authentication → SMTP Settings** → should be set to Resend.
+Dashboard → **Authentication → SMTP Settings** → must be configured for Resend.
 
 If it shows "default provider" the invite emails will be rate-limited to 2/hour
 and will not deliver reliably.
 
 ---
 
-## 3. Email templates
+## 3. Email templates — OTP CODE FORMAT
 
 Dashboard → **Authentication → Email Templates**. Each template has a **Subject**
-and a **Body (HTML)** field. Paste exactly as written — `{{ .SiteURL }}`,
-`{{ .ConfirmationURL }}`, `{{ .Email }}`, `{{ .Token }}` are server-rendered
-placeholders, leave them literal.
+and a **Body (HTML)** field. Paste exactly as written.
+
+Placeholders:
+- `{{ .SiteURL }}` — the Site URL set in §1.
+- `{{ .Email }}` — recipient's email (used to pre-fill the form on the landing page).
+- `{{ .Token }}` — the 6-digit OTP code the user types. **Critical — do not replace with `{{ .ConfirmationURL }}` or `{{ .TokenHash }}`.**
 
 All templates use inlined styles (mail clients strip `<style>` blocks) and the
 EQ brand tokens: `#3DA8D8` primary, `#2986B4` deep, `#EAF5FB` ice, `#1A1A2E`
@@ -100,7 +115,7 @@ You've been invited to EQ Solves Service
             <tr>
               <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #EAF5FB;">
                 <div style="font-size:20px;font-weight:600;color:#2986B4;letter-spacing:-0.01em;">EQ Solves Service</div>
-                <div style="font-size:13px;color:#6B7A8A;margin-top:2px;">by EQ · CDC Solutions</div>
+                <div style="font-size:13px;color:#6B7A8A;margin-top:2px;">by EQ &middot; CDC Solutions</div>
               </td>
             </tr>
             <tr>
@@ -109,39 +124,51 @@ You've been invited to EQ Solves Service
                 <p style="margin:0 0 16px 0;font-size:15px;line-height:1.55;color:#1A1A2E;">
                   You&rsquo;ve been invited to <strong>EQ Solves Service</strong> &mdash; the maintenance management platform for electrical contractors.
                 </p>
-                <p style="margin:0 0 16px 0;font-size:15px;line-height:1.55;color:#1A1A2E;">
-                  Click the button below to confirm your details, set a password, and you&rsquo;re in. The whole thing takes about 30 seconds.
-                </p>
-                <p style="margin:0 0 24px 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
-                  This link is single-use and expires in 24 hours.
+                <p style="margin:0 0 24px 0;font-size:15px;line-height:1.55;color:#1A1A2E;">
+                  To finish setting up your account, open the invitation page and enter the code below.
                 </p>
               </td>
             </tr>
             <tr>
-              <td style="padding:0 32px 28px 32px;">
+              <td style="padding:0 32px 8px 32px;" align="center">
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="background-color:#3DA8D8;border-radius:6px;">
-                      <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/auth/accept-invite" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Set up my account</a>
+                      <a href="{{ .SiteURL }}/auth/accept-invite?email={{ .Email }}" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Open invitation page</a>
                     </td>
                   </tr>
                 </table>
-                <p style="margin:20px 0 0 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
-                  Or copy this URL into your browser:<br/>
-                  <span style="word-break:break-all;color:#2986B4;">{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=invite&amp;next=/auth/accept-invite</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 32px 8px 32px;" align="center">
+                <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;color:#6B7A8A;text-transform:uppercase;">Your 6-digit code</p>
+                <div style="display:inline-block;padding:14px 24px;background-color:#EAF5FB;border:1px solid #C9DFEC;border-radius:6px;font-size:28px;font-weight:700;color:#1A1A2E;letter-spacing:8px;font-family:'Plus Jakarta Sans',monospace;">{{ .Token }}</div>
+                <p style="margin:12px 0 0 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
+                  Type this code on the invitation page. It expires in 1 hour.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 32px 28px 32px;">
+                <p style="margin:0 0 6px 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
+                  Or copy this URL into your browser:
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.5;color:#2986B4;word-break:break-all;">
+                  {{ .SiteURL }}/auth/accept-invite?email={{ .Email }}
                 </p>
               </td>
             </tr>
             <tr>
               <td style="padding:20px 32px;background-color:#F7FBFD;border-top:1px solid #EAF5FB;border-radius:0 0 8px 8px;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#6B7A8A;">
-                  If you weren't expecting this invite, you can ignore this email — no account will be created without clicking the link.
+                  If you weren't expecting this invite, you can ignore this email &mdash; no account will be created without you entering the code above.
                 </p>
               </td>
             </tr>
           </table>
           <p style="margin:16px 0 0 0;font-size:11px;line-height:1.5;color:#8A96A3;max-width:560px;">
-            © EQ · CDC Solutions Pty Ltd · ABN 40 651 962 935 · All rights reserved.
+            &copy; EQ &middot; CDC Solutions Pty Ltd &middot; ABN 40 651 962 935 &middot; All rights reserved.
           </p>
         </td>
       </tr>
@@ -171,45 +198,60 @@ Reset your EQ Solves Service password
             <tr>
               <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #EAF5FB;">
                 <div style="font-size:20px;font-weight:600;color:#2986B4;letter-spacing:-0.01em;">EQ Solves Service</div>
-                <div style="font-size:13px;color:#6B7A8A;margin-top:2px;">by EQ · CDC Solutions</div>
+                <div style="font-size:13px;color:#6B7A8A;margin-top:2px;">by EQ &middot; CDC Solutions</div>
               </td>
             </tr>
             <tr>
               <td style="padding:28px 32px 8px 32px;">
                 <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:600;color:#1A1A2E;letter-spacing:-0.01em;">Reset your password</h1>
                 <p style="margin:0 0 16px 0;font-size:15px;line-height:1.55;color:#1A1A2E;">
-                  We received a request to reset the password for the account <strong>{{ .Email }}</strong>.
+                  We received a request to reset the password for <strong>{{ .Email }}</strong>.
                 </p>
                 <p style="margin:0 0 24px 0;font-size:15px;line-height:1.55;color:#1A1A2E;">
-                  Click the button below to choose a new password. The link is single-use and expires in 1 hour.
+                  Open the reset page and enter the code below to choose a new password.
                 </p>
               </td>
             </tr>
             <tr>
-              <td style="padding:0 32px 28px 32px;">
+              <td style="padding:0 32px 8px 32px;" align="center">
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="background-color:#3DA8D8;border-radius:6px;">
-                      <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/auth/reset-password" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Reset password</a>
+                      <a href="{{ .SiteURL }}/auth/reset-password?email={{ .Email }}" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;">Open reset page</a>
                     </td>
                   </tr>
                 </table>
-                <p style="margin:20px 0 0 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
-                  Or copy this URL into your browser:<br/>
-                  <span style="word-break:break-all;color:#2986B4;">{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=recovery&amp;next=/auth/reset-password</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 32px 8px 32px;" align="center">
+                <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;color:#6B7A8A;text-transform:uppercase;">Your 6-digit code</p>
+                <div style="display:inline-block;padding:14px 24px;background-color:#EAF5FB;border:1px solid #C9DFEC;border-radius:6px;font-size:28px;font-weight:700;color:#1A1A2E;letter-spacing:8px;font-family:'Plus Jakarta Sans',monospace;">{{ .Token }}</div>
+                <p style="margin:12px 0 0 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
+                  Type this code on the reset page. It expires in 1 hour.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 32px 28px 32px;">
+                <p style="margin:0 0 6px 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
+                  Or copy this URL into your browser:
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.5;color:#2986B4;word-break:break-all;">
+                  {{ .SiteURL }}/auth/reset-password?email={{ .Email }}
                 </p>
               </td>
             </tr>
             <tr>
               <td style="padding:20px 32px;background-color:#F7FBFD;border-top:1px solid #EAF5FB;border-radius:0 0 8px 8px;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#6B7A8A;">
-                  If you didn't request a password reset, you can ignore this email — your password won't change. If this keeps happening, contact your administrator.
+                  If you didn't request a password reset, you can ignore this email &mdash; your password won't change without the code above.
                 </p>
               </td>
             </tr>
           </table>
           <p style="margin:16px 0 0 0;font-size:11px;line-height:1.5;color:#8A96A3;max-width:560px;">
-            © EQ · CDC Solutions Pty Ltd · ABN 40 651 962 935 · All rights reserved.
+            &copy; EQ &middot; CDC Solutions Pty Ltd &middot; ABN 40 651 962 935 &middot; All rights reserved.
           </p>
         </td>
       </tr>
@@ -220,38 +262,73 @@ Reset your EQ Solves Service password
 
 ---
 
-### 3.3. Magic Link (optional — keep default if unused)
+### 3.3. Magic Link (optional)
 
-Not used by the current app flow. Leave on default or mirror the Reset template
-if you want branded links everywhere.
+Not used by the current app flow. Leave on default. If we ever turn on
+magic-link sign-in, mirror the Reset template and use `{{ .Token }}` with
+a safe `/auth/signin?email=…` landing URL — same pattern, never put a
+one-shot token in the URL.
 
 ---
 
 ### 3.4. Confirm signup / Change email
 
-Same pattern, same frame. If/when you need them, clone §3.2 and swap the
-heading + body copy.
+Same OTP pattern, same frame. If/when needed, clone §3.2 and swap heading +
+body copy. Use `{{ .Token }}`, never `{{ .ConfirmationURL }}` or
+`{{ .TokenHash }}`.
 
 ---
 
 ## 4. After changing config — smoke test
 
 1. `/admin/users` → invite a fresh test user (e.g. `royce+test@eq.solutions`).
-2. Open the email — the "Set up my account" URL must start with
-   `https://eq-solves-service.netlify.app/auth/callback?token_hash=…&type=invite&next=/auth/accept-invite`,
-   NOT `http://localhost:3000` and NOT pointing at `<project>.supabase.co/auth/v1/verify`.
-3. Click the link. You should land on `/auth/accept-invite` with a welcome
-   header ("Welcome, {first name}."), the tenant + role you assigned, a
-   3-step rail, and the password form enabled (no "Auth session missing"
-   banner). If you bounce back to `/auth/signin?error=…` instead, the email
-   template is still on the old `{{ .ConfirmationURL }}` shape — see the
-   2026-04-20 note at the top of this runbook.
-4. Fill in full name (if not pre-filled), set a password (live strength
-   meter turns green at 10+ chars with mixed case / digits / symbols),
-   confirm, submit. You should be signed in and redirected to `/dashboard`.
-5. Sign out, request **Forgot password** from the sign-in page — that flow
-   still lands on `/auth/reset-password` (generic "set a new password"
-   copy). Same session bootstrap logic, different page.
+2. Open the email. The body must contain a visible 6-digit code in a
+   bordered box, AND a button labelled "Open invitation page" pointing at
+   `https://eq-solves-service.netlify.app/auth/accept-invite?email=...`
+   (no `token_hash`, no `code`, just the email).
+3. Click the link. You should land on `/auth/accept-invite` with the
+   email pre-filled (read-only) and the 3-step rail.
+4. Type the code from the email + your name + a 10+ char password.
+   Submit. You should be signed in and redirected to `/dashboard`.
+5. Sign out. Click "Forgot password" on the sign-in page. Enter the email.
+   The page should swap to "We sent a 6-digit code to..." with code +
+   new password fields.
+6. Open the email. Same shape as step 2 but with "reset" copy. Type the
+   code + new password into the page from step 5. Submit. You should be
+   redirected to `/auth/signin?reset=ok`.
+7. Sign in with the new password. Done.
 
-If any of these fail, the first thing to check is the Redirect URLs allowlist
-(missing entries fail silently with a generic error on the callback page).
+If a test fails:
+- "Code is incorrect" on a fresh code → check the template uses `{{ .Token }}`,
+  not `{{ .TokenHash }}`. The code-entry endpoint expects the 6-digit form.
+- Email never arrives → check Resend dashboard (status: Sent → Delivered).
+  If stuck on Sent for >2 min, Defender / scanner is still processing it
+  (see §5).
+- Lands on `/auth/signin?error=link_expired` → user clicked an OLD email
+  from before this migration. Send them a fresh invite.
+
+---
+
+## 5. Why OTP codes, not links
+
+Microsoft Defender Safe Links (M365), Mimecast URL Defense, Proofpoint URL
+Defense, and Google Workspace's equivalent all do the same thing: when an
+email arrives in a corporate inbox, the security tooling pre-fetches every
+URL in the body to scan it for malware. If that URL contains a one-shot
+auth token, the scanner's GET request burns the token before the human
+ever clicks the link — the user then sees "invalid or expired" on their
+first real click.
+
+Workarounds we considered and rejected:
+- **Whitelist Supabase + Resend domains in Defender** — works for SKS users,
+  but breaks again the moment we bring on Equinix or any other corporate
+  customer. Not scalable for a multi-tenant SaaS.
+- **Confirmation interstitial** ("click to confirm") — partial mitigation,
+  scanners that follow a single redirect still burn the token.
+- **PKCE flow with code_verifier** — the verifier is in the original tab,
+  but Outlook's Safe Links opens the URL in a fresh window that has no
+  verifier, so this still fails for many corporate users.
+
+Typed OTP codes are the only flow that survives every scanner because
+nothing in the email is consumable on its own — the token is just six
+digits in plain text that a human has to copy.

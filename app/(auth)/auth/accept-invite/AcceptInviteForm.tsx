@@ -1,68 +1,34 @@
+/**
+ * EQ Solves Service
+ * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
+ * Proprietary and confidential. All rights reserved.
+ */
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
-import { createClient } from '@/lib/supabase/client'
-import { acceptInviteAction } from './actions'
+import { verifyInviteOtpAndSetupAction } from './actions'
 
 interface Props {
-  email: string
-  initialName: string
+  /** Email pre-filled from `?email=` query param. Empty allowed — user types it. */
+  initialEmail: string
 }
 
 /**
- * Client portion of the invite-acceptance flow. Handles the two ways Supabase
- * can land a user here (PKCE cookie already set by /auth/callback, or implicit
- * flow tokens in the URL hash — same pattern as reset-password), and renders
- * a password-strength indicator so the user gets live feedback instead of a
- * mystery "too short" error on submit.
+ * Single-shot invite OTP form.
+ *
+ * The user types: email (pre-filled if present), 6-digit code, full name,
+ * password, confirm. On submit the server action verifies the OTP, sets
+ * the password + name, and redirects to /dashboard. There is no persistent
+ * session before submit — this entire page is rendered for an unauthenticated
+ * visitor with nothing more than a code from their email.
  */
-export function AcceptInviteForm({ email, initialName }: Props) {
+export function AcceptInviteForm({ initialEmail }: Props) {
   const [error, setError] = useState<string>()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [pending, startTransition] = useTransition()
-  const [sessionReady, setSessionReady] = useState(false)
-
-  useEffect(() => {
-    const supabase = createClient()
-    let cancelled = false
-
-    async function bootstrapSession() {
-      const { data } = await supabase.auth.getSession()
-      if (data.session) {
-        if (!cancelled) setSessionReady(true)
-        return
-      }
-
-      if (typeof window !== 'undefined' && window.location.hash) {
-        const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-        const access_token = params.get('access_token')
-        const refresh_token = params.get('refresh_token')
-        if (access_token && refresh_token) {
-          const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token })
-          if (!setErr) {
-            window.history.replaceState(null, '', window.location.pathname)
-            if (!cancelled) setSessionReady(true)
-            return
-          }
-        }
-      }
-
-      if (!cancelled) {
-        setSessionReady(false)
-        setError(
-          'This invite link has expired or been used already. Ask your administrator to send a new one.'
-        )
-      }
-    }
-
-    void bootstrapSession()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const strength = scorePassword(password)
   const mismatch = confirm.length > 0 && confirm !== password
@@ -70,8 +36,9 @@ export function AcceptInviteForm({ email, initialName }: Props) {
   function onSubmit(formData: FormData) {
     setError(undefined)
     startTransition(async () => {
-      const res = await acceptInviteAction(formData)
+      const res = await verifyInviteOtpAndSetupAction(formData)
       if (res?.error) setError(res.error)
+      // Success path: server action redirects, no further client work.
     })
   }
 
@@ -79,21 +46,36 @@ export function AcceptInviteForm({ email, initialName }: Props) {
     <form action={onSubmit} className="flex flex-col gap-4">
       <FormInput
         label="Email"
-        name="email_display"
-        value={email}
-        readOnly
-        disabled
-        className="bg-eq-ice/40 text-eq-grey cursor-not-allowed"
+        name="email"
+        type="email"
+        required
+        autoComplete="email"
+        defaultValue={initialEmail}
+        readOnly={Boolean(initialEmail)}
+        disabled={pending}
+        className={initialEmail ? 'bg-eq-ice/40 text-eq-grey cursor-not-allowed' : undefined}
+      />
+
+      <FormInput
+        label="6-digit code"
+        name="code"
+        type="text"
+        required
+        autoComplete="one-time-code"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={6}
+        placeholder="123456"
+        disabled={pending}
       />
 
       <FormInput
         label="Full name"
         name="full_name"
-        defaultValue={initialName}
         required
         autoComplete="name"
         placeholder="Jane Smith"
-        disabled={pending || !sessionReady}
+        disabled={pending}
       />
 
       <div>
@@ -105,7 +87,7 @@ export function AcceptInviteForm({ email, initialName }: Props) {
           minLength={10}
           autoComplete="new-password"
           placeholder="At least 10 characters"
-          disabled={pending || !sessionReady}
+          disabled={pending}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
@@ -118,7 +100,7 @@ export function AcceptInviteForm({ email, initialName }: Props) {
         type="password"
         required
         autoComplete="new-password"
-        disabled={pending || !sessionReady}
+        disabled={pending}
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
         error={mismatch ? 'Passwords do not match' : undefined}
@@ -132,7 +114,7 @@ export function AcceptInviteForm({ email, initialName }: Props) {
 
       <Button
         type="submit"
-        disabled={pending || !sessionReady || mismatch || strength < 2}
+        disabled={pending || mismatch || strength < 2}
         className="mt-1"
       >
         {pending ? 'Creating your account…' : 'Create my account'}
@@ -142,9 +124,9 @@ export function AcceptInviteForm({ email, initialName }: Props) {
 }
 
 /**
- * Basic heuristic password score 0–4. Not security-critical (Supabase enforces
- * its own minimum on the server); this is purely UX feedback so users learn
- * what "strong" looks like rather than guessing.
+ * Heuristic password score 0–4. Not security-critical (Supabase enforces its
+ * own server-side minimum); pure UX feedback so users see what "strong"
+ * looks like rather than guessing.
  */
 function scorePassword(pw: string): number {
   if (!pw) return 0

@@ -1,6 +1,33 @@
-import { ResetPasswordForm } from './ResetPasswordForm'
+/**
+ * EQ Solves Service
+ * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
+ * Proprietary and confidential. All rights reserved.
+ */
+import Link from 'next/link'
+import { ForgotPasswordForm } from '../forgot-password/ForgotPasswordForm'
 
-export default function ResetPasswordPage() {
+/**
+ * /auth/reset-password — OTP code + new password entry.
+ *
+ * Reset emails carry a 6-digit code (not a clickable token URL — Defender
+ * Safe Links would burn the token before the user could click it). Users
+ * can either:
+ *
+ *   - Land here directly from the email's "Reset your password at:" link
+ *     (which is a safe, tokenless URL like /auth/reset-password?email=foo).
+ *   - Land here without ?email and type their address before the code.
+ *
+ * Either way, this renders the same code+password form that
+ * /auth/forgot-password uses on its second step.
+ */
+export default async function ResetPasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email?: string }>
+}) {
+  const { email } = await searchParams
+  const initialEmail = email?.trim() || undefined
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -9,17 +36,38 @@ export default function ResetPasswordPage() {
           Password reset
         </span>
         <h1 className="text-2xl font-bold text-eq-ink tracking-tight mt-4 leading-tight">
-          Choose a new password
+          {initialEmail ? 'Enter your reset code' : 'Reset your password'}
         </h1>
         <p className="text-sm text-eq-grey mt-2 leading-relaxed">
-          Use at least 10 characters. Mixing upper / lower case, numbers and
-          symbols makes it stronger.
+          {initialEmail ? (
+            <>
+              We&rsquo;ve emailed a 6-digit code to your inbox. Enter it
+              below with your new password.
+            </>
+          ) : (
+            <>
+              Enter your email and we&rsquo;ll send a 6-digit code to reset
+              your password.
+            </>
+          )}
         </p>
       </div>
-      <ResetPasswordForm />
+
+      <ForgotPasswordForm initialEmail={initialEmail} />
+
       <p className="text-[11px] text-eq-grey leading-relaxed border-t border-gray-100 pt-4">
-        Once you save, you&rsquo;ll be signed out everywhere and asked to sign
-        in again with your new password.
+        Once your password is updated you&rsquo;ll be signed out everywhere
+        and asked to sign back in. If your account has 2FA enabled, you&rsquo;ll
+        also need to enter your authenticator code.
+      </p>
+
+      <p className="text-center">
+        <Link
+          href="/auth/signin"
+          className="text-sm text-eq-deep hover:text-eq-sky transition-colors"
+        >
+          Back to sign in
+        </Link>
       </p>
     </div>
   )

@@ -4,124 +4,69 @@
  * Proprietary and confidential. All rights reserved.
  */
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { AcceptInviteForm } from './AcceptInviteForm'
 
 /**
- * Landing page for a newly invited user after Supabase exchanges the invite
- * code for a session. Distinct from /auth/reset-password so the copy can
- * welcome the user, confirm their tenant + role, and guide them through
- * creating their account — rather than a generic "set a new password" form.
+ * Invite acceptance page — single-shot OTP flow.
  *
- * The session cookie is already set by /auth/callback before this page loads,
- * so we can read the profile + tenant assignment server-side.
+ * The user lands here from their invite email. The email no longer carries
+ * a clickable token URL (Defender Safe Links would burn the token before
+ * the user could click it); instead it carries a 6-digit code that the
+ * user types here. Email may be pre-filled via `?email=` query param.
+ *
+ * Step rail is purely visual — the form actually does the verify + name +
+ * password in one shot, then redirects into the app.
  */
-export default async function AcceptInvitePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // If the invite link expired or was already used, direct back to sign-in.
-  if (!user) {
-    return (
-      <div className="flex flex-col gap-5">
-        <div>
-          <h1 className="text-2xl font-bold text-eq-ink tracking-tight">
-            This invitation link has expired
-          </h1>
-          <p className="text-sm text-eq-grey mt-2 leading-relaxed">
-            Invite links are single-use and expire after 24 hours.
-            Ask the administrator who invited you to resend the link.
-          </p>
-        </div>
-        <Link
-          href="/auth/signin"
-          className="inline-flex items-center justify-center h-10 px-4 text-sm font-semibold rounded-md bg-eq-sky text-white hover:bg-eq-deep transition-colors"
-        >
-          Go to sign in
-        </Link>
-      </div>
-    )
-  }
-
-  // Profile + tenant context. Both are best-effort — the form still works if
-  // either lookup fails (we fall back to generic copy).
-  const [{ data: profile }, { data: membership }] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('email, full_name')
-      .eq('id', user.id)
-      .maybeSingle(),
-    supabase
-      .from('tenant_members')
-      .select('role, tenant:tenants(name)')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle(),
-  ])
-
-  const email = profile?.email ?? user.email ?? ''
-  const fullName = profile?.full_name ?? ''
-  const tenantName =
-    (membership?.tenant as { name?: string } | null | undefined)?.name ?? null
-  const role = (membership?.role as string | null) ?? null
+export default async function AcceptInvitePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email?: string }>
+}) {
+  const { email } = await searchParams
+  const initialEmail = email?.trim() || ''
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-eq-deep bg-eq-ice px-2 py-1 rounded">
           <span className="w-1.5 h-1.5 rounded-full bg-eq-sky" />
-          Invitation accepted
+          Invitation
         </span>
         <h1 className="text-2xl font-bold text-eq-ink tracking-tight mt-4 leading-tight">
-          Welcome{fullName ? `, ${fullName.split(' ')[0]}` : ''}.
+          Welcome to EQ Solves Service
         </h1>
         <p className="text-sm text-eq-grey mt-2 leading-relaxed">
-          {tenantName && role ? (
-            <>
-              You&rsquo;ve been invited to <strong className="text-eq-ink">{tenantName}</strong> as{' '}
-              <strong className="text-eq-ink">{formatRole(role)}</strong>. One last step — set
-              a password and you&rsquo;re in.
-            </>
-          ) : (
-            <>One last step — set a password and you&rsquo;re in.</>
-          )}
+          Enter the 6-digit code from your invitation email along with your
+          name and a new password. You&rsquo;ll be signed in straight after.
         </p>
       </div>
 
       <StepRail />
 
-      <AcceptInviteForm email={email} initialName={fullName} />
+      <AcceptInviteForm initialEmail={initialEmail} />
 
       <p className="text-[11px] text-eq-grey leading-relaxed border-t border-gray-100 pt-4">
-        Passwords are stored using industry-standard one-way hashing — not even
-        we can read them. You can enable two-factor authentication from your
-        profile after you sign in.
+        Codes expire 1 hour after the invitation is sent. If yours has
+        expired, ask the person who invited you to resend it. We use a
+        typed code instead of a link so corporate email scanners
+        can&rsquo;t accidentally use it before you do.
+      </p>
+
+      <p className="text-center">
+        <Link
+          href="/auth/signin"
+          className="text-sm text-eq-deep hover:text-eq-sky transition-colors"
+        >
+          Already have an account? Sign in
+        </Link>
       </p>
     </div>
   )
 }
 
-function formatRole(role: string): string {
-  switch (role) {
-    case 'super_admin':
-      return 'Super Administrator'
-    case 'admin':
-      return 'Administrator'
-    case 'supervisor':
-      return 'Supervisor'
-    case 'technician':
-      return 'Technician'
-    case 'read_only':
-      return 'Read Only'
-    default:
-      return role
-  }
-}
-
 function StepRail() {
   const steps = [
-    { n: 1, label: 'Confirm your details' },
+    { n: 1, label: 'Enter your code' },
     { n: 2, label: 'Set a password' },
     { n: 3, label: 'Enter the platform' },
   ]
