@@ -69,6 +69,16 @@ npx tsc --noEmit   # TypeScript check
 
 ## Migrations
 
-65+ migrations applied (0001–0065+). The early 0001–0025 cover profiles, core schema, maintenance checks, test records, attachments, ACB/NSX tests, audit logs, instruments, performance indexes, notifications, job plan restructure, Maximo alignment, report settings, customer logos, contract scope, defects, onboarding, ACB asset collection fields, site coordinates, customer contacts, ACB extended fields, PM calendar, and maintenance check archiving. Later migrations add NSX workflow status, security/perf cleanup, idempotency, media library, site photos, signup trigger hardening (0053), media-library categorisation, defects auto-creation from failed items/readings, contract-scope asset linkage, and more.
+Migrations live in `supabase/migrations/` — the directory itself is the
+source of truth (numeric counts in this file used to bit-rot in days).
+Early migrations cover the core schema (profiles, maintenance checks,
+test records, attachments, ACB/NSX tests, audit logs, instruments,
+performance indexes, notifications, job plans, Maximo alignment, report
+settings, contract scope, defects, ACB asset collection, PM calendar).
+Later migrations add NSX workflow status, security/perf cleanup,
+idempotency, media library, signup trigger hardening, defects
+auto-creation from failed items/readings, and contract-scope asset
+linkage. Look at the `supabase/migrations/` directory for the current
+list and any new additions.
 
 See [ROADMAP.md](ROADMAP.md) for the full migration table (note: the table in ROADMAP.md is currently behind — source of truth is `supabase/migrations/`).

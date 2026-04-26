@@ -124,7 +124,7 @@ npx vitest run     # Run once (no watch mode)
 
 ## 7. Database
 
-Migrations are in `supabase/migrations/` (0001–0065+). They've already been applied to your Supabase project. If you need to reset or apply to a new project, run them in order via the Supabase SQL Editor or the Supabase CLI.
+Migrations are in `supabase/migrations/` — the directory itself is the source of truth, no count is maintained in this file (numeric counts here used to bit-rot in days). They've already been applied to your Supabase project. If you need to reset or apply to a new project, run them in order via the Supabase SQL Editor or the Supabase CLI.
 
 ---
 

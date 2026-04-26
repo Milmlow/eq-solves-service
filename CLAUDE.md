@@ -15,7 +15,7 @@ Multi-tenant maintenance management platform for electrical contractors — circ
 ### Database (Supabase)
 - Row-Level Security via `public.get_user_tenant_ids()` and `public.get_user_role(tenant_id)` — all tables enforce tenant isolation
 - Trigger function `public.set_updated_at()` auto-maintains `updated_at` timestamps
-- Migrations in `supabase/migrations/` numbered sequentially (0001–0065+)
+- Migrations in `supabase/migrations/` — the directory itself is the source of truth (numeric counts here bit-rot fast)
 - Storage buckets: `attachments` (general files), `logos` (tenant + customer logos, public bucket with auth RLS)
 
 ### Auth & Roles
