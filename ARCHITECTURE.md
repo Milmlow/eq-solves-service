@@ -71,7 +71,7 @@
 │   ├── utils/           # cn.ts, format.ts, roles.ts, csv-export.ts, csv-parser.ts, acb-excel.ts
 │   └── tenant/          # getTenantSettings.ts
 ├── supabase/
-│   ├── migrations/      # 0001–0023 applied
+│   ├── migrations/      # 0001–0065+ applied (source of truth is the directory itself)
 │   └── seed/
 └── proxy.ts             # Next.js 16 middleware
 ```

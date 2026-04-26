@@ -60,10 +60,13 @@ If you've already run the migrations and seeded a user via the Supabase dashboar
 
 1. Go to your Supabase dashboard → Authentication → Users
 2. Create a user with email + password
-3. In the SQL Editor, set their role to admin:
+3. In the SQL Editor, set their role to super_admin and attach them to a tenant:
    ```sql
-   UPDATE profiles SET role = 'admin', is_active = true WHERE id = '<user-uuid>';
+   UPDATE profiles SET role = 'super_admin', is_active = true WHERE id = '<user-uuid>';
+   INSERT INTO tenant_members (user_id, tenant_id, role, is_active)
+   VALUES ('<user-uuid>', '<tenant-uuid>', 'super_admin', true);
    ```
+   Without the `tenant_members` row the user will hit the "No tenant assigned" screen on first login (by design — see `app/(app)/layout.tsx`).
 4. Sign in at localhost:3000, set up MFA, and you're in.
 
 ---
@@ -113,7 +116,7 @@ npm run dev        # Start dev server (hot reload)
 npm run build      # Production build (run before deploying)
 npm run lint       # ESLint check
 npx tsc --noEmit   # TypeScript check without emitting files
-npx vitest         # Run the test suite (80 tests — CSV parser, role utils, format utils, auth actions)
+npx vitest         # Run the test suite (~126 tests across 7 files — CSV parser, role utils, format utils, auth actions, levenshtein, delta WO parser, PM asset report smoke)
 npx vitest run     # Run once (no watch mode)
 ```
 
@@ -121,7 +124,7 @@ npx vitest run     # Run once (no watch mode)
 
 ## 7. Database
 
-Migrations are in `supabase/migrations/` (0001–0023). They've already been applied to your Supabase project. If you need to reset or apply to a new project, run them in order via the Supabase SQL Editor or the Supabase CLI.
+Migrations are in `supabase/migrations/` (0001–0065+). They've already been applied to your Supabase project. If you need to reset or apply to a new project, run them in order via the Supabase SQL Editor or the Supabase CLI.
 
 ---
 

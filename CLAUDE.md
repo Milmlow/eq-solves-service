@@ -15,15 +15,15 @@ Multi-tenant maintenance management platform for electrical contractors — circ
 ### Database (Supabase)
 - Row-Level Security via `public.get_user_tenant_ids()` and `public.get_user_role(tenant_id)` — all tables enforce tenant isolation
 - Trigger function `public.set_updated_at()` auto-maintains `updated_at` timestamps
-- Migrations in `supabase/migrations/` numbered sequentially (0001–0045+)
+- Migrations in `supabase/migrations/` numbered sequentially (0001–0065+)
 - Storage buckets: `attachments` (general files), `logos` (tenant + customer logos, public bucket with auth RLS)
 
 ### Auth & Roles
 - `auth.uid()` resolves the current user via Supabase Auth
 - `tenant_members` table maps users → tenants with roles: `super_admin`, `admin`, `supervisor`, `technician`, `read_only`
 - App-layer role checks via `canWrite(role)` and `isAdmin(role)` from `lib/utils/roles`
-- **Known gap:** No trigger auto-creates `tenant_members` on signup — new users get orphaned in `profiles` with no tenant. Must manually insert `tenant_members` row when adding users. Unmapped users currently fall through to demo tenant silently (needs fix: should show "no tenant assigned" screen).
-- **Known bug:** MFA (TOTP) challenge loop — users with enrolled MFA factors get AAL1 sessions that loop between signin and MFA challenge page. Workaround: delete MFA factors + sessions, user re-enrols after login. Root cause in auth middleware / MFA challenge page, not yet fixed.
+- **Tenant assignment on signup:** The `handle_new_user()` trigger (migration 0053) creates a `profiles` row only — it never assigns `tenant_members`. Tenant membership is assigned by the `inviteUserAction` server action, or auto-assigned via `tenant_settings.default_tenant_for_new_users` if configured (migration 0046). Users without a `tenant_members` row hit a clear "No tenant assigned" screen in `app/(app)/layout.tsx` (no silent fallthrough to demo tenant). The `/admin/users` page surfaces orphaned users with an Attach button (`repairUserTenantAction`).
+- **MFA history (regression watch):** MFA was historically unstable — an AAL1 challenge loop between signin and `/auth/mfa` was fixed 2026-04-26 by adding `/auth/signin` to `AAL_EXEMPT_PATHS` in `proxy.ts` so users with stale AAL1+TOTP sessions can sign out and start fresh. PostHog `mfa_redirect` events are emitted on every AAL gate bounce so any recurrence is visible (two redirects within ~30s for the same user = suspected loop). Re-verify on any auth-related change.
 - **Tenant IDs:** SKS = `ccca00fc-cbc8-442e-9489-0f1f216ddca8`, Demo = `a0000000-0000-0000-0000-000000000001`
 
 ### Server Actions
