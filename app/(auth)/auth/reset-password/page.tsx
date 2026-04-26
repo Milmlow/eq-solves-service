@@ -1,24 +1,12 @@
-/**
- * EQ Solves Service
- * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
- * Proprietary and confidential. All rights reserved.
- */
 import Link from 'next/link'
 import { ForgotPasswordForm } from '../forgot-password/ForgotPasswordForm'
 
 /**
- * /auth/reset-password — OTP code + new password entry.
- *
- * Reset emails carry an 8-digit code (not a clickable token URL — Defender
- * Safe Links would burn the token before the user could click it). Users
- * can either:
- *
- *   - Land here directly from the email's "Reset your password at:" link
- *     (which is a safe, tokenless URL like /auth/reset-password?email=foo).
- *   - Land here without ?email and type their address before the code.
- *
- * Either way, this renders the same code+password form that
- * /auth/forgot-password uses on its second step.
+ * /auth/reset-password - OTP code + new password entry. Reset emails carry
+ * an 8-digit code (not a clickable token URL - Defender Safe Links would
+ * burn the token before the user could click it). Users can either land
+ * here directly from the email's safe tokenless link with ?email= filled,
+ * or land here without ?email and type their address before the code.
  */
 export default async function ResetPasswordPage({
   searchParams,
@@ -41,12 +29,12 @@ export default async function ResetPasswordPage({
         <p className="text-sm text-eq-grey mt-2 leading-relaxed">
           {initialEmail ? (
             <>
-              We&rsquo;ve emailed an 8-digit code to your inbox. Enter it
-              below with your new password.
+              We have emailed an 8-digit code to your inbox. Enter it below
+              with your new password.
             </>
           ) : (
             <>
-              Enter your email and we&rsquo;ll send an 8-digit code to reset
+              Enter your email and we will send an 8-digit code to reset
               your password.
             </>
           )}
@@ -56,8 +44,8 @@ export default async function ResetPasswordPage({
       <ForgotPasswordForm initialEmail={initialEmail} />
 
       <p className="text-[11px] text-eq-grey leading-relaxed border-t border-gray-100 pt-4">
-        Once your password is updated you&rsquo;ll be signed out everywhere
-        and asked to sign back in. If your account has 2FA enabled, you&rsquo;ll
+        Once your password is updated you will be signed out everywhere and
+        asked to sign back in. If your account has 2FA enabled, you will
         also need to enter your authenticator code.
       </p>
 

@@ -1,8 +1,3 @@
-/**
- * EQ Solves Service
- * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
- * Proprietary and confidential. All rights reserved.
- */
 'use client'
 
 import Link from 'next/link'
@@ -12,20 +7,6 @@ import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
 import { forgotPasswordAction, verifyRecoveryOtpAction } from './actions'
 
-/**
- * Two-step OTP password reset:
- *
- *   Step 1 — Email entry. Submitting calls forgotPasswordAction which fires
- *            a recovery email containing an 8-digit code.
- *   Step 2 — Code + new password entry. Submitting calls
- *            verifyRecoveryOtpAction which exchanges the code for a session
- *            and sets the new password atomically.
- *
- * We deliberately do NOT use a clickable email link anywhere in this flow —
- * Microsoft Defender Safe Links and similar enterprise email scanners
- * pre-fetch URLs in inbound mail and burn one-shot tokens before the user
- * can click them. A typed code can't be pre-fetched.
- */
 interface Props {
   /** Skip step 1 and land on the code-entry form, pre-filled with this email. */
   initialEmail?: string
@@ -33,6 +14,13 @@ interface Props {
   initialStep?: 'email' | 'verify'
 }
 
+/**
+ * Two-step OTP password reset.
+ * Step 1: email entry -> forgotPasswordAction fires recovery email with 8-digit code.
+ * Step 2: code + new password -> verifyRecoveryOtpAction exchanges code for session
+ *         and sets the new password atomically. No clickable email link in either
+ *         direction - Defender Safe Links would burn one-shot tokens.
+ */
 export function ForgotPasswordForm({ initialEmail, initialStep }: Props = {}) {
   const router = useRouter()
   const [step, setStep] = useState<'email' | 'verify'>(
@@ -59,8 +47,6 @@ export function ForgotPasswordForm({ initialEmail, initialStep }: Props = {}) {
 
   function onSubmitVerify(formData: FormData) {
     setError(undefined)
-    // The email field is hidden in the verify form; surface the value we
-    // captured from step 1 so the server action can verify against it.
     formData.set('email', email)
     startTransition(async () => {
       const res = await verifyRecoveryOtpAction(formData)
@@ -123,7 +109,7 @@ export function ForgotPasswordForm({ initialEmail, initialStep }: Props = {}) {
         )}
 
         <Button type="submit" disabled={pending}>
-          {pending ? 'Verifying…' : 'Set new password'}
+          {pending ? 'Verifying...' : 'Set new password'}
         </Button>
 
         <button
@@ -157,12 +143,12 @@ export function ForgotPasswordForm({ initialEmail, initialStep }: Props = {}) {
         </div>
       )}
       <Button type="submit" disabled={pending}>
-        {pending ? 'Sending…' : 'Send reset code'}
+        {pending ? 'Sending...' : 'Send reset code'}
       </Button>
       <p className="text-[11px] text-eq-grey leading-relaxed">
-        We&rsquo;ll email you an 8-digit code. Codes expire after 1 hour.
-        We use a code instead of a link so corporate email scanners
-        can&rsquo;t accidentally use it before you do.
+        We will email you an 8-digit code. Codes expire after 1 hour. We use
+        a code instead of a link so corporate email scanners cannot
+        accidentally use it before you do.
       </p>
       <p className="text-center">
         <Link

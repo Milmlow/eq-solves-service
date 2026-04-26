@@ -1,8 +1,3 @@
-/**
- * EQ Solves Service
- * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
- * Proprietary and confidential. All rights reserved.
- */
 'use client'
 
 import { useState, useTransition } from 'react'
@@ -11,18 +6,15 @@ import { FormInput } from '@/components/ui/FormInput'
 import { verifyInviteOtpAndSetupAction } from './actions'
 
 interface Props {
-  /** Email pre-filled from `?email=` query param. Empty allowed — user types it. */
+  /** Email pre-filled from ?email= query param. Empty allowed - user types it. */
   initialEmail: string
 }
 
 /**
- * Single-shot invite OTP form.
- *
- * The user types: email (pre-filled if present), 8-digit code, full name,
- * password, confirm. On submit the server action verifies the OTP, sets
- * the password + name, and redirects to /dashboard. There is no persistent
- * session before submit — this entire page is rendered for an unauthenticated
- * visitor with nothing more than a code from their email.
+ * Single-shot invite OTP form. The user types: email (pre-filled if present),
+ * 8-digit code, full name, password, confirm. On submit the server action
+ * verifies the OTP, sets the password + name, and redirects to /dashboard.
+ * No persistent session before submit - the OTP itself proves email ownership.
  */
 export function AcceptInviteForm({ initialEmail }: Props) {
   const [error, setError] = useState<string>()
@@ -38,7 +30,6 @@ export function AcceptInviteForm({ initialEmail }: Props) {
     startTransition(async () => {
       const res = await verifyInviteOtpAndSetupAction(formData)
       if (res?.error) setError(res.error)
-      // Success path: server action redirects, no further client work.
     })
   }
 
@@ -117,17 +108,12 @@ export function AcceptInviteForm({ initialEmail }: Props) {
         disabled={pending || mismatch || strength < 2}
         className="mt-1"
       >
-        {pending ? 'Creating your account…' : 'Create my account'}
+        {pending ? 'Creating your account...' : 'Create my account'}
       </Button>
     </form>
   )
 }
 
-/**
- * Heuristic password score 0–4. Not security-critical (Supabase enforces its
- * own server-side minimum); pure UX feedback so users see what "strong"
- * looks like rather than guessing.
- */
 function scorePassword(pw: string): number {
   if (!pw) return 0
   let score = 0

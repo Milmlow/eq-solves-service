@@ -1,21 +1,12 @@
-/**
- * EQ Solves Service
- * © 2026 EQ, a registered business name of CDC Solutions Pty Ltd
- * Proprietary and confidential. All rights reserved.
- */
 import Link from 'next/link'
 import { AcceptInviteForm } from './AcceptInviteForm'
 
 /**
- * Invite acceptance page — single-shot OTP flow.
- *
- * The user lands here from their invite email. The email no longer carries
- * a clickable token URL (Defender Safe Links would burn the token before
- * the user could click it); instead it carries an 8-digit code that the
- * user types here. Email may be pre-filled via `?email=` query param.
- *
- * Step rail is purely visual — the form actually does the verify + name +
- * password in one shot, then redirects into the app.
+ * Invite acceptance page - single-shot OTP flow. The user lands here from
+ * their invite email. The email no longer carries a clickable token URL
+ * (Defender Safe Links would burn the token before the user could click it);
+ * instead it carries an 8-digit code that the user types here.
+ * Email may be pre-filled via ?email= query param.
  */
 export default async function AcceptInvitePage({
   searchParams,
@@ -37,7 +28,7 @@ export default async function AcceptInvitePage({
         </h1>
         <p className="text-sm text-eq-grey mt-2 leading-relaxed">
           Enter the 8-digit code from your invitation email along with your
-          name and a new password. You&rsquo;ll be signed in straight after.
+          name and a new password. You will be signed in straight after.
         </p>
       </div>
 
@@ -48,8 +39,8 @@ export default async function AcceptInvitePage({
       <p className="text-[11px] text-eq-grey leading-relaxed border-t border-gray-100 pt-4">
         Codes expire 1 hour after the invitation is sent. If yours has
         expired, ask the person who invited you to resend it. We use a
-        typed code instead of a link so corporate email scanners
-        can&rsquo;t accidentally use it before you do.
+        typed code instead of a link so corporate email scanners cannot
+        accidentally use it before you do.
       </p>
 
       <p className="text-center">
