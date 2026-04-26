@@ -392,7 +392,6 @@ export function ReportSettingsForm({ settings }: Props) {
               {/* Hidden sections indicator */}
               <div className="text-gray-400 text-[8px] mt-2">
                 {!showCover && <p>✓ Cover Page (hidden)</p>}
-                {!showOverview && <p>✓ Site Overview (hidden)</p>}
                 {!showContents && <p>✓ Table of Contents (hidden)</p>}
                 {!showSummary && <p>✓ Executive Summary (hidden)</p>}
                 {!showSignOff && <p>✓ Sign-off Page (hidden)</p>}
