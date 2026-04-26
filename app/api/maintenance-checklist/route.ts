@@ -14,6 +14,8 @@ import { generateMaintenanceChecklist } from '@/lib/reports/maintenance-checklis
 import type { MaintenanceChecklistInput, ChecklistAsset } from '@/lib/reports/maintenance-checklist'
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
+import { fetchLogoImage } from '@/lib/reports/report-branding'
+import { TENANT_LOGO_LIGHT, TENANT_LOGO_ON_DARK, CUSTOMER_LOGO_LIGHT } from '@/lib/reports/sizing'
 
 /**
  * Map the public-facing format token (summary/standard/detailed) to the legacy
@@ -102,15 +104,46 @@ export async function GET(request: NextRequest) {
     itemsByCheckAsset[caId].push(item)
   }
 
-  // Fetch tenant settings for company name
+  // Fetch tenant settings for branding — primary colour drives the brand
+  // strip on the field run-sheet; logos render in the strip when available.
+  // Without this fetch the strip fell back to EQ Sky + showed text-only
+  // company name instead of the SKS (or other tenant) logo.
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, report_company_name')
+    .select(`
+      product_name, report_company_name,
+      primary_colour, deep_colour, ice_colour, ink_colour,
+      report_logo_url, report_logo_url_on_dark, logo_url, logo_url_on_dark
+    `)
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const companyName = tenantSettings?.report_company_name ?? productName
+  const primaryColour = (tenantSettings?.primary_colour ?? '#3DA8D8').replace('#', '')
+
+  // Customer logo (if site has a customer)
+  let customerLogoUrl: string | null = null
+  const siteRow = check.sites as { name?: string; customer_id?: string | null } | null
+  if (siteRow?.customer_id) {
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('logo_url')
+      .eq('id', siteRow.customer_id)
+      .maybeSingle()
+    customerLogoUrl = customer?.logo_url ?? null
+  }
+
+  // Resolve which tenant-light logo to use. Field run-sheet brand strip is
+  // a dark surface (tenant brand colour fill) so prefer the on-dark variant;
+  // fall back to the light one if no dark variant uploaded.
+  const tenantLogoLightUrl = tenantSettings?.report_logo_url ?? tenantSettings?.logo_url ?? null
+  const tenantLogoDarkUrl = tenantSettings?.report_logo_url_on_dark ?? tenantSettings?.logo_url_on_dark ?? null
+
+  const [tenantLogoImage, customerLogoImage] = await Promise.all([
+    fetchLogoImage(tenantLogoDarkUrl ?? tenantLogoLightUrl, TENANT_LOGO_ON_DARK),
+    fetchLogoImage(customerLogoUrl, CUSTOMER_LOGO_LIGHT),
+  ])
 
   // Resolve user names (assigned_to)
   const userIds = new Set<string>()
@@ -170,6 +203,9 @@ export async function GET(request: NextRequest) {
     printedDate: printedDateStr,
     assets: checklistAssets,
     tenantProductName: productName,
+    primaryColour,
+    tenantLogoImage,
+    customerLogoImage,
     format,
   }
 
