@@ -170,11 +170,18 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2  // ~9638
 const FONT = FONT_BODY
 const FONT_HEADING = FONT_HEADING_TOKEN
 
-const BORDER_LIGHT = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
+const BORDER_LIGHT = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER } as const
 const BORDERS_LIGHT = { top: BORDER_LIGHT, bottom: BORDER_LIGHT, left: BORDER_LIGHT, right: BORDER_LIGHT }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BORDER_NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' } as any
-const BORDERS_NONE = { top: BORDER_NONE, bottom: BORDER_NONE, left: BORDER_NONE, right: BORDER_NONE } as typeof BORDERS_LIGHT
+// `BorderStyle.NONE` works as a runtime value but the docx type narrows
+// to non-NONE for ITableCellBorders — `as const` + cast keeps type-
+// checking on the rest of the literal without `any`.
+const BORDER_NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' } as const
+const BORDERS_NONE: typeof BORDERS_LIGHT = {
+  top: BORDER_NONE as unknown as typeof BORDER_LIGHT,
+  bottom: BORDER_NONE as unknown as typeof BORDER_LIGHT,
+  left: BORDER_NONE as unknown as typeof BORDER_LIGHT,
+  right: BORDER_NONE as unknown as typeof BORDER_LIGHT,
+}
 const CELL_PAD = { top: 60, bottom: 60, left: 100, right: 100 }
 const CELL_PAD_TIGHT = { top: 40, bottom: 40, left: 80, right: 80 }
 

@@ -47,6 +47,12 @@ import {
 import { fetchLogoImage, type LogoImage } from './report-branding'
 import { FONT_BODY } from './typography'
 import { EQ_MID_GREY } from './colours'
+import {
+  CUSTOMER_LOGO_LIGHT,
+  TENANT_LOGO_LIGHT,
+  TENANT_LOGO_ON_DARK,
+  SITE_PHOTO_COVER,
+} from './sizing'
 
 // ─────────── Types ───────────
 
@@ -182,10 +188,10 @@ export async function prepareShell(
   // URLs by returning undefined, so omitting an asset just means passing
   // null through ctx.
   const [customerLogo, tenantLogo, tenantLogoOnDark, sitePhoto] = await Promise.all([
-    fetchLogoImage(ctx.customerLogoUrl, { maxWidth: 220, maxHeight: 80 }),
-    fetchLogoImage(settings.tenantLogoUrl, { maxWidth: 220, maxHeight: 80 }),
-    fetchLogoImage(settings.tenantLogoOnDarkUrl, { maxWidth: 280, maxHeight: 100 }),
-    fetchLogoImage(ctx.sitePhotoUrl, { maxWidth: 600, maxHeight: 300 }),
+    fetchLogoImage(ctx.customerLogoUrl, CUSTOMER_LOGO_LIGHT),
+    fetchLogoImage(settings.tenantLogoUrl, TENANT_LOGO_LIGHT),
+    fetchLogoImage(settings.tenantLogoOnDarkUrl, TENANT_LOGO_ON_DARK),
+    fetchLogoImage(ctx.sitePhotoUrl, SITE_PHOTO_COVER),
   ])
 
   return { settings, ctx, customerLogo, tenantLogo, tenantLogoOnDark, sitePhoto }

@@ -17,6 +17,7 @@ import type { PmCheckReportInput, PmCheckReportItem } from '@/lib/reports/pm-che
 import { generateWorkOrderDetailsReport } from '@/lib/reports/work-order-details'
 import type { WorkOrderDetailsInput, WorkOrderDetailsAsset, WorkOrderTask, WorkOrderDefect } from '@/lib/reports/work-order-details'
 import { fetchLogoImage } from '@/lib/reports/report-branding'
+import { LOGO_DEFAULT } from '@/lib/reports/sizing'
 import { convertDocxToPdf } from '@/lib/reports/pdf-conversion'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -134,8 +135,8 @@ export async function generateAndStoreReport(
 
   // ── Fetch logo images ──
   const [tenantLogoImage, customerLogoImage] = await Promise.all([
-    fetchLogoImage(tenantLogoUrl, { maxWidth: 180, maxHeight: 60 }),
-    fetchLogoImage(finalCustomerLogoUrl, { maxWidth: 180, maxHeight: 60 }),
+    fetchLogoImage(tenantLogoUrl, LOGO_DEFAULT),
+    fetchLogoImage(finalCustomerLogoUrl, LOGO_DEFAULT),
   ])
 
   const input: PmCheckReportInput = {
@@ -331,8 +332,8 @@ export async function generateAndStoreWorkOrderDetailsReport(
 
   // ── Fetch logo images ──
   const [tenantLogoImage, customerLogoImage] = await Promise.all([
-    fetchLogoImage(tenantLogoUrl, { maxWidth: 180, maxHeight: 60 }),
-    fetchLogoImage(finalCustomerLogoUrl, { maxWidth: 180, maxHeight: 60 }),
+    fetchLogoImage(tenantLogoUrl, LOGO_DEFAULT),
+    fetchLogoImage(finalCustomerLogoUrl, LOGO_DEFAULT),
   ])
 
   // ── Map check_assets to WorkOrderDetailsAsset ──
