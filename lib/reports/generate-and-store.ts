@@ -270,11 +270,15 @@ export async function generateAndStoreWorkOrderDetailsReport(
   }
 
   // ── Fetch defects linked to this check ──
+  // Defects don't have an `is_active` column — they use `status`
+  // (open/resolved) and `resolved_at` for soft-delete-equivalent state.
+  // CLAUDE.md says "soft delete via is_active everywhere"; defects are
+  // the documented exception. (Was throwing 500s on any check with
+  // active defects until this was found 2026-04-26.)
   const { data: defectsData, error: defectError } = await supabase
     .from('defects')
     .select('id, code, description, severity, status, wo_number')
     .eq('check_id', maintenanceCheckId)
-    .eq('is_active', true)
 
   if (defectError) {
     console.warn(`Failed to fetch defects: ${defectError.message}`)
