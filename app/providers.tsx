@@ -47,19 +47,40 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // Global error hooks — PostHog + Clarity both surface uncaught errors
     // natively, but capturing to an 'error_thrown' event gives us a
     // queryable error stream that's consistent with the Field app.
+    //
+    // Drop known third-party noise so it never reaches PostHog:
+    //   - "Object Not Found Matching Id:N, MethodName:update, ParamCount:4"
+    //     is injected by Microsoft Office / Outlook Click-to-Run scripts
+    //     and famously dominates browser error streams. Not our code.
+    //   - ResizeObserver loop messages are benign browser warnings.
+    //   - Cross-origin "Script error." is opaque and unactionable.
+    const NOISE_PATTERNS: RegExp[] = [
+      /Object Not Found Matching Id:\d+, MethodName:update, ParamCount:\d+/,
+      /^ResizeObserver loop (limit exceeded|completed with undelivered notifications)/,
+      /^Script error\.?$/,
+    ];
+    const isNoise = (msg: string | null | undefined): boolean => {
+      if (!msg) return false;
+      return NOISE_PATTERNS.some((re) => re.test(msg));
+    };
+
     window.addEventListener('error', (ev) => {
+      const message = ev?.message ?? String(ev);
+      if (isNoise(message)) return;
       posthog.capture('error_thrown', {
         context: 'window_error',
-        message: ev?.message ?? String(ev),
+        message,
         filename: ev?.filename,
         lineno: ev?.lineno,
         colno: ev?.colno,
       });
     });
     window.addEventListener('unhandledrejection', (ev) => {
+      const message = ev?.reason?.message ?? String(ev?.reason ?? 'unknown');
+      if (isNoise(message)) return;
       posthog.capture('error_thrown', {
         context: 'unhandled_promise',
-        message: ev?.reason?.message ?? String(ev?.reason ?? 'unknown'),
+        message,
       });
     });
 

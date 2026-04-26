@@ -30,8 +30,11 @@ function statusToBadge(status: string): 'active' | 'not-started' | 'complete' | 
 
 function formatDateTime(dateStr: string | null) {
   if (!dateStr) return '—'
+  // Pin timeZone so SSR (UTC) and browser (AEST) agree — avoids React
+  // hydration mismatch (error #418) on edge-of-day UTC timestamps.
   return new Date(dateStr).toLocaleString('en-AU', {
     weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    timeZone: 'Australia/Sydney',
   })
 }
 
