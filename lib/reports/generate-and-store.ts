@@ -76,9 +76,11 @@ export async function generateAndStoreReport(
   }
 
   // ── Fetch tenant settings for branding ──
+  // report_customer_logo dropped 26-Apr-2026 (audit item 8) — customer logo
+  // is now always shown on the cover when present.
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, report_company_name, report_logo_url, report_customer_logo')
+    .select('product_name, primary_colour, report_company_name, report_logo_url')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
@@ -86,7 +88,6 @@ export async function generateAndStoreReport(
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
   const companyName = tenantSettings?.report_company_name ?? null
   const reportLogoUrl = tenantSettings?.report_logo_url ?? null
-  const showCustomerLogo = tenantSettings?.report_customer_logo ?? true
 
   // ── Fetch tenant for fallback logo ──
   const { data: tenant } = await supabase
@@ -97,8 +98,9 @@ export async function generateAndStoreReport(
 
   const tenantLogoUrl = reportLogoUrl || tenant?.logo_url || null
 
-  // Apply report_customer_logo toggle
-  const finalCustomerLogoUrl = showCustomerLogo ? customerLogoUrl : null
+  // Customer logo always rendered when present (was gated on
+  // report_customer_logo toggle until 26-Apr-2026 — see audit item 8).
+  const finalCustomerLogoUrl = customerLogoUrl
 
   // ── Resolve user display names ──
   const userIds = [
@@ -279,9 +281,10 @@ export async function generateAndStoreWorkOrderDetailsReport(
   }
 
   // ── Fetch tenant settings for branding ──
+  // report_customer_logo dropped 26-Apr-2026 (audit item 8).
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, report_company_name, report_logo_url, report_customer_logo')
+    .select('product_name, primary_colour, report_company_name, report_logo_url')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
@@ -289,7 +292,6 @@ export async function generateAndStoreWorkOrderDetailsReport(
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
   const companyName = tenantSettings?.report_company_name ?? null
   const reportLogoUrl = tenantSettings?.report_logo_url ?? null
-  const showCustomerLogo = tenantSettings?.report_customer_logo ?? true
 
   // ── Fetch tenant for fallback logo ──
   const { data: tenant } = await supabase
@@ -299,7 +301,8 @@ export async function generateAndStoreWorkOrderDetailsReport(
     .maybeSingle()
 
   const tenantLogoUrl = reportLogoUrl || tenant?.logo_url || null
-  const finalCustomerLogoUrl = showCustomerLogo ? customerLogoUrl : null
+  // Customer logo always rendered when present.
+  const finalCustomerLogoUrl = customerLogoUrl
 
   // ── Resolve user display names (for tech capture) ──
   const userIds = Array.from(

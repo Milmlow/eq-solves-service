@@ -79,15 +79,9 @@ export interface ShellSettings {
   /** Tenant report logo (dark surface — cover page band). */
   tenantLogoOnDarkUrl: string | null
 
-  /** Whether to render the customer logo on the cover. */
-  showCustomerLogo: boolean
-  /** Whether to render the site photo on the cover. */
-  showSitePhoto: boolean
-
   /** Section toggles. */
   showCover: boolean
   showContents: boolean
-  showOverview: boolean
   showSummary: boolean
   showSignoff: boolean
 
@@ -138,11 +132,8 @@ const DEFAULT_SETTINGS: ShellSettings = {
   primaryColour: '#3DA8D8',
   tenantLogoUrl: null,
   tenantLogoOnDarkUrl: null,
-  showCustomerLogo: true,
-  showSitePhoto: true,
   showCover: true,
   showContents: true,
-  showOverview: true,
   showSummary: true,
   showSignoff: true,
   complexity: 'standard',
@@ -184,15 +175,15 @@ export async function prepareShell(
   settings: ShellSettings,
   ctx: ShellContext,
 ): Promise<ResolvedShell> {
+  // Always-fetch model — the showCustomerLogo / showSitePhoto toggles were
+  // removed 26-Apr-2026 (audit items 6 + 8). fetchLogoImage tolerates null
+  // URLs by returning undefined, so omitting an asset just means passing
+  // null through ctx.
   const [customerLogo, tenantLogo, tenantLogoOnDark, sitePhoto] = await Promise.all([
-    settings.showCustomerLogo
-      ? fetchLogoImage(ctx.customerLogoUrl, { maxWidth: 220, maxHeight: 80 })
-      : Promise.resolve(undefined),
+    fetchLogoImage(ctx.customerLogoUrl, { maxWidth: 220, maxHeight: 80 }),
     fetchLogoImage(settings.tenantLogoUrl, { maxWidth: 220, maxHeight: 80 }),
     fetchLogoImage(settings.tenantLogoOnDarkUrl, { maxWidth: 280, maxHeight: 100 }),
-    settings.showSitePhoto
-      ? fetchLogoImage(ctx.sitePhotoUrl, { maxWidth: 600, maxHeight: 300 })
-      : Promise.resolve(undefined),
+    fetchLogoImage(ctx.sitePhotoUrl, { maxWidth: 600, maxHeight: 300 }),
   ])
 
   return { settings, ctx, customerLogo, tenantLogo, tenantLogoOnDark, sitePhoto }

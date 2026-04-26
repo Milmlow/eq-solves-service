@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
   // Fetch tenant settings for branding + report config
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, logo_url, logo_url_on_dark, report_logo_url, report_logo_url_on_dark, report_complexity, report_show_cover_page, report_show_site_overview, report_show_contents, report_show_executive_summary, report_show_sign_off, report_header_text, report_footer_text, report_company_name, report_company_address, report_company_abn, report_company_phone, report_sign_off_fields')
+    .select('product_name, primary_colour, logo_url, logo_url_on_dark, report_logo_url, report_logo_url_on_dark, report_complexity, report_show_cover_page, report_show_contents, report_show_executive_summary, report_show_sign_off, report_header_text, report_footer_text, report_company_name, report_company_address, report_company_abn, report_company_phone, report_sign_off_fields')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
@@ -238,8 +238,8 @@ export async function GET(request: NextRequest) {
     overallNotes: check.notes ?? undefined,
 
     // Report template config
+    // showSiteOverview removed 26-Apr-2026 (audit item 7) — always rendered.
     showCoverPage: tenantSettings?.report_show_cover_page ?? true,
-    showSiteOverview: tenantSettings?.report_show_site_overview ?? true,
     showContents: tenantSettings?.report_show_contents ?? true,
     showExecutiveSummary: tenantSettings?.report_show_executive_summary ?? true,
     showSignOff: tenantSettings?.report_show_sign_off ?? true,

@@ -39,6 +39,12 @@ import { SplitButton } from '@/components/ui/SplitButton'
  *   - 'standard' → standard run-sheet with task headings (default)
  *   - 'detailed' → full task-by-task breakdown per asset
  */
+/**
+ * Relabelled 26-Apr-2026 (audit item 9): "Print Report" → "Field Run-Sheet".
+ * The output is a printable checklist for the tech to fill in onsite, not
+ * the customer-facing PDF. The customer-facing PDF is the separate
+ * "Customer Report" button (Download Report) elsewhere on this page.
+ */
 function PrintReportSplit({ checkId }: { checkId: string }) {
   function open(format: 'summary' | 'standard' | 'detailed') {
     window.open(`/api/maintenance-checklist?check_id=${checkId}&format=${format}`, '_blank', 'noopener')
@@ -47,8 +53,8 @@ function PrintReportSplit({ checkId }: { checkId: string }) {
     <SplitButton
       variant="gray"
       icon={<Printer className="w-4 h-4" />}
-      label="Print Report"
-      title="Print the maintenance check report — uses the Standard style by default"
+      label="Field Run-Sheet"
+      title="Print a clipboard run-sheet for the tech onsite. For the customer-facing PDF, use Customer Report."
       onClick={() => open('standard')}
       options={[
         {
@@ -403,10 +409,14 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           )}
           {check.status === 'complete' && (
             <>
+              {/* Relabelled 26-Apr-2026 (audit item 9): the customer-facing
+                  PDF (cover page, sign-off, asset breakdown). Distinct from
+                  the Field Run-Sheet, which is the tech's clipboard print. */}
               <button
                 onClick={() => setShowReportDialog(true)}
+                title="Customer-facing PDF — full report with cover page and sign-off block"
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors">
-                <Download className="w-4 h-4" /> Download Report
+                <Download className="w-4 h-4" /> Customer Report
               </button>
               <button
                 onClick={() => setShowSendReport(true)}

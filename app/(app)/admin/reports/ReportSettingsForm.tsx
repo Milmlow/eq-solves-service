@@ -23,20 +23,23 @@ export function ReportSettingsForm({ settings }: Props) {
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // Section toggles
+  // Section toggles. Site Overview, Customer Logo and Site Photos used to
+  // be configurable here but were removed 26-Apr-2026 (audit items 6-8) —
+  // they were either dead settings (site_photos was read by no generator)
+  // or only consumed by one of six generators (site_overview, customer_logo)
+  // which made the form dishonest about what it controlled. Behaviour is
+  // now baked in: site overview always shown, customer logo always shown
+  // when present, site photo block dropped entirely.
   const [showCover, setShowCover] = useState(settings.report_show_cover_page ?? true)
-  const [showOverview, setShowOverview] = useState(settings.report_show_site_overview ?? true)
   const [showContents, setShowContents] = useState(settings.report_show_contents ?? true)
   const [showSummary, setShowSummary] = useState(settings.report_show_executive_summary ?? true)
   const [showSignOff, setShowSignOff] = useState(settings.report_show_sign_off ?? true)
 
-  // Logo & photos
+  // Logo
   const [logoUrl, setLogoUrl] = useState(settings.report_logo_url ?? '')
   const [logoUrlOnDark, setLogoUrlOnDark] = useState(
     (settings as unknown as { report_logo_url_on_dark?: string | null }).report_logo_url_on_dark ?? '',
   )
-  const [showCustomerLogo, setShowCustomerLogo] = useState(settings.report_customer_logo ?? true)
-  const [showSitePhotos, setShowSitePhotos] = useState(settings.report_site_photos ?? false)
   const [complexity, setComplexity] = useState<'summary' | 'standard' | 'detailed'>(settings.report_complexity ?? 'standard')
 
   // Custom text
@@ -49,10 +52,10 @@ export function ReportSettingsForm({ settings }: Props) {
   const [companyAbn, setCompanyAbn] = useState(settings.report_company_abn ?? '')
   const [companyPhone, setCompanyPhone] = useState(settings.report_company_phone ?? '')
 
-  // Report sections list
+  // Report sections list. Site Overview is always on (was a dead toggle).
   const reportSections: ReportSection[] = [
     { label: 'Cover Page', key: 'cover', enabled: showCover },
-    { label: 'Site Overview', key: 'overview', enabled: showOverview },
+    { label: 'Site Overview', key: 'overview', enabled: true },
     { label: 'Table of Contents', key: 'contents', enabled: showContents },
     { label: 'Executive Summary', key: 'summary', enabled: showSummary },
     { label: 'Asset Details', key: 'overview', enabled: true }, // Always shown
@@ -86,7 +89,6 @@ export function ReportSettingsForm({ settings }: Props) {
 
     const result = await updateReportSettingsAction({
       report_show_cover_page: showCover,
-      report_show_site_overview: showOverview,
       report_show_contents: showContents,
       report_show_executive_summary: showSummary,
       report_show_sign_off: showSignOff,
@@ -99,8 +101,6 @@ export function ReportSettingsForm({ settings }: Props) {
       report_sign_off_fields: signOffFields.filter(f => f.trim().length > 0),
       report_logo_url: logoUrl || null,
       report_logo_url_on_dark: logoUrlOnDark || null,
-      report_customer_logo: showCustomerLogo,
-      report_site_photos: showSitePhotos,
       report_complexity: complexity,
     })
 
@@ -114,7 +114,6 @@ export function ReportSettingsForm({ settings }: Props) {
 
   const sections = [
     { label: 'Cover Page', description: 'Title page with report name, site info, and logo', value: showCover, toggle: setShowCover },
-    { label: 'Site Overview', description: 'Site details, dates, outstanding counts', value: showOverview, toggle: setShowOverview },
     { label: 'Contents Page', description: 'Table of contents with links to each asset section', value: showContents, toggle: setShowContents },
     { label: 'Executive Summary', description: 'KPI dashboard with pass rates, task breakdown, key findings', value: showSummary, toggle: setShowSummary },
     { label: 'Sign-off Page', description: 'Approval table with signature lines', value: showSignOff, toggle: setShowSignOff },
@@ -245,32 +244,10 @@ export function ReportSettingsForm({ settings }: Props) {
               />
               <p className="text-xs text-eq-grey mt-1">Used on report cover pages. Falls back to light logo if empty.</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => setShowCustomerLogo(!showCustomerLogo)}
-                className="flex items-center justify-between px-4 py-3 rounded-lg border transition-colors text-left hover:bg-gray-50"
-                style={{ borderColor: showCustomerLogo ? 'var(--eq-sky, #3DA8D8)' : '#e5e7eb' }}
-              >
-                <div>
-                  <p className="text-sm font-medium text-eq-ink">Customer Logo</p>
-                  <p className="text-xs text-eq-grey">Show customer logo on cover page</p>
-                </div>
-                {showCustomerLogo ? <Image className="w-5 h-5 text-eq-sky" /> : <Image className="w-5 h-5 text-gray-300" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowSitePhotos(!showSitePhotos)}
-                className="flex items-center justify-between px-4 py-3 rounded-lg border transition-colors text-left hover:bg-gray-50"
-                style={{ borderColor: showSitePhotos ? 'var(--eq-sky, #3DA8D8)' : '#e5e7eb' }}
-              >
-                <div>
-                  <p className="text-sm font-medium text-eq-ink">Site Photos</p>
-                  <p className="text-xs text-eq-grey">Include site photos on cover page</p>
-                </div>
-                {showSitePhotos ? <Image className="w-5 h-5 text-eq-sky" /> : <Image className="w-5 h-5 text-gray-300" />}
-              </button>
-            </div>
+            {/* Customer Logo + Site Photos toggles removed 26-Apr-2026
+                (audit items 7, 8 + 6). Customer logo always shown when
+                present; site photos block was a dead setting (read by no
+                generator) so it's gone entirely. */}
           </div>
         </div>
 
@@ -354,25 +331,20 @@ export function ReportSettingsForm({ settings }: Props) {
               {showCover && (
                 <div className="bg-white border border-gray-300 p-3 rounded min-h-[60px] flex flex-col items-center justify-center text-center">
                   <p className="font-bold text-gray-800">COVER PAGE</p>
-                  {(logoUrl || showCustomerLogo) && (
-                    <p className="text-gray-500 text-[9px] mt-1">{logoUrl ? '🏢 Company logo' : ''}{showCustomerLogo ? ' + 🏪 Customer logo' : ''}</p>
-                  )}
-                  {showSitePhotos && <p className="text-gray-500 text-[9px]">📷 Site photo</p>}
+                  <p className="text-gray-500 text-[9px] mt-1">{logoUrl ? '🏢 Company logo' : ''}{logoUrl ? ' + ' : ''}🏪 Customer logo</p>
                   {companyName && <p className="text-gray-600 text-[9px] mt-1">{companyName}</p>}
                   {companyAddress && <p className="text-gray-500 text-[9px]">{companyAddress.substring(0, 30)}...</p>}
                 </div>
               )}
 
-              {/* Site Overview */}
-              {showOverview && (
-                <div className="bg-white border border-gray-300 p-2 rounded">
-                  <p className="font-bold text-gray-800">SITE OVERVIEW</p>
-                  <div className="text-gray-600 text-[9px] mt-1 space-y-0.5">
-                    <p>• Site details and dates</p>
-                    <p>• Outstanding counts</p>
-                  </div>
+              {/* Site Overview — always rendered (was a dead toggle) */}
+              <div className="bg-white border border-gray-300 p-2 rounded">
+                <p className="font-bold text-gray-800">SITE OVERVIEW</p>
+                <div className="text-gray-600 text-[9px] mt-1 space-y-0.5">
+                  <p>• Site details and dates</p>
+                  <p>• Outstanding counts</p>
                 </div>
-              )}
+              </div>
 
               {/* Table of Contents */}
               {showContents && (

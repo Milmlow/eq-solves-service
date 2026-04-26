@@ -108,8 +108,9 @@ export interface PmAssetReportInput {
   overallNotes?: string
 
   // Report template config
+  // showSiteOverview field removed 26-Apr-2026 (audit item 7) — site overview
+  // is now always rendered. Was only consumed by this generator, never propagated.
   showCoverPage?: boolean        // default true
-  showSiteOverview?: boolean     // default true
   showContents?: boolean         // default true
   showExecutiveSummary?: boolean // default true
   showAssetSummary?: boolean     // default true — one-row-per-asset register with progress
@@ -1360,7 +1361,8 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
 
   // Resolve section toggles (default all true)
   const showCover = input.showCoverPage !== false
-  const showOverview = input.showSiteOverview !== false
+  // Site overview always rendered — toggle removed 26-Apr-2026 (audit item 7).
+  const showOverview = true
   // Summary skips TOC and executive summary unless explicitly enabled
   const showContents = complexity === 'summary' ? false : input.showContents !== false
   const showSummary = input.showExecutiveSummary !== false

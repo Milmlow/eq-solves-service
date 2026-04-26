@@ -5,9 +5,18 @@ import { requireUser } from '@/lib/actions/auth'
 import { isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 
+/**
+ * Report settings update payload.
+ *
+ * Three settings were dropped 26-Apr-2026 (audit items 6-8):
+ *   - report_site_photos          → dead, no generator read it
+ *   - report_show_site_overview   → only pm-asset-report read it; baked to true
+ *   - report_customer_logo        → only the maintenance Send-Report path read it; baked to true
+ *
+ * Migration 0065 drops the columns. The form no longer surfaces these toggles.
+ */
 interface ReportSettingsUpdate {
   report_show_cover_page: boolean
-  report_show_site_overview: boolean
   report_show_contents: boolean
   report_show_executive_summary: boolean
   report_show_sign_off: boolean
@@ -20,8 +29,6 @@ interface ReportSettingsUpdate {
   report_sign_off_fields: string[]
   report_logo_url: string | null
   report_logo_url_on_dark: string | null
-  report_customer_logo: boolean
-  report_site_photos: boolean
   report_complexity: 'summary' | 'standard' | 'detailed'
 }
 
@@ -38,7 +45,6 @@ export async function updateReportSettingsAction(data: ReportSettingsUpdate) {
     // Trim text fields
     const update = {
       report_show_cover_page: data.report_show_cover_page,
-      report_show_site_overview: data.report_show_site_overview,
       report_show_contents: data.report_show_contents,
       report_show_executive_summary: data.report_show_executive_summary,
       report_show_sign_off: data.report_show_sign_off,
@@ -51,8 +57,6 @@ export async function updateReportSettingsAction(data: ReportSettingsUpdate) {
       report_sign_off_fields: data.report_sign_off_fields.filter(f => f.trim().length > 0),
       report_logo_url: data.report_logo_url?.trim() || null,
       report_logo_url_on_dark: data.report_logo_url_on_dark?.trim() || null,
-      report_customer_logo: data.report_customer_logo ?? true,
-      report_site_photos: data.report_site_photos ?? false,
       report_complexity: data.report_complexity ?? 'standard',
     }
 

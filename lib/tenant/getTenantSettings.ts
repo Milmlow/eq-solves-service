@@ -13,8 +13,10 @@ const DEFAULTS: TenantSettings = {
   product_name: 'EQ Solves',
   support_email: null,
   // Report template defaults
+  // (report_site_photos / report_show_site_overview / report_customer_logo
+  //  removed 26-Apr-2026 — see audit items 6-8. Site overview and customer
+  //  logo are now always-on; site photos toggle was dead.)
   report_show_cover_page: true,
-  report_show_site_overview: true,
   report_show_contents: true,
   report_show_executive_summary: true,
   report_show_sign_off: true,
@@ -25,11 +27,8 @@ const DEFAULTS: TenantSettings = {
   report_company_abn: null,
   report_company_phone: null,
   report_sign_off_fields: ['Technician Signature', 'Supervisor Signature'],
-  // Enhanced report settings
   report_logo_url: null,
   report_logo_url_on_dark: null,
-  report_customer_logo: true,
-  report_site_photos: false,
   report_complexity: 'standard',
   updated_at: '',
 }

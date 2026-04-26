@@ -425,7 +425,6 @@ function buildPmAsset(complexity: 'summary' | 'standard' | 'detailed'): PmAssetR
     assets: pmAssetSections,
     overallNotes: 'One CB defect raised (CB-2026-003). All other ACBs returned to service.',
     showCoverPage: true,
-    showSiteOverview: true,
     showContents: true,
     showExecutiveSummary: true,
     showAssetSummary: true,

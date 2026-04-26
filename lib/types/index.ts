@@ -27,8 +27,9 @@ export interface TenantSettings {
   product_name: string
   support_email: string | null
   // Report template settings
+  // (report_site_photos / report_show_site_overview / report_customer_logo
+  //  removed 26-Apr-2026 — see audit items 6-8.)
   report_show_cover_page: boolean
-  report_show_site_overview: boolean
   report_show_contents: boolean
   report_show_executive_summary: boolean
   report_show_sign_off: boolean
@@ -42,8 +43,6 @@ export interface TenantSettings {
   // Enhanced report settings
   report_logo_url: string | null
   report_logo_url_on_dark: string | null
-  report_customer_logo: boolean
-  report_site_photos: boolean
   report_complexity: 'summary' | 'standard' | 'detailed'
   updated_at: string
 }

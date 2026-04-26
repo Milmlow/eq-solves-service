@@ -52,7 +52,6 @@ const fixture: Omit<PmAssetReportInput, 'complexity'> = {
   overallNotes: 'April PM completed. One ACB flagged for follow-up trip unit calibration.',
 
   showCoverPage: true,
-  showSiteOverview: true,
   showContents: true,
   showExecutiveSummary: true,
   showSignOff: true,

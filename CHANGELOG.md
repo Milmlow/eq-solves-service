@@ -4,6 +4,54 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-26 — Reports audit cleanup: dead chain + dead settings + button relabel
+
+Pending push to `main`. Following the full reports audit (`docs/reviews/2026-04-26-reports-audit.html`), Royce ticked items 1-9 for removal. All applied:
+
+### Removed (dead code)
+- **`app/(app)/maintenance/CheckDetail.tsx`** — orphan (no imports). The active maintenance check page is `[id]/CheckDetailPage.tsx`.
+- **`app/(app)/maintenance/CheckHeader.tsx`** — only consumer was the file above.
+- **`app/api/pm-report/route.ts`** — only caller was the dead CheckHeader's "Download Report" button.
+- **`app/(app)/reports/BulkExportButton.tsx`** — orphan (no imports).
+- **`app/api/bulk-report/route.ts`** — only caller was the orphaned button above.
+
+### Removed (dead settings)
+Three settings on `tenant_settings` were either dead or inconsistently consumed by only 1 of 6 generators. Behaviour is now baked into safe defaults:
+- **`report_site_photos`** — was read by zero generators. Toggle removed.
+- **`report_show_site_overview`** — only `pm-asset-report` read it; site overview is now always rendered.
+- **`report_customer_logo`** — only the maintenance Send-Report path read it; customer logo is now always rendered when present.
+
+Migration **`0065_drop_dead_report_settings.sql`** drops the three columns. Already applied live via Supabase MCP. Form, server action, types, and shell all updated to match.
+
+### Spinner now wired into visible buttons
+Following user-test feedback that the new `Button.loading` prop wasn't visible: now wired on Start Check / Complete Check / Complete All Assets / Re-open / Delete (CheckDetailPage) and Send Invite (InviteUserForm). Print Report SplitButton also now appears on completed checks (was hidden — surprised users during testing).
+
+### Relabel — clearer report-type distinction
+- **"Download Report"** → **"Customer Report"** with tooltip "Customer-facing PDF — full report with cover page and sign-off block".
+- **"Print Report"** → **"Field Run-Sheet"** with tooltip "Print a clipboard run-sheet for the tech onsite. For the customer-facing PDF, use Customer Report."
+
+These really are different products (customer-facing PDF vs. tech's printable checklist) — the labels now say so.
+
+### Net surface reduction
+- 3 component files deleted
+- 2 API routes deleted
+- 3 settings columns dropped from DB
+- 6 toggles removed from `/admin/reports`
+- 1 ReportShell module simplified (showCustomerLogo / showSitePhoto fields removed)
+- ~600 lines of orphaned UI code gone
+
+### Files Touched
+- Deleted: `app/(app)/maintenance/{CheckDetail,CheckHeader}.tsx`, `app/(app)/reports/BulkExportButton.tsx`, `app/api/{pm-report,bulk-report}/`.
+- Added: `docs/reviews/2026-04-26-reports-audit.html`, `supabase/migrations/0065_drop_dead_report_settings.sql`.
+- Modified: `app/(app)/admin/reports/{ReportSettingsForm.tsx,actions.ts}`, `app/(app)/admin/users/InviteUserForm.tsx`, `app/(app)/maintenance/[id]/CheckDetailPage.tsx`, `app/api/pm-asset-report/route.ts`, `lib/reports/{generate-and-store,pm-asset-report,report-shell}.ts`, `lib/tenant/getTenantSettings.ts`, `lib/types/index.ts`, `scripts/{gen-field-map-doc.js,generate-all-sample-reports.ts}`, `tests/lib/reports/pm-asset-report.smoke.test.ts`.
+
+### Verification
+- Migration 0065 applied live to `urjhmkhbgaxrofurpbgc`.
+- Grep across `app/`, `lib/`, `scripts/`: no live references to the removed settings remain (only removal-comments).
+- TypeScript check pending: `npx tsc --noEmit` should return 0 errors before push.
+
+---
+
 ## 2026-04-26 — Service items review: Sprint 1–4 sweep (UI polish, attachments, defects, contacts, calendar)
 
 Pending push to `main`. Working through Royce's 14-item review punch list (`EQ Service items 26.4.26.xlsx`). Decisions captured in `docs/reviews/2026-04-26-service-items-decisions.html`.
