@@ -5,6 +5,7 @@ import { useCapturer } from '../hooks/useCapturer'
 import { subscribeQueue } from '../lib/queue'
 import { AssetList } from './jobscreen/AssetList'
 import { AssetCapture } from './jobscreen/AssetCapture'
+import { PasteBatchModal } from '../components/PasteBatchModal'
 
 type Props = {
   jobRef: string
@@ -68,6 +69,9 @@ export function JobScreenPage({ jobRef, assetId }: Props) {
     navigate(`/j/${job.slug ?? job.id}/a/${id}`)
   }
 
+  // Paste-batch modal — open via AssetList footer button
+  const [pasteOpen, setPasteOpen] = useState(false)
+
   if (jobLoading && !job) {
     return (
       <div className="h-full flex items-center justify-center text-[13px] text-muted">
@@ -93,12 +97,15 @@ export function JobScreenPage({ jobRef, assetId }: Props) {
       }}
     >
       <AssetList
+        jobId={job.id}
         assets={assets}
         fields={fields}
         activeAssetId={activeAsset?.id ?? null}
+        capturerName={capturerName}
         onSelectAsset={onSelectAsset}
         onOpenMatrix={() => navigate(`/j/${job.slug ?? job.id}/admin`)}
         onOpenExport={() => navigate(`/j/${job.slug ?? job.id}/export`)}
+        onOpenPasteBatch={() => setPasteOpen(true)}
       />
       {assetsLoading && assets.length === 0 ? (
         <div className="flex items-center justify-center text-[13px] text-muted">
@@ -112,6 +119,15 @@ export function JobScreenPage({ jobRef, assetId }: Props) {
           fields={fields}
           capturerName={capturerName}
           onNavigateAsset={onSelectAsset}
+        />
+      )}
+      {pasteOpen && (
+        <PasteBatchModal
+          jobId={job.id}
+          assets={assets}
+          fields={fields}
+          capturerName={capturerName}
+          onClose={() => setPasteOpen(false)}
         />
       )}
     </div>

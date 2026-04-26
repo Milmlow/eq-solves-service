@@ -12,9 +12,16 @@ type Props = {
   compact?: boolean
   /** Ref forwarded to the primary input/select so parent can focus the first empty field. */
   inputRef?: React.RefObject<HTMLElement | null>
+  /**
+   * Optional autofill suggestion. Renders yellow + "tap to confirm on
+   * nameplate" strip. Only shown when the field has no existing captured
+   * value yet. When the user taps confirm, the value writes to the queue
+   * via onChange (same path as a typed value).
+   */
+  pendingValue?: string
 }
 
-export function FieldEditor({ field, existing, onChange, compact = true, inputRef }: Props) {
+export function FieldEditor({ field, existing, onChange, compact = true, inputRef, pendingValue }: Props) {
   const current = existing?.value ?? ''
   const [draft, setDraft] = useState(current)
   const [notesOpen, setNotesOpen] = useState(Boolean(existing?.notes))
@@ -52,6 +59,17 @@ export function FieldEditor({ field, existing, onChange, compact = true, inputRe
   }
 
   const hasValue = Boolean(existing?.value && existing.value !== '')
+
+  // An autofill suggestion is "live" only when the field has no captured
+  // value yet. Once the tech types or confirms, hasValue becomes true and
+  // the suggestion is moot — the captured value is the source of truth.
+  const showSuggestion = !hasValue && Boolean(pendingValue)
+  const confirmSuggestion = () => {
+    if (!pendingValue) return
+    setDraft(pendingValue)
+    triggerFlash()
+    onChange(pendingValue, { notes: notes || null, flagged })
+  }
 
   return (
     <div
@@ -99,7 +117,26 @@ export function FieldEditor({ field, existing, onChange, compact = true, inputRe
         inputRef={inputRef}
       />
 
-      {field.sample_values && !hasValue && (
+      {showSuggestion && (
+        <button
+          type="button"
+          onClick={confirmSuggestion}
+          className={cn(
+            'mt-1.5 w-full inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md',
+            'border border-warn/40 bg-warn-bg text-warn-fg text-[11px] font-bold',
+            'hover:bg-warn/10 hover:border-warn cursor-pointer',
+            'transition-colors duration-120 text-left',
+          )}
+          title={`Auto: ${pendingValue} — tap to confirm on the breaker`}
+        >
+          <Check size={12} strokeWidth={2.5} className="shrink-0" />
+          <span className="truncate">
+            Auto: <code className="font-mono">{pendingValue}</code> — tap to confirm
+          </span>
+        </button>
+      )}
+
+      {field.sample_values && !hasValue && !showSuggestion && (
         <div className="mt-1 text-[10px] text-muted truncate">e.g. {field.sample_values}</div>
       )}
 
