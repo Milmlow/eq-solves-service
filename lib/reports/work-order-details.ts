@@ -37,6 +37,8 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { buildMasthead } from '@/lib/reports/report-branding'
+import { FONT_BODY } from '@/lib/reports/typography'
+import { EQ_MID_GREY, EQ_BORDER } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
@@ -113,7 +115,7 @@ const PAGE_HEIGHT = 16838
 const MARGIN = 1440       // 1 inch
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2
 
-const BORDER = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' }
+const BORDER = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
 const CELL_MARGINS = { top: 60, bottom: 60, left: 100, right: 100 }
 
@@ -141,7 +143,7 @@ function infoCell(text: string, width: number): TableCell {
       children: [new TextRun({
         text: text || '—',
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     })],
   })
@@ -158,7 +160,7 @@ function headerCell(text: string, width: number): TableCell {
         text,
         bold: true,
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     })],
   })
@@ -240,7 +242,7 @@ function buildProblemsSection(asset: WorkOrderDetailsAsset): Paragraph[] {
         text: 'Problem & Resolution',
         bold: true,
         size: 24,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({
@@ -248,7 +250,7 @@ function buildProblemsSection(asset: WorkOrderDetailsAsset): Paragraph[] {
       children: [new TextRun({
         text: `Problem: ${asset.problem || '—'}`,
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({
@@ -256,7 +258,7 @@ function buildProblemsSection(asset: WorkOrderDetailsAsset): Paragraph[] {
       children: [new TextRun({
         text: `Cause: ${asset.cause || '—'}`,
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({
@@ -264,7 +266,7 @@ function buildProblemsSection(asset: WorkOrderDetailsAsset): Paragraph[] {
       children: [new TextRun({
         text: `Remedy: ${asset.remedy || '—'}`,
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
   ]
@@ -327,7 +329,7 @@ function buildTechCaptureBlock(asset: WorkOrderDetailsAsset): Paragraph[] {
         text: 'Technician Capture',
         bold: true,
         size: 24,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({
@@ -335,7 +337,7 @@ function buildTechCaptureBlock(asset: WorkOrderDetailsAsset): Paragraph[] {
       children: [new TextRun({
         text: `Name:  _________________________________    Date:  _________________`,
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({
@@ -343,7 +345,7 @@ function buildTechCaptureBlock(asset: WorkOrderDetailsAsset): Paragraph[] {
       children: [new TextRun({
         text: `Hours Logged:  _____________________    Signature:  _____________________`,
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({
@@ -352,7 +354,7 @@ function buildTechCaptureBlock(asset: WorkOrderDetailsAsset): Paragraph[] {
         text: 'Comments:',
         bold: true,
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({
@@ -360,7 +362,7 @@ function buildTechCaptureBlock(asset: WorkOrderDetailsAsset): Paragraph[] {
       children: [new TextRun({
         text: '__________________________________________________________________________',
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({
@@ -368,7 +370,7 @@ function buildTechCaptureBlock(asset: WorkOrderDetailsAsset): Paragraph[] {
       children: [new TextRun({
         text: '__________________________________________________________________________',
         size: 18,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
   ]
@@ -387,7 +389,7 @@ function buildDefectsSection(defects: WorkOrderDefect[]): Paragraph[] {
         text: 'Defects Raised',
         bold: true,
         size: 24,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
   ]
@@ -399,7 +401,7 @@ function buildDefectsSection(defects: WorkOrderDefect[]): Paragraph[] {
         children: [new TextRun({
           text: `${defect.code || 'N/A'}: ${defect.description}`,
           size: 18,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
         })],
       }),
       new Paragraph({
@@ -407,9 +409,9 @@ function buildDefectsSection(defects: WorkOrderDefect[]): Paragraph[] {
         children: [new TextRun({
           text: `Severity: ${defect.severity || '—'} | Status: ${defect.status || '—'} | WO: ${defect.woNumber || '—'}`,
           size: 16,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
           italics: true,
-          color: '666666',
+          color: EQ_MID_GREY,
         })],
       }),
     )
@@ -476,7 +478,7 @@ export async function generateWorkOrderDetailsReport(
           text: 'Work Order Details',
           bold: true,
           size: 40,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
           color: brand,
         })],
       }),
@@ -491,7 +493,7 @@ export async function generateWorkOrderDetailsReport(
             text: `Work Order: ${asset.maximoWONumber}`,
             bold: true,
             size: 28,
-            font: 'Plus Jakarta Sans',
+            font: FONT_BODY,
             color: brand,
           })],
         }),
@@ -505,7 +507,7 @@ export async function generateWorkOrderDetailsReport(
         children: [new TextRun({
           text: `Asset: ${asset.assetName} ${asset.location ? `(${asset.location})` : ''}`,
           size: 20,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
         })],
       }),
     )
@@ -517,9 +519,9 @@ export async function generateWorkOrderDetailsReport(
           children: [new TextRun({
             text: `Applies To: ${asset.jobPlanType}`,
             size: 18,
-            font: 'Plus Jakarta Sans',
+            font: FONT_BODY,
             italics: true,
-            color: '666666',
+            color: EQ_MID_GREY,
           })],
         }),
       )
@@ -534,7 +536,7 @@ export async function generateWorkOrderDetailsReport(
           text: 'Work Order Information',
           bold: true,
           size: 24,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
         })],
       }),
       buildInfoGrid(asset),
@@ -553,7 +555,7 @@ export async function generateWorkOrderDetailsReport(
             text: 'Tasks',
             bold: true,
             size: 24,
-            font: 'Plus Jakarta Sans',
+            font: FONT_BODY,
           })],
         }),
         buildTasksTable(asset.tasks),

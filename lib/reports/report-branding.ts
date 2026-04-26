@@ -19,6 +19,8 @@ import {
   VerticalAlign,
   ImageRun,
 } from 'docx'
+import { FONT_BODY } from './typography'
+import { EQ_MID_GREY } from './colours'
 
 export interface LogoImage {
   data: Buffer
@@ -148,7 +150,7 @@ export function buildMasthead(opts: {
         text: reportTypeLabel,
         bold: true,
         size: 20,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
         color: '333333',
       }),
     )
@@ -193,8 +195,8 @@ export function buildFooterParagraph(opts: {
       new TextRun({
         text: `${companyName} — ${reportType} — rev 3.1`,
         size: 16,
-        font: 'Plus Jakarta Sans',
-        color: '999999',
+        font: FONT_BODY,
+        color: EQ_MID_GREY,
       }),
       new TextRun({
         text: '\t',
@@ -202,8 +204,8 @@ export function buildFooterParagraph(opts: {
       new TextRun({
         text: 'Page ',
         size: 16,
-        font: 'Plus Jakarta Sans',
-        color: '999999',
+        font: FONT_BODY,
+        color: EQ_MID_GREY,
       }),
     ],
   })

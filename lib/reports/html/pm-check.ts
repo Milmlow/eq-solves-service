@@ -344,11 +344,11 @@ function buildCss(brand: string): string {
   --brand-deep: ${deep};
   --brand-ice: ${ice};
   --ink: #1A1A2E;
-  --grey: #6B7280;
-  --pass: #16a34a;
-  --fail: #dc2626;
-  --warn: #d97706;
-  --border: #e5e7eb;
+  --grey: #666666;
+  --pass: #16A34A;
+  --fail: #DC2626;
+  --warn: #D97706;
+  --border: #E5E7EB;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {

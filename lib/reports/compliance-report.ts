@@ -37,6 +37,8 @@ import {
   resolveShellSettings,
   type ShellSettings,
 } from './report-shell'
+import { FONT_BODY, FONT_HEADING } from './typography'
+import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_WHITE, STATUS_PASS } from './colours'
 
 // ---------- types ----------
 
@@ -95,7 +97,7 @@ export interface ComplianceReportInput {
 
 // ---------- helpers ----------
 
-const thin = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' }
+const thin = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const cellBorders = { top: thin, bottom: thin, left: thin, right: thin }
 
 function headerCell(text: string, colour: string, widthPct?: number): TableCell {
@@ -104,7 +106,7 @@ function headerCell(text: string, colour: string, widthPct?: number): TableCell 
     shading: { type: ShadingType.CLEAR, fill: colour },
     verticalAlign: VerticalAlign.CENTER,
     width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
-    children: [new Paragraph({ spacing: { before: 40, after: 40 }, children: [new TextRun({ text, bold: true, size: 18, color: 'FFFFFF', font: 'Calibri' })] })],
+    children: [new Paragraph({ spacing: { before: 40, after: 40 }, children: [new TextRun({ text, bold: true, size: 18, color: EQ_WHITE, font: FONT_BODY })] })],
   })
 }
 
@@ -115,7 +117,7 @@ function dataCell(text: string, opts: { bold?: boolean; color?: string; align?: 
     children: [new Paragraph({
       spacing: { before: 30, after: 30 },
       alignment: opts.align,
-      children: [new TextRun({ text, size: 18, font: 'Calibri', bold: opts.bold, color: opts.color })],
+      children: [new TextRun({ text, size: 18, font: FONT_BODY, bold: opts.bold, color: opts.color })],
     })],
   })
 }
@@ -124,7 +126,7 @@ function sectionHeading(text: string): Paragraph {
   return new Paragraph({
     heading: HeadingLevel.HEADING_2,
     spacing: { before: 300, after: 100 },
-    children: [new TextRun({ text, bold: true, size: 24, font: 'Calibri' })],
+    children: [new TextRun({ text, bold: true, size: 24, font: FONT_BODY })],
   })
 }
 
@@ -132,8 +134,8 @@ function kpiLine(label: string, value: string | number, color?: string): Paragra
   return new Paragraph({
     spacing: { before: 40, after: 40 },
     children: [
-      new TextRun({ text: `${label}: `, size: 20, font: 'Calibri' }),
-      new TextRun({ text: String(value), size: 20, font: 'Calibri', bold: true, color }),
+      new TextRun({ text: `${label}: `, size: 20, font: FONT_BODY }),
+      new TextRun({ text: String(value), size: 20, font: FONT_BODY, bold: true, color }),
     ],
   })
 }
@@ -155,21 +157,21 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
-      children: [new TextRun({ text: 'Compliance Report', bold: true, size: 52, color: colour, font: 'Calibri' })],
+      children: [new TextRun({ text: 'Compliance Report', bold: true, size: 52, color: colour, font: FONT_BODY })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
-      children: [new TextRun({ text: input.filterDescription, size: 24, font: 'Calibri', color: '666666' })],
+      children: [new TextRun({ text: input.filterDescription, size: 24, font: FONT_BODY, color: EQ_MID_GREY })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
-      children: [new TextRun({ text: `Generated: ${input.generatedDate}`, size: 20, font: 'Calibri', color: '999999' })],
+      children: [new TextRun({ text: `Generated: ${input.generatedDate}`, size: 20, font: FONT_BODY, color: EQ_MID_GREY })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: input.tenantProductName, size: 20, font: 'Calibri', color: colour, bold: true })],
+      children: [new TextRun({ text: input.tenantProductName, size: 20, font: FONT_BODY, color: colour, bold: true })],
     }),
     new Paragraph({ children: [new PageBreak()] }),
   )
@@ -198,7 +200,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
     sections.push(sectionHeading('Breaker Testing Progress'))
 
     if (input.acb.total > 0) {
-      sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'ACB (Air Circuit Breakers)', bold: true, size: 20, font: 'Calibri' })] }))
+      sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'ACB (Air Circuit Breakers)', bold: true, size: 20, font: FONT_BODY })] }))
       sections.push(kpiLine('Total', input.acb.total))
       sections.push(kpiLine('Complete', input.acb.complete, '00AA00'))
       sections.push(kpiLine('In Progress', input.acb.inProgress, '3DA8D8'))
@@ -206,7 +208,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
     }
 
     if (input.nsx.total > 0) {
-      sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'NSX / MCCB', bold: true, size: 20, font: 'Calibri' })] }))
+      sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'NSX / MCCB', bold: true, size: 20, font: FONT_BODY })] }))
       sections.push(kpiLine('Total', input.nsx.total))
       sections.push(kpiLine('Complete', input.nsx.complete, '00AA00'))
       sections.push(kpiLine('In Progress', input.nsx.inProgress, '3DA8D8'))
@@ -223,7 +225,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
     sections.push(kpiLine('Resolved / Closed', input.defects.resolved, '00AA00'))
 
     if (!isSummary) {
-      sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'By Severity', bold: true, size: 20, font: 'Calibri' })] }))
+      sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'By Severity', bold: true, size: 20, font: FONT_BODY })] }))
       sections.push(kpiLine('Critical', input.defects.critical, input.defects.critical > 0 ? 'CC0000' : undefined))
       sections.push(kpiLine('High', input.defects.high, input.defects.high > 0 ? 'CC0000' : undefined))
       sections.push(kpiLine('Medium', input.defects.medium))
@@ -252,7 +254,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
             children: [
               dataCell(row.site),
               dataCell(String(row.total), { align: AlignmentType.RIGHT }),
-              dataCell(String(row.complete), { align: AlignmentType.RIGHT, color: '00AA00' }),
+              dataCell(String(row.complete), { align: AlignmentType.RIGHT, color: STATUS_PASS }),
               dataCell(String(row.overdue), { align: AlignmentType.RIGHT, color: row.overdue > 0 ? 'CC8800' : undefined }),
               dataCell(`${row.rate}%`, { align: AlignmentType.RIGHT, bold: true, color: row.rate >= 80 ? '00AA00' : row.rate >= 50 ? 'CC8800' : 'CC0000' }),
             ],
@@ -290,9 +292,9 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
             children: [
               dataCell(mo.label ?? ''),
               dataCell(String(mo.tests ?? 0), { align: AlignmentType.RIGHT }),
-              dataCell(String(mo.pass ?? 0), { align: AlignmentType.RIGHT, color: '00AA00' }),
+              dataCell(String(mo.pass ?? 0), { align: AlignmentType.RIGHT, color: STATUS_PASS }),
               dataCell(String(mo.checks ?? 0), { align: AlignmentType.RIGHT }),
-              dataCell(String(mo.complete ?? 0), { align: AlignmentType.RIGHT, color: '00AA00' }),
+              dataCell(String(mo.complete ?? 0), { align: AlignmentType.RIGHT, color: STATUS_PASS }),
             ],
           })
         ),

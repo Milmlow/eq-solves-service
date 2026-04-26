@@ -34,6 +34,8 @@ import {
   prepareShell,
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
+import { FONT_BODY } from '@/lib/reports/typography'
+import { EQ_MID_GREY, EQ_BORDER } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
@@ -75,7 +77,7 @@ const PAGE_HEIGHT = 16838
 const MARGIN = 1440 // 1 inch
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2 // 9026
 
-const BORDER = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' }
+const BORDER = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
 const CELL_MARGINS = { top: 60, bottom: 60, left: 100, right: 100 }
 
@@ -87,7 +89,7 @@ function headerCell(text: string, width: number): TableCell {
     width: { size: width, type: WidthType.DXA },
     shading: { fill: 'D5E8F0', type: ShadingType.CLEAR },
     margins: CELL_MARGINS,
-    children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+    children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
   })
 }
 
@@ -100,7 +102,7 @@ function cell(text: string, width: number, opts?: { bold?: boolean; shading?: st
     verticalAlign: VerticalAlign.CENTER,
     children: [new Paragraph({
       alignment: opts?.align,
-      children: [new TextRun({ text: text || '', bold: opts?.bold, size: 18, font: 'Plus Jakarta Sans' })]
+      children: [new TextRun({ text: text || '', bold: opts?.bold, size: 18, font: FONT_BODY })]
     })],
   })
 }
@@ -151,7 +153,7 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
           text: 'Preventive Maintenance Report',
           bold: true,
           size: 52,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
           color: brand,
         })],
       }),
@@ -162,8 +164,8 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
           text: `Report Generated: ${today}`,
           italics: true,
           size: 24,
-          font: 'Plus Jakarta Sans',
-          color: '666666',
+          font: FONT_BODY,
+          color: EQ_MID_GREY,
         })],
       }),
       // spacer
@@ -175,7 +177,7 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
           text: 'Check Information',
           bold: true,
           size: 32,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
         })],
       }),
       new Paragraph({ spacing: { before: 400, after: 100 } }),
@@ -185,7 +187,7 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
         children: [new TextRun({
           text: `Site: ${input.siteName}`,
           size: 24,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
         })],
       }),
       new Paragraph({
@@ -194,7 +196,7 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
         children: [new TextRun({
           text: `Job Plan: ${input.jobPlanName}`,
           size: 24,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
         })],
       }),
       ...(input.maximoWONumber ? [
@@ -205,7 +207,7 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
             text: `Work Order: ${input.maximoWONumber}`,
             bold: true,
             size: 28,
-            font: 'Plus Jakarta Sans',
+            font: FONT_BODY,
             color: brand,
           })],
         }),
@@ -216,7 +218,7 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
         children: [new TextRun({
           text: `Check Date: ${formatDateDDMMYYYY(input.checkDate)}`,
           size: 24,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
         })],
       }),
       new Paragraph({
@@ -225,7 +227,7 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
         children: [new TextRun({
           text: `Due Date: ${formatDateDDMMYYYY(input.dueDate)}`,
           size: 24,
-          font: 'Plus Jakarta Sans',
+          font: FONT_BODY,
         })],
       }),
       new Paragraph({
@@ -234,8 +236,8 @@ function buildCoverSection(input: PmCheckReportInput): { children: (Paragraph | 
         children: [new TextRun({
           text: input.tenantProductName,
           size: 20,
-          font: 'Plus Jakarta Sans',
-          color: '999999',
+          font: FONT_BODY,
+          color: EQ_MID_GREY,
         })],
       }),
     ],
@@ -358,7 +360,7 @@ function buildStatisticsSection(input: PmCheckReportInput): (Paragraph | Table)[
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_2,
     spacing: { before: 240, after: 120 },
-    children: [new TextRun({ text: 'Summary Statistics', bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Summary Statistics', bold: true, size: 24, font: FONT_BODY })],
   }))
 
   const c1 = 2000
@@ -435,7 +437,7 @@ export async function generatePMCheckReport(input: PmCheckReportInput): Promise<
     styles: {
       default: {
         document: {
-          run: { font: 'Plus Jakarta Sans', size: 20 },
+          run: { font: FONT_BODY, size: 20 },
         },
       },
       paragraphStyles: [
@@ -445,7 +447,7 @@ export async function generatePMCheckReport(input: PmCheckReportInput): Promise<
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 28, bold: true, font: 'Plus Jakarta Sans', color: brand },
+          run: { size: 28, bold: true, font: FONT_BODY, color: brand },
           paragraph: { spacing: { before: 240, after: 120 }, outlineLevel: 0 },
         },
         {
@@ -454,7 +456,7 @@ export async function generatePMCheckReport(input: PmCheckReportInput): Promise<
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 24, bold: true, font: 'Plus Jakarta Sans', color: '333333' },
+          run: { size: 24, bold: true, font: FONT_BODY, color: '333333' },
           paragraph: { spacing: { before: 180, after: 100 }, outlineLevel: 1 },
         },
       ],
@@ -484,13 +486,13 @@ export async function generatePMCheckReport(input: PmCheckReportInput): Promise<
           new Paragraph({ children: [new PageBreak()] }),
           new Paragraph({
             heading: HeadingLevel.HEADING_1,
-            children: [new TextRun({ text: 'Check Summary', bold: true, size: 28, font: 'Plus Jakarta Sans' })],
+            children: [new TextRun({ text: 'Check Summary', bold: true, size: 28, font: FONT_BODY })],
           }),
           buildCheckSummaryTable(input),
           new Paragraph({ spacing: { before: 240 } }),
           new Paragraph({
             heading: HeadingLevel.HEADING_1,
-            children: [new TextRun({ text: 'Check Items', bold: true, size: 28, font: 'Plus Jakarta Sans' })],
+            children: [new TextRun({ text: 'Check Items', bold: true, size: 28, font: FONT_BODY })],
           }),
           buildCheckItemsTable(input),
           ...buildStatisticsSection(input),

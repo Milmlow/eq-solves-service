@@ -33,6 +33,7 @@ import {
   prepareShell,
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
+import { FONT_BODY, FONT_HEADING as FONT_HEADING_TOKEN } from '@/lib/reports/typography'
 
 // ─────────── Types ───────────
 
@@ -93,8 +94,11 @@ const PAGE_HEIGHT = 11906  // A4 landscape DXA (~8.3")
 const MARGIN = 720         // ~0.5 inch (12.7mm)
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2
 
-const FONT = 'Arial'
-const FONT_HEADING = 'Arial'
+// Local aliases keep the existing inline references readable; sources of
+// truth are FONT_BODY / FONT_HEADING_TOKEN from lib/reports/typography.ts
+// per Brief v1.3 §6.2.
+const FONT = FONT_BODY
+const FONT_HEADING = FONT_HEADING_TOKEN
 
 const BORDER_STANDARD = { style: BorderStyle.SINGLE, size: 6, color: '000000' }
 const BORDERS_STANDARD = { top: BORDER_STANDARD, bottom: BORDER_STANDARD, left: BORDER_STANDARD, right: BORDER_STANDARD }

@@ -35,6 +35,8 @@ import {
   prepareShell,
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
+import { FONT_BODY } from '@/lib/reports/typography'
+import { EQ_MID_GREY, EQ_BORDER, EQ_INK } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
@@ -106,7 +108,7 @@ const PAGE_HEIGHT = 16838
 const MARGIN = 1440 // 1 inch
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2 // 9026
 
-const BORDER = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' }
+const BORDER = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
 const CELL_MARGINS = { top: 60, bottom: 60, left: 100, right: 100 }
 
@@ -203,7 +205,7 @@ function headerCell(text: string, width: number): TableCell {
     width: { size: width, type: WidthType.DXA },
     shading: { fill: 'D5E8F0', type: ShadingType.CLEAR },
     margins: CELL_MARGINS,
-    children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+    children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
   })
 }
 
@@ -213,7 +215,7 @@ function cell(text: string, width: number, opts?: { bold?: boolean; shading?: st
     width: { size: width, type: WidthType.DXA },
     shading: opts?.shading ? { fill: opts.shading, type: ShadingType.CLEAR } : undefined,
     margins: CELL_MARGINS,
-    children: [new Paragraph({ children: [new TextRun({ text: text || '', bold: opts?.bold, size: 18, font: 'Plus Jakarta Sans' })] })],
+    children: [new Paragraph({ children: [new TextRun({ text: text || '', bold: opts?.bold, size: 18, font: FONT_BODY })] })],
   })
 }
 
@@ -416,7 +418,7 @@ function buildElectricalTestingSection(test: AcbReportTest): (Paragraph | Table)
   // Sub-heading: Electrical Testing
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_3,
-    children: [new TextRun({ text: `${test.assetName} - Electrical Testing`, bold: true, size: 22, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: `${test.assetName} - Electrical Testing`, bold: true, size: 22, font: FONT_BODY })],
   }))
 
   // -- Main Contact Resistance -- (4 cols: Red, White, Blue, Neutral)
@@ -431,7 +433,7 @@ function buildElectricalTestingSection(test: AcbReportTest): (Paragraph | Table)
 
   children.push(new Paragraph({
     spacing: { before: 120, after: 60 },
-    children: [new TextRun({ text: 'Main Contact Resistance \u2014 All results are in MicroOhms', bold: true, size: 18, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Main Contact Resistance \u2014 All results are in MicroOhms', bold: true, size: 18, font: FONT_BODY })],
   }))
 
   children.push(new Table({
@@ -449,7 +451,7 @@ function buildElectricalTestingSection(test: AcbReportTest): (Paragraph | Table)
   const irColW = Math.floor(CONTENT_WIDTH / 3)
   children.push(new Paragraph({
     spacing: { before: 160, after: 60 },
-    children: [new TextRun({ text: 'Insulation Resistance - Closed', bold: true, size: 18, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Insulation Resistance - Closed', bold: true, size: 18, font: FONT_BODY })],
   }))
 
   const irClosedTableRows: TableRow[] = []
@@ -473,7 +475,7 @@ function buildElectricalTestingSection(test: AcbReportTest): (Paragraph | Table)
   const irOpenColW = Math.floor(CONTENT_WIDTH / 4)
   children.push(new Paragraph({
     spacing: { before: 160, after: 60 },
-    children: [new TextRun({ text: 'Insulation Resistance - Open', bold: true, size: 18, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Insulation Resistance - Open', bold: true, size: 18, font: FONT_BODY })],
   }))
 
   const irOpenRow = new TableRow({
@@ -496,16 +498,16 @@ function buildElectricalTestingSection(test: AcbReportTest): (Paragraph | Table)
   children.push(new Paragraph({
     spacing: { before: 120 },
     children: [
-      new TextRun({ text: 'Carry Out Secondary Injection Test Using Software: ', bold: true, size: 18, font: 'Plus Jakarta Sans' }),
-      new TextRun({ text: siRdg ? siRdg.value : '', size: 18, font: 'Plus Jakarta Sans' }),
+      new TextRun({ text: 'Carry Out Secondary Injection Test Using Software: ', bold: true, size: 18, font: FONT_BODY }),
+      new TextRun({ text: siRdg ? siRdg.value : '', size: 18, font: FONT_BODY }),
     ],
   }))
 
   children.push(new Paragraph({
     spacing: { before: 60 },
     children: [
-      new TextRun({ text: 'Operation Counter - After: ', bold: true, size: 18, font: 'Plus Jakarta Sans' }),
-      new TextRun({ text: ocAfterRdg ? ocAfterRdg.value : '', size: 18, font: 'Plus Jakarta Sans' }),
+      new TextRun({ text: 'Operation Counter - After: ', bold: true, size: 18, font: FONT_BODY }),
+      new TextRun({ text: ocAfterRdg ? ocAfterRdg.value : '', size: 18, font: FONT_BODY }),
     ],
   }))
 
@@ -601,7 +603,7 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
       text: `${input.siteName} - ACB Test List - ${year}`,
       bold: true,
       size: 52,
-      font: 'Plus Jakarta Sans',
+      font: FONT_BODY,
       color: brand,
     })],
   }))
@@ -612,8 +614,8 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
       text: `Report Generated: ${today}`,
       italics: true,
       size: 24,
-      font: 'Plus Jakarta Sans',
-      color: '666666',
+      font: FONT_BODY,
+      color: EQ_MID_GREY,
     })],
   }))
 
@@ -625,8 +627,8 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
       children: [new TextRun({
         text: 'PREPARED FOR',
         size: 18, bold: true,
-        font: 'Plus Jakarta Sans',
-        color: '6B7280',
+        font: FONT_BODY,
+        color: EQ_MID_GREY,
       })],
     }))
     if (input.customerName) {
@@ -636,8 +638,8 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
         children: [new TextRun({
           text: input.customerName,
           size: 28, bold: true,
-          font: 'Plus Jakarta Sans',
-          color: '1A1A2E',
+          font: FONT_BODY,
+          color: EQ_INK,
         })],
       }))
     }
@@ -677,7 +679,7 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
       text: input.siteName,
       bold: true,
       size: 32,
-      font: 'Plus Jakarta Sans',
+      font: FONT_BODY,
     })],
   }))
 
@@ -690,8 +692,8 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
     children: [new TextRun({
       text: input.tenantProductName,
       size: 20,
-      font: 'Plus Jakarta Sans',
-      color: '999999',
+      font: FONT_BODY,
+      color: EQ_MID_GREY,
     })],
   }))
 
@@ -711,7 +713,7 @@ function buildBreakerSection(test: AcbReportTest, siteName: string, index: numbe
     children: [
       new Bookmark({
         id: `breaker_${index}`,
-        children: [new TextRun({ text: label, bold: true, size: 28, font: 'Plus Jakarta Sans' })],
+        children: [new TextRun({ text: label, bold: true, size: 28, font: FONT_BODY })],
       }),
     ],
   }))
@@ -723,7 +725,7 @@ function buildBreakerSection(test: AcbReportTest, siteName: string, index: numbe
   // H2 — CB Details
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    children: [new TextRun({ text: `${label} - Circuit Breaker Details`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: `${label} - Circuit Breaker Details`, bold: true, size: 24, font: FONT_BODY })],
   }))
   children.push(buildCbDetailsTable(test))
   children.push(new Paragraph({ spacing: { before: 80 } }))
@@ -731,7 +733,7 @@ function buildBreakerSection(test: AcbReportTest, siteName: string, index: numbe
   // H2 — Visual / Functional
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    children: [new TextRun({ text: `${label} - Visual / Functional Test Results`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: `${label} - Visual / Functional Test Results`, bold: true, size: 24, font: FONT_BODY })],
   }))
   children.push(buildVisualFunctionalQuickTable(test))
   children.push(new Paragraph({ spacing: { before: 60 } }))
@@ -745,7 +747,7 @@ function buildBreakerSection(test: AcbReportTest, siteName: string, index: numbe
   // H2 — Protection Test Results
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    children: [new TextRun({ text: `${label} - Protection Test Results`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: `${label} - Protection Test Results`, bold: true, size: 24, font: FONT_BODY })],
   }))
   children.push(buildProtectionResultsTable(test))
 
@@ -754,11 +756,11 @@ function buildBreakerSection(test: AcbReportTest, siteName: string, index: numbe
     children.push(new Paragraph({ spacing: { before: 120 } }))
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_2,
-      children: [new TextRun({ text: `${label} - Notes & Commentary`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+      children: [new TextRun({ text: `${label} - Notes & Commentary`, bold: true, size: 24, font: FONT_BODY })],
     }))
     children.push(new Paragraph({
       spacing: { before: 60 },
-      children: [new TextRun({ text: test.notes, size: 20, font: 'Plus Jakarta Sans' })],
+      children: [new TextRun({ text: test.notes, size: 20, font: FONT_BODY })],
     }))
   }
 
@@ -773,11 +775,11 @@ function buildSummaryTable(input: AcbReportInput): (Paragraph | Table)[] {
   // Summary heading
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_1,
-    children: [new TextRun({ text: 'Test Results Summary', bold: true, size: 28, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Test Results Summary', bold: true, size: 28, font: FONT_BODY })],
   }))
   children.push(new Paragraph({
     spacing: { before: 60, after: 120 },
-    children: [new TextRun({ text: `${input.tests.length} circuit breakers tested at ${input.siteName}`, size: 20, font: 'Plus Jakarta Sans', color: '666666' })],
+    children: [new TextRun({ text: `${input.tests.length} circuit breakers tested at ${input.siteName}`, size: 20, font: FONT_BODY, color: EQ_MID_GREY })],
   }))
 
   // KPI row
@@ -813,7 +815,7 @@ function buildSummaryTable(input: AcbReportInput): (Paragraph | Table)[] {
         width: { size: colWidths[ci], type: WidthType.DXA },
         margins: CELL_MARGINS,
         shading: { fill: 'F3F4F6', type: ShadingType.CLEAR },
-        children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+        children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
       })
     ),
   })
@@ -830,7 +832,7 @@ function buildSummaryTable(input: AcbReportInput): (Paragraph | Table)[] {
           width: { size: colWidths[3], type: WidthType.DXA },
           margins: CELL_MARGINS,
           shading: { fill: resultColour, type: ShadingType.CLEAR },
-          children: [new Paragraph({ children: [new TextRun({ text: t.overallResult, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+          children: [new Paragraph({ children: [new TextRun({ text: t.overallResult, bold: true, size: 18, font: FONT_BODY })] })],
         }),
         textCell(t.testedBy ?? '—', colWidths[4]),
       ],
@@ -855,11 +857,11 @@ function kpiCell(label: string, value: string, fill: string): TableCell {
     children: [
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: value, bold: true, size: 36, font: 'Plus Jakarta Sans' })],
+        children: [new TextRun({ text: value, bold: true, size: 36, font: FONT_BODY })],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: label, size: 16, font: 'Plus Jakarta Sans', color: '666666' })],
+        children: [new TextRun({ text: label, size: 16, font: FONT_BODY, color: EQ_MID_GREY })],
       }),
     ],
   })
@@ -870,7 +872,7 @@ function textCell(text: string, width: number): TableCell {
     borders: BORDERS,
     width: { size: width, type: WidthType.DXA },
     margins: CELL_MARGINS,
-    children: [new Paragraph({ children: [new TextRun({ text, size: 18, font: 'Plus Jakarta Sans' })] })],
+    children: [new Paragraph({ children: [new TextRun({ text, size: 18, font: FONT_BODY })] })],
   })
 }
 
@@ -941,7 +943,7 @@ export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> 
     styles: {
       default: {
         document: {
-          run: { font: 'Plus Jakarta Sans', size: 20 },
+          run: { font: FONT_BODY, size: 20 },
         },
       },
       paragraphStyles: [
@@ -951,7 +953,7 @@ export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> 
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 28, bold: true, font: 'Plus Jakarta Sans', color: brand },
+          run: { size: 28, bold: true, font: FONT_BODY, color: brand },
           paragraph: { spacing: { before: 240, after: 120 }, outlineLevel: 0 },
         },
         {
@@ -960,7 +962,7 @@ export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> 
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 24, bold: true, font: 'Plus Jakarta Sans', color: '333333' },
+          run: { size: 24, bold: true, font: FONT_BODY, color: '333333' },
           paragraph: { spacing: { before: 180, after: 100 }, outlineLevel: 1 },
         },
         {
@@ -969,7 +971,7 @@ export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> 
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 22, bold: true, font: 'Plus Jakarta Sans', color: '444444' },
+          run: { size: 22, bold: true, font: FONT_BODY, color: '444444' },
           paragraph: { spacing: { before: 120, after: 80 }, outlineLevel: 2 },
         },
       ],

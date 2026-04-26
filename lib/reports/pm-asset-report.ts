@@ -42,6 +42,7 @@ import {
   prepareShell,
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
+import { FONT_BODY, FONT_HEADING as FONT_HEADING_TOKEN } from '@/lib/reports/typography'
 
 // ─────────── Types ───────────
 
@@ -154,8 +155,11 @@ const PAGE_HEIGHT = 16838
 const MARGIN = 1134       // ~0.79 inch (20mm)
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2  // ~9638
 
-const FONT = 'Arial'
-const FONT_HEADING = 'Arial'
+// Local aliases keep the existing inline references readable; sources of
+// truth are FONT_BODY / FONT_HEADING_TOKEN from lib/reports/typography.ts
+// per Brief v1.3 §6.2.
+const FONT = FONT_BODY
+const FONT_HEADING = FONT_HEADING_TOKEN
 
 const BORDER_LIGHT = { style: BorderStyle.SINGLE, size: 1, color: 'D5D8DC' }
 const BORDERS_LIGHT = { top: BORDER_LIGHT, bottom: BORDER_LIGHT, left: BORDER_LIGHT, right: BORDER_LIGHT }

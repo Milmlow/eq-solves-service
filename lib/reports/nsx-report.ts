@@ -34,6 +34,8 @@ import {
   prepareShell,
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
+import { FONT_BODY } from '@/lib/reports/typography'
+import { EQ_MID_GREY, EQ_BORDER } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
@@ -104,7 +106,7 @@ const PAGE_HEIGHT = 16838
 const MARGIN = 1440
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2
 
-const BORDER = { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' }
+const BORDER = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
 const CELL_MARGINS = { top: 60, bottom: 60, left: 100, right: 100 }
 
@@ -177,7 +179,7 @@ function headerCell(text: string, width: number): TableCell {
     width: { size: width, type: WidthType.DXA },
     shading: { fill: 'D5E8F0', type: ShadingType.CLEAR },
     margins: CELL_MARGINS,
-    children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+    children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
   })
 }
 
@@ -187,7 +189,7 @@ function cell(text: string, width: number, opts?: { bold?: boolean; shading?: st
     width: { size: width, type: WidthType.DXA },
     shading: opts?.shading ? { fill: opts.shading, type: ShadingType.CLEAR } : undefined,
     margins: CELL_MARGINS,
-    children: [new Paragraph({ children: [new TextRun({ text: text || '', bold: opts?.bold, size: 18, font: 'Plus Jakarta Sans' })] })],
+    children: [new Paragraph({ children: [new TextRun({ text: text || '', bold: opts?.bold, size: 18, font: FONT_BODY })] })],
   })
 }
 
@@ -347,14 +349,14 @@ function buildElectricalTestingSection(test: NsxReportTest): (Paragraph | Table)
 
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_3,
-    children: [new TextRun({ text: `${test.assetName} - Electrical Testing`, bold: true, size: 22, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: `${test.assetName} - Electrical Testing`, bold: true, size: 22, font: FONT_BODY })],
   }))
 
   // Contact Resistance (4 cols: Red, White, Blue, Neutral)
   const contactColW = Math.floor(CONTENT_WIDTH / 4)
   children.push(new Paragraph({
     spacing: { before: 120, after: 60 },
-    children: [new TextRun({ text: 'Main Contact Resistance \u2014 All results in MicroOhms', bold: true, size: 18, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Main Contact Resistance \u2014 All results in MicroOhms', bold: true, size: 18, font: FONT_BODY })],
   }))
 
   children.push(new Table({
@@ -377,7 +379,7 @@ function buildElectricalTestingSection(test: NsxReportTest): (Paragraph | Table)
   const irColW = Math.floor(CONTENT_WIDTH / 3)
   children.push(new Paragraph({
     spacing: { before: 160, after: 60 },
-    children: [new TextRun({ text: 'Insulation Resistance - Closed', bold: true, size: 18, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Insulation Resistance - Closed', bold: true, size: 18, font: FONT_BODY })],
   }))
 
   const irClosedRows: TableRow[] = []
@@ -401,7 +403,7 @@ function buildElectricalTestingSection(test: NsxReportTest): (Paragraph | Table)
   const irOpenColW = Math.floor(CONTENT_WIDTH / 4)
   children.push(new Paragraph({
     spacing: { before: 160, after: 60 },
-    children: [new TextRun({ text: 'Insulation Resistance - Open', bold: true, size: 18, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Insulation Resistance - Open', bold: true, size: 18, font: FONT_BODY })],
   }))
 
   const irOpenRow = new TableRow({
@@ -474,7 +476,7 @@ function buildBreakerSection(test: NsxReportTest, siteName: string, index: numbe
     children: [
       new Bookmark({
         id: `breaker_${index}`,
-        children: [new TextRun({ text: label, bold: true, size: 28, font: 'Plus Jakarta Sans' })],
+        children: [new TextRun({ text: label, bold: true, size: 28, font: FONT_BODY })],
       }),
     ],
   }))
@@ -484,14 +486,14 @@ function buildBreakerSection(test: NsxReportTest, siteName: string, index: numbe
 
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    children: [new TextRun({ text: `${label} - Circuit Breaker Details`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: `${label} - Circuit Breaker Details`, bold: true, size: 24, font: FONT_BODY })],
   }))
   children.push(buildCbDetailsTable(test))
   children.push(new Paragraph({ spacing: { before: 80 } }))
 
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    children: [new TextRun({ text: `${label} - Visual / Functional Checks`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: `${label} - Visual / Functional Checks`, bold: true, size: 24, font: FONT_BODY })],
   }))
   children.push(buildVisualChecklistTable(test))
   children.push(new Paragraph({ spacing: { before: 80 } }))
@@ -501,7 +503,7 @@ function buildBreakerSection(test: NsxReportTest, siteName: string, index: numbe
 
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    children: [new TextRun({ text: `${label} - Trip Test Results`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: `${label} - Trip Test Results`, bold: true, size: 24, font: FONT_BODY })],
   }))
   children.push(buildTripTestTable(test))
 
@@ -510,11 +512,11 @@ function buildBreakerSection(test: NsxReportTest, siteName: string, index: numbe
     children.push(new Paragraph({ spacing: { before: 120 } }))
     children.push(new Paragraph({
       heading: HeadingLevel.HEADING_2,
-      children: [new TextRun({ text: `${label} - Notes & Commentary`, bold: true, size: 24, font: 'Plus Jakarta Sans' })],
+      children: [new TextRun({ text: `${label} - Notes & Commentary`, bold: true, size: 24, font: FONT_BODY })],
     }))
     children.push(new Paragraph({
       spacing: { before: 60 },
-      children: [new TextRun({ text: test.notes, size: 20, font: 'Plus Jakarta Sans' })],
+      children: [new TextRun({ text: test.notes, size: 20, font: FONT_BODY })],
     }))
   }
 
@@ -528,11 +530,11 @@ function buildSummaryTable(input: NsxReportInput): (Paragraph | Table)[] {
 
   children.push(new Paragraph({
     heading: HeadingLevel.HEADING_1,
-    children: [new TextRun({ text: 'Test Results Summary', bold: true, size: 28, font: 'Plus Jakarta Sans' })],
+    children: [new TextRun({ text: 'Test Results Summary', bold: true, size: 28, font: FONT_BODY })],
   }))
   children.push(new Paragraph({
     spacing: { before: 60, after: 120 },
-    children: [new TextRun({ text: `${input.tests.length} circuit breakers tested at ${input.siteName}`, size: 20, font: 'Plus Jakarta Sans', color: '666666' })],
+    children: [new TextRun({ text: `${input.tests.length} circuit breakers tested at ${input.siteName}`, size: 20, font: FONT_BODY, color: EQ_MID_GREY })],
   }))
 
   const total = input.tests.length
@@ -565,7 +567,7 @@ function buildSummaryTable(input: NsxReportInput): (Paragraph | Table)[] {
         width: { size: colWidths[ci], type: WidthType.DXA },
         margins: CELL_MARGINS,
         shading: { fill: 'F3F4F6', type: ShadingType.CLEAR },
-        children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+        children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
       })
     ),
   })
@@ -583,7 +585,7 @@ function buildSummaryTable(input: NsxReportInput): (Paragraph | Table)[] {
           width: { size: colWidths[4], type: WidthType.DXA },
           margins: CELL_MARGINS,
           shading: { fill: resultColour, type: ShadingType.CLEAR },
-          children: [new Paragraph({ children: [new TextRun({ text: t.overallResult, bold: true, size: 18, font: 'Plus Jakarta Sans' })] })],
+          children: [new Paragraph({ children: [new TextRun({ text: t.overallResult, bold: true, size: 18, font: FONT_BODY })] })],
         }),
         textCell(t.testedBy ?? '—', colWidths[5]),
       ],
@@ -607,11 +609,11 @@ function kpiCell(label: string, value: string, fill: string): TableCell {
     children: [
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: value, bold: true, size: 36, font: 'Plus Jakarta Sans' })],
+        children: [new TextRun({ text: value, bold: true, size: 36, font: FONT_BODY })],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: label, size: 16, font: 'Plus Jakarta Sans', color: '666666' })],
+        children: [new TextRun({ text: label, size: 16, font: FONT_BODY, color: EQ_MID_GREY })],
       }),
     ],
   })
@@ -622,7 +624,7 @@ function textCell(text: string, width: number): TableCell {
     borders: BORDERS,
     width: { size: width, type: WidthType.DXA },
     margins: CELL_MARGINS,
-    children: [new Paragraph({ children: [new TextRun({ text, size: 18, font: 'Plus Jakarta Sans' })] })],
+    children: [new Paragraph({ children: [new TextRun({ text, size: 18, font: FONT_BODY })] })],
   })
 }
 
@@ -703,7 +705,7 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
         text: `${input.siteName} - NSX / MCCB Test List - ${year}`,
         bold: true,
         size: 52,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
         color: brand,
       })],
     }),
@@ -714,8 +716,8 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
         text: `Report Generated: ${today}`,
         italics: true,
         size: 24,
-        font: 'Plus Jakarta Sans',
-        color: '666666',
+        font: FONT_BODY,
+        color: EQ_MID_GREY,
       })],
     }),
     new Paragraph({ spacing: { before: 2000 } }),
@@ -725,7 +727,7 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
         text: input.siteName,
         bold: true,
         size: 36,
-        font: 'Plus Jakarta Sans',
+        font: FONT_BODY,
       })],
     }),
     new Paragraph({ spacing: { before: 3000 } }),
@@ -734,8 +736,8 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
       children: [new TextRun({
         text: input.tenantProductName,
         size: 20,
-        font: 'Plus Jakarta Sans',
-        color: '999999',
+        font: FONT_BODY,
+        color: EQ_MID_GREY,
       })],
     }),
   )
@@ -758,22 +760,22 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
   const doc = new Document({
     styles: {
       default: {
-        document: { run: { font: 'Plus Jakarta Sans', size: 20 } },
+        document: { run: { font: FONT_BODY, size: 20 } },
       },
       paragraphStyles: [
         {
           id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { size: 28, bold: true, font: 'Plus Jakarta Sans', color: brand },
+          run: { size: 28, bold: true, font: FONT_BODY, color: brand },
           paragraph: { spacing: { before: 240, after: 120 }, outlineLevel: 0 },
         },
         {
           id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { size: 24, bold: true, font: 'Plus Jakarta Sans', color: '333333' },
+          run: { size: 24, bold: true, font: FONT_BODY, color: '333333' },
           paragraph: { spacing: { before: 180, after: 100 }, outlineLevel: 1 },
         },
         {
           id: 'Heading3', name: 'Heading 3', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { size: 22, bold: true, font: 'Plus Jakarta Sans', color: '444444' },
+          run: { size: 22, bold: true, font: FONT_BODY, color: '444444' },
           paragraph: { spacing: { before: 120, after: 80 }, outlineLevel: 2 },
         },
       ],
