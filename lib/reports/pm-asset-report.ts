@@ -38,6 +38,7 @@ import {
   TabStopType,
   TabStopPosition,
 } from 'docx'
+import { buildMasthead } from '@/lib/reports/report-branding'
 
 // ─────────── Types ───────────
 
@@ -73,6 +74,7 @@ export interface PmAssetReportInput {
   // Branding
   tenantProductName: string
   primaryColour: string             // hex e.g. "#1B4F72" or "1B4F72"
+  reportTypeLabel?: string          // Phase 1: report type for masthead (e.g. "Per-Asset PM Report")
 
   // Site photo (optional)
   sitePhoto?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
@@ -287,11 +289,24 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   const brand = getBrand(input)
   const children: (Paragraph | Table)[] = []
 
+  // Masthead with customer + tenant logos (Phase 1 branding update)
+  const customerLogo = pickCustomerLogo(input, 'light')
+  const tenantLogo = pickReportLogo(input, 'light')
+  if (customerLogo || tenantLogo || input.reportTypeLabel) {
+    children.push(
+      buildMasthead({
+        customerLogo: customerLogo ?? undefined,
+        tenantLogo: tenantLogo ?? undefined,
+        reportTypeLabel: input.reportTypeLabel || 'Per-Asset PM Report',
+      }),
+    )
+  }
+
   // Logo — cover page is currently a light surface in this template, but the
   // picker is future-proof: if a "dark cover" variant is introduced later
   // we'll just flip the surface argument here.
   const coverLogo = pickReportLogo(input, 'light')
-  if (coverLogo) {
+  if (coverLogo && !tenantLogo) {  // Don't duplicate if already in masthead
     children.push(new Paragraph({
       spacing: { after: 200 },
       children: [new ImageRun({
@@ -340,9 +355,8 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     })],
   }))
 
-  // Customer logo — "Prepared for" lockup
-  const customerLogo = pickCustomerLogo(input, 'light')
-  if (customerLogo) {
+  // Customer logo — "Prepared for" lockup (only if not already in masthead)
+  if (customerLogo && !input.reportTypeLabel) {
     children.push(new Paragraph({
       spacing: { after: 80 },
       children: [new TextRun({
@@ -1356,7 +1370,7 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
 
   // Custom header / footer text
   const headerText = input.customHeaderText || input.reportTitle
-  const footerText = input.customFooterText || input.tenantProductName
+  const footerText = input.customFooterText || `${input.companyName || input.tenantProductName} — Per-Asset PM Report — rev 3.1`
 
   // Build all per-asset sections with page breaks
   const assetSectionChildren: (Paragraph | Table)[] = []
@@ -1434,13 +1448,21 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
     },
     footers: {
       default: new Footer({
-        children: [new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [
-            new TextRun({ text: `${footerText}  |  Page `, size: 14, font: FONT, color: '95A5A6' }),
-            new TextRun({ children: [PageNumber.CURRENT], size: 14, font: FONT, color: '95A5A6' }),
-          ],
-        })],
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.JUSTIFIED,
+            children: [
+              new TextRun({ text: footerText, size: 14, font: FONT, color: '95A5A6' }),
+            ],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children: [
+              new TextRun({ text: 'Page ', size: 14, font: FONT, color: '95A5A6' }),
+              new TextRun({ children: [PageNumber.CURRENT], size: 14, font: FONT, color: '95A5A6' }),
+            ],
+          }),
+        ],
       }),
     },
     children: bodyChildren,

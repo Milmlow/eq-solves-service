@@ -55,36 +55,49 @@ function Write-Warn { param([string]$Text) Write-Host "[warn] $Text" -Foreground
 function Write-Err  { param([string]$Text) Write-Host "[error] $Text" -ForegroundColor Red }
 
 function Clear-StaleLock {
-    $lockPath = Join-Path (Get-Location) '.git\index.lock'
-    if (-not (Test-Path $lockPath)) { return }
+    # Clears ALL stale .git/*.lock files - index.lock, HEAD.lock,
+    # refs/heads/<branch>.lock, packed-refs.lock, config.lock, etc.
+    # Cowork sessions, coworkr-svc, editors, and AV scans can each leave
+    # different lock files behind, and a single-file clear (the original
+    # implementation) just kicks the can to the next lock the next process
+    # tries to take.
 
-    # If a real git.exe is running, don't touch the lock - it's legitimately held.
+    $gitDir = Join-Path (Get-Location) '.git'
+    if (-not (Test-Path $gitDir)) { return }
+
+    $locks = Get-ChildItem -Path $gitDir -Filter '*.lock' -Recurse -Force -File -ErrorAction SilentlyContinue
+    if (-not $locks) { return }
+
+    # If a real git.exe is running, leave everything alone.
     $gitProcs = Get-Process -Name git -ErrorAction SilentlyContinue
     if ($gitProcs) {
-        Write-Warn "index.lock exists AND a git.exe process is running (PID $($gitProcs.Id -join ', ')). Waiting..."
+        Write-Warn "Lock files exist AND a git.exe process is running (PID $($gitProcs.Id -join ', ')). Waiting..."
         Start-Sleep -Seconds 3
-        if (Test-Path $lockPath) {
-            $gitProcs = Get-Process -Name git -ErrorAction SilentlyContinue
-            if ($gitProcs) {
-                throw "git.exe is still running (PID $($gitProcs.Id -join ', ')). Refusing to remove index.lock."
-            }
-        } else {
-            return
+        $gitProcs = Get-Process -Name git -ErrorAction SilentlyContinue
+        if ($gitProcs) {
+            throw "git.exe is still running (PID $($gitProcs.Id -join ', ')). Refusing to remove $($locks.Count) lock file(s)."
+        }
+        # git.exe gone - re-list locks (some may have been cleaned up)
+        $locks = Get-ChildItem -Path $gitDir -Filter '*.lock' -Recurse -Force -File -ErrorAction SilentlyContinue
+        if (-not $locks) { return }
+    }
+
+    foreach ($lock in $locks) {
+        $ageSeconds = ((Get-Date) - $lock.LastWriteTime).TotalSeconds
+        if ($ageSeconds -lt 2) {
+            # Brand new - give it a moment in case another tool is writing
+            Start-Sleep -Seconds 2
+            if (-not (Test-Path $lock.FullName)) { continue }
+        }
+        $rel = $lock.FullName.Substring($gitDir.Length + 1)
+        Write-Warn "Removing stale .git/$rel (age $([int]$ageSeconds)s, no git.exe running)"
+        try {
+            Remove-Item -LiteralPath $lock.FullName -Force -ErrorAction Stop
+        } catch {
+            Write-Warn "Could not remove $rel - $($_.Exception.Message)"
         }
     }
-
-    # No git process, but lock exists - check the age. If it's brand new (<2s)
-    # some other tool may be writing; give it a moment.
-    $lockFile = Get-Item $lockPath
-    $ageSeconds = ((Get-Date) - $lockFile.LastWriteTime).TotalSeconds
-    if ($ageSeconds -lt 2) {
-        Start-Sleep -Seconds 2
-        if (-not (Test-Path $lockPath)) { return }
-    }
-
-    Write-Warn "Removing stale .git/index.lock (age $([int]$ageSeconds)s, no git.exe running)"
-    Remove-Item -Force $lockPath
-    Write-OK 'Lock cleared.'
+    Write-OK 'Locks cleared.'
 }
 
 function Invoke-GitSafe {

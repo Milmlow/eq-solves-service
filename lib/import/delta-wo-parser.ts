@@ -71,6 +71,26 @@ export interface DeltaRow {
   frequency: FrequencyEnum | null
   /** Target start date. */
   targetStart: Date
+  /** Priority from Maximo WO (low, medium, high, urgent). Nullable. */
+  priority: string | null
+  /** Work Type from Maximo (PM, CM, EM, CAL, INSP or raw string). Nullable. */
+  workType: string | null
+  /** Crew ID from Maximo. Nullable. */
+  crewId: string | null
+  /** Target finish date. Nullable. */
+  targetFinish: Date | null
+  /** Failure Code from Maximo. Nullable. */
+  failureCode: string | null
+  /** Problem code from Maximo. Nullable. */
+  problem: string | null
+  /** Cause code from Maximo. Nullable. */
+  cause: string | null
+  /** Remedy code from Maximo. Nullable. */
+  remedy: string | null
+  /** IR Scan result (pass, fail, na, not_done or raw string). Nullable. */
+  irScanResult: string | null
+  /** Maximo Task ID for linking to job_plan_items. Nullable. */
+  maximoTaskId: string | null
   /** Per-row non-blocking warnings — row still emitted, flagged for preview. */
   warnings: string[]
 }
@@ -155,6 +175,19 @@ export const OPTIONAL_HEADERS = [
   'Reported Date',
   'CR Required',
   'Qualifications Required',
+  'Priority',
+  'Crew',
+  'Crew ID',
+  'Target Finish',
+  'Sched Finish',
+  'Failure Code',
+  'Problem',
+  'Cause',
+  'Remedy',
+  'IR Scan',
+  'IR Test Result',
+  'Task ID',
+  'Task #',
 ] as const
 
 /**
@@ -376,6 +409,37 @@ export async function parseWorkbook(
     const targetRaw = cell('Target Start')
     const targetStart = targetRaw instanceof Date ? targetRaw : null
 
+    // ── Maximo WO metadata fields (all optional) ──
+    const priorityRaw = cell('Priority')
+    const priority = priorityRaw ? String(priorityRaw).trim() : null
+
+    const workTypeRaw = cell('Work Type')
+    const workType = workTypeRaw ? String(workTypeRaw).trim() : null
+
+    const crewRaw = cell('Crew') ?? cell('Crew ID')
+    const crewId = crewRaw ? String(crewRaw).trim() : null
+
+    const targetFinishRaw = cell('Target Finish') ?? cell('Sched Finish') ?? cell('TARGCOMPDATE')
+    const targetFinish = targetFinishRaw instanceof Date ? targetFinishRaw : null
+
+    const failureCodeRaw = cell('Failure Code')
+    const failureCode = failureCodeRaw ? String(failureCodeRaw).trim() : null
+
+    const problemRaw = cell('Problem')
+    const problem = problemRaw ? String(problemRaw).trim() : null
+
+    const causeRaw = cell('Cause')
+    const cause = causeRaw ? String(causeRaw).trim() : null
+
+    const remedyRaw = cell('Remedy')
+    const remedy = remedyRaw ? String(remedyRaw).trim() : null
+
+    const irScanRaw = cell('IR Scan') ?? cell('IR Test Result')
+    const irScanResult = irScanRaw ? String(irScanRaw).trim() : null
+
+    const taskIdRaw = cell('Task ID') ?? cell('Task #')
+    const maximoTaskId = taskIdRaw ? String(taskIdRaw).trim() : null
+
     // Hard-fail rows with missing critical fields.
     if (!site) {
       errors.push({ rowNumber, message: 'Missing Site' })
@@ -431,6 +495,16 @@ export async function parseWorkbook(
       frequencySuffix,
       frequency,
       targetStart,
+      priority,
+      workType,
+      crewId,
+      targetFinish,
+      failureCode,
+      problem,
+      cause,
+      remedy,
+      irScanResult,
+      maximoTaskId,
       warnings,
     })
   }

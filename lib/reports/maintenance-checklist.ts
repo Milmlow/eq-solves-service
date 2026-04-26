@@ -29,6 +29,7 @@ import {
   PageBreak,
   VerticalAlign,
 } from 'docx'
+import { buildMasthead } from '@/lib/reports/report-branding'
 
 // ─────────── Types ───────────
 
@@ -49,6 +50,12 @@ export interface MaintenanceChecklistInput {
 
   // Company branding
   tenantProductName: string
+  reportTypeLabel?: string        // Phase 1: report type label for display
+
+  // Phase 1: logos for masthead
+  tenantLogoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | null
+  customerLogoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | null
+  primaryColour?: string          // hex color for masthead
 
   // Format: 'simple' = asset register only, 'detailed' = full task breakdown per asset
   format?: 'simple' | 'detailed'
@@ -149,15 +156,29 @@ function buildHeader(checkName: string, siteName: string): Header {
   })
 }
 
-function buildFooter(tenantProductName: string): Footer {
+function buildFooter(tenantProductName: string, companyName?: string, reportTypeLabel?: string): Footer {
+  const label = reportTypeLabel || 'Maintenance Checklist'
+  const company = companyName || tenantProductName
   return new Footer({
     children: [
       new Paragraph({
-        alignment: AlignmentType.CENTER,
+        alignment: AlignmentType.JUSTIFIED,
         spacing: { after: 0 },
         children: [
           new TextRun({
-            text: `${tenantProductName} — Printed Checklist | Page `,
+            text: `${company} — ${label} — rev 3.1`,
+            size: 14,
+            font: FONT,
+            color: '666666'
+          })
+        ]
+      }),
+      new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        spacing: { after: 0 },
+        children: [
+          new TextRun({
+            text: 'Page ',
             size: 14,
             font: FONT,
             color: '666666'
@@ -178,6 +199,17 @@ function buildFooter(tenantProductName: string): Footer {
 
 function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = []
+
+  // Masthead with logos (Phase 1 branding update)
+  if (input.customerLogoImage || input.tenantLogoImage || input.reportTypeLabel) {
+    children.push(
+      buildMasthead({
+        customerLogo: input.customerLogoImage ?? undefined,
+        tenantLogo: input.tenantLogoImage ?? undefined,
+        reportTypeLabel: input.reportTypeLabel || 'Maintenance Checklist',
+      }),
+    )
+  }
 
   // Title
   children.push(new Paragraph({
@@ -540,7 +572,7 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
           default: buildHeader(input.checkName, input.siteName),
         },
         footers: {
-          default: buildFooter(input.tenantProductName),
+          default: buildFooter(input.tenantProductName, input.companyName, input.reportTypeLabel),
         },
         children: bodyChildren,
       },

@@ -30,6 +30,7 @@ import {
   VerticalAlign,
   ImageRun,
 } from 'docx'
+import { buildMasthead } from '@/lib/reports/report-branding'
 
 // ---------- types ----------
 
@@ -40,12 +41,19 @@ export interface NsxReportInput {
   primaryColour: string
   complexity?: 'summary' | 'standard' | 'detailed'
   tests: NsxReportTest[]
+  reportTypeLabel?: string        // Phase 1: report type for masthead
 
   // Report settings (optional — all generators now read these)
   /** @deprecated Pass `logoImageOnLight` / `logoImageOnDark` instead. */
   logoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
   logoImageOnLight?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
   logoImageOnDark?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+
+  /** Customer logo variants (rendered on cover when present). */
+  customerLogoOnLight?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  customerLogoOnDark?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number }
+  customerName?: string
+
   companyName?: string
   companyAddress?: string
   companyAbn?: string
@@ -630,12 +638,25 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
   const showContents = input.showContents ?? true
   const year = new Date().getFullYear()
   const today = formatDateDDMMYYYY(new Date().toISOString())
+  const footerText = input.customFooterText || `${input.companyName || input.tenantProductName} — NSX Test Report — rev 3.1`
 
   const coverLogo = input.logoImageOnLight ?? input.logoImage ?? input.logoImageOnDark
+  const customerLogo = input.customerLogoOnLight ?? input.customerLogoOnDark
 
   const coverChildren: (Paragraph | Table)[] = []
 
-  if (coverLogo) {
+  // Masthead with customer + tenant logos (Phase 1 branding update)
+  if (customerLogo || coverLogo || input.reportTypeLabel) {
+    coverChildren.push(
+      buildMasthead({
+        customerLogo: customerLogo ?? undefined,
+        tenantLogo: coverLogo ?? undefined,
+        reportTypeLabel: input.reportTypeLabel || 'NSX Test Report',
+      }),
+    )
+  }
+
+  if (coverLogo && !input.reportTypeLabel) {
     coverChildren.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 2000, after: 400 },
@@ -763,7 +784,13 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
           default: new Footer({
             children: [
               new Paragraph({
-                alignment: AlignmentType.CENTER,
+                alignment: AlignmentType.JUSTIFIED,
+                children: [
+                  new TextRun({ text: footerText, size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
+                ],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
                 children: [
                   new TextRun({ text: 'Page ', size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
                   new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Plus Jakarta Sans', color: '999999' }),

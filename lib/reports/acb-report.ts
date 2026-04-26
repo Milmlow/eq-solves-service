@@ -31,6 +31,7 @@ import {
   VerticalAlign,
   ImageRun,
 } from 'docx'
+import { buildMasthead } from '@/lib/reports/report-branding'
 
 // ---------- types ----------
 
@@ -41,6 +42,7 @@ export interface AcbReportInput {
   primaryColour: string // hex without #
   complexity?: 'summary' | 'standard' | 'detailed'
   tests: AcbReportTest[]
+  reportTypeLabel?: string        // Phase 1: report type for masthead
 
   // Report settings (optional — all generators now read these)
   /** @deprecated Pass `logoImageOnLight` / `logoImageOnDark` instead. */
@@ -561,8 +563,19 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
 
   const out: (Paragraph | Table)[] = []
 
-  // Tenant / report logo — top of page
-  if (coverLogo) {
+  // Masthead with customer + tenant logos (Phase 1 branding update)
+  if (customerLogo || coverLogo || input.reportTypeLabel) {
+    out.push(
+      buildMasthead({
+        customerLogo: customerLogo ?? undefined,
+        tenantLogo: coverLogo ?? undefined,
+        reportTypeLabel: input.reportTypeLabel || 'ACB Test Report',
+      }),
+    )
+  }
+
+  // Tenant / report logo — top of page (if not already in masthead)
+  if (coverLogo && !input.reportTypeLabel) {
     out.push(new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 1200, after: 300 },
@@ -574,7 +587,7 @@ function buildCoverSection(input: AcbReportInput): { children: (Paragraph | Tabl
       })],
     }))
   } else {
-    out.push(new Paragraph({ spacing: { before: 1800 } }))
+    out.push(new Paragraph({ spacing: { before: coverLogo ? 300 : 1800 } }))
   }
 
   // Title
@@ -871,6 +884,7 @@ export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> 
   const complexity = input.complexity ?? 'standard'
   const showCover = input.showCoverPage ?? true
   const showContents = input.showContents ?? true
+  const footerText = input.customFooterText || `${input.companyName || input.tenantProductName} — ACB Test Report — rev 3.1`
 
   const coverChildren = showCover ? buildCoverSection(input).children : []
 
@@ -966,7 +980,13 @@ export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> 
           default: new Footer({
             children: [
               new Paragraph({
-                alignment: AlignmentType.CENTER,
+                alignment: AlignmentType.JUSTIFIED,
+                children: [
+                  new TextRun({ text: footerText, size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
+                ],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
                 children: [
                   new TextRun({ text: 'Page ', size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
                   new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
