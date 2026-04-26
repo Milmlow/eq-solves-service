@@ -145,9 +145,13 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  // Format dates
-  const dueDateStr = check.due_date ? new Date(check.due_date).toLocaleDateString() : '—'
-  const printedDateStr = new Date().toLocaleDateString()
+  // Format dates as Australian long-form ("26 April 2026") to match the
+  // other report generators. Without an explicit locale, Node defaults to
+  // the server's locale (Netlify Linux = en-US "5/1/2026") which both
+  // looks American and ambiguous to AU readers (5 Jan vs 1 May).
+  const dateFmt: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'long', year: 'numeric' }
+  const dueDateStr = check.due_date ? new Date(check.due_date).toLocaleDateString('en-AU', dateFmt) : '—'
+  const printedDateStr = new Date().toLocaleDateString('en-AU', dateFmt)
   const frequency = check.frequency?.replace(/_/g, ' ') ?? '—'
 
   // Build the checklist input

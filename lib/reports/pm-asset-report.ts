@@ -419,6 +419,11 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   const c2 = 7238
   const tw = c1 + c2
 
+  // Info grid carries the operational metadata (who the report is for and
+  // who prepared it). Company name + ABN intentionally NOT listed here —
+  // they're rendered in the brand-coloured footer below this grid, which
+  // is the visual anchor for tenant identity. Putting them in both places
+  // duplicates "SKS Technologies" twice in close proximity on the cover.
   const infoRows: [string, string][] = [
     ['Site', input.siteName],
     ['Customer', input.customerName],
@@ -426,8 +431,6 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     ['Prepared By', input.technicianName],
     ['Supervisor', input.supervisorName],
   ]
-  if (input.companyName) infoRows.push(['Company', input.companyName])
-  if (input.companyAbn) infoRows.push(['ABN', input.companyAbn])
 
   children.push(new Table({
     width: { size: tw, type: WidthType.DXA },
@@ -442,19 +445,25 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     ),
   }))
 
-  // Footer branding — left side shows the issuing company (SKS Technologies),
-  // right side shows the product attribution (EQ Solves Service) in smaller
-  // grey text. Falls back to tenantProductName for the company name only if
-  // the call site didn't pass companyName, which would be a misconfiguration.
+  // Footer branding — the visual anchor for tenant identity on the cover.
+  // Left: company name + ABN line in brand colour (this is where the
+  // company info from the previous info-grid rows now lives). Right:
+  // product attribution in small grey text.
   children.push(spacer(1600))
+  const companyText = input.companyName ?? input.tenantProductName
+  const companyAbnSuffix = input.companyAbn ? `  ·  ABN ${input.companyAbn}` : ''
   children.push(new Paragraph({
     border: { top: { style: BorderStyle.SINGLE, size: 3, color: brand, space: 1 } },
     spacing: { before: 200 },
     tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
     children: [
       new TextRun({
-        text: input.companyName ?? input.tenantProductName,
+        text: companyText,
         bold: true, size: 18, font: FONT, color: brand,
+      }),
+      new TextRun({
+        text: companyAbnSuffix,
+        size: 16, font: FONT, color: EQ_MID_GREY,
       }),
       new TextRun({ text: '\t' }),
       new TextRun({
