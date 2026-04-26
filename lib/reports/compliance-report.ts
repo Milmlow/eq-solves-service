@@ -38,7 +38,7 @@ import {
   type ShellSettings,
 } from './report-shell'
 import { FONT_BODY, FONT_HEADING } from './typography'
-import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_WHITE, STATUS_PASS } from './colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_WHITE, EQ_ICE, STATUS_PASS } from './colours'
 
 // ---------- types ----------
 

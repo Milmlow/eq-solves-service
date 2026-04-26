@@ -35,7 +35,7 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY } from '@/lib/reports/typography'
-import { EQ_MID_GREY, EQ_BORDER } from '@/lib/reports/colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_ICE } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
@@ -87,7 +87,7 @@ function headerCell(text: string, width: number): TableCell {
   return new TableCell({
     borders: BORDERS,
     width: { size: width, type: WidthType.DXA },
-    shading: { fill: 'D5E8F0', type: ShadingType.CLEAR },
+    shading: { fill: EQ_ICE, type: ShadingType.CLEAR },
     margins: CELL_MARGINS,
     children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
   })
