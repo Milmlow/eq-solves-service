@@ -237,7 +237,19 @@ export function buildCover(shell: ResolvedShell): Paragraph[] {
               }),
               new TextRun({ text: '  ', size: 20 }),
             ]
-          : []),
+          : [
+              // No logo configured — render a visible placeholder so the
+              // tenant admin notices and uploads one. Per Brief v1.3 §6.4
+              // we deliberately do NOT fall back to the EQ logo because
+              // that would mask tenant misconfiguration. (Audit Q1.)
+              new TextRun({
+                text: '⚠ Logo not configured — set in /admin/reports    ',
+                italics: true,
+                color: 'FFFFFF',
+                size: 18,
+                font: FONT_BODY,
+              }),
+            ]),
         new TextRun({
           text: REPORT_TYPE_LABELS[ctx.reportType],
           bold: true,
