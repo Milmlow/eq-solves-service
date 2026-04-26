@@ -35,7 +35,7 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY } from '@/lib/reports/typography'
-import { EQ_MID_GREY, EQ_BORDER, EQ_ICE } from '@/lib/reports/colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_ICE, EQ_INK } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
@@ -770,12 +770,12 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
         },
         {
           id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { size: 24, bold: true, font: FONT_BODY, color: '333333' },
+          run: { size: 24, bold: true, font: FONT_BODY, color: brand },
           paragraph: { spacing: { before: 180, after: 100 }, outlineLevel: 1 },
         },
         {
           id: 'Heading3', name: 'Heading 3', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { size: 22, bold: true, font: FONT_BODY, color: '444444' },
+          run: { size: 22, bold: true, font: FONT_BODY, color: EQ_INK },
           paragraph: { spacing: { before: 120, after: 80 }, outlineLevel: 2 },
         },
       ],

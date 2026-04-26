@@ -962,7 +962,7 @@ export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> 
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 24, bold: true, font: FONT_BODY, color: '333333' },
+          run: { size: 24, bold: true, font: FONT_BODY, color: brand },
           paragraph: { spacing: { before: 180, after: 100 }, outlineLevel: 1 },
         },
         {
@@ -971,7 +971,7 @@ export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> 
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 22, bold: true, font: FONT_BODY, color: '444444' },
+          run: { size: 22, bold: true, font: FONT_BODY, color: EQ_INK },
           paragraph: { spacing: { before: 120, after: 80 }, outlineLevel: 2 },
         },
       ],

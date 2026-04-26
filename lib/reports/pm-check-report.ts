@@ -464,7 +464,7 @@ export async function generatePMCheckReport(input: PmCheckReportInput): Promise<
           basedOn: 'Normal',
           next: 'Normal',
           quickFormat: true,
-          run: { size: 24, bold: true, font: FONT_BODY, color: '333333' },
+          run: { size: 24, bold: true, font: FONT_BODY, color: brand },
           paragraph: { spacing: { before: 180, after: 100 }, outlineLevel: 1 },
         },
       ],
