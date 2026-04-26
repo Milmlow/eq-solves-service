@@ -52,7 +52,8 @@ export interface SupervisorDigestSendResult {
   empty: boolean
 }
 
-const FROM_ADDRESS = 'EQ Solutions <noreply@eq.solutions>'
+const FROM_ADDRESS = 'EQ Solves Service <contact@eq.solutions>'
+const REPLY_TO_ADDRESS = 'contact@eq.solutions'
 
 const BUCKET_LABEL: Record<DigestBucket, string> = {
   overdue: 'Overdue',
@@ -226,6 +227,7 @@ export async function sendSupervisorDigestEmail(
 
   const res = await resend.emails.send({
     from: FROM_ADDRESS,
+    replyTo: REPLY_TO_ADDRESS,
     to: [input.to],
     subject,
     html,

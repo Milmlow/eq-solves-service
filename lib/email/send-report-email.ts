@@ -23,7 +23,8 @@ export interface ReportDeliveryEmailInput {
   contentHash: string
 }
 
-const FROM_ADDRESS = 'EQ Solutions <noreply@eq.solutions>'
+const FROM_ADDRESS = 'EQ Solves Service <contact@eq.solutions>'
+const REPLY_TO_ADDRESS = 'contact@eq.solutions'
 
 export async function sendReportDeliveryEmail(input: ReportDeliveryEmailInput): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
@@ -111,6 +112,7 @@ export async function sendReportDeliveryEmail(input: ReportDeliveryEmailInput): 
 
   await resend.emails.send({
     from: FROM_ADDRESS,
+    replyTo: REPLY_TO_ADDRESS,
     to: input.to,
     cc: input.cc?.length ? input.cc : undefined,
     subject,
