@@ -18,7 +18,7 @@ interface Props {
 /**
  * Single-shot invite OTP form.
  *
- * The user types: email (pre-filled if present), 6-digit code, full name,
+ * The user types: email (pre-filled if present), 8-digit code, full name,
  * password, confirm. On submit the server action verifies the OTP, sets
  * the password + name, and redirects to /dashboard. There is no persistent
  * session before submit — this entire page is rendered for an unauthenticated
@@ -57,15 +57,15 @@ export function AcceptInviteForm({ initialEmail }: Props) {
       />
 
       <FormInput
-        label="6-digit code"
+        label="8-digit code"
         name="code"
         type="text"
         required
         autoComplete="one-time-code"
         inputMode="numeric"
         pattern="[0-9]*"
-        maxLength={6}
-        placeholder="123456"
+        maxLength={8}
+        placeholder="12345678"
         disabled={pending}
       />
 

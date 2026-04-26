@@ -170,7 +170,7 @@ export async function inviteUserAction(formData: FormData): Promise<{ ok: true; 
   // invites sent from a local dev build don't leak http://localhost:3000
   // into production emails. Request origin is the fallback, not the default.
   const origin = getSiteUrl(requestOrigin)
-  // 2026-04-26 OTP migration: the invite email now carries a typed 6-digit
+  // 2026-04-26 OTP migration: the invite email now carries a typed 8-digit
   // code, NOT a clickable token URL. The link in the email points at this
   // safe, tokenless URL so Defender Safe Links can pre-fetch it harmlessly.
   // The user types the code from the email body to verify ownership.
@@ -291,7 +291,7 @@ export async function resendInviteAction(formData: FormData) {
   const authUser = await findAuthUserByEmail(admin, profile.email)
   const isConfirmed = !!authUser?.email_confirmed_at
   // 2026-04-26 OTP migration: tokenless landing URL with email pre-filled.
-  // The token itself is the 6-digit code in the email body, not in the URL.
+  // The token itself is the 8-digit code in the email body, not in the URL.
   const nextPath = isConfirmed ? '/auth/reset-password' : '/auth/accept-invite'
   const redirectTo = `${origin}${nextPath}?email=${encodeURIComponent(profile.email)}`
 

@@ -6,7 +6,7 @@ sign-in flow to work against production (`https://eq-solves-service.netlify.app`
 Project: `urjhmkhbgaxrofurpbgc` (eq-solves-service-dev — treat as prod for now).
 
 > **2026-04-26 — major change. OTP CODES, NOT LINKS.** The invite and recovery
-> email templates now carry a typed 6-digit code (`{{ .Token }}`) instead of
+> email templates now carry a typed 8-digit code (`{{ .Token }}`) instead of
 > a clickable token URL. Microsoft Defender Safe Links (and Mimecast,
 > Proofpoint, Google Workspace's equivalent) pre-fetch every URL in inbound
 > mail and burn one-shot Supabase tokens before the user can click them —
@@ -14,7 +14,7 @@ Project: `urjhmkhbgaxrofurpbgc` (eq-solves-service-dev — treat as prod for now
 >
 > The new flow:
 >
->   - Email contains a 6-digit code in the body, plus a tokenless link to
+>   - Email contains an 8-digit code in the body, plus a tokenless link to
 >     `/auth/accept-invite?email=…` (or `/auth/reset-password?email=…`).
 >     Defender can pre-fetch the link as much as it likes — there's nothing
 >     to burn.
@@ -88,7 +88,7 @@ and a **Body (HTML)** field. Paste exactly as written.
 Placeholders:
 - `{{ .SiteURL }}` — the Site URL set in §1.
 - `{{ .Email }}` — recipient's email (used to pre-fill the form on the landing page).
-- `{{ .Token }}` — the 6-digit OTP code the user types. **Critical — do not replace with `{{ .ConfirmationURL }}` or `{{ .TokenHash }}`.**
+- `{{ .Token }}` — the 8-digit OTP code the user types. **Critical — do not replace with `{{ .ConfirmationURL }}` or `{{ .TokenHash }}`. The code length (default 6, our project ships 8) is set under Authentication → Settings → Email OTP length.**
 
 All templates use inlined styles (mail clients strip `<style>` blocks) and the
 EQ brand tokens: `#3DA8D8` primary, `#2986B4` deep, `#EAF5FB` ice, `#1A1A2E`
@@ -142,7 +142,7 @@ You've been invited to EQ Solves Service
             </tr>
             <tr>
               <td style="padding:24px 32px 8px 32px;" align="center">
-                <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;color:#6B7A8A;text-transform:uppercase;">Your 6-digit code</p>
+                <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;color:#6B7A8A;text-transform:uppercase;">Your 8-digit code</p>
                 <div style="display:inline-block;padding:14px 24px;background-color:#EAF5FB;border:1px solid #C9DFEC;border-radius:6px;font-size:28px;font-weight:700;color:#1A1A2E;letter-spacing:8px;font-family:'Plus Jakarta Sans',monospace;">{{ .Token }}</div>
                 <p style="margin:12px 0 0 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
                   Type this code on the invitation page. It expires in 1 hour.
@@ -225,7 +225,7 @@ Reset your EQ Solves Service password
             </tr>
             <tr>
               <td style="padding:24px 32px 8px 32px;" align="center">
-                <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;color:#6B7A8A;text-transform:uppercase;">Your 6-digit code</p>
+                <p style="margin:0 0 8px 0;font-size:12px;font-weight:600;letter-spacing:0.1em;color:#6B7A8A;text-transform:uppercase;">Your 8-digit code</p>
                 <div style="display:inline-block;padding:14px 24px;background-color:#EAF5FB;border:1px solid #C9DFEC;border-radius:6px;font-size:28px;font-weight:700;color:#1A1A2E;letter-spacing:8px;font-family:'Plus Jakarta Sans',monospace;">{{ .Token }}</div>
                 <p style="margin:12px 0 0 0;font-size:13px;line-height:1.5;color:#6B7A8A;">
                   Type this code on the reset page. It expires in 1 hour.
@@ -282,7 +282,7 @@ body copy. Use `{{ .Token }}`, never `{{ .ConfirmationURL }}` or
 ## 4. After changing config — smoke test
 
 1. `/admin/users` → invite a fresh test user (e.g. `royce+test@eq.solutions`).
-2. Open the email. The body must contain a visible 6-digit code in a
+2. Open the email. The body must contain a visible 8-digit code in a
    bordered box, AND a button labelled "Open invitation page" pointing at
    `https://eq-solves-service.netlify.app/auth/accept-invite?email=...`
    (no `token_hash`, no `code`, just the email).
@@ -291,7 +291,7 @@ body copy. Use `{{ .Token }}`, never `{{ .ConfirmationURL }}` or
 4. Type the code from the email + your name + a 10+ char password.
    Submit. You should be signed in and redirected to `/dashboard`.
 5. Sign out. Click "Forgot password" on the sign-in page. Enter the email.
-   The page should swap to "We sent a 6-digit code to..." with code +
+   The page should swap to "We sent an 8-digit code to..." with code +
    new password fields.
 6. Open the email. Same shape as step 2 but with "reset" copy. Type the
    code + new password into the page from step 5. Submit. You should be
@@ -300,7 +300,7 @@ body copy. Use `{{ .Token }}`, never `{{ .ConfirmationURL }}` or
 
 If a test fails:
 - "Code is incorrect" on a fresh code → check the template uses `{{ .Token }}`,
-  not `{{ .TokenHash }}`. The code-entry endpoint expects the 6-digit form.
+  not `{{ .TokenHash }}`. The code-entry endpoint expects the 8-digit form.
 - Email never arrives → check Resend dashboard (status: Sent → Delivered).
   If stuck on Sent for >2 min, Defender / scanner is still processing it
   (see §5).

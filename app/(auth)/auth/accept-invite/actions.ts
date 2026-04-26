@@ -13,7 +13,7 @@ import { logAuditEvent } from '@/lib/actions/audit'
 
 const AcceptInviteSchema = z.object({
   email: z.string().trim().toLowerCase().email({ error: 'Enter a valid email address.' }),
-  code: z.string().trim().min(6, { error: 'Enter the 6-digit code from your email.' }).max(10),
+  code: z.string().trim().min(6, { error: 'Enter the 8-digit code from your email.' }).max(10),
   full_name: z.string().trim().min(1, { error: 'Please enter your full name.' }).max(120),
   password: z.string().min(10, { error: 'Password must be at least 10 characters.' }),
   confirm: z.string(),
@@ -29,7 +29,7 @@ const AcceptInviteSchema = z.object({
  * sees "invite link expired or already used" and gets locked out.
  *
  * The fix is to take the token out of the URL entirely. The invite email
- * now carries a 6-digit code (`{{ .Token }}` in the Supabase template) that
+ * now carries an 8-digit code (`{{ .Token }}` in the Supabase template) that
  * the user TYPES on this page along with their name and password. Scanners
  * cannot type a code into a UI, so the token survives.
  *

@@ -11,7 +11,7 @@ import { AcceptInviteForm } from './AcceptInviteForm'
  *
  * The user lands here from their invite email. The email no longer carries
  * a clickable token URL (Defender Safe Links would burn the token before
- * the user could click it); instead it carries a 6-digit code that the
+ * the user could click it); instead it carries an 8-digit code that the
  * user types here. Email may be pre-filled via `?email=` query param.
  *
  * Step rail is purely visual — the form actually does the verify + name +
@@ -36,7 +36,7 @@ export default async function AcceptInvitePage({
           Welcome to EQ Solves Service
         </h1>
         <p className="text-sm text-eq-grey mt-2 leading-relaxed">
-          Enter the 6-digit code from your invitation email along with your
+          Enter the 8-digit code from your invitation email along with your
           name and a new password. You&rsquo;ll be signed in straight after.
         </p>
       </div>
@@ -66,7 +66,7 @@ export default async function AcceptInvitePage({
 
 function StepRail() {
   const steps = [
-    { n: 1, label: 'Enter your code' },
+    { n: 1, label: 'Enter your 8-digit code' },
     { n: 2, label: 'Set a password' },
     { n: 3, label: 'Enter the platform' },
   ]

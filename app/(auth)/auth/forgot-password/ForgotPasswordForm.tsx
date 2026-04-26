@@ -16,7 +16,7 @@ import { forgotPasswordAction, verifyRecoveryOtpAction } from './actions'
  * Two-step OTP password reset:
  *
  *   Step 1 — Email entry. Submitting calls forgotPasswordAction which fires
- *            a recovery email containing a 6-digit code.
+ *            a recovery email containing an 8-digit code.
  *   Step 2 — Code + new password entry. Submitting calls
  *            verifyRecoveryOtpAction which exchanges the code for a session
  *            and sets the new password atomically.
@@ -78,21 +78,21 @@ export function ForgotPasswordForm({ initialEmail, initialStep }: Props = {}) {
     return (
       <form action={onSubmitVerify} className="flex flex-col gap-4">
         <div className="text-sm text-eq-ink bg-eq-ice border border-eq-sky/30 rounded-md p-4 leading-relaxed">
-          We sent a 6-digit code to <strong>{email}</strong>.
+          We sent an 8-digit code to <strong>{email}</strong>.
           Check your inbox (and Junk folder) and enter the code below along
           with your new password.
         </div>
 
         <FormInput
-          label="6-digit code"
+          label="8-digit code"
           name="code"
           type="text"
           required
           autoComplete="one-time-code"
           inputMode="numeric"
           pattern="[0-9]*"
-          maxLength={6}
-          placeholder="123456"
+          maxLength={8}
+          placeholder="12345678"
           disabled={pending}
         />
 
@@ -160,7 +160,7 @@ export function ForgotPasswordForm({ initialEmail, initialStep }: Props = {}) {
         {pending ? 'Sending…' : 'Send reset code'}
       </Button>
       <p className="text-[11px] text-eq-grey leading-relaxed">
-        We&rsquo;ll email you a 6-digit code. Codes expire after 1 hour.
+        We&rsquo;ll email you an 8-digit code. Codes expire after 1 hour.
         We use a code instead of a link so corporate email scanners
         can&rsquo;t accidentally use it before you do.
       </p>

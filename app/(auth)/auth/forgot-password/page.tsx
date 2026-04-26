@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
           Reset your password
         </h1>
         <p className="text-sm text-eq-grey mt-2 leading-relaxed">
-          Enter your email and we&rsquo;ll send a 6-digit code. You&rsquo;ll
+          Enter your email and we&rsquo;ll send an 8-digit code. You&rsquo;ll
           enter that code on the next screen along with your new password.
         </p>
       </div>

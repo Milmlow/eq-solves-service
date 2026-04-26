@@ -11,7 +11,7 @@ import { createClient } from '@/lib/supabase/server'
  * Auth callback.
  *
  * As of 2026-04-26 the recovery + invite flows DO NOT route through here —
- * the email templates carry a typed 6-digit code (`{{ .Token }}`) that the
+ * the email templates carry a typed 8-digit code (`{{ .Token }}`) that the
  * user enters on /auth/accept-invite or /auth/reset-password, and the URL
  * in the email points directly at those pages with NO token. This change
  * was forced by Microsoft Defender Safe Links (and equivalents on Mimecast,

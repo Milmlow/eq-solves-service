@@ -14,7 +14,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * Defender Safe Links / Mimecast / Proofpoint pre-fetch every URL in inbound
  * mail, which used to burn our one-shot recovery token before the user could
  * click it. To survive that, we no longer rely on a clickable token URL —
- * the recovery email now carries a 6-digit OTP code (`{{ .Token }}` template)
+ * the recovery email now carries a 8-digit OTP code (`{{ .Token }}` template)
  * that the user TYPES on the next screen. Scanners can't type a code into
  * a UI, so the token survives.
  *
@@ -38,7 +38,7 @@ export async function forgotPasswordAction(formData: FormData) {
 /**
  * STEP 2 — verify the OTP code and set a new password in one shot.
  *
- * `verifyOtp({ type: 'recovery' })` exchanges the 6-digit code for a real
+ * `verifyOtp({ type: 'recovery' })` exchanges the 8-digit code for a real
  * recovery session. We then immediately update the password via the
  * service-role admin API (same reason as the legacy reset-password action:
  * AAL1 sessions can't `updateUser({password})` when MFA is enrolled).
@@ -53,7 +53,7 @@ export async function verifyRecoveryOtpAction(formData: FormData) {
   const confirm = String(formData.get('confirm') || '')
 
   if (!email) return { error: 'Email is required.' }
-  if (!code || code.length < 6) return { error: 'Enter the 6-digit code from your email.' }
+  if (!code || code.length < 6) return { error: 'Enter the 8-digit code from your email.' }
   if (password.length < 10) return { error: 'Password must be at least 10 characters.' }
   if (password !== confirm) return { error: 'Passwords do not match.' }
 

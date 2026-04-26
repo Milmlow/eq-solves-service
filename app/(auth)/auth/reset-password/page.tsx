@@ -9,7 +9,7 @@ import { ForgotPasswordForm } from '../forgot-password/ForgotPasswordForm'
 /**
  * /auth/reset-password — OTP code + new password entry.
  *
- * Reset emails carry a 6-digit code (not a clickable token URL — Defender
+ * Reset emails carry an 8-digit code (not a clickable token URL — Defender
  * Safe Links would burn the token before the user could click it). Users
  * can either:
  *
@@ -41,12 +41,12 @@ export default async function ResetPasswordPage({
         <p className="text-sm text-eq-grey mt-2 leading-relaxed">
           {initialEmail ? (
             <>
-              We&rsquo;ve emailed a 6-digit code to your inbox. Enter it
+              We&rsquo;ve emailed an 8-digit code to your inbox. Enter it
               below with your new password.
             </>
           ) : (
             <>
-              Enter your email and we&rsquo;ll send a 6-digit code to reset
+              Enter your email and we&rsquo;ll send an 8-digit code to reset
               your password.
             </>
           )}
