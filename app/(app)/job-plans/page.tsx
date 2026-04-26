@@ -9,11 +9,12 @@ const PER_PAGE = 25
 export default async function JobPlansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; page?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; customer_id?: string; page?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
+  const customerId = params.customer_id ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
 
   const supabase = await createClient()
@@ -36,14 +37,21 @@ export default async function JobPlansPage({
   // can disambiguate duplicate site codes across customers)
   const { data: sites } = await supabase
     .from('sites')
-    .select('id, name, code, customers(name)')
+    .select('id, name, code, customer_id, customers(name)')
+    .eq('is_active', true)
+    .order('name')
+
+  // Fetch customers for the customer filter dropdown
+  const { data: customers } = await supabase
+    .from('customers')
+    .select('id, name')
     .eq('is_active', true)
     .order('name')
 
   // Build job plans query with item count
   let query = supabase
     .from('job_plans')
-    .select('*, sites(name), job_plan_items(count)', { count: 'exact' })
+    .select('*, sites(name), customers(name), job_plan_items(count)', { count: 'exact' })
     .order('name')
 
   if (search) {
@@ -51,6 +59,17 @@ export default async function JobPlansPage({
   }
   if (siteId) {
     query = query.eq('site_id', siteId)
+  }
+  if (customerId) {
+    // Show plans scoped to this customer OR scoped to any of its sites
+    const customerSiteIds = (sites ?? [])
+      .filter((s) => s.customer_id === customerId)
+      .map((s) => s.id)
+    if (customerSiteIds.length > 0) {
+      query = query.or(`customer_id.eq.${customerId},site_id.in.(${customerSiteIds.join(',')})`)
+    } else {
+      query = query.eq('customer_id', customerId)
+    }
   }
 
   const from = (page - 1) * PER_PAGE
@@ -98,6 +117,7 @@ export default async function JobPlansPage({
       <JobPlanList
         jobPlans={jobPlans as never}
         sites={sites ?? []}
+        customers={customers ?? []}
         itemsMap={itemsMap}
         page={page}
         totalPages={totalPages}

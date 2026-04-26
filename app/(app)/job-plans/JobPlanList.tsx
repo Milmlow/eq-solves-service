@@ -11,7 +11,7 @@ import { JobPlanForm } from './JobPlanForm'
 import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importJobPlansAction } from './actions'
-import type { JobPlan, JobPlanItem, Site } from '@/lib/types'
+import type { JobPlan, JobPlanItem, Site, Customer } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { Upload, ListChecks } from 'lucide-react'
@@ -22,17 +22,22 @@ import { formatSiteLabel } from '@/lib/utils/format'
 
 interface JobPlanWithSite extends JobPlan {
   sites: { name: string } | null
+  customers: { name: string } | null
   item_count?: number
 }
 
 type SiteOption = Pick<Site, 'id' | 'name'> & {
   code?: string | null
+  customer_id?: string | null
   customers?: { name?: string | null } | { name?: string | null }[] | null
 }
+
+type CustomerOption = Pick<Customer, 'id' | 'name'>
 
 interface JobPlanListProps {
   jobPlans: JobPlanWithSite[]
   sites: SiteOption[]
+  customers: CustomerOption[]
   itemsMap: Record<string, JobPlanItem[]>
   page: number
   totalPages: number
@@ -40,7 +45,7 @@ interface JobPlanListProps {
   canWrite: boolean
 }
 
-export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdmin, canWrite: canWriteRole }: JobPlanListProps) {
+export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalPages, isAdmin, canWrite: canWriteRole }: JobPlanListProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<JobPlanWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -100,6 +105,16 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
       render: (row) => (row as JobPlanWithSite).type ?? '—',
     },
     {
+      key: 'scope',
+      header: 'Scope',
+      render: (row) => {
+        const r = row as JobPlanWithSite
+        if (r.sites?.name) return r.sites.name
+        if (r.customers?.name) return `All ${r.customers.name} sites`
+        return 'Tenant-global'
+      },
+    },
+    {
       key: 'item_count',
       header: 'Tasks',
       render: (row) => String((row as JobPlanWithSite).item_count ?? 0),
@@ -112,6 +127,7 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
   ]
 
   const siteFilterOptions = sites.map((s) => ({ value: s.id, label: formatSiteLabel(s) }))
+  const customerFilterOptions = customers.map((c) => ({ value: c.id, label: c.name }))
 
   return (
     <>
@@ -119,6 +135,7 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
         <SearchFilter
           placeholder="Search job plans..."
           filters={[
+            { key: 'customer_id', label: 'All Customers', options: customerFilterOptions },
             { key: 'site_id', label: 'All Sites', options: siteFilterOptions },
           ]}
         />
@@ -134,12 +151,16 @@ export function JobPlanList({ jobPlans, sites, itemsMap, page, totalPages, isAdm
             </Button>
           )}
           <ExportButton onClick={() => exportToCsv(
-            jobPlans.map(jp => ({ ...jp, site_name: jp.sites?.name ?? 'Global' })),
+            jobPlans.map(jp => ({
+              ...jp,
+              scope_label: jp.sites?.name
+                ?? (jp.customers?.name ? `All ${jp.customers.name} sites` : 'Tenant-global'),
+            })),
             [
               { key: 'code', header: 'Job Code' },
               { key: 'name', header: 'Job Plan' },
               { key: 'type', header: 'Name' },
-              { key: 'site_name', header: 'Site' },
+              { key: 'scope_label', header: 'Scope' },
               { key: 'item_count', header: 'Tasks' },
               { key: 'is_active', header: 'Active', format: (r) => r.is_active ? 'Yes' : 'No' },
             ],

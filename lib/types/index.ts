@@ -205,6 +205,8 @@ export interface Asset {
   model: string | null
   serial_number: string | null
   maximo_id: string | null
+  jemena_asset_id: string | null
+  expected_rcd_circuits: number | null
   install_date: string | null
   location: string | null
   job_plan_id: string | null
@@ -217,7 +219,8 @@ export interface Asset {
 export interface JobPlan {
   id: string
   tenant_id: string
-  site_id: string
+  site_id: string | null
+  customer_id: string | null
   name: string
   code: string | null
   type: string | null
