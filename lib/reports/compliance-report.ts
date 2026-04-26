@@ -38,7 +38,7 @@ import {
   type ShellSettings,
 } from './report-shell'
 import { FONT_BODY, FONT_HEADING } from './typography'
-import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_WHITE, EQ_ICE, STATUS_PASS } from './colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_WHITE, EQ_ICE, EQ_SKY, STATUS_PASS, STATUS_FAIL, STATUS_WARN } from './colours'
 
 // ---------- types ----------
 
@@ -46,6 +46,16 @@ export interface ComplianceReportInput {
   filterDescription: string
   generatedDate: string
   tenantProductName: string
+  /**
+   * Tenant company name shown prominently on the cover. Falls back to
+   * tenantProductName if not supplied — but the call site should always
+   * pass the company name from `tenants.name` so reports identify the
+   * issuing entity (e.g. "SKS Technologies"), not the product
+   * ("EQ Solves Service").
+   */
+  companyName?: string
+  /** Tenant ABN, shown on cover when present. */
+  companyAbn?: string | null
   primaryColour: string // hex without #
   complexity: 'summary' | 'standard' | 'detailed'
 
@@ -155,56 +165,96 @@ function kpiLine(label: string, value: string | number, color?: string): Paragra
 // ---------- generator ----------
 
 export async function generateComplianceReport(input: ComplianceReportInput): Promise<Buffer> {
-  const colour = input.primaryColour || '3DA8D8'
+  const colour = input.primaryColour || EQ_SKY
   const m = input.maintenance
   const t = input.testing
   const isDetailed = input.complexity === 'detailed'
   const isSummary = input.complexity === 'summary'
 
   const sections: Paragraph[] = []
+  const company = input.companyName ?? input.tenantProductName
 
   // ── Cover ──
+  // Brand-coloured top accent bar — gives the cover a clear visual anchor
+  // that says "this report came from <tenant>" before any text.
   sections.push(
-    new Paragraph({ spacing: { before: 2000 } }),
+    new Paragraph({
+      spacing: { after: 600 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: colour, space: 1 } },
+    }),
+    new Paragraph({ spacing: { before: 1200 } }),
+
+    // Title
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
       children: [new TextRun({ text: 'Compliance Report', bold: true, size: 52, color: colour, font: FONT_BODY })],
     }),
+
+    // Filter description (e.g. "Equinix · April 2026 · All sites")
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
       children: [new TextRun({ text: input.filterDescription, size: 24, font: FONT_BODY, color: EQ_MID_GREY })],
     }),
+
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
+      spacing: { after: 800 },
       children: [new TextRun({ text: `Generated: ${input.generatedDate}`, size: 20, font: FONT_BODY, color: EQ_MID_GREY })],
     }),
+
+    // Prominent "Prepared by" block — anchors the cover on the issuing
+    // company so customers see who they're getting the report from.
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: input.tenantProductName, size: 20, font: FONT_BODY, color: colour, bold: true })],
+      spacing: { after: 80 },
+      children: [new TextRun({ text: 'Prepared by', size: 18, font: FONT_BODY, color: EQ_MID_GREY })],
     }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 80 },
+      children: [new TextRun({ text: company, bold: true, size: 32, font: FONT_BODY, color: EQ_INK })],
+    }),
+    ...(input.companyAbn ? [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 200 },
+        children: [new TextRun({ text: `ABN ${input.companyAbn}`, size: 18, font: FONT_BODY, color: EQ_MID_GREY })],
+      }),
+    ] : []),
+
+    // Bottom accent — closes the cover with the same brand colour.
+    new Paragraph({ spacing: { before: 600 } }),
+    new Paragraph({
+      border: { top: { style: BorderStyle.SINGLE, size: 6, color: colour, space: 1 } },
+      spacing: { before: 200, after: 200 },
+      children: [new TextRun({
+        text: input.tenantProductName,
+        size: 14, font: FONT_BODY, color: EQ_MID_GREY,
+      })],
+    }),
+
     new Paragraph({ children: [new PageBreak()] }),
   )
 
   // ── Maintenance Compliance ──
   sections.push(sectionHeading('Maintenance Compliance'))
-  sections.push(kpiLine('Compliance Rate', `${m.complianceRate}%`, m.complianceRate >= 80 ? '00AA00' : m.complianceRate >= 50 ? 'CC8800' : 'CC0000'))
+  sections.push(kpiLine('Compliance Rate', `${m.complianceRate}%`, m.complianceRate >= 80 ? STATUS_PASS : m.complianceRate >= 50 ? STATUS_WARN : STATUS_FAIL))
   sections.push(kpiLine('Total Checks', m.total))
-  sections.push(kpiLine('Complete', m.complete, '00AA00'))
-  sections.push(kpiLine('In Progress', m.inProgress, '3DA8D8'))
+  sections.push(kpiLine('Complete', m.complete, STATUS_PASS))
+  sections.push(kpiLine('In Progress', m.inProgress, colour))
   sections.push(kpiLine('Scheduled', m.scheduled))
-  sections.push(kpiLine('Overdue', m.overdue, m.overdue > 0 ? 'CC0000' : '00AA00'))
+  sections.push(kpiLine('Overdue', m.overdue, m.overdue > 0 ? STATUS_FAIL : STATUS_PASS))
   sections.push(kpiLine('Cancelled', m.cancelled))
 
   // ── Testing Results ──
   sections.push(sectionHeading('Testing Results'))
-  sections.push(kpiLine('Pass Rate', `${t.passRate}%`, t.passRate >= 80 ? '00AA00' : t.passRate >= 50 ? 'CC8800' : 'CC0000'))
+  sections.push(kpiLine('Pass Rate', `${t.passRate}%`, t.passRate >= 80 ? STATUS_PASS : t.passRate >= 50 ? STATUS_WARN : STATUS_FAIL))
   sections.push(kpiLine('Total Tests', t.total))
-  sections.push(kpiLine('Pass', t.pass, '00AA00'))
-  sections.push(kpiLine('Fail', t.fail, t.fail > 0 ? 'CC0000' : undefined))
-  sections.push(kpiLine('Defect', t.defect, t.defect > 0 ? 'CC8800' : undefined))
+  sections.push(kpiLine('Pass', t.pass, STATUS_PASS))
+  sections.push(kpiLine('Fail', t.fail, t.fail > 0 ? STATUS_FAIL : undefined))
+  sections.push(kpiLine('Defect', t.defect, t.defect > 0 ? STATUS_WARN : undefined))
   sections.push(kpiLine('Pending', t.pending))
 
   // ── ACB / NSX Workflow Progress ──
@@ -214,16 +264,16 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
     if (input.acb.total > 0) {
       sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'ACB (Air Circuit Breakers)', bold: true, size: 20, font: FONT_BODY })] }))
       sections.push(kpiLine('Total', input.acb.total))
-      sections.push(kpiLine('Complete', input.acb.complete, '00AA00'))
-      sections.push(kpiLine('In Progress', input.acb.inProgress, '3DA8D8'))
+      sections.push(kpiLine('Complete', input.acb.complete, STATUS_PASS))
+      sections.push(kpiLine('In Progress', input.acb.inProgress, colour))
       sections.push(kpiLine('Not Started', input.acb.notStarted))
     }
 
     if (input.nsx.total > 0) {
       sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'NSX / MCCB', bold: true, size: 20, font: FONT_BODY })] }))
       sections.push(kpiLine('Total', input.nsx.total))
-      sections.push(kpiLine('Complete', input.nsx.complete, '00AA00'))
-      sections.push(kpiLine('In Progress', input.nsx.inProgress, '3DA8D8'))
+      sections.push(kpiLine('Complete', input.nsx.complete, STATUS_PASS))
+      sections.push(kpiLine('In Progress', input.nsx.inProgress, colour))
       sections.push(kpiLine('Not Started', input.nsx.notStarted))
     }
   }
@@ -232,14 +282,14 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
   if (input.defects.total > 0) {
     sections.push(sectionHeading('Defects Register'))
     sections.push(kpiLine('Total Defects', input.defects.total))
-    sections.push(kpiLine('Open', input.defects.open, input.defects.open > 0 ? 'CC0000' : undefined))
-    sections.push(kpiLine('In Progress', input.defects.inProgress, 'CC8800'))
-    sections.push(kpiLine('Resolved / Closed', input.defects.resolved, '00AA00'))
+    sections.push(kpiLine('Open', input.defects.open, input.defects.open > 0 ? STATUS_FAIL : undefined))
+    sections.push(kpiLine('In Progress', input.defects.inProgress, STATUS_WARN))
+    sections.push(kpiLine('Resolved / Closed', input.defects.resolved, STATUS_PASS))
 
     if (!isSummary) {
       sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'By Severity', bold: true, size: 20, font: FONT_BODY })] }))
-      sections.push(kpiLine('Critical', input.defects.critical, input.defects.critical > 0 ? 'CC0000' : undefined))
-      sections.push(kpiLine('High', input.defects.high, input.defects.high > 0 ? 'CC0000' : undefined))
+      sections.push(kpiLine('Critical', input.defects.critical, input.defects.critical > 0 ? STATUS_FAIL : undefined))
+      sections.push(kpiLine('High', input.defects.high, input.defects.high > 0 ? STATUS_FAIL : undefined))
       sections.push(kpiLine('Medium', input.defects.medium))
       sections.push(kpiLine('Low', input.defects.low))
     }
@@ -267,8 +317,8 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
               dataCell(row.site),
               dataCell(String(row.total), { align: AlignmentType.RIGHT }),
               dataCell(String(row.complete), { align: AlignmentType.RIGHT, color: STATUS_PASS }),
-              dataCell(String(row.overdue), { align: AlignmentType.RIGHT, color: row.overdue > 0 ? 'CC8800' : undefined }),
-              dataCell(`${row.rate}%`, { align: AlignmentType.RIGHT, bold: true, color: row.rate >= 80 ? '00AA00' : row.rate >= 50 ? 'CC8800' : 'CC0000' }),
+              dataCell(String(row.overdue), { align: AlignmentType.RIGHT, color: row.overdue > 0 ? STATUS_WARN : undefined }),
+              dataCell(`${row.rate}%`, { align: AlignmentType.RIGHT, bold: true, color: row.rate >= 80 ? STATUS_PASS : row.rate >= 50 ? STATUS_WARN : STATUS_FAIL }),
             ],
           })
         ),

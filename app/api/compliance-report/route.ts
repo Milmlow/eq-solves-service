@@ -55,12 +55,25 @@ export async function GET(request: NextRequest) {
 
   const tenantId = membership.tenant_id
 
-  // Fetch tenant settings for branding
+  // Fetch tenant settings for branding. tenants.name is the canonical
+  // company name; tenant_settings overrides allow custom report-only
+  // branding (e.g. trading name for invoicing different from legal name).
   const { data: tenant } = await supabase
     .from('tenants')
     .select('name, primary_colour')
     .eq('id', tenantId)
     .maybeSingle()
+
+  const { data: tenantSettings } = await supabase
+    .from('tenant_settings')
+    .select('product_name, report_company_name, report_company_abn, primary_colour')
+    .eq('tenant_id', tenantId)
+    .maybeSingle()
+
+  const reportCompanyName = tenantSettings?.report_company_name ?? tenant?.name ?? 'EQ Solves'
+  const reportCompanyAbn = tenantSettings?.report_company_abn ?? null
+  const productName = tenantSettings?.product_name ?? 'EQ Solves Service'
+  const reportPrimaryColour = (tenantSettings?.primary_colour ?? tenant?.primary_colour ?? '3DA8D8').replace('#', '')
 
   // Sites for name lookup and customer filtering
   const { data: sites } = await supabase
@@ -200,8 +213,10 @@ export async function GET(request: NextRequest) {
   const input: ComplianceReportInput = {
     filterDescription,
     generatedDate: new Date().toLocaleDateString('en-AU', { day: '2-digit', month: 'long', year: 'numeric' }),
-    tenantProductName: tenant?.name ?? 'EQ Solves',
-    primaryColour: (tenant?.primary_colour ?? '3DA8D8').replace('#', ''),
+    tenantProductName: productName,
+    companyName: reportCompanyName,
+    companyAbn: reportCompanyAbn,
+    primaryColour: reportPrimaryColour,
     complexity,
     maintenance,
     testing: { total: tTotal, pass: tPass, fail: tFail, defect: tDefect, pending: tPending, passRate: tPassRate },
