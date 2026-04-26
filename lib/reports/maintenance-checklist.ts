@@ -35,7 +35,7 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY, FONT_HEADING as FONT_HEADING_TOKEN } from '@/lib/reports/typography'
-import { EQ_WHITE, bareHex } from '@/lib/reports/colours'
+import { EQ_WHITE, EQ_MID_GREY, bareHex, tenantIce } from '@/lib/reports/colours'
 
 // ─────────── Types ───────────
 
@@ -119,11 +119,12 @@ const CELL_PAD_TIGHT = { top: 40, bottom: 40, left: 80, right: 80 }
 
 // ─────────── Helpers ───────────
 
-function makeCell(text: string, width: number, opts?: { bold?: boolean; color?: string; borders?: typeof BORDERS_STANDARD; size?: number }): TableCell {
+function makeCell(text: string, width: number, opts?: { bold?: boolean; color?: string; borders?: typeof BORDERS_STANDARD; size?: number; shading?: string }): TableCell {
   return new TableCell({
     borders: opts?.borders ?? BORDERS_STANDARD,
     width: { size: width, type: WidthType.DXA },
     margins: CELL_PAD,
+    shading: opts?.shading ? { fill: opts.shading, type: ShadingType.CLEAR } : undefined,
     children: [new Paragraph({
       children: [new TextRun({
         text,
@@ -239,7 +240,8 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
     )
   }
 
-  // Title
+  // Title — uses tenant brand colour so the title carries the same identity
+  // as the brand strip above it.
   children.push(new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { after: 120 },
@@ -248,6 +250,7 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
       size: 32,
       font: FONT_HEADING,
       bold: true,
+      color: brandHex,
     })]
   }))
 
@@ -258,6 +261,7 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
       text: `${input.siteName}`,
       size: 24,
       font: FONT,
+      color: EQ_MID_GREY,
     })]
   }))
 
@@ -276,13 +280,15 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
   if (input.maximoWONumber) infoRows.push(['Maximo WO #', input.maximoWONumber])
   if (input.maximoPMNumber) infoRows.push(['Maximo PM #', input.maximoPMNumber])
 
+  // Info table — labels in tenant brand colour for visual consistency
+  // with the title.
   children.push(new Table({
     width: { size: tw, type: WidthType.DXA },
     columnWidths: [c1, c2],
     rows: infoRows.map(([label, value]) =>
       new TableRow({
         children: [
-          makeCell(label, c1, { bold: true, size: 18 }),
+          makeCell(label, c1, { bold: true, size: 18, color: brandHex }),
           makeCell(value, c2, { size: 18 }),
         ],
       })
@@ -297,10 +303,12 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
 
 // ─────────── Asset Checklist Section ───────────
 
-function buildAssetSection(asset: ChecklistAsset): (Paragraph | Table)[] {
+function buildAssetSection(asset: ChecklistAsset, brandHex: string): (Paragraph | Table)[] {
   const children: (Paragraph | Table)[] = []
+  const headerFill = tenantIce(brandHex)
 
-  // Asset header
+  // Asset header — brand-coloured so each asset block reads as part of the
+  // tenant-branded document, not a generic black-on-white form.
   children.push(new Paragraph({
     spacing: { before: 160, after: 120 },
     children: [new TextRun({
@@ -308,6 +316,7 @@ function buildAssetSection(asset: ChecklistAsset): (Paragraph | Table)[] {
       size: 26,
       font: FONT_HEADING,
       bold: true,
+      color: brandHex,
     })]
   }))
 
@@ -341,15 +350,17 @@ function buildAssetSection(asset: ChecklistAsset): (Paragraph | Table)[] {
     width: { size: taskTableWidth, type: WidthType.DXA },
     columnWidths: [col1, col2, col3, col4, col5, col6],
     rows: [
-      // Header row
+      // Header row — tinted with tenant ice + bold ink so the table header
+      // reads as part of the tenant brand on otherwise B&W body.
       new TableRow({
+        tableHeader: true,
         children: [
-          makeCell('#', col1, { bold: true, size: 18 }),
-          makeCell('Task Description', col2, { bold: true, size: 18 }),
-          makeCell('✓ Pass', col3, { bold: true, size: 16 }),
-          makeCell('✗ Fail', col4, { bold: true, size: 16 }),
-          makeCell('N/A', col5, { bold: true, size: 16 }),
-          makeCell('Comments', col6, { bold: true, size: 18 }),
+          makeCell('#', col1, { bold: true, size: 18, shading: headerFill }),
+          makeCell('Task Description', col2, { bold: true, size: 18, shading: headerFill }),
+          makeCell('✓ Pass', col3, { bold: true, size: 16, shading: headerFill }),
+          makeCell('✗ Fail', col4, { bold: true, size: 16, shading: headerFill }),
+          makeCell('N/A', col5, { bold: true, size: 16, shading: headerFill }),
+          makeCell('Comments', col6, { bold: true, size: 18, shading: headerFill }),
         ],
       }),
       // Task rows
@@ -398,7 +409,8 @@ function buildAssetSection(asset: ChecklistAsset): (Paragraph | Table)[] {
 
 // ─────────── Simple Asset Register ───────────
 
-function buildAssetRegister(assets: ChecklistAsset[]): (Paragraph | Table)[] {
+function buildAssetRegister(assets: ChecklistAsset[], brandHex: string): (Paragraph | Table)[] {
+  const _ = brandHex // brand colour reserved for future register-row tinting; keeps signature consistent with buildAssetSection.
   const children: (Paragraph | Table)[] = []
 
   children.push(new Paragraph({
@@ -580,6 +592,7 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
 
   // Build body: info block + all asset sections
   const bodyChildren: (Paragraph | Table)[] = []
+  const brandHex = bareHex(input.primaryColour ?? '3DA8D8')
 
   // Header info
   bodyChildren.push(...buildInfoBlock(input))
@@ -588,14 +601,14 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
 
   if (format === 'simple') {
     // Simple: single asset register table only
-    bodyChildren.push(...buildAssetRegister(input.assets))
+    bodyChildren.push(...buildAssetRegister(input.assets, brandHex))
   } else {
     // Detailed: per-asset task breakdown with page breaks
     for (let i = 0; i < input.assets.length; i++) {
       if (i > 0) {
         bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
       }
-      bodyChildren.push(...buildAssetSection(input.assets[i]))
+      bodyChildren.push(...buildAssetSection(input.assets[i], brandHex))
     }
   }
 

@@ -51,6 +51,7 @@ import {
   STATUS_PASS,
   STATUS_FAIL,
   STATUS_WARN,
+  mixWithWhite,
 } from '@/lib/reports/colours'
 
 // ─────────── Types ───────────
@@ -351,13 +352,14 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   // Spacer
   children.push(spacer(coverLogo ? 400 : 1200))
 
-  // Report title
+  // Report title — uses tenant brand colour so the cover anchors on the
+  // tenant's identity, not a generic ink.
   children.push(new Paragraph({
     alignment: AlignmentType.LEFT,
     spacing: { after: 120 },
     children: [new TextRun({
       text: input.reportTitle,
-      bold: true, size: 48, font: FONT_HEADING, color: EQ_INK,
+      bold: true, size: 48, font: FONT_HEADING, color: brand,
     })],
   }))
 
@@ -440,15 +442,26 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     ),
   }))
 
-  // Footer branding
+  // Footer branding — left side shows the issuing company (SKS Technologies),
+  // right side shows the product attribution (EQ Solves Service) in smaller
+  // grey text. Falls back to tenantProductName for the company name only if
+  // the call site didn't pass companyName, which would be a misconfiguration.
   children.push(spacer(1600))
   children.push(new Paragraph({
     border: { top: { style: BorderStyle.SINGLE, size: 3, color: brand, space: 1 } },
     spacing: { before: 200 },
-    children: [new TextRun({
-      text: input.tenantProductName,
-      size: 18, font: FONT, color: EQ_MID_GREY,
-    })],
+    tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
+    children: [
+      new TextRun({
+        text: input.companyName ?? input.tenantProductName,
+        bold: true, size: 18, font: FONT, color: brand,
+      }),
+      new TextRun({ text: '\t' }),
+      new TextRun({
+        text: input.tenantProductName,
+        size: 14, font: FONT, color: EQ_MID_GREY,
+      }),
+    ],
   }))
 
   return children
@@ -1129,19 +1142,22 @@ function classifyAsset(asset: PmAssetSection): AssetStats {
   return { status, done, total, failed, followUp }
 }
 
-function statusBadgeCell(status: AssetStatus, width: number): TableCell {
+function statusBadgeCell(status: AssetStatus, width: number, brand: string): TableCell {
   const text = status === 'complete' ? 'Complete'
     : status === 'defect' ? 'Defect'
     : status === 'in_progress' ? 'In Progress'
     : 'Pending'
+  // Pass/fail use semantic status fills (cross-tenant constants); the
+  // in-progress badge picks up the tenant brand so SKS reports highlight
+  // in-progress in SKS purple, not EQ blue.
   const fill = status === 'complete' ? 'DCFCE7'
     : status === 'defect' ? 'FEF3C7'
-    : status === 'in_progress' ? 'EAF5FB'
+    : status === 'in_progress' ? mixWithWhite(brand, 0.85)
     : 'F3F4F6'
-  const color = status === 'complete' ? '15803D'
-    : status === 'defect' ? 'B45309'
-    : status === 'in_progress' ? '2986B4'
-    : '6B7280'
+  const color = status === 'complete' ? STATUS_PASS
+    : status === 'defect' ? STATUS_WARN
+    : status === 'in_progress' ? brand
+    : EQ_MID_GREY
   return makeCell(text, width, {
     align: AlignmentType.CENTER,
     bold: true,
@@ -1156,11 +1172,15 @@ function statusBadgeCell(status: AssetStatus, width: number): TableCell {
  * Actual graphical bars in docx require drawing primitives; the block
  * glyphs give a clean visual in a single cell and print reliably.
  */
-function progressCell(done: number, total: number, width: number): TableCell {
+function progressCell(done: number, total: number, width: number, brand: string): TableCell {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
   const segments = 10
   const filled = Math.round((pct / 100) * segments)
   const bar = '█'.repeat(filled) + '░'.repeat(segments - filled)
+  // Bar colour: pass-green at 100%, tenant brand for in-progress, light
+  // border-grey for empty. Previously hardcoded EQ Sky for in-progress
+  // which leaked EQ branding into SKS reports.
+  const barColour = pct === 100 ? STATUS_PASS : pct > 0 ? brand : EQ_BORDER
   return new TableCell({
     borders: BORDERS_LIGHT,
     width: { size: width, type: WidthType.DXA },
@@ -1169,7 +1189,7 @@ function progressCell(done: number, total: number, width: number): TableCell {
     children: [new Paragraph({
       alignment: AlignmentType.LEFT,
       children: [
-        new TextRun({ text: bar, size: 14, font: FONT, color: pct === 100 ? '15803D' : pct > 0 ? '3DA8D8' : 'D5D8DC' }),
+        new TextRun({ text: bar, size: 14, font: FONT, color: barColour }),
         new TextRun({ text: `  ${pct}%`, size: 14, font: FONT, color: EQ_MID_GREY }),
       ],
     })],
@@ -1222,8 +1242,8 @@ function buildAssetSummary(input: PmAssetReportInput): (Paragraph | Table)[] {
         makeCell(asset.location, wLoc, { size: 17 }),
         makeCell(asset.workOrderNumber ?? '—', wWO, { size: 17 }),
         makeCell(`${s.done}/${s.total}`, wTasks, { size: 17, align: AlignmentType.CENTER }),
-        progressCell(s.done, s.total, wProg),
-        statusBadgeCell(s.status, wStatus),
+        progressCell(s.done, s.total, wProg, brand),
+        statusBadgeCell(s.status, wStatus, brand),
       ],
     })
   })

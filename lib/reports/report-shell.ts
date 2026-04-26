@@ -314,7 +314,7 @@ export function buildCover(shell: ResolvedShell): Paragraph[] {
             text: ctx.siteName,
             size: 28,
             font: FONT_BODY,
-            color: '2986B4',
+            color: hexToDocxShade(settings.primaryColour),
           }),
         ],
       }),
@@ -384,13 +384,14 @@ export function buildCover(shell: ResolvedShell): Paragraph[] {
 export function buildHeader(shell: ResolvedShell): Header {
   const { settings, ctx } = shell
 
+  const brandHex = hexToDocxShade(settings.primaryColour)
   return new Header({
     children: [
       new Paragraph({
         alignment: AlignmentType.JUSTIFIED,
         spacing: { after: 100 },
         border: {
-          bottom: { color: '3DA8D8', style: BorderStyle.SINGLE, size: 6 },
+          bottom: { color: brandHex, style: BorderStyle.SINGLE, size: 6 },
         },
         children: [
           new TextRun({
@@ -398,7 +399,7 @@ export function buildHeader(shell: ResolvedShell): Header {
             bold: true,
             size: 18,
             font: FONT_BODY,
-            color: '2986B4',
+            color: brandHex,
           }),
           new TextRun({ text: '\t' }),
           new TextRun({
