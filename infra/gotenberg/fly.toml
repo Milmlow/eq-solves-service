@@ -14,7 +14,11 @@ primary_region = 'syd'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0
+  # Keep one machine warm. Fly's proxy returns generic HTTP 500 if a cold
+  # wake exceeds its proxy timeout, which surfaces to users as a render
+  # failure. ~$3/mo extra for shared-cpu-1x; cheap insurance for a
+  # customer-facing report path.
+  min_machines_running = 1
 
 [[vm]]
   cpu_kind = 'shared'

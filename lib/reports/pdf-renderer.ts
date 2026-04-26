@@ -56,11 +56,11 @@ export async function renderHtmlToPdf(
   const merged = { ...DEFAULTS, ...opts }
   const endpoint = `${baseUrl.replace(/\/$/, '')}/forms/chromium/convert/html`
 
-  // First attempt; if Fly's machine is cold-starting, Gotenberg can return a
-  // brief 503 while it boots. One retry after 2s covers it without being a
-  // generic try-anything loop.
+  // First attempt; if Fly's machine is cold-starting, Fly's proxy can return
+  // 503 (machine waking) or a generic 500 (proxy timeout while waking).
+  // One retry after 2s covers either case.
   let res = await postHtml(endpoint, html, merged)
-  if (res.status === 503) {
+  if (res.status === 503 || res.status === 500) {
     await new Promise((r) => setTimeout(r, 2000))
     res = await postHtml(endpoint, html, merged)
   }
@@ -80,8 +80,10 @@ async function postHtml(
   opts: Required<RenderOptions>,
 ): Promise<Response> {
   const form = new FormData()
-  // Gotenberg requires the entry HTML file to be named index.html.
-  form.append('files', new Blob([html], { type: 'text/html' }), 'index.html')
+  // Gotenberg requires the entry HTML file to be named index.html. Use File
+  // (not Blob) so the filename survives Node's multipart serialisation —
+  // FormData with a plain Blob drops the filename arg in some runtimes.
+  form.append('files', new File([html], 'index.html', { type: 'text/html' }))
 
   // Chromium routing options — see https://gotenberg.dev/docs/routes#convert-into-pdf-route
   form.append('paperWidth', String(opts.paperWidth))
