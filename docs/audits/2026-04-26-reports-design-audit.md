@@ -1,5 +1,17 @@
 # Reports Design Audit — 2026-04-26
 
+> **Status as of 2026-04-27:** all audit items closed in code (see fix order
+> below — every numbered item has a commit). One item is partial: S2 full
+> tenant-aware ice is implemented for `pm-check-report.ts` only; the other
+> four affected generators use `EQ_ICE` (the brief default) rather than a
+> tenant-derived ice. The visual difference is small enough on shared-CPU
+> DOCX rendering that it wasn't worth threading through the deeper builder
+> hierarchies tonight; pattern is documented for future revival.
+>
+> Royce confirmed Option A on the semantic colours open question — pass
+> `#16A34A`, fail `#DC2626`, warn `#D97706`. Tokens live in
+> `lib/reports/colours.ts` and should be added to the brief in v1.4.
+
 Audit of all DOCX report generators against **EQ Solutions Design Brief v1.3 (17 April 2026)**, plus the SKS Technologies brand notes in the global CLAUDE.md.
 
 Brief source: `C:\Users\EQ\OneDrive - eq-power.com.au\Documents\EQ_Design_Brief_v1_3.docx`.

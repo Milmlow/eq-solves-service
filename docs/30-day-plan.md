@@ -4,26 +4,38 @@ Consolidated punch list of everything flagged during the 2026-04-26 review and r
 
 This is a reference document — it doesn't enforce anything. Use it as the input when you decide what to work on next, and update/cross off as items land.
 
+> **Update 2026-04-27:** Royce gave explicit go to "all suggestions" overnight,
+> including auth items B1a/B1b/B1c. Items below marked **[DONE]** landed in
+> commits during 2026-04-26 → 2026-04-27 review session. Items still showing
+> as priority are either Royce-manual (DB writes, external accounts), partial
+> due to scope (S2 full threading), or genuinely future work.
+
 ---
 
 ## Priority A — ship within ~7 days
 
 These are the items where the cost of *not* doing them is real (hidden bug, ongoing brand damage, or operational risk).
 
-### A1. Pre-push build gate (~30 min)
+### A1. Pre-push build gate **[DONE 2026-04-27]**
 
-Tonight added `npm run check` (`tsc --noEmit && next build`) as an opt-in script. Two prod build failures in this evening's session would have been caught by it.
+`npm run check` (`tsc --noEmit && next build`) shipped as a script. GitHub
+Action at `.github/workflows/check.yml` runs `npm run check + npx vitest run`
+on every push to main and on every PR. Removes the "I forgot to run build
+locally" class of failure surfaced twice during the review session.
 
-**Next step:** add a GitHub Action that runs `npm run check` on every push to `main` and blocks the Netlify deploy hook if it fails. ~40 lines of YAML, removes the entire class of "I forgot to run build locally."
+### A2. Reports design audit fixes **[DONE 2026-04-27]**
 
-### A2. Reports design audit fixes — Phase 1 (~2 hr)
+Phase 1 (S1 fonts, S3 greys, N1 borders, N2 brand fallback) and most of
+Phase 2 (S2 ice partial, S4 FlatUI swap, Q1 fail-visibly, Q2 sizing,
+Q3 brand strip, Q4 contrast, N3 cast) all landed during the overnight
+session. See [docs/audits/2026-04-26-reports-design-audit.md](docs/audits/2026-04-26-reports-design-audit.md)
+for status banner and per-item commits.
 
-Documented in [docs/audits/2026-04-26-reports-design-audit.md](docs/audits/2026-04-26-reports-design-audit.md). Phase 1 = items S1, S3, N1, N2 from the audit:
-- Centralise colours + borders into `lib/reports/colours.ts`
-- Centralise font into `lib/reports/typography.ts` (Aptos Display + Aptos per Brief v1.3)
-- Replace hex literals across all generators
-
-Brand consistency wins immediately. Doesn't touch any data flow, low risk.
+The one partial item is S2 full (tenant-aware ice across all generators).
+Implemented for pm-check-report only; the other four generators use
+`EQ_ICE` (brief default). Threading through nsx/acb/compliance/work-order
+needs ~6 builder fns × 4 generators of refactoring for marginal visual
+gain — left as a follow-up if any customer flags the colour mismatch.
 
 ### A3. SKS `report_company_abn` is null
 
@@ -43,23 +55,31 @@ You confirmed backups are on but nobody has tested a restore. "Backups exist" �
 
 Real issues but not on fire today.
 
-### B1. Auth hardening pass (~2 hr, requires explicit Royce approval before push)
+### B1. Auth hardening pass **[DONE 2026-04-27 — Royce explicit go]**
 
-Three independent items:
+All three items landed:
 
-**B1a. `requireUser()` non-determinism.** [lib/actions/auth.ts:15-21](lib/actions/auth.ts:15) — `.limit(1).maybeSingle()` with no `ORDER BY` means a user in multiple tenants gets a coin-flip tenant per session. Doesn't matter today (only Royce is in multiple) but bites the moment a non-you human is in multiple tenants. Fix: `.order('created_at', { ascending: true })` + ideally a `last_active_tenant_id` column on profiles for an explicit tenant switcher.
+- **B1a [DONE]:** `requireUser()` membership query now `.order('created_at', { ascending: true }).order('tenant_id', { ascending: true })` so multi-tenant users land deterministically. Full tenant-switcher UI is the proper long-term fix — still a follow-up.
+- **B1b [DONE]:** `'use server'` directive removed from `lib/actions/auth.ts` and `lib/actions/idempotency.ts`. Both files are now plain helpers, not Next.js server-action endpoints.
+- **B1c [DONE]:** Pure-function MFA routing helpers extracted to `lib/auth/mfa-routing.ts` with vitest spec at `tests/lib/auth/mfa-routing.test.ts` (21 tests, all passing). Asserts `/auth/signin` is in `AAL_EXEMPT_PATHS` so the AAL1-loop fix has a regression test.
 
-**B1b. `'use server'` directive on helper files.** [lib/actions/auth.ts:1](lib/actions/auth.ts:1) and [lib/actions/idempotency.ts:1](lib/actions/idempotency.ts:1) both have `'use server'`. These files contain helpers, not action endpoints — every export becomes a public RPC by accident. Today blocked by accidental-serialisation-error in `requireUser`'s return value, but one refactor away from being a working "tell me my own auth state" public endpoint. Fix: delete the directive from both files.
+### B2. Cross-tenant isolation smoke test **[PARTIAL 2026-04-27]**
 
-**B1c. MFA regression test.** Royce confirmed the AAL1 loop was fixed 2026-04-26. No automated check confirms it stays fixed. Quick test: a Playwright script that creates a user → enrols TOTP → signs out → signs in → asserts the MFA challenge resolves cleanly. Run on every push.
+Static-audit version landed at `scripts/audit-rls.ts` (registered as
+`npm run audit:rls`). Verifies every public table has RLS enabled —
+catches "new table added without RLS" regressions. Currently requires a
+Supabase RPC `exec_sql_return_json` that doesn't exist yet; script
+self-documents what to add.
 
-### B2. Cross-tenant isolation smoke test (~1 hr)
+The full enforcement-test version (logs in as a fixture user, asserts
+cross-tenant reads return empty + cross-tenant writes 403) is still the
+right end-state. Needs fixture user setup that wasn't in scope tonight.
 
-Single Node script: `scripts/check-isolation.ts`. Logs in as a fixture user in tenant SKS, asserts every `SELECT *` returns only SKS rows, asserts an UPDATE on a Demo-owned row fails. Run via `npm run check` on every push. Catches the entire "RLS policy regression" class of bug that no other check catches.
+### B3. Reports design audit fixes — Phase 2 **[DONE 2026-04-27]**
 
-### B3. Reports design audit fixes — Phase 2 (~3 hr)
-
-Items S2, S4, Q1–Q4 from [the audit](docs/audits/2026-04-26-reports-design-audit.md). Bigger surface area, requires per-report eyeball comparison before/after. Don't push without you reviewing the rendered output.
+S4, Q1, Q2, Q3, Q4, N3 all landed; S2 full deferred per A2 note. See
+[the audit](docs/audits/2026-04-26-reports-design-audit.md) for the
+status banner and per-item commits.
 
 ### B4. Idempotency adoption gaps (~1 hr each module)
 
@@ -71,9 +91,10 @@ Items S2, S4, Q1–Q4 from [the audit](docs/audits/2026-04-26-reports-design-aud
 
 Each is an opportunity for a duplicate write under retry. Fix incrementally — wrap one action per session, audit-log the same `mutationId` inside the wrapper.
 
-### B5. Defects schema doc cleanup
+### B5. Defects schema doc cleanup **[DONE 2026-04-27]**
 
-CLAUDE.md says "soft delete via `is_active` everywhere." `defects` doesn't have `is_active` — it uses `status` (open/resolved). Tonight fixed the legacy `generate-and-store.ts` queries that hit this. CLAUDE.md should be updated to call out the exception explicitly so future Claude doesn't write the same bug a third time.
+CLAUDE.md "Conventions" section now explicitly calls out defects as the
+exception to the `is_active` soft-delete convention.
 
 ### B6. Dashboard `as any` / `as unknown as` casts (~1 hr)
 
@@ -93,9 +114,11 @@ If you ever revisit PDF reports, the legacy DOCX generator includes a "I confirm
 
 Legacy DOCX cover shows "Outstanding Work Orders: 4." New HTML template doesn't. Add to template + loader if PDF revives.
 
-### C3. Migration count discipline
+### C3. Migration count discipline **[DONE 2026-04-27]**
 
-Markdown files keep claiming "0001-0025" / "0001-0045+" / "0001-0065+" — these claims rot in days. Replace all numeric migration counts with "see `supabase/migrations/`" so they don't need maintenance.
+CLAUDE.md, README.md, ARCHITECTURE.md, LOCAL_DEV.md all updated to point
+at `supabase/migrations/` as the source of truth instead of carrying
+numeric ranges that bit-rot. CHANGELOG kept as-is (historical record).
 
 ### C4. Audit-log enforcement (~30 min once decided)
 
