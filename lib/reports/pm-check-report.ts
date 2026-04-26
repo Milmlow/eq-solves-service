@@ -35,7 +35,7 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY } from '@/lib/reports/typography'
-import { EQ_MID_GREY, EQ_BORDER, EQ_ICE } from '@/lib/reports/colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_ICE, tenantIce } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
@@ -83,11 +83,16 @@ const CELL_MARGINS = { top: 60, bottom: 60, left: 100, right: 100 }
 
 // ---------- helpers ----------
 
-function headerCell(text: string, width: number): TableCell {
+/**
+ * Header cell. `fill` defaults to EQ_ICE so existing call sites without
+ * a brand-aware fill continue to render brief-default. New call sites
+ * pass tenantIce(input.primaryColour) to get a tenant-flavoured ice.
+ */
+function headerCell(text: string, width: number, fill: string = EQ_ICE): TableCell {
   return new TableCell({
     borders: BORDERS,
     width: { size: width, type: WidthType.DXA },
-    shading: { fill: EQ_ICE, type: ShadingType.CLEAR },
+    shading: { fill, type: ShadingType.CLEAR },
     margins: CELL_MARGINS,
     children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
   })
@@ -248,6 +253,7 @@ function buildCheckSummaryTable(input: PmCheckReportInput): Table {
   const c1 = 2000
   const c2 = 3600
   const totalW = c1 + c2
+  const fill = tenantIce(input.primaryColour)
 
   return new Table({
     width: { size: totalW, type: WidthType.DXA },
@@ -255,8 +261,8 @@ function buildCheckSummaryTable(input: PmCheckReportInput): Table {
     rows: [
       new TableRow({
         children: [
-          headerCell('Field', c1),
-          headerCell('Value', c2),
+          headerCell('Field', c1, fill),
+          headerCell('Value', c2, fill),
         ],
       }),
       new TableRow({
@@ -313,6 +319,7 @@ function buildCheckItemsTable(input: PmCheckReportInput): Table {
   const c5 = 1400 // Completed By
   const c6 = 1026 // Completed At
   const totalW = c1 + c2 + c3 + c4 + c5 + c6
+  const fill = tenantIce(input.primaryColour)
 
   const itemRows = input.items.map((item) =>
     new TableRow({
@@ -333,12 +340,12 @@ function buildCheckItemsTable(input: PmCheckReportInput): Table {
     rows: [
       new TableRow({
         children: [
-          headerCell('#', c1),
-          headerCell('Description', c2),
-          headerCell('Result', c3),
-          headerCell('Notes', c4),
-          headerCell('Completed By', c5),
-          headerCell('Completed At', c6),
+          headerCell('#', c1, fill),
+          headerCell('Description', c2, fill),
+          headerCell('Result', c3, fill),
+          headerCell('Notes', c4, fill),
+          headerCell('Completed By', c5, fill),
+          headerCell('Completed At', c6, fill),
         ],
       }),
       ...itemRows,
@@ -366,6 +373,7 @@ function buildStatisticsSection(input: PmCheckReportInput): (Paragraph | Table)[
   const c1 = 2000
   const c2 = 1400
   const totalW = c1 + c2
+  const fill = tenantIce(input.primaryColour)
 
   children.push(new Table({
     width: { size: totalW, type: WidthType.DXA },
@@ -373,8 +381,8 @@ function buildStatisticsSection(input: PmCheckReportInput): (Paragraph | Table)[
     rows: [
       new TableRow({
         children: [
-          headerCell('Metric', c1),
-          headerCell('Count', c2),
+          headerCell('Metric', c1, fill),
+          headerCell('Count', c2, fill),
         ],
       }),
       new TableRow({
