@@ -150,11 +150,13 @@ export async function loadPmCheckReportData(
   if (itemsErr) throw new Error(`Could not load check items: ${itemsErr.message}`)
 
   // ── defects ──
+  // No is_active column on defects — they're tracked via `status`
+  // (open/resolved) and `resolved_at`. Pull all defects for the check;
+  // the template will badge them by status.
   const { data: defects, error: defErr } = await supabase
     .from('defects')
     .select('id, check_asset_id, severity, status, title, description, raised_by, work_order_number, created_at, asset_id')
     .eq('check_id', checkId)
-    .eq('is_active', true)
     .order('created_at', { ascending: true })
 
   if (defErr) throw new Error(`Could not load defects: ${defErr.message}`)
