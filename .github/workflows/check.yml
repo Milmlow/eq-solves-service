@@ -1,0 +1,59 @@
+name: check
+
+# Build gate — runs `npm run check` (tsc --noEmit && next build) on every
+# push to main and on every pull request. Two prod build failures during
+# the 2026-04-26 review session would have been caught by this.
+#
+# This is the gate referenced in CLAUDE.md "Conventions". A failing run
+# here doesn't directly block the Netlify deploy (Netlify watches the
+# branch independently), but it surfaces the failure in the GitHub PR /
+# commit UI before Netlify burns a build slot, and gives a single place
+# to add the cross-tenant isolation smoke test (B2 in 30-day-plan.md)
+# once it lands.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: tsc + next build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # The build needs the same NEXT_PUBLIC_* env vars Netlify uses, otherwise
+    # Next collects-page-data step fails with "Invalid public environment
+    # variables". Provide placeholders here — they're fine for compilation,
+    # the real values live in Netlify env. Add real values to GitHub Actions
+    # secrets only if a future check needs to actually call Supabase.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-build-only
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-for-build-only
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Next.js build
+        run: npx next build
+
+      - name: Vitest
+        run: npx vitest run
