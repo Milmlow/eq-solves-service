@@ -152,7 +152,10 @@ export async function GET(request: NextRequest) {
   const dateFmt: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'long', year: 'numeric' }
   const dueDateStr = check.due_date ? new Date(check.due_date).toLocaleDateString('en-AU', dateFmt) : '—'
   const printedDateStr = new Date().toLocaleDateString('en-AU', dateFmt)
-  const frequency = check.frequency?.replace(/_/g, ' ') ?? '—'
+  // Capitalise frequency for display ("quarterly" -> "Quarterly").
+  // DB enum is lowercase; the UI capitalises it everywhere except here.
+  const rawFreq = check.frequency?.replace(/_/g, ' ') ?? '—'
+  const frequency = rawFreq.charAt(0).toUpperCase() + rawFreq.slice(1)
 
   // Build the checklist input
   const checklistInput: MaintenanceChecklistInput = {

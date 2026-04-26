@@ -144,11 +144,11 @@ function dataCell(text: string, opts: { bold?: boolean; color?: string; align?: 
   })
 }
 
-function sectionHeading(text: string): Paragraph {
+function sectionHeading(text: string, colour: string): Paragraph {
   return new Paragraph({
     heading: HeadingLevel.HEADING_2,
     spacing: { before: 300, after: 100 },
-    children: [new TextRun({ text, bold: true, size: 24, font: FONT_BODY })],
+    children: [new TextRun({ text, bold: true, size: 24, font: FONT_BODY, color: colour })],
   })
 }
 
@@ -239,7 +239,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
   )
 
   // ── Maintenance Compliance ──
-  sections.push(sectionHeading('Maintenance Compliance'))
+  sections.push(sectionHeading('Maintenance Compliance', colour))
   sections.push(kpiLine('Compliance Rate', `${m.complianceRate}%`, m.complianceRate >= 80 ? STATUS_PASS : m.complianceRate >= 50 ? STATUS_WARN : STATUS_FAIL))
   sections.push(kpiLine('Total Checks', m.total))
   sections.push(kpiLine('Complete', m.complete, STATUS_PASS))
@@ -249,7 +249,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
   sections.push(kpiLine('Cancelled', m.cancelled))
 
   // ── Testing Results ──
-  sections.push(sectionHeading('Testing Results'))
+  sections.push(sectionHeading('Testing Results', colour))
   sections.push(kpiLine('Pass Rate', `${t.passRate}%`, t.passRate >= 80 ? STATUS_PASS : t.passRate >= 50 ? STATUS_WARN : STATUS_FAIL))
   sections.push(kpiLine('Total Tests', t.total))
   sections.push(kpiLine('Pass', t.pass, STATUS_PASS))
@@ -259,7 +259,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
 
   // ── ACB / NSX Workflow Progress ──
   if (!isSummary && (input.acb.total > 0 || input.nsx.total > 0)) {
-    sections.push(sectionHeading('Breaker Testing Progress'))
+    sections.push(sectionHeading('Breaker Testing Progress', colour))
 
     if (input.acb.total > 0) {
       sections.push(new Paragraph({ spacing: { before: 100, after: 60 }, children: [new TextRun({ text: 'ACB (Air Circuit Breakers)', bold: true, size: 20, font: FONT_BODY })] }))
@@ -280,7 +280,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
 
   // ── Defects Register ──
   if (input.defects.total > 0) {
-    sections.push(sectionHeading('Defects Register'))
+    sections.push(sectionHeading('Defects Register', colour))
     sections.push(kpiLine('Total Defects', input.defects.total))
     sections.push(kpiLine('Open', input.defects.open, input.defects.open > 0 ? STATUS_FAIL : undefined))
     sections.push(kpiLine('In Progress', input.defects.inProgress, STATUS_WARN))
@@ -297,7 +297,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
 
   // ── Compliance by Site table ──
   if (input.complianceBySite.length > 0 && !isSummary) {
-    sections.push(sectionHeading('Compliance by Site'))
+    sections.push(sectionHeading('Compliance by Site', colour))
     const siteTable = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [
@@ -335,7 +335,7 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
   // to fall back to content-based sizing and produced a malformed
   // column set in the .docx XML. Keep the widths explicit.
   if (isDetailed && input.months.length > 0) {
-    sections.push(sectionHeading('6-Month Trend'))
+    sections.push(sectionHeading('6-Month Trend', colour))
     const trendTable = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [
