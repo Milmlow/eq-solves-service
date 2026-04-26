@@ -7,7 +7,12 @@ app = 'eq-solves-gotenberg'
 primary_region = 'syd'
 
 [build]
-  image = 'gotenberg/gotenberg:8'
+  # Pinned to 8.21.1 (not the floating `:8` tag) — Gotenberg 8.31.0
+  # exhibits "websocket url timeout reached" Chromium boot failures
+  # on shared-cpu-1x even with 2GB RAM. 8.21.1 is the last version
+  # we've confirmed renders reliably here. Bump deliberately when
+  # testing newer 8.x releases; do not auto-track `:8`.
+  image = 'gotenberg/gotenberg:8.21.1'
 
 [http_service]
   internal_port = 3000
@@ -23,4 +28,7 @@ primary_region = 'syd'
 [[vm]]
   cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 1024
+  # Chromium needs ~2GB on Linux. 1024MB caused "websocket url timeout
+  # reached" errors at boot on Gotenberg 8.31.0 — Chromium fails to
+  # initialise its DevTools port under memory pressure.
+  memory_mb = 2048

@@ -94,6 +94,7 @@ Configurable report template with section toggles (cover, overview, contents, su
 ## Conventions
 - `requireUser()` at the top of every server action — resolves user, tenant, role
 - `tsc --noEmit` at 0 errors before any sprint is closed
+- **Run `npm run check` before pushing to main.** Equivalent to `tsc --noEmit && next build`. Catches both TypeScript errors and Turbopack bundler rules (e.g. `react-dom/server` imports in app routes). Two prod build failures on 2026-04-26 would have been caught by this — habit it in.
 - No credentials hardcoded — `.env.local` only, never committed
 - No deployment without explicit Royce instruction in chat
 - Working before refactoring
@@ -101,7 +102,7 @@ Configurable report template with section toggles (cover, overview, contents, su
 - All mutations use Next.js server actions: `requireUser()` → role check → Zod validation → Supabase mutation → audit log → `revalidatePath()`
 - Zod v4: use `.error.issues[0]` not `.errors[0]`; use `error:` option not `errorMap:`
 - Client components use `createClient()` from `lib/supabase/client`; server components/actions use `lib/supabase/server`
-- Soft deletes via `is_active` everywhere — no hard deletes (except consumed MFA codes and removed job plan items)
+- Soft deletes via `is_active` everywhere — no hard deletes (except consumed MFA codes, removed job plan items, **and the `defects` table which uses `status` (open/resolved) + `resolved_at` instead — do not add `is_active` to defects queries, it doesn't exist**)
 - All DataTable instances use `onRowClick` — no icon action columns
 - Toolbar button order convention: Import (left), Export, then action buttons (right)
 - Button labels: "Import" and "Export" — never "Import CSV" or "Export CSV"
