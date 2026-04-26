@@ -7,31 +7,33 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import { trackServer } from '@/lib/analytics-server'
+import {
+  PUBLIC_PATHS,
+  MFA_PATHS,
+  AAL_EXEMPT_PATHS,
+  isPublicPath,
+  isAalExempt,
+} from '@/lib/auth/mfa-routing'
 
 // Next.js 16 renamed `middleware.ts` → `proxy.ts` with a `proxy()` export.
 // This file refreshes the Supabase session on every request, enforces
 // authentication, MFA (AAL2), and admin-only routes.
+//
+// Path lists and pure routing helpers live in lib/auth/mfa-routing.ts so
+// the AAL1 loop fix has a regression test (tests/lib/auth/mfa-routing.test.ts).
 
-const PUBLIC_PATHS = [
-  '/auth/signin',
-  '/auth/forgot-password',
-  '/auth/reset-password',
-  '/auth/callback',
-]
-
-const MFA_PATHS = ['/auth/mfa', '/auth/enroll-mfa']
-// Paths an authenticated user can reach without completing MFA.
-// /auth/signin is included so users with a stale AAL1+TOTP session can
-// reach the signin page to sign out and start fresh — prevents MFA loop.
-const AAL_EXEMPT_PATHS = ['/auth/mfa', '/auth/enroll-mfa', '/auth/reset-password', '/auth/signout', '/auth/signin']
+// Re-export so existing direct readers still resolve (keeps the call surface
+// stable; new code should import from lib/auth/mfa-routing directly).
+export { PUBLIC_PATHS, MFA_PATHS, AAL_EXEMPT_PATHS }
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const { response, supabase, user, aal } = await updateSession(request)
 
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
-  const isMfaPath = MFA_PATHS.some((p) => pathname.startsWith(p))
-  const isAalExempt = AAL_EXEMPT_PATHS.some((p) => pathname.startsWith(p))
+  const isPublic = isPublicPath(pathname)
+  const isAalExemptPath = isAalExempt(pathname)
+  // isMfaPath is exported for callers that need it, but not used in this
+  // middleware body — the AAL exemption check covers the same routes.
 
   // Unauthenticated users -> /auth/signin (except for public routes).
   if (!user) {
@@ -55,7 +57,7 @@ export async function proxy(request: NextRequest) {
   // AAL enforcement:
   //   nextLevel === 'aal2' && currentLevel === 'aal1'  -> must challenge existing factor
   //   nextLevel === 'aal1' && currentLevel === 'aal1'  -> no factor enrolled yet
-  if (aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2' && !isAalExempt) {
+  if (aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2' && !isAalExemptPath) {
     // Fire-and-forget observability: makes the MFA loop visible if it recurs.
     // Two of these within ~30s for the same user = suspected loop.
     trackServer(user.id, 'mfa_redirect', { from: pathname }).catch(() => {})
@@ -68,7 +70,7 @@ export async function proxy(request: NextRequest) {
   if (
     aal.currentLevel === 'aal1' &&
     aal.nextLevel === 'aal1' &&
-    !isAalExempt &&
+    !isAalExemptPath &&
     !isDemoUser
   ) {
     const url = request.nextUrl.clone()
@@ -92,7 +94,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Deactivated users are signed out on any protected route.
-  if (!isPublic && !isAalExempt) {
+  if (!isPublic && !isAalExemptPath) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_active')
