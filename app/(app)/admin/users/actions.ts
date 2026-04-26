@@ -489,4 +489,62 @@ export async function setRoleAction(formData: FormData) {
   revalidatePath('/admin/users')
   return { ok: true }
 }
-  
+
+/**
+ * PERMANENTLY delete a user.
+ *
+ * Reserved for super_admin only. This:
+ *   1. Deletes the user from auth.users (Supabase Admin API).
+ *   2. profiles + tenant_members + audit_log rows are preserved with the user
+ *      reference intact — historical data isn't rewritten. Foreign keys to
+ *      auth.users use ON DELETE SET NULL so display layers will show
+ *      "Removed user" where appropriate.
+ *
+ * Use cases: test accounts, mistaken invitations, GDPR-style erasure requests.
+ * For "this person left the team" use removeUserFromTenantAction (soft archive).
+ *
+ * Irreversible. UI must double-confirm before calling.
+ */
+export async function hardDeleteUserAction(formData: FormData) {
+  const userId = String(formData.get('user_id') || '')
+  if (!userId) return { error: 'Missing user.' }
+
+  let ctx
+  try {
+    ctx = await requireTenantAdmin()
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+  const { user: actor, role: actorRole } = ctx
+
+  // Super-admin gate. Even regular admins cannot trigger a hard delete —
+  // archive is the right tool for the job 95% of the time.
+  if (actorRole !== 'super_admin') {
+    return { error: 'Only super_admin users can permanently delete accounts. Archive instead.' }
+  }
+  if (userId === actor.id) {
+    return { error: 'You cannot permanently delete yourself.' }
+  }
+
+  const admin = createAdminClient()
+
+  // Capture email/name for the audit summary BEFORE we delete the auth row.
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('email, full_name')
+    .eq('id', userId)
+    .maybeSingle()
+
+  const { error } = await admin.auth.admin.deleteUser(userId)
+  if (error) return { error: error.message }
+
+  await logAuditEvent({
+    action: 'delete',
+    entityType: 'user',
+    entityId: userId,
+    summary: `PERMANENTLY DELETED user ${profile?.email ?? userId} (${profile?.full_name ?? 'unknown name'})`,
+  })
+
+  revalidatePath('/admin/users')
+  return { ok: true }
+}

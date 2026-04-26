@@ -79,6 +79,8 @@ export async function updateSiteAction(id: string, formData: FormData) {
 
     await logAuditEvent({ action: 'update', entityType: 'site', entityId: id, summary: 'Updated site' })
     revalidatePath('/sites')
+    revalidatePath(`/sites/${id}`)
+    revalidatePath('/customers')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

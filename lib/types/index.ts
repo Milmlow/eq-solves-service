@@ -415,11 +415,23 @@ export interface AcbTestReading {
   created_at: string
 }
 
+/**
+ * Attachment categorisation. Drives where the file shows up:
+ *   - evidence  → photos/videos on tests + defects, included on PDF reports.
+ *   - reference → site drawings/SLDs/manuals, pinned to site detail pages.
+ *   - paperwork → POs/customer signoffs/dockets on work orders, internal only.
+ *
+ * Required on every new upload (migration 0060). Existing pre-2026-04-26 rows
+ * were wiped; no nulls in the column.
+ */
+export type AttachmentType = 'evidence' | 'reference' | 'paperwork'
+
 export interface Attachment {
   id: string
   tenant_id: string
   entity_type: string
   entity_id: string
+  attachment_type: AttachmentType
   file_name: string
   file_size: number
   content_type: string

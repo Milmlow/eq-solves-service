@@ -70,6 +70,8 @@ export async function updateCustomerAction(id: string, formData: FormData) {
 
     await logAuditEvent({ action: 'update', entityType: 'customer', entityId: id, summary: `Updated customer` })
     revalidatePath('/customers')
+    revalidatePath(`/customers/${id}`)
+    revalidatePath('/sites')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -179,7 +181,10 @@ export async function uploadCustomerLogoAction(customerId: string, formData: For
 
     await logAuditEvent({ action: 'update', entityType: 'customer', entityId: customerId, summary: 'Uploaded customer logo' })
     revalidatePath('/customers')
-    return { success: true }
+    revalidatePath(`/customers/${customerId}`)
+    revalidatePath('/sites')
+    revalidatePath('/admin/reports')
+    return { success: true, logoUrl }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }

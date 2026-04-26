@@ -177,7 +177,7 @@ export default async function DashboardPage({
     }
   })
 
-  const viewLabel = effectiveView === 'mine' ? 'My Work' : 'All Work'
+  const viewLabel = effectiveView === 'mine' ? 'Assigned to Me' : 'All Active Work'
   const myTestsTotal = myAcbTests.length + myNsxTests.length
 
   return (

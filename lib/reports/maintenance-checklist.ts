@@ -57,8 +57,16 @@ export interface MaintenanceChecklistInput {
   customerLogoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | null
   primaryColour?: string          // hex color for masthead
 
-  // Format: 'simple' = asset register only, 'detailed' = full task breakdown per asset
-  format?: 'simple' | 'detailed'
+  /**
+   * Detail level (Sprint 2 — three-tier styles, mirrors Report Settings):
+   *   - 'simple'   → asset register only, single page (legacy alias 'summary').
+   *   - 'standard' → asset register + per-asset task headings (default for Print Report).
+   *   - 'detailed' → full task-by-task breakdown with comment space per task.
+   *
+   * Generator currently treats 'standard' as 'detailed' until a slimmed-down
+   * template is built. Type accepts all three so the API contract is stable.
+   */
+  format?: 'simple' | 'standard' | 'detailed'
 }
 
 export interface ChecklistAsset {

@@ -3,15 +3,17 @@ import { createClient } from '@/lib/supabase/server'
 import { UsersTable } from './UsersTable'
 import { InviteUserForm } from './InviteUserForm'
 import { requireUser } from '@/lib/actions/auth'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * Admin → Users.
  *
- * This page lists ONLY users who have a `tenant_members` row for the acting
- * admin's current tenant — both active members and previously-removed ones
- * (so the "Attach" affordance still works for re-inviting them).
+ * Lists users who have a `tenant_members` row for the acting admin's current
+ * tenant. By default, soft-removed users are HIDDEN — toggle "Show archived"
+ * to bring them back into view (where you can re-attach them or, as super_admin,
+ * permanently delete them).
  *
  * Until 2026-04-21 this page listed every profile in the database, which
  * meant an SKS admin could see Demo / Equinix / Webb users they had no
@@ -19,22 +21,35 @@ export const dynamic = 'force-dynamic'
  * RLS still prevented data access. C1 fix: query tenant_members first, then
  * fetch profiles only for those user_ids.
  */
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ show_archived?: string }>
+}) {
+  const params = await searchParams
+  const showArchived = params.show_archived === '1'
+
   const admin = createAdminClient()
   const supabase = await createClient()
 
-  // Establish the acting user's tenant — every query below is scoped to this.
-  const { tenantId } = await requireUser()
+  // Establish the acting user's tenant + role — every query below is scoped to this.
+  const { tenantId, role: callerRole } = await requireUser()
 
   const { data: { user: currentUser } } = await supabase.auth.getUser()
 
-  // 1. Memberships for THIS tenant only (both active and soft-removed).
-  //    Soft-removed rows are kept so the admin can see who's been removed
-  //    and re-attach them via the "Attach" button. No hard deletes — ever.
-  const { data: memberships } = await admin
+  // 1. Memberships for THIS tenant only. By default, only ACTIVE members.
+  //    Toggle showArchived to include soft-removed members so the admin can
+  //    re-attach (any admin) or permanently delete (super_admin only) them.
+  let membershipQuery = admin
     .from('tenant_members')
     .select('user_id, role, is_active')
     .eq('tenant_id', tenantId)
+
+  if (!showArchived) {
+    membershipQuery = membershipQuery.eq('is_active', true)
+  }
+
+  const { data: memberships } = await membershipQuery
 
   const memberIds = (memberships ?? []).map((m) => m.user_id as string)
 
@@ -78,14 +93,36 @@ export default async function AdminUsersPage() {
     }
   })
 
+  // Count of archived members so the toggle can show "(3)" badge — admin
+  // doesn't need to click to discover whether any exist.
+  const { count: archivedCount } = await admin
+    .from('tenant_members')
+    .select('user_id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('is_active', false)
+
   return (
     <div className="flex flex-col gap-6 max-w-6xl">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-eq-ink">Users</h1>
           <p className="text-sm text-eq-grey mt-1">
-            Invite, disable, and manage roles. <strong className="font-semibold">Remove</strong> takes a user out of this tenant only — they can be re-attached. <strong className="font-semibold">Disable account</strong> blocks sign-in across all tenants. Nothing is ever hard-deleted.
+            Invite, archive, and manage roles. <strong className="font-semibold">Archive</strong> takes a user out of this tenant only — they can be re-attached. <strong className="font-semibold">Disable account</strong> blocks sign-in across all tenants. <strong className="font-semibold">Delete permanently</strong> (super_admin only) wipes the account from auth — historical records keep their name.
           </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href={showArchived ? '/admin/users' : '/admin/users?show_archived=1'}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm font-medium text-eq-ink"
+          >
+            <span className={`w-2 h-2 rounded-full ${showArchived ? 'bg-amber-500' : 'bg-gray-300'}`} />
+            {showArchived ? 'Hide archived' : 'Show archived'}
+            {!!archivedCount && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-semibold">
+                {archivedCount}
+              </span>
+            )}
+          </Link>
         </div>
       </div>
 
@@ -95,7 +132,12 @@ export default async function AdminUsersPage() {
       </div>
 
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <UsersTable users={rows} currentUserId={currentUser?.id ?? ''} />
+        <UsersTable
+          users={rows}
+          currentUserId={currentUser?.id ?? ''}
+          callerRole={callerRole ?? 'admin'}
+          showArchived={showArchived}
+        />
       </div>
     </div>
   )

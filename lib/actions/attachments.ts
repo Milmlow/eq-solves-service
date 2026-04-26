@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
+import type { AttachmentType } from '@/lib/types'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = [
@@ -15,6 +16,20 @@ const ALLOWED_TYPES = [
   'text/csv',
   'text/plain',
 ]
+
+const VALID_ATTACHMENT_TYPES: readonly AttachmentType[] = ['evidence', 'reference', 'paperwork'] as const
+
+/**
+ * Sensible default category given the parent entity. The form still asks the
+ * user, but the picker pre-selects this so they only have to deviate when
+ * needed. Reduces clicks for the most common pattern (defect → evidence).
+ */
+function inferAttachmentType(entityType: string): AttachmentType {
+  if (entityType === 'site' || entityType === 'asset') return 'reference'
+  if (entityType === 'work_order' || entityType.startsWith('wo_')) return 'paperwork'
+  // defects, maintenance_check, *_test → evidence
+  return 'evidence'
+}
 
 export async function uploadAttachmentAction(
   entityType: string,
@@ -32,6 +47,13 @@ export async function uploadAttachmentAction(
       return { success: false, error: `File type "${file.type}" not allowed. Accepted: PDF, images, XLSX, DOCX, CSV, TXT.` }
     }
 
+    // Type comes from the form (radio in the upload modal). Falls back to a
+    // context-aware default so older callers without the picker still work.
+    const requestedType = String(formData.get('attachment_type') ?? '').trim() as AttachmentType
+    const attachmentType: AttachmentType = VALID_ATTACHMENT_TYPES.includes(requestedType)
+      ? requestedType
+      : inferAttachmentType(entityType)
+
     // Build storage path: {tenant_id}/{entity_type}/{entity_id}/{timestamp}_{filename}
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     const storagePath = `${tenantId}/${entityType}/${entityId}/${Date.now()}_${safeName}`
@@ -48,6 +70,7 @@ export async function uploadAttachmentAction(
       tenant_id: tenantId,
       entity_type: entityType,
       entity_id: entityId,
+      attachment_type: attachmentType,
       file_name: file.name,
       file_size: file.size,
       content_type: file.type,
@@ -62,7 +85,7 @@ export async function uploadAttachmentAction(
     }
 
     revalidatePath(`/${entityType.replace('_', '-')}s`)
-    return { success: true }
+    return { success: true, attachmentType }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CheckDetailPage } from './CheckDetailPage'
+import { ContractScopeBanner } from '@/components/ui/ContractScopeBanner'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { notFound } from 'next/navigation'
 import type { Role, MaintenanceCheckItem, Attachment } from '@/lib/types'
@@ -82,6 +83,14 @@ export default async function MaintenanceCheckPage({
         ]} />
         <h1 className="text-2xl font-bold text-eq-sky mt-2">{checkName}</h1>
       </div>
+      {/* Contract scope context — shown above the detail body so site teams
+          see what's in/out of scope before they pick assets to inspect.
+          Phase 2 of Royce's 26-Apr review. */}
+      <ContractScopeBanner
+        siteId={check.site_id as string | null}
+        jobPlanId={check.job_plan_id as string | null}
+        hideWhenEmpty
+      />
       <CheckDetailPage
         check={{ ...check, assignee_name: assigneeName } as never}
         items={(allItems ?? []) as MaintenanceCheckItem[]}

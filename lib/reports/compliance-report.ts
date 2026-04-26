@@ -22,17 +22,21 @@ import {
   Table,
   TableRow,
   TableCell,
-  Header,
-  Footer,
   AlignmentType,
   HeadingLevel,
   BorderStyle,
   WidthType,
   ShadingType,
-  PageNumber,
   PageBreak,
   VerticalAlign,
 } from 'docx'
+import {
+  buildHeader as buildShellHeader,
+  buildFooter as buildShellFooter,
+  prepareShell,
+  resolveShellSettings,
+  type ShellSettings,
+} from './report-shell'
 
 // ---------- types ----------
 
@@ -298,31 +302,36 @@ export async function generateComplianceReport(input: ComplianceReportInput): Pr
     sections.push(trendTable as unknown as Paragraph)
   }
 
+  // ── Header / Footer via shared ReportShell ─────────────────────────────
+  // Sprint 2.3 (2026-04-26): first generator to adopt report-shell.ts.
+  // The shell delivers the standard EQ header/footer (sky border, brand
+  // typography, "Page X of Y" right-aligned). Cover + sign-off remain
+  // bespoke for compliance reports until those sections migrate too —
+  // header/footer are the lowest-risk first step.
+  const shellSettings: ShellSettings = resolveShellSettings({
+    companyName: input.tenantProductName,
+    productName: input.tenantProductName,
+    primaryColour: input.primaryColour ? `#${input.primaryColour}` : '#3DA8D8',
+    complexity: input.complexity,
+  })
+  const shell = await prepareShell(shellSettings, {
+    reportType: 'compliance',
+    reportDate: input.generatedDate,
+    customerName: null,
+    siteName: null,
+    siteAddress: null,
+    customerLogoUrl: null,
+    sitePhotoUrl: null,
+  })
+
   // ── Build document ──
   const doc = new Document({
     sections: [{
       properties: {
         page: { margin: { top: 1440, bottom: 1440, left: 1200, right: 1200 } },
       },
-      headers: {
-        default: new Header({
-          children: [new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            children: [new TextRun({ text: input.tenantProductName, size: 16, color: '999999', font: 'Calibri' })],
-          })],
-        }),
-      },
-      footers: {
-        default: new Footer({
-          children: [new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ text: 'Page ', size: 16, color: '999999', font: 'Calibri' }),
-              new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '999999', font: 'Calibri' }),
-            ],
-          })],
-        }),
-      },
+      headers: { default: buildShellHeader(shell) },
+      footers: { default: buildShellFooter(shell) },
       children: sections,
     }],
   })

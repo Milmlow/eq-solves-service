@@ -14,6 +14,7 @@ import {
   completeAllCheckAssetsAction,
   batchForceCompleteAssetsAction,
   updateCheckItemResultAction,
+  reopenCheckAction,
 } from '../actions'
 import { formatDate } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
@@ -24,6 +25,52 @@ import { events as analyticsEvents } from '@/lib/analytics'
 import { SendReportModal } from './SendReportModal'
 import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
 import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
+import { SplitButton } from '@/components/ui/SplitButton'
+
+/**
+ * Replaces the old "Print — Simple" / "Print — Detailed" pair with a single
+ * action button + caret dropdown. Default action is the Standard report
+ * (covers most use cases). Dropdown lets the user override to Summary or
+ * Detailed for a given print.
+ *
+ * Each option opens a new tab against /api/maintenance-checklist with the
+ * chosen format. The maintenance-checklist generator accepts:
+ *   - 'summary'  → printable asset register (formerly 'simple')
+ *   - 'standard' → standard run-sheet with task headings (default)
+ *   - 'detailed' → full task-by-task breakdown per asset
+ */
+function PrintReportSplit({ checkId }: { checkId: string }) {
+  function open(format: 'summary' | 'standard' | 'detailed') {
+    window.open(`/api/maintenance-checklist?check_id=${checkId}&format=${format}`, '_blank', 'noopener')
+  }
+  return (
+    <SplitButton
+      variant="gray"
+      icon={<Printer className="w-4 h-4" />}
+      label="Print Report"
+      title="Print the maintenance check report — uses the Standard style by default"
+      onClick={() => open('standard')}
+      options={[
+        {
+          label: 'Summary',
+          description: 'Asset register only — one-page overview',
+          onSelect: () => open('summary'),
+        },
+        {
+          label: 'Standard',
+          description: 'Default. Headline results + key tasks per asset.',
+          onSelect: () => open('standard'),
+          recommended: true,
+        },
+        {
+          label: 'Detailed',
+          description: 'Full task-by-task breakdown for every asset',
+          onSelect: () => open('detailed'),
+        },
+      ]}
+    />
+  )
+}
 
 interface CheckAssetWithDetails extends CheckAsset {
   assets?: { name: string; maximo_id: string | null; location: string | null; job_plans?: { name: string } | null } | null
@@ -162,6 +209,19 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     const result = await startCheckAction(check.id)
     setLoading(false)
     if (!result.success) setError(result.error ?? 'Failed to start.')
+  }
+
+  /**
+   * Re-open a completed check so the user can amend results, add notes,
+   * or attach follow-up work orders. Single confirm — no reason field
+   * (per Royce 26-Apr decision). Audit log captures who + when.
+   */
+  async function handleReopen() {
+    if (!confirm('Re-open this completed check? The change will be audit-logged. Any subsequent edits will appear as an amendment on the next-generated report.')) return
+    setError(null); setLoading(true)
+    const result = await reopenCheckAction(check.id)
+    setLoading(false)
+    if (!result.success) setError(result.error ?? 'Failed to re-open.')
   }
 
   async function handleComplete() {
@@ -328,14 +388,14 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
         {/* Action buttons */}
         <div className="flex gap-2 flex-wrap shrink-0">
           {(check.status === 'scheduled' || check.status === 'overdue') && canAct && (
-            <Button size="sm" onClick={handleStart} disabled={loading}>Start Check</Button>
+            <Button size="sm" onClick={handleStart} loading={loading}>Start Check</Button>
           )}
           {check.status === 'in_progress' && canAct && (
             <>
-              <Button size="sm" onClick={handleCompleteAll} disabled={loading}>
+              <Button size="sm" onClick={handleCompleteAll} loading={loading}>
                 <CheckCheck className="w-4 h-4 mr-1" /> Complete All Assets
               </Button>
-              <Button size="sm" onClick={handleComplete} disabled={loading || requiredIncomplete > 0}
+              <Button size="sm" onClick={handleComplete} loading={loading} disabled={requiredIncomplete > 0}
                 title={requiredIncomplete > 0 ? `${requiredIncomplete} required tasks incomplete` : ''}>
                 Complete Check
               </Button>
@@ -353,24 +413,26 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-deep text-white rounded hover:bg-eq-ink transition-colors">
                 <Send className="w-4 h-4" /> Send Report
               </button>
+              {/* Re-open is also offered on completed checks so techs can add
+                  WOs/notes after handover. Per Royce 26-Apr — single confirm,
+                  no reason field, audit-logged. */}
+              {canAct && (
+                <Button size="sm" variant="secondary" onClick={handleReopen} loading={loading}
+                  title="Re-open this check to add notes, work orders, or amend results. Audit-logged.">
+                  Re-open
+                </Button>
+              )}
+              {/* Print Report is now available on completed checks too — was
+                  scheduled/in_progress only before, which surprised users
+                  during testing. */}
+              {canWriteRole && <PrintReportSplit checkId={check.id} />}
             </>
           )}
           {(check.status === 'scheduled' || check.status === 'in_progress' || check.status === 'overdue') && canWriteRole && (
-            <>
-              <a href={`/api/maintenance-checklist?check_id=${check.id}&format=simple`} target="_blank"
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                title="Simple: asset register only">
-                <Printer className="w-4 h-4" /> Print — Simple
-              </a>
-              <a href={`/api/maintenance-checklist?check_id=${check.id}&format=detailed`} target="_blank"
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-                title="Detailed: full task breakdown per asset">
-                <Printer className="w-4 h-4" /> Print — Detailed
-              </a>
-            </>
+            <PrintReportSplit checkId={check.id} />
           )}
           {isAdmin && (
-            <Button size="sm" variant="danger" onClick={handleDelete} disabled={loading}>Delete</Button>
+            <Button size="sm" variant="danger" onClick={handleDelete} loading={loading}>Delete</Button>
           )}
         </div>
       </div>

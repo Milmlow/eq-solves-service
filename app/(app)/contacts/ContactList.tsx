@@ -2,13 +2,42 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { ExportButton } from '@/components/ui/ExportButton'
+import { Button } from '@/components/ui/Button'
 import { exportToCsv } from '@/lib/utils/csv-export'
-import { Mail, Phone, Star, Building2, MapPin } from 'lucide-react'
+import { Mail, Phone, Star, Building2, MapPin, Upload } from 'lucide-react'
+import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
+import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
+import { importContactsAction, type ContactImportRow } from './actions'
+
+/**
+ * CSV import config for contacts. Required: customer + name. Optional: site,
+ * email, phone, role. Site is the disambiguator between a customer-level
+ * contact and a site-level one — leave site blank for customer contacts.
+ */
+const contactImportConfig: ImportCSVConfig<ContactImportRow> = {
+  entityName: 'Contacts',
+  requiredColumns: ['customer', 'name'],
+  optionalColumns: ['site', 'email', 'phone', 'role'],
+  mapRow: (row, columnMap) => {
+    const customer = row[columnMap['customer']]?.trim()
+    const name = row[columnMap['name']]?.trim()
+    if (!customer || !name) return null
+    return {
+      customer,
+      site: row[columnMap['site']]?.trim() || null,
+      name,
+      email: row[columnMap['email']]?.trim() || null,
+      phone: row[columnMap['phone']]?.trim() || null,
+      role: row[columnMap['role']]?.trim() || null,
+    }
+  },
+  importAction: importContactsAction,
+}
 
 export interface MasterContact {
   id: string
@@ -30,11 +59,12 @@ interface ContactListProps {
   isAdmin: boolean
 }
 
-export function ContactList({ contacts, kind, primaryOnly }: ContactListProps) {
+export function ContactList({ contacts, kind, primaryOnly, isAdmin }: ContactListProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [, startTransition] = useTransition()
+  const [importOpen, setImportOpen] = useState(false)
 
   function togglePrimaryOnly() {
     const params = new URLSearchParams(searchParams.toString())
@@ -125,6 +155,11 @@ export function ContactList({ contacts, kind, primaryOnly }: ContactListProps) {
           </label>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {isAdmin && (
+            <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Import
+            </Button>
+          )}
           <ExportButton onClick={() => exportToCsv(
             contacts,
             [
@@ -140,6 +175,12 @@ export function ContactList({ contacts, kind, primaryOnly }: ContactListProps) {
           )} />
         </div>
       </div>
+
+      <ImportCSVModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        config={contactImportConfig}
+      />
 
       {contacts.length === 0 ? (
         <div className="text-center py-12 border border-gray-200 rounded-lg bg-white">

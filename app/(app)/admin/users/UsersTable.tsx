@@ -7,6 +7,7 @@ import {
   removeUserFromTenantAction,
   resendInviteAction,
   repairUserTenantAction,
+  hardDeleteUserAction,
 } from './actions'
 
 interface Profile {
@@ -42,12 +43,20 @@ function fmtDate(s: string | null) {
 export function UsersTable({
   users,
   currentUserId,
+  callerRole,
+  showArchived,
 }: {
   users: Profile[]
   currentUserId: string
+  /** Role of the admin viewing this page — gates the Permanently Delete button. */
+  callerRole: string
+  /** Whether the page is currently showing archived users. Empty-state copy adapts. */
+  showArchived: boolean
 }) {
   const [pending, startTransition] = useTransition()
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+
+  const isSuperAdmin = callerRole === 'super_admin'
 
   function show(kind: 'ok' | 'err', text: string) {
     setNotice({ kind, text })
@@ -75,8 +84,8 @@ export function UsersTable({
     })
   }
 
-  function removeFromTenant(userId: string, label: string) {
-    if (!confirm(`Remove ${label} from this tenant? Their account will remain but they'll lose access. You can re-invite them later.`)) return
+  function archiveFromTenant(userId: string, label: string) {
+    if (!confirm(`Archive ${label} from this tenant? Their account stays intact and they can be re-attached. Use Show archived to find them again.`)) return
     setNotice(null)
     const fd = new FormData()
     fd.set('user_id', userId)
@@ -111,6 +120,25 @@ export function UsersTable({
     })
   }
 
+  function hardDelete(userId: string, label: string) {
+    // Two confirmations because this is irreversible — the second prompt
+    // forces the admin to type the user's email/name to proceed.
+    if (!confirm(`PERMANENTLY DELETE ${label}? This wipes their auth account and CANNOT be undone. Historical records keep their name as a string.`)) return
+    const typed = prompt(`Type "${label}" exactly to confirm permanent deletion:`)
+    if (typed?.trim() !== label) {
+      show('err', 'Confirmation text did not match — deletion cancelled.')
+      return
+    }
+    setNotice(null)
+    const fd = new FormData()
+    fd.set('user_id', userId)
+    startTransition(async () => {
+      const res = await hardDeleteUserAction(fd)
+      if (res && 'error' in res && res.error) show('err', res.error)
+      else show('ok', `${label} permanently deleted.`)
+    })
+  }
+
   return (
     <>
       {notice && (
@@ -141,10 +169,10 @@ export function UsersTable({
             const isSelf = u.id === currentUserId
             // `has_tenant_membership` is true only for ACTIVE tenant members.
             // A row with `is_active_in_tenant === false` represents a user who
-            // was previously in this tenant but has been soft-removed — keep
-            // them on screen so the admin can re-attach them.
-            const noTenant = !u.has_tenant_membership
+            // was previously in this tenant but has been soft-archived — they
+            // only appear when the admin opted into Show archived.
             const removedFromTenant = !u.is_active_in_tenant
+            const label = u.full_name || u.email
             return (
               <tr key={u.id} className={u.is_active && !removedFromTenant ? '' : 'bg-gray-50/50'}>
                 <td className="px-4 py-3 text-eq-ink font-medium">{u.email}</td>
@@ -168,9 +196,9 @@ export function UsersTable({
                   {removedFromTenant ? (
                     <span
                       className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-amber-50 text-amber-700"
-                      title="This user was previously a member of this tenant but has been removed. Use Attach to re-add them."
+                      title="Archived from this tenant. Use Attach to re-add or (super_admin) Delete permanently to wipe."
                     >
-                      Removed
+                      Archived
                     </span>
                   ) : (
                     <span
@@ -181,7 +209,7 @@ export function UsersTable({
                           : 'bg-gray-100 text-gray-500')
                       }
                     >
-                      {u.is_active ? 'Active' : 'Deactivated'}
+                      {u.is_active ? 'Active' : 'Disabled'}
                     </span>
                   )}
                 </td>
@@ -191,7 +219,7 @@ export function UsersTable({
                     {removedFromTenant && (
                       <button
                         type="button"
-                        onClick={() => repairUser(u.id, u.full_name || u.email, u.role)}
+                        onClick={() => repairUser(u.id, label, u.role)}
                         disabled={pending}
                         className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
                         title="Re-attach this user to the current tenant"
@@ -201,7 +229,7 @@ export function UsersTable({
                     )}
                     <button
                       type="button"
-                      onClick={() => resendInvite(u.id, u.full_name || u.email)}
+                      onClick={() => resendInvite(u.id, label)}
                       disabled={pending || removedFromTenant}
                       className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
                       title={removedFromTenant
@@ -216,20 +244,33 @@ export function UsersTable({
                       disabled={pending || isSelf}
                       className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
                       title={u.is_active
-                        ? 'Disable sign-in across ALL tenants — different from Remove (current tenant only)'
+                        ? 'Disable sign-in across ALL tenants — different from Archive (current tenant only)'
                         : 'Re-enable sign-in across all tenants'}
                     >
                       {u.is_active ? 'Disable account' : 'Enable account'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => removeFromTenant(u.id, u.full_name || u.email)}
-                      disabled={pending || isSelf || removedFromTenant}
-                      className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                      title="Remove this user from the current tenant (reversible)"
-                    >
-                      Remove
-                    </button>
+                    {!removedFromTenant && (
+                      <button
+                        type="button"
+                        onClick={() => archiveFromTenant(u.id, label)}
+                        disabled={pending || isSelf}
+                        className="text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                        title="Archive this user from the current tenant (reversible — see Show archived)"
+                      >
+                        Archive
+                      </button>
+                    )}
+                    {isSuperAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => hardDelete(u.id, label)}
+                        disabled={pending || isSelf}
+                        className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                        title="PERMANENTLY delete this user from auth. Irreversible. Super_admin only."
+                      >
+                        Delete permanently
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -238,7 +279,9 @@ export function UsersTable({
           {users.length === 0 && (
             <tr>
               <td colSpan={6} className="px-4 py-8 text-center text-eq-grey text-sm">
-                No users in this tenant yet — invite someone above to get started.
+                {showArchived
+                  ? 'No archived users in this tenant.'
+                  : 'No active users in this tenant — invite someone above to get started.'}
               </td>
             </tr>
           )}

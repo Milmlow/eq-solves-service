@@ -62,6 +62,55 @@ function CategoryBadge({ category }: { category: string }) {
   return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{category}</span>
 }
 
+/**
+ * Top-of-page summary card — a single number on a tinted background. Renders
+ * the four timing buckets (Overdue / This Week / Looking Ahead / Completed)
+ * so the user sees the headline counts before any filtering.
+ */
+function StatusStripCard({
+  label,
+  count,
+  tone,
+  hint,
+}: {
+  label: string
+  count: number
+  tone: 'red' | 'amber' | 'blue' | 'green'
+  hint?: string
+}) {
+  const toneClasses: Record<typeof tone, { bar: string; text: string; bg: string }> = {
+    red:   { bar: 'bg-red-500',   text: 'text-red-700',   bg: 'bg-red-50/50 border-red-200/70' },
+    amber: { bar: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50/50 border-amber-200/70' },
+    blue:  { bar: 'bg-eq-sky',    text: 'text-eq-deep',   bg: 'bg-eq-ice/40 border-eq-sky/30' },
+    green: { bar: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-50/50 border-green-200/70' },
+  }
+  const c = toneClasses[tone]
+  return (
+    <div className={`relative border rounded-lg overflow-hidden ${c.bg}`}>
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${c.bar}`} />
+      <div className="px-4 py-3 pl-5">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-eq-grey">{label}</div>
+        <div className={`text-2xl font-bold tabular-nums ${c.text}`}>{count}</div>
+        {hint && <div className="text-[11px] text-eq-grey mt-0.5">{hint}</div>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Returns the left-border colour class for an entry, based on its timing
+ * bucket. Used inside the calendar view so each entry chip carries a quick
+ * visual signal of urgency without needing a status badge.
+ */
+function timingBorderClass(startTimeIso: string, status: string): string {
+  const bucket = timingBucket(startTimeIso, status)
+  if (status === 'completed') return 'border-l-2 border-l-green-400'
+  if (bucket === 'overdue') return 'border-l-2 border-l-red-500'
+  if (bucket === 'today') return 'border-l-2 border-l-amber-500'
+  if (bucket === 'upcoming') return 'border-l-2 border-l-eq-sky'
+  return 'border-l-2 border-l-gray-200'
+}
+
 function DigestStatusBadge({ status, error }: { status: SupervisorRunResult['status']; error?: string }) {
   const config: Record<SupervisorRunResult['status'], { cls: string; label: string }> = {
     sent: { cls: 'bg-green-100 text-green-700', label: 'Sent' },
@@ -415,10 +464,60 @@ export function PmCalendarView({
     { key: 'status' as const, label: 'Status' },
   ]
 
-  // ===== TOTALS =====
+  // ===== TIMING ROLLUP — drives the top-of-page status strip =====
+  // Sprint 4.2 (26-Apr): give site teams a single glance at "what should I be
+  // worrying about" before they dig into months. Uses the same timingBucket
+  // classifier as the list view so the numbers match across views.
+  const timingCounts = useMemo(() => {
+    let overdue = 0
+    let today = 0
+    let upcoming = 0
+    let completed = 0
+    for (const e of entries) {
+      if (e.status === 'completed') {
+        completed += 1
+        continue
+      }
+      const b = timingBucket(e.start_time, e.status)
+      if (b === 'overdue') overdue += 1
+      else if (b === 'today') today += 1
+      else if (b === 'upcoming') upcoming += 1
+    }
+    return { overdue, today, upcoming, completed }
+  }, [entries])
 
   return (
     <>
+      {/* Status strip — overdue / due this week / upcoming / completed.
+          Sits above the toolbar so the most important number is the first
+          thing the user sees on the page. */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <StatusStripCard
+          label="Overdue"
+          count={timingCounts.overdue}
+          tone="red"
+          hint="Past due, not completed"
+        />
+        <StatusStripCard
+          label="This Week"
+          count={timingCounts.today + timingCounts.upcoming}
+          tone="amber"
+          hint="Due in the next 7 days"
+        />
+        <StatusStripCard
+          label="Looking Ahead"
+          count={Math.max(0, entries.length - timingCounts.overdue - timingCounts.today - timingCounts.upcoming - timingCounts.completed)}
+          tone="blue"
+          hint="Beyond next week"
+        />
+        <StatusStripCard
+          label="Completed"
+          count={timingCounts.completed}
+          tone="green"
+          hint="Already done"
+        />
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -643,7 +742,7 @@ export function PmCalendarView({
                       <button
                         key={e.id}
                         onClick={() => setDetailEntry(e)}
-                        className="w-full text-left p-2 rounded-md hover:bg-gray-50 border border-gray-100 transition-colors"
+                        className={`w-full text-left p-2 rounded-md hover:bg-gray-50 border border-gray-100 transition-colors ${timingBorderClass(e.start_time, e.status)}`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-medium text-eq-ink truncate">{e.title}</span>
@@ -651,6 +750,7 @@ export function PmCalendarView({
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <CategoryBadge category={e.category} />
+                          <span className="text-[10px] text-eq-grey">{formatDate(e.start_time)}</span>
                         </div>
                       </button>
                     ))

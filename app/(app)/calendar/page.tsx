@@ -31,7 +31,10 @@ export default async function CalendarPage({
   const statusFilter = params.status ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const showArchived = params.show_archived === '1'
-  const viewMode = (params.view ?? 'list') as 'list' | 'calendar' | 'quarterly'
+  // Default to the month-grid calendar view (Sprint 4.2, 26-Apr decision).
+  // Royce: "calendar-feeling" — leads with the visual that looks most like a
+  // calendar. Users can switch to list/quarterly via the toolbar toggle.
+  const viewMode = (params.view ?? 'calendar') as 'list' | 'calendar' | 'quarterly'
 
   const supabase = await createClient()
 
@@ -146,7 +149,9 @@ export default async function CalendarPage({
       <div>
         <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Calendar' }]} />
         <h1 className="text-3xl font-bold text-eq-sky mt-2">Calendar</h1>
-        <p className="text-sm text-eq-grey mt-1">Preventative maintenance planning and scheduling across all sites</p>
+        <p className="text-sm text-eq-grey mt-1">
+          PM planning across all sites — month-grid by default, with status overlays so you spot what Outlook can&apos;t (overdue, due-soon, completed).
+        </p>
       </div>
       <PmCalendarView
         entries={filtered}

@@ -4,6 +4,73 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-26 — Service items review: Sprint 1–4 sweep (UI polish, attachments, defects, contacts, calendar)
+
+Pending push to `main`. Working through Royce's 14-item review punch list (`EQ Service items 26.4.26.xlsx`). Decisions captured in `docs/reviews/2026-04-26-service-items-decisions.html`.
+
+### Added
+- **`components/ui/Skeleton.tsx`** — `Skeleton`, `SkeletonRows`, `SkeletonCards` for loading states.
+- **`components/ui/SplitButton.tsx`** — Primary action + dropdown caret pattern (used for Print Report).
+- **`lib/reports/report-shell.ts`** — Shared cover/header/footer/sign-off scaffolding for unifying all PDF outputs (`buildCover`, `buildHeader`, `buildFooter`, `buildSignoff`, driven by Report Settings + per-call overrides). Generators will migrate incrementally.
+- **`hardDeleteUserAction`** in `app/(app)/admin/users/actions.ts` — super_admin-only permanent user delete with double-confirm UI (typed name match).
+- **`reopenCheckAction`** in `app/(app)/maintenance/actions.ts` — re-open completed checks for amendments. Audit-logged.
+- **`importContactsAction`** in `app/(app)/contacts/actions.ts` — CSV bulk import with name-based customer/site lookup.
+- **Status strip on `/calendar`** — Overdue / This Week / Looking Ahead / Completed counts above the toolbar.
+
+### Changed
+- **`Button` component** now accepts a `loading` prop — renders an inline spinner and disables the button. Use during async actions.
+- **`DashboardViewToggle`** relabelled "My Work / All Work" → "Assigned to Me / All Active Work" per decision (item 1).
+- **Maintenance check page**: replaced "Print — Simple" + "Print — Detailed" buttons with single `SplitButton` (Summary / Standard / Detailed). API normalises `format=summary|simple|standard|detailed`.
+- **`AttachmentList`** asks for a Type (Evidence / Reference / Paperwork) on every new upload. Existing items show their type as a small inline tag.
+- **`uploadAttachmentAction`** accepts `attachment_type` in form data; falls back to context-aware default if missing.
+- **Users page**: Archive (any admin) and Permanently Delete (super_admin only) buttons. "Show archived" toggle filters the list.
+- **Calendar**: month grid is now the default view (was list). Each entry chip carries a colour-coded left border by timing bucket.
+- **Contacts**: toolbar gains an Import button (admin only) wiring the existing `ImportCSVModal`.
+- **Customer + site logo flows**: `revalidatePath` now hits `/customers/[id]` and `/sites/[id]` after edits/uploads (was list-only) — fixes silent-fail reports where the detail page didn't refresh.
+
+### Database
+- **`0060_attachments_categorize.sql`** — TRUNCATE attachments table + add `attachment_type` enum-via-check (`evidence` | `reference` | `paperwork`). Authorised by Royce on 26-Apr (demo data only). Storage bucket wipe to be done out-of-band; new uploads enforce Type.
+- **`0061_defects_auto_from_failed_items.sql`** — `source` + `source_check_item_id` columns on `defects`, plus trigger `fn_check_item_to_defect` that auto-creates a defect when a `maintenance_check_items` row is set to `result='fail'` and resolves it on un-fail. Severity defaults to `medium` for check items (ACB/NSX trigger paths to follow with their per-test severity rules).
+
+### Decisions captured (HTML explainer)
+- `docs/reviews/2026-04-26-service-items-decisions.html` — full 14-item decision log + 4-sprint roadmap with rationale per item.
+
+### Files Touched
+- Added: `lib/reports/report-shell.ts`, `components/ui/Skeleton.tsx`, `components/ui/SplitButton.tsx`, `app/(app)/contacts/actions.ts`, `supabase/migrations/0060_attachments_categorize.sql`, `supabase/migrations/0061_defects_auto_from_failed_items.sql`, `docs/reviews/2026-04-26-service-items-decisions.html`.
+- Modified: `components/ui/Button.tsx`, `components/ui/AttachmentList.tsx`, `lib/actions/attachments.ts`, `lib/types/index.ts`, `app/(app)/customers/actions.ts`, `app/(app)/sites/actions.ts`, `app/(app)/admin/users/{actions.ts,UsersTable.tsx,page.tsx}`, `app/(app)/dashboard/{DashboardViewToggle.tsx,page.tsx}`, `app/(app)/maintenance/actions.ts`, `app/(app)/maintenance/[id]/CheckDetailPage.tsx`, `app/api/maintenance-checklist/route.ts`, `lib/reports/maintenance-checklist.ts`, `app/(app)/contacts/ContactList.tsx`, `app/(app)/calendar/page.tsx`, `app/(app)/pm-calendar/PmCalendarView.tsx`.
+
+### Phase 2 follow-up (same day)
+
+Royce asked to push through everything in one sitting. Done in the same session:
+
+- **Migration `0062_defects_auto_from_test_readings.sql`** — applied live. Triggers on `acb_test_readings`, `nsx_test_readings`, and `test_record_readings` auto-create defects when `is_pass`/`pass` flips to false. Severity inferred from reading label via `fn_severity_from_reading_label(text)` regex helper (Visual=low, Functional=medium, Electrical=high; default medium for unknown). Reverse-on-pass auto-resolves the defect with an audit note.
+- **Migration `0063_tests_assigned_to.sql`** — applied live. Adds `assigned_to uuid` (FK auth.users, ON DELETE SET NULL) to `acb_tests`, `nsx_tests`, `test_records` with filtered indexes. Lets the dashboard "Assigned to Me" filter drill below check level.
+- **Migration `0064_contract_scopes_asset_linkage.sql`** — applied live. Adds nullable `asset_id` + `job_plan_id` to `contract_scopes` so a scope row can pin to a specific asset or job-plan family.
+- **`components/ui/ContractScopeBanner.tsx`** — server component that renders matched scope items (in/out of scope, FY-filtered, sorted by precedence: asset → job_plan → site → customer). Wired into `app/(app)/maintenance/[id]/page.tsx` above the check detail body. Phase-2 of Royce's 26-Apr decision.
+- **`lib/reports/compliance-report.ts`** — first generator to adopt `report-shell.ts`. Header + Footer now come from `buildShellHeader` / `buildShellFooter`. The remaining 7 generators (acb-report, nsx-report, maintenance-checklist, pm-asset-report, pm-check-report, work-order-details, generate-and-store) follow the same pattern at next-touch — the integration is one import + two function calls.
+- **`scripts/seed-demo-attachments.ts`** — Node script that uploads tiny placeholder PNGs to the Demo tenant's bucket folder + inserts metadata across all three categories. Idempotent.
+- **Demo metadata seed** — 19 attachment rows inserted via SQL across Evidence (6 on defects), Reference (8 on sites), Paperwork (5 on checks). UI now looks populated for prospects. Run the script above when you want the actual file bytes uploaded too.
+- **Severity helper post-deploy fix** — bare `label` was matching arbitrary text (e.g. "Some unknown label" → low). Patched the regex to require `warning\s*label`. Verified in live DB. Migration file synced to match.
+
+### Files Touched (phase-2)
+- Added: `supabase/migrations/0062_defects_auto_from_test_readings.sql`, `supabase/migrations/0063_tests_assigned_to.sql`, `supabase/migrations/0064_contract_scopes_asset_linkage.sql`, `components/ui/ContractScopeBanner.tsx`, `scripts/seed-demo-attachments.ts`.
+- Modified: `lib/reports/compliance-report.ts`, `app/(app)/maintenance/[id]/page.tsx`.
+
+### Pending
+- TypeScript check (`npx tsc --noEmit`) before push — Cowork can't run it directly; please verify locally.
+- Push to main via your push script.
+- Optionally run `scripts/seed-demo-attachments.ts` if you want the Demo placeholder PNGs physically uploaded (the metadata is already there, downloads will 404 until the script runs but the lists look populated).
+- Migrate the remaining 7 PDF generators to `report-shell` at next touch — pattern is documented in `compliance-report.ts`.
+- 2 orphaned objects still in the `attachments` storage bucket from before today's wipe (390 kB SKS logo, 13 kB SKS report DOCX). Removable via the PowerShell snippet sent earlier — purely cosmetic.
+
+### Verification
+- TypeScript check pending: `npx tsc --noEmit` should return 0 errors before push.
+- All 5 migrations (0060–0064) confirmed live via `supabase_migrations.schema_migrations`.
+- All 4 defect triggers (`trg_check_item_to_defect`, `trg_acb_reading_to_defect`, `trg_nsx_reading_to_defect`, `trg_test_record_reading_to_defect`) confirmed enabled.
+- Severity helper smoke-tested across 9 representative labels; all classify correctly.
+
+---
+
 ## 2026-04-26 — Auth: OTP-code flow for invites + password resets (Defender Safe Links bypass)
 
 Pending push to `main`. Live SKS users were getting "link expired" on every first click of password-reset and invite emails. Root cause: Microsoft Defender Safe Links pre-fetches every URL in inbound mail, which burns the one-shot Supabase token before the human can use it. The fix: stop putting any consumable token in the URL — send an 8-digit OTP code in the email body (project default is 6, ours is set to 8 under Auth → Settings → Email OTP length) that the user types on a tokenless landing page.

@@ -57,3 +57,6 @@ deploy-*.zip
 
 # Local Netlify folder
 .netlify
+
+# Cowork agent worktrees & metadata
+.claude/

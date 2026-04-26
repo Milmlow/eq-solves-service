@@ -15,9 +15,23 @@ import type { MaintenanceChecklistInput, ChecklistAsset } from '@/lib/reports/ma
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 
+/**
+ * Map the public-facing format token (summary/standard/detailed) to the legacy
+ * generator format (simple/detailed). 'standard' is a new middle ground —
+ * runs the detailed layout but suppresses the most granular task notes.
+ *
+ * Older callers using 'simple' continue to work.
+ */
+function normaliseFormat(raw: string | null): 'simple' | 'standard' | 'detailed' {
+  const v = (raw ?? 'standard').toLowerCase()
+  if (v === 'simple' || v === 'summary') return 'simple'
+  if (v === 'detailed') return 'detailed'
+  return 'standard'
+}
+
 export async function GET(request: NextRequest) {
   const checkId = request.nextUrl.searchParams.get('check_id')
-  const format = (request.nextUrl.searchParams.get('format') ?? 'detailed') as 'simple' | 'detailed'
+  const format = normaliseFormat(request.nextUrl.searchParams.get('format'))
   if (!checkId) {
     return NextResponse.json({ error: 'check_id is required' }, { status: 400 })
   }

@@ -40,8 +40,8 @@ export function InviteUserForm() {
           <option value="read_only">Read Only</option>
         </select>
       </div>
-      <Button type="submit" disabled={pending}>
-        {pending ? 'Sending…' : 'Send invite'}
+      <Button type="submit" loading={pending}>
+        Send invite
       </Button>
       {error && (
         <div className="md:col-span-4 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-3">

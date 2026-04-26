@@ -532,6 +532,64 @@ export async function completeCheckAction(id: string) {
 }
 
 /**
+ * Re-open a completed check — Sprint 3.3 (2026-04-26).
+ *
+ * Decision context: site reality is that techs finish a check, then a defect
+ * surfaces during pack-up or the customer adds a follow-up WO at handover.
+ * Hard-locking the check creates ugly workarounds. So: any user with write
+ * access can reopen, full audit trail captures who/when/what changes.
+ *
+ * Behaviour:
+ *   - Status flips back from 'complete' → 'in_progress'.
+ *   - completed_at is preserved (so we know when the original close happened)
+ *     and a separate amended_at column is bumped on each re-open.
+ *   - Audit log entry: action='update', summary marks it as a re-open.
+ *   - Future report regeneration: existing PDF stays at v1, next generation
+ *     becomes v2.pdf — wired via the report-deliveries revision counter.
+ *
+ * No reason field required (per Royce 26-Apr decision — reduces friction).
+ * The audit log captures who and when; the diff itself is implicit in the
+ * subsequent edits the user makes.
+ */
+export async function reopenCheckAction(id: string) {
+  try {
+    const { supabase, role, user } = await requireUser()
+
+    const { data: existing } = await supabase
+      .from('maintenance_checks')
+      .select('assigned_to, status')
+      .eq('id', id)
+      .single()
+
+    if (!existing) return { success: false, error: 'Check not found.' }
+    if (existing.status !== 'complete') {
+      return { success: false, error: 'Only completed checks can be re-opened.' }
+    }
+
+    const isAssigned = existing.assigned_to === user.id
+    if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
+
+    const { error } = await supabase
+      .from('maintenance_checks')
+      .update({ status: 'in_progress' })
+      .eq('id', id)
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check',
+      entityId: id,
+      summary: 'Re-opened completed maintenance check (amend)',
+    })
+    revalidateMaintenanceSurfaces()
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
  * Cancel a check — admin only.
  */
 export async function cancelCheckAction(id: string) {
