@@ -1,4 +1,8 @@
-'use server'
+// NOT marked 'use server'. withIdempotency takes a function callback —
+// server actions can't accept function arguments anyway, so calling this
+// from the client would never have worked. The directive was unused at
+// best, a footgun at worst (every export would have been registered as
+// a public RPC endpoint). Removed 2026-04-27.
 
 import { isMutationProcessed } from '@/lib/actions/audit'
 
