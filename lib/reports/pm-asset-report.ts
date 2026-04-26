@@ -43,6 +43,15 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY, FONT_HEADING as FONT_HEADING_TOKEN } from '@/lib/reports/typography'
+import {
+  EQ_INK,
+  EQ_MID_GREY,
+  EQ_BORDER,
+  EQ_WHITE,
+  STATUS_PASS,
+  STATUS_FAIL,
+  STATUS_WARN,
+} from '@/lib/reports/colours'
 
 // ─────────── Types ───────────
 
@@ -161,7 +170,7 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2  // ~9638
 const FONT = FONT_BODY
 const FONT_HEADING = FONT_HEADING_TOKEN
 
-const BORDER_LIGHT = { style: BorderStyle.SINGLE, size: 1, color: 'D5D8DC' }
+const BORDER_LIGHT = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const BORDERS_LIGHT = { top: BORDER_LIGHT, bottom: BORDER_LIGHT, left: BORDER_LIGHT, right: BORDER_LIGHT }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const BORDER_NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' } as any
@@ -275,7 +284,7 @@ function makeHeaderCell(text: string, width: number, brand: string): TableCell {
     shading: { fill: brand, type: ShadingType.CLEAR },
     margins: CELL_PAD,
     children: [new Paragraph({
-      children: [new TextRun({ text, bold: true, size: 18, font: FONT, color: 'FFFFFF' })]
+      children: [new TextRun({ text, bold: true, size: 18, font: FONT, color: EQ_WHITE })]
     })],
   })
 }
@@ -341,7 +350,7 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     spacing: { after: 120 },
     children: [new TextRun({
       text: input.reportTitle,
-      bold: true, size: 48, font: FONT_HEADING, color: '2C3E50',
+      bold: true, size: 48, font: FONT_HEADING, color: EQ_INK,
     })],
   }))
 
@@ -350,7 +359,7 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     spacing: { after: 80 },
     children: [new TextRun({
       text: 'Preventive Maintenance Asset Report',
-      size: 28, font: FONT, color: '7F8C8D', italics: true,
+      size: 28, font: FONT, color: EQ_MID_GREY, italics: true,
     })],
   }))
 
@@ -359,7 +368,7 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     spacing: { after: 600 },
     children: [new TextRun({
       text: `Report Generated: ${fmtDate(input.reportGeneratedDate)}`,
-      size: 20, font: FONT, color: '95A5A6',
+      size: 20, font: FONT, color: EQ_MID_GREY,
     })],
   }))
 
@@ -369,7 +378,7 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
       spacing: { after: 80 },
       children: [new TextRun({
         text: 'Prepared for',
-        size: 18, font: FONT, color: '95A5A6',
+        size: 18, font: FONT, color: EQ_MID_GREY,
       })],
     }))
     children.push(new Paragraph({
@@ -417,7 +426,7 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     rows: infoRows.map(([label, value]) =>
       new TableRow({
         children: [
-          makeCell(label, c1, { bold: true, color: '566573', borders: BORDERS_NONE, size: 20 }),
+          makeCell(label, c1, { bold: true, color: EQ_MID_GREY, borders: BORDERS_NONE, size: 20 }),
           makeCell(value, c2, { borders: BORDERS_NONE, size: 20 }),
         ],
       })
@@ -431,7 +440,7 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     spacing: { before: 200 },
     children: [new TextRun({
       text: input.tenantProductName,
-      size: 18, font: FONT, color: '95A5A6',
+      size: 18, font: FONT, color: EQ_MID_GREY,
     })],
   }))
 
@@ -517,7 +526,7 @@ function buildContentsPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   children.push(spacer(120))
   children.push(new Paragraph({
     spacing: { after: 80 },
-    children: [new TextRun({ text: 'Asset Reports', bold: true, size: 22, font: FONT, color: '2C3E50' })],
+    children: [new TextRun({ text: 'Asset Reports', bold: true, size: 22, font: FONT, color: EQ_INK })],
   }))
 
   // Asset entries
@@ -535,7 +544,7 @@ function buildContentsPage(input: PmAssetReportInput): (Paragraph | Table)[] {
             style: 'Hyperlink', size: 20, font: FONT,
           })],
         }),
-        new TextRun({ text: `\t${asset.jobPlanName}`, size: 18, font: FONT, color: '95A5A6' }),
+        new TextRun({ text: `\t${asset.jobPlanName}`, size: 18, font: FONT, color: EQ_MID_GREY }),
       ],
     }))
   }
@@ -618,7 +627,7 @@ function buildExecutiveSummary(input: PmAssetReportInput): (Paragraph | Table)[]
         }),
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: label, size: 16, font: FONT, color: '7F8C8D' })],
+          children: [new TextRun({ text: label, size: 16, font: FONT, color: EQ_MID_GREY })],
         }),
       ],
     })
@@ -649,7 +658,7 @@ function buildExecutiveSummary(input: PmAssetReportInput): (Paragraph | Table)[]
   children.push(spacer(200))
   children.push(new Paragraph({
     spacing: { after: 100 },
-    children: [new TextRun({ text: 'Task Breakdown', bold: true, size: 22, font: FONT, color: '2C3E50' })],
+    children: [new TextRun({ text: 'Task Breakdown', bold: true, size: 22, font: FONT, color: EQ_INK })],
   }))
 
   const bc1 = 4000
@@ -689,11 +698,11 @@ function buildExecutiveSummary(input: PmAssetReportInput): (Paragraph | Table)[]
     children.push(spacer(200))
     children.push(new Paragraph({
       spacing: { after: 80 },
-      children: [new TextRun({ text: 'Key Findings & Notes', bold: true, size: 22, font: FONT, color: '2C3E50' })],
+      children: [new TextRun({ text: 'Key Findings & Notes', bold: true, size: 22, font: FONT, color: EQ_INK })],
     }))
     children.push(new Paragraph({
       spacing: { after: 100 },
-      children: [new TextRun({ text: input.overallNotes, size: 20, font: FONT, color: '34495E' })],
+      children: [new TextRun({ text: input.overallNotes, size: 20, font: FONT, color: EQ_INK })],
     }))
   }
 
@@ -767,17 +776,17 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
     children.push(new Paragraph({
       spacing: { after: 80 },
       children: [
-        new TextRun({ text: `${asset.tasks.length} tasks: `, size: 20, font: FONT, color: '2C3E50' }),
-        new TextRun({ text: `${passed} pass`, bold: true, size: 20, font: FONT, color: '27AE60' }),
-        new TextRun({ text: ' · ', size: 20, font: FONT, color: '95A5A6' }),
+        new TextRun({ text: `${asset.tasks.length} tasks: `, size: 20, font: FONT, color: EQ_INK }),
+        new TextRun({ text: `${passed} pass`, bold: true, size: 20, font: FONT, color: STATUS_PASS }),
+        new TextRun({ text: ' · ', size: 20, font: FONT, color: EQ_MID_GREY }),
         new TextRun({ text: `${failed} fail`, bold: true, size: 20, font: FONT, color: failed > 0 ? 'C0392B' : '95A5A6' }),
         ...(pending > 0 ? [
-          new TextRun({ text: ' · ', size: 20, font: FONT, color: '95A5A6' }),
-          new TextRun({ text: `${pending} pending`, size: 20, font: FONT, color: 'F39C12' }),
+          new TextRun({ text: ' · ', size: 20, font: FONT, color: EQ_MID_GREY }),
+          new TextRun({ text: `${pending} pending`, size: 20, font: FONT, color: STATUS_WARN }),
         ] : []),
         ...(na > 0 ? [
-          new TextRun({ text: ' · ', size: 20, font: FONT, color: '95A5A6' }),
-          new TextRun({ text: `${na} N/A`, size: 20, font: FONT, color: '95A5A6' }),
+          new TextRun({ text: ' · ', size: 20, font: FONT, color: EQ_MID_GREY }),
+          new TextRun({ text: `${na} N/A`, size: 20, font: FONT, color: EQ_MID_GREY }),
         ] : []),
       ],
     }))
@@ -786,9 +795,9 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
     if (asset.defectsFound) {
       children.push(new Paragraph({
         spacing: { after: 60 },
-        border: { left: { style: BorderStyle.SINGLE, size: 8, color: 'E74C3C', space: 8 } },
+        border: { left: { style: BorderStyle.SINGLE, size: 8, color: STATUS_FAIL, space: 8 } },
         indent: { left: 200 },
-        children: [new TextRun({ text: asset.defectsFound, size: 18, font: FONT, color: 'C0392B' })],
+        children: [new TextRun({ text: asset.defectsFound, size: 18, font: FONT, color: STATUS_FAIL })],
       }))
     }
   } else {
@@ -796,7 +805,7 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
     children.push(spacer(200))
     children.push(new Paragraph({
       spacing: { after: 80 },
-      children: [new TextRun({ text: 'Maintenance Checklist', bold: true, size: 22, font: FONT, color: '2C3E50' })],
+      children: [new TextRun({ text: 'Maintenance Checklist', bold: true, size: 22, font: FONT, color: EQ_INK })],
     }))
 
     // Column widths differ by complexity — Detailed gives more room to Notes
@@ -923,13 +932,13 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
       children.push(spacer(120))
       children.push(new Paragraph({
         spacing: { after: 60 },
-        children: [new TextRun({ text: 'Technician Notes', bold: true, size: 20, font: FONT, color: '2C3E50' })],
+        children: [new TextRun({ text: 'Technician Notes', bold: true, size: 20, font: FONT, color: EQ_INK })],
       }))
       children.push(new Paragraph({
         spacing: { after: 80 },
-        border: { left: { style: BorderStyle.SINGLE, size: 8, color: 'BDC3C7', space: 8 } },
+        border: { left: { style: BorderStyle.SINGLE, size: 8, color: EQ_BORDER, space: 8 } },
         indent: { left: 200 },
-        children: [new TextRun({ text: asset.notes, size: 18, font: FONT, color: '34495E' })],
+        children: [new TextRun({ text: asset.notes, size: 18, font: FONT, color: EQ_INK })],
       }))
     }
 
@@ -938,7 +947,7 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
       children.push(spacer(160))
       children.push(new Paragraph({
         spacing: { after: 80 },
-        children: [new TextRun({ text: 'Asset Photos', bold: true, size: 20, font: FONT, color: '2C3E50' })],
+        children: [new TextRun({ text: 'Asset Photos', bold: true, size: 20, font: FONT, color: EQ_INK })],
       }))
       for (const photo of asset.photos) {
         children.push(new Paragraph({
@@ -958,10 +967,10 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
   children.push(spacer(200))
   children.push(new Paragraph({
     spacing: { after: 40 },
-    border: { top: { style: BorderStyle.SINGLE, size: 1, color: 'D5D8DC', space: 4 } },
+    border: { top: { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER, space: 4 } },
     children: [new TextRun({
       text: 'I confirm that the above work has been carried out successfully as required.',
-      italics: true, size: 18, font: FONT, color: '566573',
+      italics: true, size: 18, font: FONT, color: EQ_MID_GREY,
     })],
   }))
 
@@ -1004,7 +1013,7 @@ function buildSignOff(input: PmAssetReportInput): (Paragraph | Table)[] {
     spacing: { after: 200 },
     children: [new TextRun({
       text: 'This report documents the preventive maintenance activities completed for the assets listed above. All work was carried out in accordance with applicable maintenance procedures and safety requirements.',
-      size: 20, font: FONT, color: '34495E',
+      size: 20, font: FONT, color: EQ_INK,
     })],
   }))
 
@@ -1057,12 +1066,12 @@ function buildSignOff(input: PmAssetReportInput): (Paragraph | Table)[] {
               children: [
                 spacer(400),
                 new Paragraph({
-                  border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: '2C3E50', space: 1 } },
+                  border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: EQ_INK, space: 1 } },
                   children: [],
                 }),
                 new Paragraph({
                   spacing: { before: 40 },
-                  children: [new TextRun({ text: label, size: 16, font: FONT, color: '95A5A6' })],
+                  children: [new TextRun({ text: label, size: 16, font: FONT, color: EQ_MID_GREY })],
                 }),
               ],
             })
@@ -1154,7 +1163,7 @@ function progressCell(done: number, total: number, width: number): TableCell {
       alignment: AlignmentType.LEFT,
       children: [
         new TextRun({ text: bar, size: 14, font: FONT, color: pct === 100 ? '15803D' : pct > 0 ? '3DA8D8' : 'D5D8DC' }),
-        new TextRun({ text: `  ${pct}%`, size: 14, font: FONT, color: '6B7280' }),
+        new TextRun({ text: `  ${pct}%`, size: 14, font: FONT, color: EQ_MID_GREY }),
       ],
     })],
   })
@@ -1292,7 +1301,7 @@ function buildDefectsRegister(input: PmAssetReportInput): (Paragraph | Table)[] 
       spacing: { after: 120 },
       children: [new TextRun({
         text: 'No defects identified during this maintenance check.',
-        italics: true, size: 20, font: FONT, color: '15803D',
+        italics: true, size: 20, font: FONT, color: STATUS_PASS,
       })],
     }))
     return children
@@ -1344,7 +1353,7 @@ function buildDefectsRegister(input: PmAssetReportInput): (Paragraph | Table)[] 
           bold: true,
           size: 16,
           shading: 'FEF3C7',
-          color: 'B45309',
+          color: STATUS_WARN,
         }),
       ],
     })
