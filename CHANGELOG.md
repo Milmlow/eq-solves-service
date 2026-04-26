@@ -4,6 +4,38 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-04-26 — Reports finish: all 6 generators on ReportShell + WO Details dispatcher restored
+
+Pending push to `main`. Closes Sprint 2.3 from the original 14-item review and restores the Work Order Details dispatcher that was lost in the prior recovery (memory note `project_phase2_ui_lost_2026_04_26`).
+
+### Every PDF generator now uses the shared shell
+All six remaining generators migrated to `lib/reports/report-shell.ts`:
+- `acb-report.ts` — header/footer via `buildShellHeader` / `buildShellFooter`.
+- `nsx-report.ts` — same.
+- `pm-asset-report.ts` — same.
+- `pm-check-report.ts` — same.
+- `maintenance-checklist.ts` — same; local `buildHeader` / `buildFooter` functions deleted (now redundant). Unused docx imports (`Header`, `Footer`, `PageNumber`) cleaned up.
+- `work-order-details.ts` — same.
+
+Plus `compliance-report.ts` (migrated earlier in the same session). Net: `new Header(` and `new Footer(` calls now exist in exactly one place — `report-shell.ts`. Every customer-facing PDF gets the same EQ-branded sky border on the header and "Page X of Y" footer driven by Report Settings.
+
+### WO Details dispatcher restored
+- `app/(app)/reports/actions.ts::issueMaintenanceReportAction` now accepts a `report_type: 'pm_check' | 'wo_details'` parameter (default `pm_check` for backward compat).
+- Branches between `generateAndStoreReport` (PM check) and `generateAndStoreWorkOrderDetailsReport` (WO details).
+- `SendReportModal` gets a two-card radio picker at the top: PM Check (default — check-level pass/fail summary) vs Work Order Details (per-asset Maximo layout with WO# + tasks + defects per asset).
+- `SendReport` button now uses the `loading` prop on `Button` so the spinner fires while generating + emailing.
+
+### Files Touched
+- Modified: `lib/reports/{acb-report,nsx-report,pm-asset-report,pm-check-report,maintenance-checklist,work-order-details}.ts`, `app/(app)/reports/actions.ts`, `app/(app)/maintenance/[id]/SendReportModal.tsx`.
+
+### Verification
+- Final grep: zero `new Header(` / `new Footer(` constructions outside `report-shell.ts`.
+- All 6 generators import `buildShellHeader` + `buildShellFooter` + `prepareShell` + `resolveShellSettings`.
+- Backwards compat: callers that don't pass `report_type` default to `pm_check`, so nothing else needs to change.
+- TypeScript check pending: `npx tsc --noEmit` should return 0 errors before push.
+
+---
+
 ## 2026-04-26 — Reports audit cleanup: dead chain + dead settings + button relabel
 
 Pending push to `main`. Following the full reports audit (`docs/reviews/2026-04-26-reports-audit.html`), Royce ticked items 1-9 for removal. All applied:

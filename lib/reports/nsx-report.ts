@@ -16,14 +16,11 @@ import {
   Table,
   TableRow,
   TableCell,
-  Header,
-  Footer,
   AlignmentType,
   HeadingLevel,
   BorderStyle,
   WidthType,
   ShadingType,
-  PageNumber,
   PageBreak,
   TableOfContents,
   Bookmark,
@@ -31,6 +28,12 @@ import {
   ImageRun,
 } from 'docx'
 import { buildMasthead } from '@/lib/reports/report-branding'
+import {
+  buildHeader as buildShellHeader,
+  buildFooter as buildShellFooter,
+  prepareShell,
+  resolveShellSettings,
+} from '@/lib/reports/report-shell'
 
 // ---------- types ----------
 
@@ -640,6 +643,28 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
   const today = formatDateDDMMYYYY(new Date().toISOString())
   const footerText = input.customFooterText || `${input.companyName || input.tenantProductName} — NSX Test Report — rev 3.1`
 
+  // Sprint 2.3 (26-Apr-2026): adopt shared ReportShell for header/footer.
+  // See compliance-report.ts for the canonical worked example.
+  const shell = await prepareShell(
+    resolveShellSettings({
+      companyName: input.companyName ?? input.tenantProductName,
+      productName: input.tenantProductName,
+      primaryColour: input.primaryColour,
+      complexity,
+      headerText: input.customHeaderText ?? `${input.siteName} — NSX / MCCB Test Report`,
+      footerText,
+    }),
+    {
+      reportType: 'nsx_test',
+      reportDate: today,
+      customerName: input.companyName ?? null,
+      siteName: input.siteName,
+      siteAddress: null,
+      customerLogoUrl: null,
+      sitePhotoUrl: null,
+    },
+  )
+
   const coverLogo = input.logoImageOnLight ?? input.logoImage ?? input.logoImageOnDark
   const customerLogo = input.customerLogoOnLight ?? input.customerLogoOnDark
 
@@ -770,35 +795,8 @@ export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> 
             margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
           },
         },
-        headers: {
-          default: new Header({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [new TextRun({ text: input.customHeaderText ?? `${input.siteName} \u2014 NSX / MCCB Test Report`, size: 16, font: 'Plus Jakarta Sans', color: '999999' })],
-              }),
-            ],
-          }),
-        },
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.JUSTIFIED,
-                children: [
-                  new TextRun({ text: footerText, size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
-                ],
-              }),
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [
-                  new TextRun({ text: 'Page ', size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
-                  new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
-                ],
-              }),
-            ],
-          }),
-        },
+        headers: { default: buildShellHeader(shell) },
+        footers: { default: buildShellFooter(shell) },
         children: [...tocChildren, ...breakerChildren],
       },
     ],

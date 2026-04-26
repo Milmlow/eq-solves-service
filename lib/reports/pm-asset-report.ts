@@ -22,14 +22,11 @@ import {
   Table,
   TableRow,
   TableCell,
-  Header,
-  Footer,
   AlignmentType,
   HeadingLevel,
   BorderStyle,
   WidthType,
   ShadingType,
-  PageNumber,
   PageBreak,
   VerticalAlign,
   Bookmark,
@@ -39,6 +36,12 @@ import {
   TabStopPosition,
 } from 'docx'
 import { buildMasthead } from '@/lib/reports/report-branding'
+import {
+  buildHeader as buildShellHeader,
+  buildFooter as buildShellFooter,
+  prepareShell,
+  resolveShellSettings,
+} from '@/lib/reports/report-shell'
 
 // ─────────── Types ───────────
 
@@ -1374,6 +1377,27 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
   const headerText = input.customHeaderText || input.reportTitle
   const footerText = input.customFooterText || `${input.companyName || input.tenantProductName} — Per-Asset PM Report — rev 3.1`
 
+  // Sprint 2.3 (26-Apr-2026): adopt shared ReportShell for header/footer.
+  const shell = await prepareShell(
+    resolveShellSettings({
+      companyName: input.companyName ?? input.tenantProductName,
+      productName: input.tenantProductName,
+      primaryColour: input.primaryColour,
+      complexity,
+      headerText,
+      footerText,
+    }),
+    {
+      reportType: 'maintenance_check',
+      reportDate: new Date().toLocaleDateString('en-AU'),
+      customerName: input.companyName ?? null,
+      siteName: input.siteName ?? null,
+      siteAddress: null,
+      customerLogoUrl: null,
+      sitePhotoUrl: null,
+    },
+  )
+
   // Build all per-asset sections with page breaks
   const assetSectionChildren: (Paragraph | Table)[] = []
   for (let i = 0; i < input.assets.length; i++) {
@@ -1438,35 +1462,8 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
         margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
       },
     },
-    headers: {
-      default: new Header({
-        children: [new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [
-            new TextRun({ text: headerText, size: 16, font: FONT, color: '95A5A6' }),
-          ],
-        })],
-      }),
-    },
-    footers: {
-      default: new Footer({
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.JUSTIFIED,
-            children: [
-              new TextRun({ text: footerText, size: 14, font: FONT, color: '95A5A6' }),
-            ],
-          }),
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            children: [
-              new TextRun({ text: 'Page ', size: 14, font: FONT, color: '95A5A6' }),
-              new TextRun({ children: [PageNumber.CURRENT], size: 14, font: FONT, color: '95A5A6' }),
-            ],
-          }),
-        ],
-      }),
-    },
+    headers: { default: buildShellHeader(shell) },
+    footers: { default: buildShellFooter(shell) },
     children: bodyChildren,
   })
 

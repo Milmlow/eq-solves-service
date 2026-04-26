@@ -11,10 +11,22 @@ interface SendReportModalProps {
   onClose: () => void
 }
 
+/**
+ * Send Report modal — picks the report flavour, generates the DOCX, uploads
+ * to Storage, and emails a signed download link to the recipients.
+ *
+ * Report type dropdown (restored 26-Apr-2026 — was lost in prior recovery,
+ * see memory note `project_phase2_ui_lost_2026_04_26`):
+ *   - PM Check (default) → simpler check-level summary, pass/fail per item.
+ *   - Work Order Details → per-asset Maximo-parity layout (WO# / tasks /
+ *                          defects per asset). Use when the customer wants
+ *                          asset-by-asset detail with their Maximo IDs.
+ */
 export function SendReportModal({ checkId, customerEmail, onClose }: SendReportModalProps) {
   const [emails, setEmails] = useState(customerEmail ?? '')
   const [ccEmails, setCcEmails] = useState('')
   const [message, setMessage] = useState('')
+  const [reportType, setReportType] = useState<'pm_check' | 'wo_details'>('pm_check')
   const [isPending, startTransition] = useTransition()
   const [result, setResult] = useState<{ success: boolean; error?: string; revision?: number } | null>(null)
 
@@ -30,6 +42,7 @@ export function SendReportModal({ checkId, customerEmail, onClose }: SendReportM
         recipient_emails: toList,
         cc_emails: ccList.length > 0 ? ccList : undefined,
         message: message.trim() || undefined,
+        report_type: reportType,
       })
       setResult(res)
     })
@@ -60,6 +73,40 @@ export function SendReportModal({ checkId, customerEmail, onClose }: SendReportM
       </div>
 
       <div className="space-y-2">
+        {/* Report type — radio chips so the choice is visible inline rather
+            than buried in a dropdown. Default PM Check covers most cases. */}
+        <div>
+          <span className="text-xs font-medium text-eq-grey">Report type</span>
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setReportType('pm_check')}
+              className={
+                'text-left p-2.5 border rounded-md transition-colors ' +
+                (reportType === 'pm_check'
+                  ? 'border-eq-sky bg-white'
+                  : 'border-gray-200 bg-white hover:border-eq-sky/50')
+              }
+            >
+              <div className="text-xs font-semibold text-eq-ink">PM Check</div>
+              <p className="text-[11px] text-eq-grey leading-snug mt-0.5">Default. Check-level summary with pass/fail per item.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setReportType('wo_details')}
+              className={
+                'text-left p-2.5 border rounded-md transition-colors ' +
+                (reportType === 'wo_details'
+                  ? 'border-eq-sky bg-white'
+                  : 'border-gray-200 bg-white hover:border-eq-sky/50')
+              }
+            >
+              <div className="text-xs font-semibold text-eq-ink">Work Order Details</div>
+              <p className="text-[11px] text-eq-grey leading-snug mt-0.5">Per-asset Maximo layout — WO#, tasks, defects per asset.</p>
+            </button>
+          </div>
+        </div>
+
         <label className="block">
           <span className="text-xs font-medium text-eq-grey">Recipient emails *</span>
           <input
@@ -100,9 +147,9 @@ export function SendReportModal({ checkId, customerEmail, onClose }: SendReportM
       )}
 
       <div className="flex gap-2">
-        <Button size="sm" onClick={handleSend} disabled={isPending || !emails.trim()}>
+        <Button size="sm" onClick={handleSend} loading={isPending} disabled={!emails.trim()}>
           <Send className="w-4 h-4 mr-1" />
-          {isPending ? 'Sending...' : 'Send Report'}
+          Send Report
         </Button>
         <Button size="sm" variant="secondary" onClick={onClose}>Cancel</Button>
       </div>

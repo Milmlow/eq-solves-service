@@ -17,20 +17,23 @@ import {
   Table,
   TableRow,
   TableCell,
-  Header,
-  Footer,
   AlignmentType,
   HeadingLevel,
   BorderStyle,
   WidthType,
   ShadingType,
-  PageNumber,
   PageBreak,
   VerticalAlign,
   ImageRun,
   convertInchesToTwip,
 } from 'docx'
 import { buildMasthead } from '@/lib/reports/report-branding'
+import {
+  buildHeader as buildShellHeader,
+  buildFooter as buildShellFooter,
+  prepareShell,
+  resolveShellSettings,
+} from '@/lib/reports/report-shell'
 
 // ---------- types ----------
 
@@ -408,6 +411,26 @@ export async function generatePMCheckReport(input: PmCheckReportInput): Promise<
   const brand = input.primaryColour.replace('#', '')
   const coverChildren = buildCoverSection(input).children
 
+  // Sprint 2.3 (26-Apr-2026): adopt shared ReportShell for header/footer.
+  const shell = await prepareShell(
+    resolveShellSettings({
+      companyName: input.companyName ?? input.tenantProductName,
+      productName: input.tenantProductName,
+      primaryColour: input.primaryColour,
+      headerText: `${input.siteName} — PM Check Report`,
+      footerText: `${input.companyName || input.tenantProductName} — Preventive Maintenance Report — rev 3.1`,
+    }),
+    {
+      reportType: 'maintenance_check',
+      reportDate: new Date().toLocaleDateString('en-AU'),
+      customerName: input.companyName ?? null,
+      siteName: input.siteName,
+      siteAddress: null,
+      customerLogoUrl: null,
+      sitePhotoUrl: null,
+    },
+  )
+
   const doc = new Document({
     styles: {
       default: {
@@ -455,45 +478,8 @@ export async function generatePMCheckReport(input: PmCheckReportInput): Promise<
             margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
           },
         },
-        headers: {
-          default: new Header({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [new TextRun({
-                  text: `${input.siteName} — PM Check Report`,
-                  size: 16,
-                  font: 'Plus Jakarta Sans',
-                  color: '999999',
-                })],
-              }),
-            ],
-          }),
-        },
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.JUSTIFIED,
-                children: [
-                  new TextRun({
-                    text: `${input.companyName || input.tenantProductName} — Preventive Maintenance Report — rev 3.1`,
-                    size: 16,
-                    font: 'Plus Jakarta Sans',
-                    color: '999999',
-                  }),
-                ],
-              }),
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [
-                  new TextRun({ text: 'Page ', size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
-                  new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Plus Jakarta Sans', color: '999999' }),
-                ],
-              }),
-            ],
-          }),
-        },
+        headers: { default: buildShellHeader(shell) },
+        footers: { default: buildShellFooter(shell) },
         children: [
           new Paragraph({ children: [new PageBreak()] }),
           new Paragraph({

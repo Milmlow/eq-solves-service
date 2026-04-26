@@ -21,18 +21,21 @@ import {
   Table,
   TableRow,
   TableCell,
-  Header,
-  Footer,
   AlignmentType,
   HeadingLevel,
   BorderStyle,
   WidthType,
   ShadingType,
-  PageNumber,
   PageBreak,
   VerticalAlign,
   ImageRun,
 } from 'docx'
+import {
+  buildHeader as buildShellHeader,
+  buildFooter as buildShellFooter,
+  prepareShell,
+  resolveShellSettings,
+} from '@/lib/reports/report-shell'
 import { buildMasthead } from '@/lib/reports/report-branding'
 
 // ---------- types ----------
@@ -422,6 +425,26 @@ export async function generateWorkOrderDetailsReport(
 ): Promise<Buffer> {
   const brand = input.primaryColour.replace('#', '')
 
+  // Sprint 2.3 (26-Apr-2026): adopt shared ReportShell for header/footer.
+  const shell = await prepareShell(
+    resolveShellSettings({
+      companyName: input.companyName,
+      productName: input.tenantProductName,
+      primaryColour: input.primaryColour,
+      headerText: `${input.companyName} — Work Order Details`,
+      footerText: `${input.companyName} — Work Order Details — rev 3.1`,
+    }),
+    {
+      reportType: 'maintenance_check',
+      reportDate: new Date().toLocaleDateString('en-AU'),
+      customerName: input.companyName ?? null,
+      siteName: null,
+      siteAddress: null,
+      customerLogoUrl: null,
+      sitePhotoUrl: null,
+    },
+  )
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const assetSections: any[] = []
 
@@ -553,36 +576,8 @@ export async function generateWorkOrderDetailsReport(
             margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
           },
         },
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.JUSTIFIED,
-                children: [
-                  new TextRun({
-                    text: `${input.companyName} — Work Order Details — rev 3.1`,
-                    size: 16,
-                    font: 'Plus Jakarta Sans',
-                    color: '999999',
-                  }),
-                  new TextRun({ text: '\t' }),
-                  new TextRun({
-                    text: 'Page ',
-                    size: 16,
-                    font: 'Plus Jakarta Sans',
-                    color: '999999',
-                  }),
-                  new TextRun({
-                    children: [PageNumber.CURRENT],
-                    size: 16,
-                    font: 'Plus Jakarta Sans',
-                    color: '999999',
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
+        headers: { default: buildShellHeader(shell) },
+        footers: { default: buildShellFooter(shell) },
         children: assetSections,
       },
     ],

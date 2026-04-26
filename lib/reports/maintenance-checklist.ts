@@ -19,17 +19,20 @@ import {
   Table,
   TableRow,
   TableCell,
-  Header,
-  Footer,
   AlignmentType,
   BorderStyle,
   WidthType,
   ShadingType,
-  PageNumber,
   PageBreak,
   VerticalAlign,
 } from 'docx'
 import { buildMasthead } from '@/lib/reports/report-branding'
+import {
+  buildHeader as buildShellHeader,
+  buildFooter as buildShellFooter,
+  prepareShell,
+  resolveShellSettings,
+} from '@/lib/reports/report-shell'
 
 // ─────────── Types ───────────
 
@@ -146,62 +149,8 @@ function divider(): Paragraph {
 }
 
 // ─────────── Header & Footer ───────────
-
-function buildHeader(checkName: string, siteName: string): Header {
-  return new Header({
-    children: [
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 80 },
-        children: [new TextRun({
-          text: `${checkName} — ${siteName}`,
-          size: 20,
-          font: FONT,
-          bold: true,
-        })]
-      }),
-    ]
-  })
-}
-
-function buildFooter(tenantProductName: string, companyName?: string, reportTypeLabel?: string): Footer {
-  const label = reportTypeLabel || 'Maintenance Checklist'
-  const company = companyName || tenantProductName
-  return new Footer({
-    children: [
-      new Paragraph({
-        alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: 0 },
-        children: [
-          new TextRun({
-            text: `${company} — ${label} — rev 3.1`,
-            size: 14,
-            font: FONT,
-            color: '666666'
-          })
-        ]
-      }),
-      new Paragraph({
-        alignment: AlignmentType.RIGHT,
-        spacing: { after: 0 },
-        children: [
-          new TextRun({
-            text: 'Page ',
-            size: 14,
-            font: FONT,
-            color: '666666'
-          }),
-          new TextRun({
-            children: [PageNumber.CURRENT],
-            size: 14,
-            font: FONT,
-            color: '666666'
-          })
-        ]
-      })
-    ]
-  })
-}
+// Local buildHeader/buildFooter functions removed 26-Apr-2026 — replaced by
+// the shared report-shell.ts module (see Sprint 2.3 + audit cleanup).
 
 // ─────────── Info Block ───────────
 
@@ -535,6 +484,29 @@ function buildSignOffBlock(): (Paragraph | Table)[] {
 // ─────────── Main Generator ───────────
 
 export async function generateMaintenanceChecklist(input: MaintenanceChecklistInput): Promise<Buffer> {
+  // Sprint 2.3 (26-Apr-2026): use shared ReportShell for header/footer.
+  // Local buildHeader/buildFooter functions below are kept as fallback in
+  // case any external caller still imports them, but the document below
+  // uses the shell variants directly.
+  const shell = await prepareShell(
+    resolveShellSettings({
+      companyName: input.companyName ?? input.tenantProductName,
+      productName: input.tenantProductName,
+      primaryColour: input.primaryColour,
+      headerText: `${input.checkName} — ${input.siteName}`,
+      footerText: `${input.companyName || input.tenantProductName} — ${input.reportTypeLabel || 'Maintenance Checklist'} — rev 3.1`,
+    }),
+    {
+      reportType: 'maintenance_check',
+      reportDate: input.printedDate ?? new Date().toLocaleDateString('en-AU'),
+      customerName: input.companyName ?? null,
+      siteName: input.siteName,
+      siteAddress: null,
+      customerLogoUrl: null,
+      sitePhotoUrl: null,
+    },
+  )
+
   // Build body: info block + all asset sections
   const bodyChildren: (Paragraph | Table)[] = []
 
@@ -576,12 +548,8 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
             margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
           },
         },
-        headers: {
-          default: buildHeader(input.checkName, input.siteName),
-        },
-        footers: {
-          default: buildFooter(input.tenantProductName, input.companyName, input.reportTypeLabel),
-        },
+        headers: { default: buildShellHeader(shell) },
+        footers: { default: buildShellFooter(shell) },
         children: bodyChildren,
       },
     ],

@@ -5,7 +5,10 @@ import { canWrite } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import { revalidatePath } from 'next/cache'
-import { generateAndStoreReport } from '@/lib/reports/generate-and-store'
+import {
+  generateAndStoreReport,
+  generateAndStoreWorkOrderDetailsReport,
+} from '@/lib/reports/generate-and-store'
 import { sendReportDeliveryEmail } from '@/lib/email/send-report-email'
 
 /**
@@ -16,6 +19,16 @@ import { sendReportDeliveryEmail } from '@/lib/email/send-report-email'
  * This action is the single entry point for the report delivery pipeline.
  * Design: docs/architecture/report-delivery.md
  */
+/**
+ * Issue a maintenance report.
+ *
+ * `report_type` (Sprint 2.3 dispatcher restored 26-Apr-2026 — was lost in
+ * the prior recovery per memory note `project_phase2_ui_lost_2026_04_26`):
+ *   - 'pm_check'   → generatePMCheckReport via generate-and-store. Default.
+ *                    Simpler check-level summary with pass/fail per item.
+ *   - 'wo_details' → generateWorkOrderDetailsReport. Per-asset Maximo
+ *                    parity layout with WO# / tasks / defects per asset.
+ */
 export async function issueMaintenanceReportAction(data: {
   maintenance_check_id: string
   recipient_emails: string[]
@@ -23,6 +36,7 @@ export async function issueMaintenanceReportAction(data: {
   message?: string
   revision_reason?: string
   mutationId?: string
+  report_type?: 'pm_check' | 'wo_details'
 }) {
   return withIdempotency(data.mutationId, async () => {
     try {
@@ -73,12 +87,21 @@ export async function issueMaintenanceReportAction(data: {
       }
 
       // ── Generate DOCX + upload to Storage + compute hash ──
-      const report = await generateAndStoreReport(
-        supabase,
-        tenantId,
-        data.maintenance_check_id,
-        nextRevision,
-      )
+      // Dispatch on report_type — defaults to pm_check for backward compat.
+      const reportType = data.report_type ?? 'pm_check'
+      const report = reportType === 'wo_details'
+        ? await generateAndStoreWorkOrderDetailsReport(
+            supabase,
+            tenantId,
+            data.maintenance_check_id,
+            nextRevision,
+          )
+        : await generateAndStoreReport(
+            supabase,
+            tenantId,
+            data.maintenance_check_id,
+            nextRevision,
+          )
 
       // ── Calculate signed URL expiry (30 days) ──
       const expiresAt = new Date()
