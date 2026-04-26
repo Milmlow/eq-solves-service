@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { navigate } from '../lib/router'
 import { useAssets, useFields, useJob } from '../hooks/useJobData'
 import { TopBar } from '../components/TopBar'
@@ -101,29 +101,6 @@ export function AssetPage({ jobRef, assetId }: { jobRef: string; assetId: string
   const done = fieldCaptured.filter((f) => completeIds.has(f.id)).length
   const total = fieldCaptured.length
 
-  // Stable callback so MemoFieldRow isn't invalidated on every parent tick.
-  // The fieldId is passed in by the row itself — keeps this reference stable
-  // across re-renders as long as jobId / assetId / capturedBy don't change.
-  const handleFieldChange = useCallback(
-    (
-      fieldId: number,
-      value: string | null,
-      opts?: { flagged?: boolean; notes?: string | null },
-    ) => {
-      if (!jobId) return
-      enqueueCapture({
-        jobId,
-        assetId: asset.id,
-        classificationFieldId: fieldId,
-        value,
-        capturedBy,
-        flagged: opts?.flagged,
-        notes: opts?.notes,
-      })
-    },
-    [jobId, asset.id, capturedBy],
-  )
-
   return (
     <div className="min-h-screen flex flex-col pb-24">
       <TopBar
@@ -164,15 +141,8 @@ export function AssetPage({ jobRef, assetId }: { jobRef: string; assetId: string
         </div>
       </div>
 
-      {/* Copy from previous asset.
-          IMPORTANT: this card self-unmounts (internal state), NOT via a
-          parent-level conditional on `done`. Previously, as soon as the first
-          field was captured `done` flipped to 1 and the whole card disappeared
-          — which removed ~180px of DOM from above the viewport and caused the
-          page to scroll-reset toward the top on every capture. Now the card
-          decides once on mount whether to show, and sticks with that until
-          the user dismisses or copies. */}
-      {jobId && capturedBy ? (
+      {/* Copy from previous asset */}
+      {jobId && capturedBy && done === 0 ? (
         <CopyFromPrevious
           jobId={jobId}
           capturedBy={capturedBy}
@@ -196,19 +166,25 @@ export function AssetPage({ jobRef, assetId }: { jobRef: string; assetId: string
                 </span>
               </h2>
               <div className="card divide-y divide-border/60">
-                {group.fields.map((field) => {
-                  const cap = captureFor(asset.id, field.id)
-                  return (
-                    <MemoFieldRow
-                      key={field.id}
-                      field={field}
-                      value={cap?.value ?? null}
-                      flagged={Boolean(cap?.flagged)}
-                      notes={cap?.notes ?? null}
-                      onChange={handleFieldChange}
-                    />
-                  )
-                })}
+                {group.fields.map((field) => (
+                  <FieldRow
+                    key={field.id}
+                    field={field}
+                    existing={captureFor(asset.id, field.id)}
+                    onChange={(value, opts) => {
+                      if (!jobId) return
+                      enqueueCapture({
+                        jobId,
+                        assetId: asset.id,
+                        classificationFieldId: field.id,
+                        value,
+                        capturedBy,
+                        flagged: opts?.flagged,
+                        notes: opts?.notes,
+                      })
+                    }}
+                  />
+                ))}
               </div>
             </section>
           ))
@@ -384,44 +360,36 @@ function AssetFooter({
 
 function FieldRow({
   field,
-  value: currentValue,
-  flagged,
-  notes: currentNotes,
+  existing,
   onChange,
 }: {
   field: ClassificationField
-  value: string | null
-  flagged: boolean
-  notes: string | null
-  onChange: (
-    fieldId: number,
-    value: string | null,
-    opts?: { flagged?: boolean; notes?: string | null },
-  ) => void
+  existing?: ReturnType<typeof captureFor>
+  onChange: (value: string | null, opts?: { flagged?: boolean; notes?: string | null }) => void
 }) {
-  const [draft, setDraft] = useState(currentValue ?? '')
-  const [notesOpen, setNotesOpen] = useState(Boolean(currentNotes))
-  const [notes, setNotes] = useState(currentNotes ?? '')
+  const current = existing?.value ?? ''
+  const [draft, setDraft] = useState(current)
+  const [notesOpen, setNotesOpen] = useState(Boolean(existing?.notes))
+  const [notes, setNotes] = useState(existing?.notes ?? '')
+  const flagged = Boolean(existing?.flagged)
 
-  // Keep draft synced with external changes (e.g. queue update / sibling
-  // capture triggering a global refresh). Primitives means this only runs
-  // when THIS row's value actually changed.
+  // Keep draft synced with external changes (e.g. queue update)
   useEffect(() => {
-    setDraft(currentValue ?? '')
-    setNotes(currentNotes ?? '')
-  }, [currentValue, currentNotes])
+    setDraft(existing?.value ?? '')
+    setNotes(existing?.notes ?? '')
+  }, [existing?.value, existing?.notes])
 
   const commit = (v: string) => {
-    onChange(field.id, v === '' ? null : v, { notes: notes || null, flagged })
+    onChange(v === '' ? null : v, { notes: notes || null, flagged })
   }
 
   const toggleFlag = () => {
-    onChange(field.id, currentValue, { notes: notes || null, flagged: !flagged })
+    onChange(existing?.value ?? null, { notes: notes || null, flagged: !flagged })
     // If flagging, open the notes area so the tech writes WHY
     if (!flagged) setNotesOpen(true)
   }
 
-  const hasValue = Boolean(currentValue && currentValue !== '')
+  const hasValue = Boolean(existing?.value && existing.value !== '')
 
   return (
     <div className={`p-4 ${flagged ? 'bg-warn/5 border-l-4 border-warn' : ''}`}>
@@ -479,7 +447,7 @@ function FieldRow({
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          onBlur={() => onChange(field.id, currentValue, { notes: notes || null, flagged })}
+          onBlur={() => onChange(existing?.value ?? null, { notes: notes || null, flagged })}
           placeholder={flagged
             ? 'Tell the office why this needs review (e.g. nameplate illegible, value doesn\'t match drawing)'
             : 'Notes for the office'}
@@ -585,21 +553,6 @@ function FieldInput({
   )
 }
 
-// Memoised FieldRow — only re-renders when THIS row's captured value / flag
-// / notes change, or when the onChange callback identity changes. Siblings
-// firing captures no longer force a re-render of every field on the page,
-// which was the main contributor to the "scroll snaps back to top on every
-// entry" bug.
-const MemoFieldRow = memo(FieldRow, (prev, next) => {
-  return (
-    prev.field === next.field &&
-    prev.value === next.value &&
-    prev.flagged === next.flagged &&
-    prev.notes === next.notes &&
-    prev.onChange === next.onChange
-  )
-})
-
 // ----------------------------------------------------------------------------
 // Grouping heuristic
 // ----------------------------------------------------------------------------
@@ -669,15 +622,6 @@ function CopyFromPrevious({
   assets: Asset[]
   fieldCaptured: ClassificationField[]
 }) {
-  // Mount-time snapshot: "did this asset already have captures when the user
-  // opened it?" If yes, the copy-offer was never relevant and we don't render.
-  // If no (fresh asset), we DO render and stay rendered until dismissed or
-  // copied — even after the first value is typed. Unmounting mid-flow was
-  // what removed ~180px of DOM from above the viewport and made the page
-  // appear to scroll-reset.
-  const [hadCapturesOnMount] = useState(
-    () => capturesForAsset(currentAsset.id).some((c) => c.value && c.value !== ''),
-  )
   const [dismissed, setDismissed] = useState(false)
 
   // Find the most recent PREVIOUS asset (by row_number) that actually has captures
@@ -691,7 +635,7 @@ function CopyFromPrevious({
     return null
   }, [assets, currentAsset.id])
 
-  if (hadCapturesOnMount || dismissed || !prev) return null
+  if (dismissed || !prev) return null
 
   const fieldById = new Map(fieldCaptured.map((f) => [f.id, f]))
   const copyable = prev.captures.filter((c) => fieldById.has(c.classificationFieldId))

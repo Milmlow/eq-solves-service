@@ -110,6 +110,66 @@ export function enqueueCapture(opts: {
   return row
 }
 
+/**
+ * Bulk enqueue. Skips per-write sync trigger and writes localStorage once
+ * at the end. Use for blanket-fill / paste-batch / "Copy prev" — anything
+ * that touches many fields at once. Triggers a single sync at the end.
+ *
+ * Same upsert semantics as enqueueCapture: existing (assetId, fieldId)
+ * rows are updated in place.
+ */
+export function enqueueBatch(
+  rows: ReadonlyArray<{
+    jobId: string
+    assetId: string
+    classificationFieldId: number
+    value: string | null
+    capturedBy: string | null
+    notes?: string | null
+    flagged?: boolean
+  }>,
+): QueuedCapture[] {
+  if (rows.length === 0) return []
+  const items = read()
+  const now = new Date().toISOString()
+  const written: QueuedCapture[] = []
+
+  for (const opts of rows) {
+    const localId = `${opts.assetId}:${opts.classificationFieldId}`
+    const existing = items.find((i) => i.localId === localId)
+    if (existing) {
+      existing.value = opts.value
+      existing.capturedBy = opts.capturedBy
+      existing.notes = opts.notes ?? existing.notes ?? null
+      existing.flagged = opts.flagged ?? existing.flagged
+      existing.capturedAt = now
+      existing.synced = false
+      existing.attempts = 0
+      existing.lastError = undefined
+      written.push(existing)
+    } else {
+      const row: QueuedCapture = {
+        localId,
+        jobId: opts.jobId,
+        assetId: opts.assetId,
+        classificationFieldId: opts.classificationFieldId,
+        value: opts.value,
+        capturedBy: opts.capturedBy,
+        capturedAt: now,
+        notes: opts.notes ?? null,
+        flagged: opts.flagged ?? false,
+        synced: false,
+        attempts: 0,
+      }
+      items.push(row)
+      written.push(row)
+    }
+  }
+  write(items)
+  void syncPending()
+  return written
+}
+
 let syncInFlight = false
 
 export async function syncPending(): Promise<{ ok: boolean; synced: number; failed: number }> {

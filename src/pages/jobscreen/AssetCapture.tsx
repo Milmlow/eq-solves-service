@@ -4,12 +4,15 @@ import {
   ArrowRight,
   Copy,
   Flag,
+  Layers,
   MapPin,
   MoreHorizontal,
 } from 'lucide-react'
 import type { Asset, ClassificationField } from '../../types/db'
 import { enqueueCapture, capturesForAsset } from '../../lib/queue'
 import type { QueuedCapture } from '../../lib/queue'
+import { computeAutofillSuggestions } from '../../lib/autofill'
+import { setFillTemplate, getFillTemplate, clearFillTemplate } from '../../lib/fillTemplate'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Pill } from '../../components/ui/Pill'
@@ -72,6 +75,18 @@ export function AssetCapture({
     () => groupFields(captured, classificationCode),
     [captured, classificationCode],
   )
+
+  // Autofill suggestions: derived from manufacturer + model already on the
+  // sheet (e.g. Schneider MTZ2-40 H1 → 5 fields). Each suggestion appears
+  // as a yellow tap-to-confirm strip below the empty input. No suggestions
+  // for fields that already have a captured value.
+  const suggestionByFieldId = useMemo(() => {
+    const sugs = computeAutofillSuggestions(asset, captured)
+    const map = new Map<number, string>()
+    for (const s of sugs) map.set(s.fieldId, s.value)
+    return map
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset.id, captured])
 
   // First-empty field (in visual order across groups) → where auto-focus lands
   // when the tech opens a new asset. Skip if everything is already captured.
@@ -165,6 +180,32 @@ export function AssetCapture({
     }
   }
 
+  // Fill template: stash this asset's non-empty values as a template the
+  // tech can apply to other assets from the AssetList. Key by jobId so the
+  // template scopes to the current job. Re-rendering on subscribeQueue is
+  // already wired in the parent JobScreenPage, so toggling shows immediately.
+  const activeTemplate = getFillTemplate(jobId)
+  const isTemplateAsset = activeTemplate?.sourceAssetId === asset.id
+  const captureCount = localRows.filter((c) => c.value && c.value.trim() !== '').length
+
+  const setAsTemplate = () => {
+    if (isTemplateAsset) {
+      clearFillTemplate(jobId)
+      return
+    }
+    // Snapshot only fields with a captured value
+    const snapshot: Record<number, string> = {}
+    for (const c of localRows) {
+      if (c.value && c.value.trim() !== '') snapshot[c.classificationFieldId] = c.value
+    }
+    setFillTemplate(jobId, {
+      sourceAssetId: asset.id,
+      sourceAssetLabel: asset.asset_id ?? `#${asset.row_number}`,
+      values: snapshot,
+      classificationCode: asset.classification_code,
+    })
+  }
+
   return (
     <div className="flex flex-col min-h-0 min-w-0">
       {/* ── Header strip ───────────────────────────────────────── */}
@@ -220,6 +261,22 @@ export function AssetCapture({
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
+            <Button
+              size="sm"
+              variant={isTemplateAsset ? 'primary' : 'ghost'}
+              icon={Layers}
+              onClick={setAsTemplate}
+              disabled={!isTemplateAsset && captureCount === 0}
+              title={
+                isTemplateAsset
+                  ? 'This asset is the active fill template — tap to clear'
+                  : captureCount > 0
+                    ? 'Use this asset as a fill template for similar breakers'
+                    : 'Capture some fields first, then you can use this asset as a template'
+              }
+            >
+              {isTemplateAsset ? 'Template ✓' : 'Set template'}
+            </Button>
             <Button
               size="sm"
               variant="ghost"
@@ -282,6 +339,7 @@ export function AssetCapture({
                         existing={byFieldId.get(f.id)}
                         onChange={(value, opts) => setField(f.id, value, opts)}
                         inputRef={f.id === firstEmptyFieldId ? firstEmptyRef : undefined}
+                        pendingValue={suggestionByFieldId.get(f.id)}
                       />
                     ))}
                   </div>
