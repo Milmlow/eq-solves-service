@@ -100,13 +100,25 @@ export interface ComplianceReportInput {
 const thin = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const cellBorders = { top: thin, bottom: thin, left: thin, right: thin }
 
-function headerCell(text: string, colour: string, widthPct?: number): TableCell {
+/**
+ * Header cell for compliance tables.
+ *
+ * Uses EQ_ICE fill + EQ_INK text per Brief v1.3 §6.7 — passes WCAG AA at
+ * all sizes (16.2:1 contrast). The previous implementation used the brand
+ * colour as fill with white text, which caused borderline contrast on
+ * lighter brand colours (e.g. SKS purple #8070C0 on white text was
+ * marginal against AA requirements). The `_colour` arg is retained for
+ * call-site stability but ignored — change is intentional, not a bug.
+ *
+ * Closes audit finding Q4 (2026-04-26 reports design audit).
+ */
+function headerCell(text: string, _colour: string, widthPct?: number): TableCell {
   return new TableCell({
     borders: cellBorders,
-    shading: { type: ShadingType.CLEAR, fill: colour },
+    shading: { type: ShadingType.CLEAR, fill: EQ_ICE },
     verticalAlign: VerticalAlign.CENTER,
     width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
-    children: [new Paragraph({ spacing: { before: 40, after: 40 }, children: [new TextRun({ text, bold: true, size: 18, color: EQ_WHITE, font: FONT_BODY })] })],
+    children: [new Paragraph({ spacing: { before: 40, after: 40 }, children: [new TextRun({ text, bold: true, size: 18, color: EQ_INK, font: FONT_BODY })] })],
   })
 }
 
