@@ -42,6 +42,7 @@ export interface RcdImportCommitSummary {
   testsCreated: number
   circuitsCreated: number
   boardsSkipped: number
+  checksCreated: number
   filename: string
 }
 
@@ -296,6 +297,117 @@ export async function commitJemenaRcdImportAction(
       }
     }
 
+    // Load all RCD-marked job plans for the tenant once. Used below to
+    // find-or-create a maintenance_check that owns each rcd_tests row, so
+    // the imported work surfaces in the standard /maintenance dashboard.
+    const { data: allRcdPlans } = await supabase
+      .from('job_plans')
+      .select('id, customer_id, code, name')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .or('code.ilike.%RCD%,name.ilike.%RCD%')
+
+    function rcdPlanForCustomer(customerId: string | null): { id: string } | null {
+      const candidates = allRcdPlans ?? []
+      // Prefer a customer-scoped plan; fall back to a global plan.
+      const scoped = candidates.find((p) => p.customer_id === customerId)
+      if (scoped) return { id: scoped.id }
+      const global = candidates.find((p) => p.customer_id === null)
+      if (global) return { id: global.id }
+      return null
+    }
+
+    // In-memory cache so multiple tabs that map to the same (site, plan,
+    // month) share a single maintenance_check. Key: `${siteId}|${planId}|${YYYY-MM}`.
+    const checkCache = new Map<string, string>()
+    let checksCreated = 0
+
+    /**
+     * Find an open maintenance_check for this site + plan + month, or create
+     * a fresh one. Returns the check id, or null if no RCD plan exists for
+     * this customer (caller leaves rcd_tests.check_id null).
+     *
+     * Frequency rule: May visits cover the annual time-trip + biannual push-
+     * button items; other months are push-button only.
+     */
+    async function findOrCreateRcdCheck(
+      siteId: string,
+      customerId: string | null,
+      isoTestDate: string,
+    ): Promise<string | null> {
+      const plan = rcdPlanForCustomer(customerId)
+      if (!plan) return null
+
+      const monthKey = isoTestDate.slice(0, 7) // YYYY-MM
+      const cacheKey = `${siteId}|${plan.id}|${monthKey}`
+      const cached = checkCache.get(cacheKey)
+      if (cached) return cached
+
+      // Look for an existing check at this site for the RCD plan in the same
+      // month. Status filter excludes only cancelled — even completed checks
+      // get re-used so a re-import lands on the original check.
+      const monthStart = `${monthKey}-01`
+      const monthEnd = `${monthKey}-31`
+      const { data: existingChecks } = await supabase
+        .from('maintenance_checks')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('site_id', siteId)
+        .eq('job_plan_id', plan.id)
+        .eq('is_active', true)
+        .neq('status', 'cancelled')
+        .gte('due_date', monthStart)
+        .lte('due_date', monthEnd)
+        .order('created_at', { ascending: true })
+        .limit(1)
+
+      const existing = existingChecks?.[0]
+      if (existing) {
+        checkCache.set(cacheKey, existing.id)
+        return existing.id
+      }
+
+      // Create one. May visits cover the annual time-trip; other months are
+      // push-button only.
+      const month = parseInt(isoTestDate.slice(5, 7), 10)
+      const frequency = month === 5 ? 'annual' : 'semi_annual'
+      const { data: site } = await supabase
+        .from('sites')
+        .select('name')
+        .eq('id', siteId)
+        .maybeSingle()
+      const dateObj = new Date(isoTestDate)
+      const monthName = dateObj.toLocaleString('en-AU', { month: 'long' })
+      const year = dateObj.getFullYear()
+      const customName = `${site?.name ?? 'RCD'} - RCD Test - ${monthName} ${year}`
+
+      const { data: created, error: createErr } = await supabase
+        .from('maintenance_checks')
+        .insert({
+          tenant_id: tenantId,
+          site_id: siteId,
+          job_plan_id: plan.id,
+          frequency,
+          custom_name: customName,
+          start_date: isoTestDate,
+          due_date: isoTestDate,
+          status: 'in_progress',
+          assigned_to: user.id,
+          started_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
+
+      if (createErr || !created) {
+        // Don't fail the whole import for a check-creation issue. Leaving
+        // check_id null still lands the rcd_tests rows.
+        return null
+      }
+      checkCache.set(cacheKey, created.id)
+      checksCreated++
+      return created.id
+    }
+
     let testsCreated = 0
     let circuitsCreated = 0
     let boardsSkipped = 0
@@ -321,6 +433,8 @@ export async function commitJemenaRcdImportAction(
         continue
       }
 
+      const checkId = await findOrCreateRcdCheck(site.id, site.customer_id, isoDate)
+
       const { data: rcdTest, error: testErr } = await supabase
         .from('rcd_tests')
         .insert({
@@ -328,6 +442,7 @@ export async function commitJemenaRcdImportAction(
           customer_id: site.customer_id ?? null,
           site_id: site.id,
           asset_id: asset.id,
+          check_id: checkId,
           test_date: isoDate,
           technician_user_id: user.id,
           technician_name_snapshot: t.technicianName || null,
@@ -387,21 +502,23 @@ export async function commitJemenaRcdImportAction(
     await logAuditEvent({
       action: 'create',
       entityType: 'rcd_test',
-      summary: `Jemena RCD import: ${testsCreated} tests, ${circuitsCreated} circuits, ${boardsSkipped} boards skipped`,
+      summary: `Jemena RCD import: ${testsCreated} tests, ${circuitsCreated} circuits, ${checksCreated} checks created, ${boardsSkipped} boards skipped`,
       metadata: {
         source: 'jemena_rcd_xlsx',
         filename,
         testsCreated,
         circuitsCreated,
+        checksCreated,
         boardsSkipped,
       },
       mutationId,
     })
 
     revalidatePath('/testing/rcd')
+    revalidatePath('/maintenance')
     return {
       success: true,
-      data: { testsCreated, circuitsCreated, boardsSkipped, filename },
+      data: { testsCreated, circuitsCreated, boardsSkipped, checksCreated, filename },
     }
   })
 }
