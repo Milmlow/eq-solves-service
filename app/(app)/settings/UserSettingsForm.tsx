@@ -100,8 +100,8 @@ export function UserSettingsForm({ email, fullName, role, lastLogin, createdAt }
           />
           {profileError && <p className="text-sm text-red-500">{profileError}</p>}
           {profileSuccess && <p className="text-sm text-green-600">Profile updated.</p>}
-          <Button type="submit" disabled={profileLoading}>
-            {profileLoading ? 'Saving...' : 'Update Profile'}
+          <Button type="submit" loading={profileLoading}>
+            Update Profile
           </Button>
         </div>
       </form>
@@ -126,8 +126,8 @@ export function UserSettingsForm({ email, fullName, role, lastLogin, createdAt }
           />
           {pwError && <p className="text-sm text-red-500">{pwError}</p>}
           {pwSuccess && <p className="text-sm text-green-600">Password changed successfully.</p>}
-          <Button type="submit" disabled={pwLoading}>
-            {pwLoading ? 'Changing...' : 'Change Password'}
+          <Button type="submit" loading={pwLoading}>
+            Change Password
           </Button>
         </div>
       </form>

@@ -286,8 +286,8 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : isEdit ? 'Update Customer' : 'Create Customer'}
+          <Button type="submit" loading={loading}>
+            {isEdit ? 'Update Customer' : 'Create Customer'}
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel

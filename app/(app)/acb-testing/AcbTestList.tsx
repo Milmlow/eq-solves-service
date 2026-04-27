@@ -178,7 +178,7 @@ export function AcbTestList({
             </div>
           )}
           {canWriteRole && (
-            <Button onClick={() => setCreateOpen(true)}>Add ACB Test</Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>Add ACB Test</Button>
           )}
         </div>
       </div>

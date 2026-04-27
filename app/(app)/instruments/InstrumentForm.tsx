@@ -115,8 +115,8 @@ export function InstrumentForm({ open, onClose, instrument, technicians }: Instr
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : isEdit ? 'Update Instrument' : 'Create Instrument'}
+          <Button type="submit" loading={loading}>
+            {isEdit ? 'Update Instrument' : 'Create Instrument'}
           </Button>
           <Button type="button" variant="secondary" onClick={handleClose}>Cancel</Button>
         </div>

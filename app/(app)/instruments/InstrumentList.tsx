@@ -156,7 +156,7 @@ export function InstrumentList({
             </Button>
           )}
           {canWriteRole && (
-            <Button onClick={() => setCreateOpen(true)}>Add Instrument</Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>Add Instrument</Button>
           )}
         </div>
       </div>

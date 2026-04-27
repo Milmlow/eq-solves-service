@@ -308,8 +308,8 @@ export function ReportSettingsForm({ settings }: Props) {
         {error && <p className="text-sm text-red-500">{error}</p>}
         {success && <p className="text-sm text-green-600">Report settings saved.</p>}
 
-        <Button type="submit" disabled={loading}>
-          {loading ? 'Saving...' : 'Save Report Settings'}
+        <Button type="submit" loading={loading}>
+          Save Report Settings
         </Button>
       </div>
 

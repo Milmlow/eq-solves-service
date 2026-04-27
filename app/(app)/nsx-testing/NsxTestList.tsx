@@ -171,7 +171,7 @@ export function NsxTestList({
             </div>
           )}
           {canWriteRole && (
-            <Button onClick={() => setCreateOpen(true)}>Add NSX Test</Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>Add NSX Test</Button>
           )}
         </div>
       </div>

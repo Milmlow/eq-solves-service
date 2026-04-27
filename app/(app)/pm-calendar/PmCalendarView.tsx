@@ -234,7 +234,7 @@ export function PmCalendarView({
     e.stopPropagation()
     if (!confirm(`Archive "${title}"? It will be hidden from the list (use the Show Archived toggle to restore).`)) return
     const row = entries.find((entry) => entry.id === id)
-    const result = await togglePmCalendarActiveAction(id, false, row?.updated_at)
+    const result = await togglePmCalendarActiveAction(id, false, row?.updated_at, crypto.randomUUID())
     if (result.success) {
       analyticsEvents.archivedCheckToggled({ new_state: false })
       router.refresh()
@@ -249,7 +249,7 @@ export function PmCalendarView({
   // Drag-and-drop move handler (called from MonthGrid)
   async function handleMoveEntry(id: string, newDate: string) {
     const sourceEntry = entries.find((entry) => entry.id === id)
-    const res = await movePmCalendarEntryAction(id, newDate, sourceEntry?.updated_at)
+    const res = await movePmCalendarEntryAction(id, newDate, sourceEntry?.updated_at, crypto.randomUUID())
     if (res.success) {
       router.refresh()
       return

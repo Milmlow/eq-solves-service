@@ -143,8 +143,8 @@ export function BatchCreateForm({ open, onClose, jobPlans, sites, technicians }:
         {success && <p className="text-sm text-green-600">Checks created successfully!</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading || !selectedJobPlan || !startDate || !endDate}>
-            {loading ? 'Creating...' : `Create ${previewDates.length} Checks`}
+          <Button type="submit" loading={loading} disabled={!selectedJobPlan || !startDate || !endDate}>
+            Create {previewDates.length} Checks
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel

@@ -162,8 +162,8 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : isEdit ? 'Update Job Plan' : 'Create Job Plan'}
+          <Button type="submit" loading={loading}>
+            {isEdit ? 'Update Job Plan' : 'Create Job Plan'}
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel

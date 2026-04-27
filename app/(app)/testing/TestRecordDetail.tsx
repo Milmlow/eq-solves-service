@@ -174,8 +174,8 @@ export function TestRecordDetail({
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <Button type="submit" size="sm" disabled={loading}>
-                  {loading ? 'Adding...' : 'Add'}
+                <Button type="submit" size="sm" loading={loading}>
+                  Add
                 </Button>
                 <Button type="button" size="sm" variant="secondary" onClick={() => setShowAddReading(false)}>
                   Cancel
