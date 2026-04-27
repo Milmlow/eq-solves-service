@@ -130,10 +130,21 @@ export default async function CalendarPage({
     .limit(200)
   const uniqueFYs = [...new Set((fysRaw ?? []).map((f) => f.financial_year as string))].sort()
 
-  // Fetch technicians for the form assigned_to dropdown
-  const { data: members } = await supabase.from('tenant_members').select('user_id').eq('is_active', true)
+  // Fetch technicians for the form assigned_to dropdown.
+  // Also collect admin + supervisor emails for the notification recipients
+  // checklist (these are who can receive the supervisor digest).
+  const { data: members } = await supabase
+    .from('tenant_members')
+    .select('user_id, role')
+    .eq('is_active', true)
   const memberIds = (members ?? []).map((m) => m.user_id)
+  const adminUserIds = new Set(
+    (members ?? [])
+      .filter((m) => ['super_admin', 'admin', 'supervisor'].includes(m.role as string))
+      .map((m) => m.user_id),
+  )
   let technicians: { id: string; email: string; full_name: string | null }[] = []
+  let notificationRecipients: { email: string; name: string | null }[] = []
   if (memberIds.length > 0) {
     const { data: profiles } = await supabase
       .from('profiles')
@@ -142,6 +153,38 @@ export default async function CalendarPage({
       .eq('is_active', true)
       .order('full_name')
     technicians = (profiles ?? []) as typeof technicians
+    notificationRecipients = (profiles ?? [])
+      .filter((p) => adminUserIds.has(p.id))
+      .map((p) => ({ email: p.email as string, name: p.full_name as string | null }))
+  }
+
+  // Fetch known locations per site — pull distinct values from existing
+  // assets and past calendar entries so the form can offer suggestions for
+  // the location field as the user picks a site.
+  const [{ data: assetLocations }, { data: entryLocations }] = await Promise.all([
+    supabase
+      .from('assets')
+      .select('site_id, location')
+      .eq('is_active', true)
+      .not('location', 'is', null)
+      .limit(2000),
+    supabase
+      .from('pm_calendar')
+      .select('site_id, location')
+      .eq('is_active', true)
+      .not('location', 'is', null)
+      .limit(2000),
+  ])
+  const siteLocations: Record<string, string[]> = {}
+  for (const row of [...(assetLocations ?? []), ...(entryLocations ?? [])]) {
+    const sid = row.site_id as string | null
+    const loc = (row.location as string | null)?.trim()
+    if (!sid || !loc) continue
+    if (!siteLocations[sid]) siteLocations[sid] = []
+    if (!siteLocations[sid].includes(loc)) siteLocations[sid].push(loc)
+  }
+  for (const sid of Object.keys(siteLocations)) {
+    siteLocations[sid].sort((a, b) => a.localeCompare(b))
   }
 
   return (
@@ -159,6 +202,8 @@ export default async function CalendarPage({
         categories={uniqueCategories}
         financialYears={uniqueFYs}
         technicians={technicians}
+        notificationRecipients={notificationRecipients}
+        siteLocations={siteLocations}
         page={page}
         totalPages={totalPages}
         viewMode={viewMode}
