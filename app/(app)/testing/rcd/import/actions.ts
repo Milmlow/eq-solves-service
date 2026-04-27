@@ -370,6 +370,11 @@ export async function commitJemenaRcdImportAction(
         const batch = circuitRows.slice(i, i + 500)
         const { error: cErr } = await supabase.from('rcd_test_circuits').insert(batch)
         if (cErr) {
+          // Roll back the just-created rcd_tests header so we don't leave an
+          // empty parent row when the child batch fails. Best-effort cleanup —
+          // an error here is logged but doesn't override the original error.
+          await supabase.from('rcd_tests').delete().eq('id', rcdTest.id)
+          testsCreated--
           return {
             success: false,
             error: `Failed to insert circuits for ${t.tabName}: ${cErr.message}`,
