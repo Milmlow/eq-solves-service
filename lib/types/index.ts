@@ -286,6 +286,54 @@ export interface MaintenanceCheck {
   updated_at: string
 }
 
+// ── RCD test types (migration 0069) ───────────────────────────────────
+
+export type RcdTestStatus = 'draft' | 'complete' | 'archived'
+
+export interface RcdTest {
+  id: string
+  tenant_id: string
+  customer_id: string | null
+  site_id: string
+  asset_id: string
+  check_id: string | null
+  test_date: string
+  technician_user_id: string | null
+  technician_name_snapshot: string | null
+  technician_initials: string | null
+  site_signature_url: string | null
+  site_rep_name: string | null
+  equipment_used: string | null
+  notes: string | null
+  status: RcdTestStatus
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface RcdTestCircuit {
+  id: string
+  tenant_id: string
+  rcd_test_id: string
+  section_label: string | null
+  circuit_no: string
+  normal_trip_current_ma: number
+  // Timing values stored as text to allow ">310" non-trip indicator.
+  x1_no_trip_0_ms: string | null
+  x1_no_trip_180_ms: string | null
+  x1_trip_0_ms: string | null
+  x1_trip_180_ms: string | null
+  x5_fast_0_ms: string | null
+  x5_fast_180_ms: string | null
+  trip_test_button_ok: boolean
+  jemena_circuit_asset_id: string | null
+  action_taken: string | null
+  is_critical_load: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 export type CheckAssetStatus = 'pending' | 'completed' | 'na'
 
 export interface CheckAsset {
