@@ -1276,3 +1276,631 @@ export async function commitDeltaImportAction(
     return { success: true, data: summary }
   })
 }
+
+// ───────────────────────────────────────────────────────────────────────
+// Consolidated multi-file commit (Phase 2 of multi-file import)
+//
+// Takes N .xlsx files for the SAME site and writes a SINGLE
+// maintenance_check covering all their work orders. The check has
+// `job_plan_id = NULL` (it spans multiple plans); each asset still
+// gets check_items derived from its own underlying job plan.
+//
+// Locked decisions (2026-04-27 with Royce):
+//   - frequency: most common across resolved groups; ties → earliest
+//   - same WO across files: hard error (Maximo WOs are unique by design)
+//   - different sites across files: hard error (consolidate is per-site)
+// ───────────────────────────────────────────────────────────────────────
+
+export async function commitConsolidatedDeltaImportAction(
+  formData: FormData,
+  mutationId?: string,
+): Promise<CommitActionResult> {
+  return withIdempotency<CommitSummary>(mutationId, async () => {
+    const { supabase, tenantId, role, user } = await requireUser()
+    if (!canWrite(role)) {
+      return { success: false, error: 'Insufficient permissions.' }
+    }
+
+    // ── Read files (file_0, file_1, ...) ──────────────────────────────
+    const files: File[] = []
+    let i = 0
+    while (true) {
+      const f = formData.get(`file_${i}`)
+      if (!(f instanceof File)) break
+      files.push(f)
+      i++
+    }
+    if (files.length === 0) {
+      return { success: false, error: 'No files uploaded.' }
+    }
+
+    // Custom name for the consolidated check (user-supplied, required).
+    const customNameRaw = formData.get('customName')
+    const customName =
+      typeof customNameRaw === 'string' && customNameRaw.trim().length > 0
+        ? customNameRaw.trim()
+        : null
+    if (!customName) {
+      return { success: false, error: 'Consolidated check name is required.' }
+    }
+
+    const assignedToRaw = formData.get('assigned_to')
+    const assignedTo =
+      typeof assignedToRaw === 'string' && assignedToRaw.trim().length > 0
+        ? assignedToRaw.trim()
+        : null
+
+    // Resolutions and rowResolutions are combined across files.
+    let resolutions: Record<string, GroupResolution> = {}
+    const resolutionsRaw = formData.get('resolutions')
+    if (typeof resolutionsRaw === 'string' && resolutionsRaw.trim().length > 0) {
+      let parsedJson: unknown
+      try {
+        parsedJson = JSON.parse(resolutionsRaw)
+      } catch {
+        return { success: false, error: 'Invalid resolutions payload — expected JSON.' }
+      }
+      const parsed = ResolutionsMapSchema.safeParse(parsedJson)
+      if (!parsed.success) {
+        return { success: false, error: `Invalid resolution: ${parsed.error.issues[0]?.message ?? 'bad payload'}` }
+      }
+      resolutions = parsed.data
+    }
+    let rowResolutions: Record<string, RowResolution> = {}
+    const rrRaw = formData.get('rowResolutions')
+    if (typeof rrRaw === 'string' && rrRaw.trim().length > 0) {
+      let parsedJson: unknown
+      try {
+        parsedJson = JSON.parse(rrRaw)
+      } catch {
+        return { success: false, error: 'Invalid rowResolutions payload — expected JSON.' }
+      }
+      const parsed = RowResolutionsMapSchema.safeParse(parsedJson)
+      if (!parsed.success) {
+        return { success: false, error: `Invalid row resolution: ${parsed.error.issues[0]?.message ?? 'bad payload'}` }
+      }
+      rowResolutions = parsed.data
+    }
+
+    // ── Parse all files; combine rows/groups + dedup WO across files ─
+    const allRows: DeltaRow[] = []
+    const allGroupsRaw: ParsedGroup[] = []
+    const allErrors: { rowNumber: number; message: string }[] = []
+    const woToFiles = new Map<string, string[]>()
+
+    for (const f of files) {
+      const buf = Buffer.from(await f.arrayBuffer())
+      const parsed = await parseWorkbook(buf)
+      for (const r of parsed.rows) {
+        allRows.push(r)
+        const list = woToFiles.get(r.workOrder) ?? []
+        list.push(f.name)
+        woToFiles.set(r.workOrder, list)
+      }
+      for (const g of parsed.groups) allGroupsRaw.push(g)
+      for (const e of parsed.errors) allErrors.push(e)
+    }
+
+    if (allErrors.length > 0) {
+      return {
+        success: false,
+        error: `Parse produced ${allErrors.length} error(s). Fix the sheets and retry.`,
+      }
+    }
+    if (allRows.length === 0 || allGroupsRaw.length === 0) {
+      return { success: false, error: 'No importable rows found across any uploaded workbook.' }
+    }
+
+    // Cross-file WO dedup — locked decision: hard error.
+    const dupes: { wo: string; files: string[] }[] = []
+    for (const [wo, fileList] of woToFiles) {
+      if (fileList.length > 1) {
+        dupes.push({ wo, files: Array.from(new Set(fileList)) })
+      }
+    }
+    if (dupes.length > 0) {
+      const sample = dupes
+        .slice(0, 5)
+        .map((d) => `${d.wo} (in ${d.files.join(', ')})`)
+        .join('; ')
+      const more = dupes.length > 5 ? ` (+${dupes.length - 5} more)` : ''
+      return {
+        success: false,
+        error: `Cannot consolidate — ${dupes.length} work order(s) appear in multiple files: ${sample}${more}. Maximo WOs are unique by design; check the source exports.`,
+      }
+    }
+
+    // Same-site validation — consolidate requires all files target one site.
+    const distinctSites = new Set(allRows.map((r) => r.siteCode))
+    if (distinctSites.size > 1) {
+      return {
+        success: false,
+        error: `Cannot consolidate across multiple sites: ${Array.from(distinctSites).join(', ')}. Upload files for one site at a time, or commit as separate checks.`,
+      }
+    }
+
+    // ── Resolve sites (single site, but reuse the existing pattern) ──
+    const siteCodes = Array.from(distinctSites)
+    const { data: siteRows } = await supabase
+      .from('sites')
+      .select('id, code, name')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .in('code', siteCodes)
+    const siteByCode = new Map<string, { id: string; name: string }>()
+    for (const s of siteRows ?? []) {
+      if (s.code) siteByCode.set(s.code, { id: s.id, name: s.name })
+    }
+
+    // ── Resolve job plans (active codes for tenant) ──────────────────
+    const { data: jpRows } = await supabase
+      .from('job_plans')
+      .select('id, code, name')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .not('code', 'is', null)
+    const jpByCode = new Map<string, { id: string; name: string }>()
+    for (const jp of jpRows ?? []) {
+      if (jp.code) jpByCode.set(jp.code, { id: jp.id, name: jp.name })
+    }
+
+    // ── Load delta aliases ────────────────────────────────────────────
+    const { data: aliasRows } = await supabase
+      .from('job_plan_aliases')
+      .select('external_code, job_plan_id')
+      .eq('tenant_id', tenantId)
+      .eq('source_system', 'delta')
+    const aliasMap = new Map<string, { id: string; code: string; name: string }>()
+    if (aliasRows && aliasRows.length > 0) {
+      const aliasIds = Array.from(
+        new Set(aliasRows.map((a) => a.job_plan_id).filter(Boolean)),
+      ) as string[]
+      if (aliasIds.length > 0) {
+        const { data: aliasTargets } = await supabase
+          .from('job_plans')
+          .select('id, code, name')
+          .in('id', aliasIds)
+        const byId = new Map<string, { id: string; code: string; name: string }>()
+        for (const t of aliasTargets ?? []) {
+          if (t.code) byId.set(t.id, { id: t.id, code: t.code, name: t.name })
+        }
+        for (const a of aliasRows) {
+          const target = byId.get(a.job_plan_id)
+          if (target) aliasMap.set(a.external_code, target)
+        }
+      }
+    }
+
+    // ── Apply user resolutions (mirrors single-file commit) ──────────
+    const skippedKeys = new Set<string>()
+    const aliasesCreated: { externalCode: string; jobPlanId: string }[] = []
+    const plansCreated: { id: string; code: string; name: string }[] = []
+    const jpByLowerCode = new Map<string, string>()
+    for (const [k, v] of jpByCode) jpByLowerCode.set(k.toLowerCase(), v.id)
+
+    for (const g of allGroupsRaw) {
+      const resolution = resolutions[g.key]
+      if (!resolution) continue
+      if (resolution.action === 'skip') {
+        skippedKeys.add(g.key)
+        continue
+      }
+      const alreadyResolved = jpByCode.has(g.jobPlanCode) || aliasMap.has(g.jobPlanCode)
+      if (alreadyResolved && resolution.action !== 'create') continue
+
+      let targetJobPlanId: string | null = null
+      let targetCode: string | null = null
+      let targetName: string | null = null
+
+      if (resolution.action === 'accept') {
+        const near = closestMatch(g.jobPlanCode, Array.from(jpByCode.keys()), 2)
+        if (!near) {
+          return { success: false, error: `Cannot accept fuzzy match for "${g.jobPlanCode}" — no close candidate found.` }
+        }
+        const jp = jpByCode.get(near.value)
+        if (!jp) {
+          return { success: false, error: `Fuzzy candidate "${near.value}" no longer exists — re-preview the import.` }
+        }
+        targetJobPlanId = jp.id; targetCode = near.value; targetName = jp.name
+      } else if (resolution.action === 'nominate') {
+        const { data: plan, error: planErr } = await supabase
+          .from('job_plans')
+          .select('id, code, name')
+          .eq('id', resolution.jobPlanId)
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .maybeSingle()
+        if (planErr || !plan) {
+          return { success: false, error: `Nominated job plan not found or inactive (group ${g.siteCode}/${g.jobPlanCode}).` }
+        }
+        targetJobPlanId = plan.id; targetCode = plan.code ?? g.jobPlanCode; targetName = plan.name
+      } else if (resolution.action === 'create') {
+        const lower = resolution.code.trim().toLowerCase()
+        const existingId = jpByLowerCode.get(lower)
+        if (existingId) {
+          return { success: false, error: `Cannot create plan "${resolution.code}" — a plan with that code already exists. Use "Nominate existing" instead.` }
+        }
+        const { data: newPlan, error: createErr } = await supabase
+          .from('job_plans')
+          .insert({
+            tenant_id: tenantId,
+            site_id: null,
+            name: resolution.name.trim(),
+            code: resolution.code.trim(),
+            type: resolution.type?.trim() || null,
+            is_active: true,
+          })
+          .select('id, code, name')
+          .single()
+        if (createErr || !newPlan) {
+          return { success: false, error: createErr?.message ?? 'Failed to create job plan.' }
+        }
+        const newCode: string = newPlan.code ?? resolution.code.trim()
+        targetJobPlanId = newPlan.id; targetCode = newCode; targetName = newPlan.name
+        plansCreated.push({ id: newPlan.id, code: newCode, name: newPlan.name })
+        jpByCode.set(newCode, { id: newPlan.id, name: newPlan.name })
+        jpByLowerCode.set(lower, newPlan.id)
+      }
+
+      if (!targetJobPlanId || !targetCode || !targetName) {
+        return { success: false, error: `Could not resolve target plan for group ${g.siteCode}/${g.jobPlanCode}.` }
+      }
+
+      const { error: aliasErr } = await supabase
+        .from('job_plan_aliases')
+        .upsert(
+          {
+            tenant_id: tenantId,
+            source_system: 'delta',
+            external_code: g.jobPlanCode,
+            job_plan_id: targetJobPlanId,
+            created_by: user.id,
+          },
+          { onConflict: 'tenant_id,source_system,external_code' },
+        )
+      if (aliasErr) {
+        return { success: false, error: `Failed to create alias: ${aliasErr.message}` }
+      }
+      aliasMap.set(g.jobPlanCode, { id: targetJobPlanId, code: targetCode, name: targetName })
+      aliasesCreated.push({ externalCode: g.jobPlanCode, jobPlanId: targetJobPlanId })
+    }
+
+    const workingGroups = allGroupsRaw.filter((g) => !skippedKeys.has(g.key))
+    if (workingGroups.length === 0) {
+      return { success: false, error: 'No groups selected — every group was skipped.' }
+    }
+
+    // ── Resolve assets + WO duplicate check vs DB ────────────────────
+    const workingRows = workingGroups.flatMap((g) => g.rows)
+    const resolvedSiteIds = Array.from(siteByCode.values()).map((s) => s.id)
+    const maximoIds = Array.from(new Set(workingRows.map((r) => r.maximoAssetId)))
+    const assetByKey = new Map<string, { id: string; name: string }>()
+    if (resolvedSiteIds.length > 0 && maximoIds.length > 0) {
+      const { data: assetRows } = await supabase
+        .from('assets')
+        .select('id, name, site_id, maximo_id')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .in('site_id', resolvedSiteIds)
+        .in('maximo_id', maximoIds)
+      for (const a of assetRows ?? []) {
+        if (a.maximo_id) assetByKey.set(`${a.site_id}|${a.maximo_id}`, { id: a.id, name: a.name })
+      }
+    }
+
+    const incomingWOs = Array.from(new Set(workingRows.map((r) => r.workOrder)))
+    const existingWO = new Set<string>()
+    if (incomingWOs.length > 0) {
+      const { data: dupRows } = await supabase
+        .from('check_assets')
+        .select('work_order_number')
+        .eq('tenant_id', tenantId)
+        .in('work_order_number', incomingWOs)
+      for (const d of dupRows ?? []) {
+        if (d.work_order_number) existingWO.add(d.work_order_number)
+      }
+    }
+
+    // ── Validate every working group ──────────────────────────────────
+    interface ResolvedGroup {
+      parsed: ParsedGroup
+      siteId: string
+      siteName: string
+      jobPlanId: string
+      jobPlanName: string
+      frequency: FrequencyEnum
+      assetIdByRow: Map<number, string>
+      skippedRowNumbers: Set<number>
+    }
+
+    const resolved: ResolvedGroup[] = []
+    const blockers: string[] = []
+    let rowsLinked = 0
+    let rowsCreated = 0
+    let rowsSkipped = 0
+
+    for (const g of workingGroups) {
+      const site = siteByCode.get(g.siteCode)
+      if (!site) { blockers.push(`Site "${g.siteCode}" not found`); continue }
+      if (!g.frequency) {
+        blockers.push(`Group ${g.siteCode}/${g.jobPlanCode}/${g.frequencySuffix}: unknown frequency`)
+        continue
+      }
+      let jp = jpByCode.get(g.jobPlanCode) ?? null
+      if (!jp) {
+        const alias = aliasMap.get(g.jobPlanCode)
+        if (alias) jp = { id: alias.id, name: alias.name }
+      }
+      if (!jp) { blockers.push(`Group ${g.siteCode}/${g.jobPlanCode}: no matching job plan`); continue }
+
+      const assetTypeDefault = aliasMap.get(g.jobPlanCode)?.code ?? g.jobPlanCode ?? jp.name ?? 'Equipment'
+      const assetIdByRow = new Map<number, string>()
+      const skippedRowNumbers = new Set<number>()
+      const unmatchedNoRes: number[] = []
+
+      for (const r of g.rows) {
+        const match = assetByKey.get(`${site.id}|${r.maximoAssetId}`)
+        if (match) { assetIdByRow.set(r.rowNumber, match.id); continue }
+        const rowKey = `${g.key}:${r.rowNumber}`
+        const rr = rowResolutions[rowKey]
+        if (!rr) { unmatchedNoRes.push(r.rowNumber); continue }
+
+        if (rr.action === 'skip') {
+          skippedRowNumbers.add(r.rowNumber); rowsSkipped++; continue
+        }
+
+        if (rr.action === 'link') {
+          const { data: linked, error: linkErr } = await supabase
+            .from('assets')
+            .select('id, name, site_id, is_active')
+            .eq('id', rr.assetId)
+            .eq('tenant_id', tenantId)
+            .eq('site_id', site.id)
+            .eq('is_active', true)
+            .maybeSingle()
+          if (linkErr || !linked) {
+            return { success: false, error: `Row ${r.rowNumber} (${g.siteCode}/${g.jobPlanCode}): nominated asset not found or not at site "${g.siteCode}".` }
+          }
+          assetIdByRow.set(r.rowNumber, linked.id); rowsLinked++; continue
+        }
+
+        if (rr.action === 'create') {
+          const name = r.description?.trim() || r.maximoAssetId
+          const { data: created, error: createErr } = await supabase
+            .from('assets')
+            .insert({
+              tenant_id: tenantId, site_id: site.id, name,
+              asset_type: assetTypeDefault, maximo_id: r.maximoAssetId,
+              location: r.location?.trim() || null, job_plan_id: jp.id, is_active: true,
+            })
+            .select('id')
+            .single()
+          if (createErr || !created) {
+            return { success: false, error: `Row ${r.rowNumber} (${g.siteCode}/${g.jobPlanCode}): failed to create asset — ${createErr?.message ?? 'insert failed'}.` }
+          }
+          assetIdByRow.set(r.rowNumber, created.id)
+          assetByKey.set(`${site.id}|${r.maximoAssetId}`, { id: created.id, name })
+          rowsCreated++; continue
+        }
+      }
+
+      if (unmatchedNoRes.length > 0) {
+        blockers.push(`Group ${g.siteCode}/${g.jobPlanCode}: ${unmatchedNoRes.length} unresolved asset row(s) — choose Link / Create / Skip for each`)
+        continue
+      }
+      const dupInGroup = g.rows.filter(
+        (r) => !skippedRowNumbers.has(r.rowNumber) && existingWO.has(r.workOrder),
+      ).length
+      if (dupInGroup > 0) {
+        blockers.push(`Group ${g.siteCode}/${g.jobPlanCode}: ${dupInGroup} duplicate work order(s) already imported`)
+        continue
+      }
+      resolved.push({
+        parsed: g, siteId: site.id, siteName: site.name,
+        jobPlanId: jp.id, jobPlanName: jp.name, frequency: g.frequency,
+        assetIdByRow, skippedRowNumbers,
+      })
+    }
+
+    if (blockers.length > 0) {
+      return {
+        success: false,
+        error: `Cannot commit — ${blockers.length} blocker(s): ${blockers.slice(0, 5).join('; ')}${blockers.length > 5 ? '…' : ''}`,
+      }
+    }
+
+    // ── Compute consolidated frequency: most common across resolved ──
+    // Locked decision 2026-04-27: most common wins; ties → earliest start.
+    const freqInfo = new Map<FrequencyEnum, { count: number; earliest: Date }>()
+    for (const g of resolved) {
+      const cur = freqInfo.get(g.frequency)
+      if (!cur) {
+        freqInfo.set(g.frequency, { count: 1, earliest: g.parsed.startDate })
+      } else {
+        cur.count += 1
+        if (g.parsed.startDate < cur.earliest) cur.earliest = g.parsed.startDate
+        freqInfo.set(g.frequency, cur)
+      }
+    }
+    let consolidatedFrequency: FrequencyEnum = resolved[0].frequency
+    let bestCount = 0
+    let bestEarliest = new Date(8640000000000000)
+    for (const [freq, info] of freqInfo) {
+      if (info.count > bestCount || (info.count === bestCount && info.earliest < bestEarliest)) {
+        consolidatedFrequency = freq
+        bestCount = info.count
+        bestEarliest = info.earliest
+      }
+    }
+
+    // Earliest start across all resolved → consolidated start_date / due_date.
+    let earliestStart: Date = resolved[0].parsed.startDate
+    for (const g of resolved) {
+      if (g.parsed.startDate < earliestStart) earliestStart = g.parsed.startDate
+    }
+    const startIso = earliestStart.toISOString().slice(0, 10)
+
+    // ── Preload job_plan_items per (jpId, frequency) ──────────────────
+    const uniquePairs = new Set<string>()
+    const pairs: { jpId: string; frequency: FrequencyEnum; col: string }[] = []
+    for (const g of resolved) {
+      const key = `${g.jobPlanId}|${g.frequency}`
+      if (uniquePairs.has(key)) continue
+      uniquePairs.add(key)
+      pairs.push({ jpId: g.jobPlanId, frequency: g.frequency, col: freqColumn(g.frequency) })
+    }
+    const itemsByGroup = new Map<string, { id: string; description: string; sort_order: number; is_required: boolean }[]>()
+    const distinctCols = Array.from(new Set(pairs.map((p) => p.col)))
+    for (const col of distinctCols) {
+      const jpIdsForCol = Array.from(new Set(pairs.filter((p) => p.col === col).map((p) => p.jpId)))
+      if (jpIdsForCol.length === 0) continue
+      const { data: items } = await supabase
+        .from('job_plan_items')
+        .select('id, job_plan_id, description, sort_order, is_required')
+        .in('job_plan_id', jpIdsForCol)
+        .eq(col, true)
+        .order('sort_order')
+      for (const item of items ?? []) {
+        for (const p of pairs.filter((p) => p.col === col && p.jpId === item.job_plan_id)) {
+          const key = `${p.jpId}|${p.frequency}`
+          const arr = itemsByGroup.get(key) ?? []
+          arr.push({
+            id: item.id, description: item.description,
+            sort_order: item.sort_order, is_required: item.is_required,
+          })
+          itemsByGroup.set(key, arr)
+        }
+      }
+    }
+
+    // ── Write: ONE consolidated check + check_assets across all groups ─
+    const summary: CommitSummary = {
+      checksCreated: 0,
+      checkAssetsCreated: 0,
+      checkItemsCreated: 0,
+      rowsLinked, rowsCreated, rowsSkipped,
+      groupsCreated: [],
+    }
+
+    const totalToInsert = resolved.reduce(
+      (acc, g) => acc + (g.parsed.rows.length - g.skippedRowNumbers.size),
+      0,
+    )
+    if (totalToInsert === 0) {
+      return { success: false, error: 'No rows to insert — every row was skipped.' }
+    }
+
+    const consolidatedSite = resolved[0]
+    const { data: check, error: checkErr } = await supabase
+      .from('maintenance_checks')
+      .insert({
+        tenant_id: tenantId,
+        site_id: consolidatedSite.siteId,
+        job_plan_id: null,
+        frequency: consolidatedFrequency,
+        start_date: startIso,
+        due_date: startIso,
+        custom_name: customName,
+        status: 'scheduled',
+        assigned_to: assignedTo,
+      })
+      .select('id')
+      .single()
+    if (checkErr || !check) {
+      return { success: false, error: checkErr?.message ?? 'Failed to create consolidated check.' }
+    }
+    summary.checksCreated = 1
+
+    const allCARows = resolved.flatMap((g) =>
+      g.parsed.rows
+        .filter((r) => !g.skippedRowNumbers.has(r.rowNumber))
+        .map((r) => ({
+          tenant_id: tenantId,
+          check_id: check.id,
+          asset_id: g.assetIdByRow.get(r.rowNumber)!,
+          status: 'pending' as const,
+          work_order_number: r.workOrder,
+        })),
+    )
+    const { data: insertedCA, error: caErr } = await supabase
+      .from('check_assets')
+      .insert(allCARows)
+      .select('id, asset_id')
+    if (caErr || !insertedCA) {
+      return { success: false, error: caErr?.message ?? 'Failed to create check assets.' }
+    }
+    summary.checkAssetsCreated = insertedCA.length
+    const caByAsset = new Map<string, string>()
+    for (const ca of insertedCA) caByAsset.set(ca.asset_id, ca.id)
+
+    const checkItemRows: {
+      tenant_id: string; check_id: string; check_asset_id: string;
+      job_plan_item_id: string; asset_id: string; description: string;
+      sort_order: number; is_required: boolean;
+    }[] = []
+    for (const g of resolved) {
+      const items = itemsByGroup.get(`${g.jobPlanId}|${g.frequency}`) ?? []
+      for (const r of g.parsed.rows) {
+        if (g.skippedRowNumbers.has(r.rowNumber)) continue
+        const assetId = g.assetIdByRow.get(r.rowNumber)
+        if (!assetId) continue
+        const caId = caByAsset.get(assetId)
+        if (!caId) continue
+        for (const it of items) {
+          checkItemRows.push({
+            tenant_id: tenantId, check_id: check.id, check_asset_id: caId,
+            job_plan_item_id: it.id, asset_id: assetId,
+            description: it.description, sort_order: it.sort_order, is_required: it.is_required,
+          })
+        }
+      }
+    }
+    if (checkItemRows.length > 0) {
+      for (let i = 0; i < checkItemRows.length; i += 500) {
+        const batch = checkItemRows.slice(i, i + 500)
+        const { error: itemsErr } = await supabase
+          .from('maintenance_check_items')
+          .insert(batch)
+        if (itemsErr) return { success: false, error: itemsErr.message }
+      }
+    }
+    summary.checkItemsCreated = checkItemRows.length
+
+    summary.groupsCreated.push({
+      key: `consolidated:${check.id}`,
+      checkId: check.id,
+      customName,
+      siteCode: consolidatedSite.parsed.siteCode,
+      jobPlanCode: 'consolidated',
+      frequency: consolidatedFrequency,
+      startDate: startIso,
+      assetCount: summary.checkAssetsCreated,
+      taskCount: summary.checkItemsCreated,
+    })
+
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'maintenance_check',
+      summary: `Delta consolidated import: 1 check, ${summary.checkAssetsCreated} assets, ${summary.checkItemsCreated} tasks across ${files.length} file(s)`,
+      metadata: {
+        source: 'delta_wo_import_consolidated',
+        consolidatedCheckId: check.id,
+        consolidatedFrequency,
+        fileCount: files.length,
+        filenames: files.map((f) => f.name),
+        groupsCount: resolved.length,
+        skippedKeys: skippedKeys.size,
+        aliasesCreated: aliasesCreated.length,
+        plansCreated: plansCreated.length,
+        rowsLinked: summary.rowsLinked,
+        rowsCreated: summary.rowsCreated,
+        rowsSkipped: summary.rowsSkipped,
+      },
+      mutationId,
+    })
+
+    revalidatePath('/maintenance')
+    revalidatePath('/testing/summary')
+    return { success: true, data: summary }
+  })
+}
