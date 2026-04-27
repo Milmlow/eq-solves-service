@@ -194,8 +194,8 @@ export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEd
             <Button size="sm" onClick={onEdit}>Edit</Button>
           )}
           {isAdmin && (
-            <Button size="sm" variant="secondary" onClick={handleToggleActive} disabled={toggling}>
-              {toggling ? 'Updating...' : entry.is_active ? 'Deactivate' : 'Reactivate'}
+            <Button size="sm" variant="secondary" onClick={handleToggleActive} loading={toggling}>
+              {entry.is_active ? 'Deactivate' : 'Reactivate'}
             </Button>
           )}
         </div>

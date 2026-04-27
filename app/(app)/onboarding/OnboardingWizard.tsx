@@ -178,8 +178,8 @@ export function OnboardingWizard({ userName, companyName }: OnboardingWizardProp
               <p className="text-sm text-eq-grey mb-6">
                 Your workspace is ready. You can add more customers, sites, and assets from the sidebar navigation.
               </p>
-              <Button onClick={handleFinish} disabled={loading}>
-                {loading ? 'Loading...' : 'Go to Dashboard'}
+              <Button onClick={handleFinish} loading={loading}>
+                Go to Dashboard
               </Button>
             </div>
           )}

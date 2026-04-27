@@ -593,8 +593,8 @@ export function PmCalendarView({
               {showArchived ? 'Hide Archived' : 'Show Archived'}
             </button>
             {isAdmin && entries.length === 0 && (
-              <Button variant="secondary" size="sm" onClick={handleSeed} disabled={seeding}>
-                {seeding ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Seeding...</> : 'Seed Data'}
+              <Button variant="secondary" size="sm" onClick={handleSeed} loading={seeding}>
+                Seed Data
               </Button>
             )}
             {isAdmin && (
