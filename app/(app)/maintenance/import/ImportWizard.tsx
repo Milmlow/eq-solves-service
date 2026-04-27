@@ -16,6 +16,7 @@ import {
   SkipForward,
   Search,
   X,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import {
@@ -56,17 +57,32 @@ interface JobPlanOption {
 }
 
 /**
+ * One staged file in the wizard. Each file goes through its own preview
+ * call; results are combined client-side into a single virtual PreviewResult
+ * that the existing Preview sub-component renders unchanged.
+ */
+interface FileEntry {
+  id: string
+  file: File
+  preview: PreviewResult | null
+  parseError: string | null
+}
+
+/**
  * Delta WO import wizard.
  *
- * Step 1: choose file → call `previewDeltaImportAction`
- * Step 2: show preview — unresolved items, groups, per-asset detail
- * Step 3: (not yet wired) commit server action + redirect to /maintenance
+ * Step 1: choose one or more .xlsx files → call `previewDeltaImportAction`
+ *         per file (sequential), combine results into one preview view
+ * Step 2: show combined preview — unresolved items, groups, per-asset detail
+ * Step 3: commit per-file (sequential) — currently creates one
+ *         maintenance_check per file's groups. Phase 2 will add a
+ *         "Consolidate into one check" toggle that creates a single
+ *         multi-plan check spanning all files.
  */
 export function ImportWizard() {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<PreviewResult | null>(null)
+  const [files, setFiles] = useState<FileEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [commitResult, setCommitResult] = useState<CommitSummary | null>(null)
   const [resolutions, setResolutions] = useState<ResolutionsMap>({})
@@ -74,73 +90,176 @@ export function ImportWizard() {
   const [isPending, startTransition] = useTransition()
   const [isCommitting, startCommit] = useTransition()
 
+  // Combined preview: aggregate all per-file PreviewResults into one virtual
+  // PreviewResult so the existing Preview sub-component renders all groups
+  // together. Available only when every staged file has a successful preview.
+  const combinedPreview: PreviewResult | null = useMemo(() => {
+    if (files.length === 0) return null
+    if (!files.every((f) => f.preview)) return null
+
+    const allGroups: PreviewGroup[] = []
+    const allParseErrors: { rowNumber: number; message: string }[] = []
+    const unresolvedSites = new Set<string>()
+    const unresolvedPlans = new Set<string>()
+    let totalRows = 0
+
+    for (const fe of files) {
+      const p = fe.preview
+      if (!p) continue
+      totalRows += p.parsedRowCount
+      for (const e of p.parseErrors) allParseErrors.push(e)
+      for (const c of p.unresolvedSiteCodes) unresolvedSites.add(c)
+      for (const c of p.unresolvedJobPlanCodes) unresolvedPlans.add(c)
+      // Group keys naturally partition by file because they include
+      // siteCode + jobPlanCode + frequencySuffix and each file is a
+      // single-classification Maximo export. No collision risk.
+      for (const g of p.groups) allGroups.push(g)
+    }
+
+    return {
+      success: true,
+      filename: files.length === 1 ? files[0].file.name : `${files.length} files`,
+      parsedRowCount: totalRows,
+      parseErrors: allParseErrors,
+      groups: allGroups,
+      unresolvedJobPlanCodes: Array.from(unresolvedPlans),
+      unresolvedSiteCodes: Array.from(unresolvedSites),
+    }
+  }, [files])
+
+  const allFilesParsed = files.length > 0 && files.every((f) => f.preview)
+  const anyParseError = files.some((f) => f.parseError)
+
   function handleChoose(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = e.target.files?.[0] ?? null
-    setFile(picked)
-    setPreview(null)
+    const picked = Array.from(e.target.files ?? [])
+    if (picked.length === 0) return
+    const newEntries: FileEntry[] = picked.map((f) => ({
+      id: cryptoRandomId(),
+      file: f,
+      preview: null,
+      parseError: null,
+    }))
+    setFiles((prev) => [...prev, ...newEntries])
     setError(null)
     setCommitResult(null)
     setResolutions({})
     setRowResolutions({})
+    if (fileInput.current) fileInput.current.value = ''
+  }
+
+  function removeFile(id: string) {
+    setFiles((prev) => prev.filter((f) => f.id !== id))
+    // Resolutions are keyed by group.key — when files change, drop them all
+    // rather than try to figure out which keys belonged to which file.
+    setResolutions({})
+    setRowResolutions({})
+    setCommitResult(null)
+    setError(null)
   }
 
   function handlePreview() {
-    if (!file) return
+    if (files.length === 0) return
     setError(null)
     setCommitResult(null)
     setResolutions({})
     setRowResolutions({})
     analyticsEvents.deltaImportStarted()
     startTransition(async () => {
-      const fd = new FormData()
-      fd.append('file', file)
-      const result = await previewDeltaImportAction(fd)
-      if (!result.success) {
-        setError(result.error)
-        setPreview(null)
-        return
+      // Sequential parse — each file independently. Cheaper to debug than
+      // Promise.all and the parse cost is low (Maximo exports are small).
+      const updated: FileEntry[] = []
+      for (const fe of files) {
+        const fd = new FormData()
+        fd.append('file', fe.file)
+        const result = await previewDeltaImportAction(fd)
+        if (!result.success) {
+          updated.push({ ...fe, preview: null, parseError: result.error })
+        } else {
+          updated.push({ ...fe, preview: result, parseError: null })
+        }
       }
-      setPreview(result)
+      setFiles(updated)
     })
   }
 
   function handleCommit() {
-    if (!file) return
+    if (!combinedPreview) return
     setError(null)
     startCommit(async () => {
-      const fd = new FormData()
-      fd.append('file', file)
-      // Only send non-empty resolutions to keep the payload small.
-      if (Object.keys(resolutions).length > 0) {
-        fd.append('resolutions', JSON.stringify(resolutions))
+      // Aggregate summary across per-file commits.
+      const aggregate: CommitSummary = {
+        checksCreated: 0,
+        checkAssetsCreated: 0,
+        checkItemsCreated: 0,
+        rowsLinked: 0,
+        rowsCreated: 0,
+        rowsSkipped: 0,
+        groupsCreated: [],
       }
-      if (Object.keys(rowResolutions).length > 0) {
-        fd.append('rowResolutions', JSON.stringify(rowResolutions))
+      const errors: string[] = []
+
+      for (const fe of files) {
+        const p = fe.preview
+        if (!p) continue
+
+        // Filter resolutions to keys that belong to this file's groups so
+        // the per-file commit only sees its own resolutions.
+        const fileGroupKeys = new Set(p.groups.map((g) => g.key))
+        const fileResolutions: ResolutionsMap = {}
+        for (const [k, v] of Object.entries(resolutions)) {
+          if (fileGroupKeys.has(k)) fileResolutions[k] = v
+        }
+        const fileRowResolutions: RowResolutionsMap = {}
+        for (const [k, v] of Object.entries(rowResolutions)) {
+          // Row resolution keys are `${groupKey}:${rowNumber}`.
+          const groupKey = k.split(':')[0]
+          if (groupKey && fileGroupKeys.has(groupKey)) fileRowResolutions[k] = v
+        }
+
+        const fd = new FormData()
+        fd.append('file', fe.file)
+        if (Object.keys(fileResolutions).length > 0) {
+          fd.append('resolutions', JSON.stringify(fileResolutions))
+        }
+        if (Object.keys(fileRowResolutions).length > 0) {
+          fd.append('rowResolutions', JSON.stringify(fileRowResolutions))
+        }
+        const mutationId = cryptoRandomId()
+        const result = await commitDeltaImportAction(fd, mutationId)
+        if (!result.success) {
+          errors.push(`${fe.file.name}: ${result.error}`)
+          continue
+        }
+        const summary = result.data
+        if (summary) {
+          aggregate.checksCreated += summary.checksCreated
+          aggregate.checkAssetsCreated += summary.checkAssetsCreated
+          aggregate.checkItemsCreated += summary.checkItemsCreated
+          aggregate.rowsLinked += summary.rowsLinked
+          aggregate.rowsCreated += summary.rowsCreated
+          aggregate.rowsSkipped += summary.rowsSkipped
+          aggregate.groupsCreated.push(...summary.groupsCreated)
+          analyticsEvents.deltaImportCommitted({
+            rows_linked: summary.rowsLinked ?? 0,
+            rows_created: summary.rowsCreated ?? 0,
+            rows_skipped: summary.rowsSkipped ?? 0,
+          })
+        }
       }
-      // Generate an idempotency key scoped to this commit attempt. A client
-      // retry inside the same tab reuses the same id — safe replay.
-      const mutationId = cryptoRandomId()
-      const result = await commitDeltaImportAction(fd, mutationId)
-      if (!result.success) {
-        setError(result.error)
-        return
+
+      if (errors.length > 0) {
+        setError(`${errors.length} file(s) failed: ${errors.join('; ')}`)
       }
-      setCommitResult(result.data ?? null)
-      const summary = result.data
-      if (summary) {
-        analyticsEvents.deltaImportCommitted({
-          rows_linked: summary.rowsLinked ?? 0,
-          rows_created: summary.rowsCreated ?? 0,
-          rows_skipped: summary.rowsSkipped ?? 0,
-        })
+      // Show whatever succeeded — partial wins are still wins.
+      if (aggregate.checksCreated > 0) {
+        setCommitResult(aggregate)
       }
       router.refresh()
     })
   }
 
   function handleReset() {
-    setFile(null)
-    setPreview(null)
+    setFiles([])
     setError(null)
     setCommitResult(null)
     setResolutions({})
@@ -177,6 +296,7 @@ export function ImportWizard() {
             ref={fileInput}
             type="file"
             accept=".xlsx"
+            multiple
             onChange={handleChoose}
             className="hidden"
           />
@@ -186,28 +306,77 @@ export function ImportWizard() {
             onClick={() => fileInput.current?.click()}
           >
             <Upload className="w-4 h-4 mr-1.5" />
-            {file ? 'Change file' : 'Choose .xlsx'}
+            {files.length > 0 ? 'Add more files' : 'Choose .xlsx file(s)'}
           </Button>
 
-          {file && (
-            <div className="flex items-center gap-2 text-sm text-eq-ink">
-              <FileText className="w-4 h-4 text-eq-sky" />
-              <span className="font-medium">{file.name}</span>
-              <span className="text-eq-grey">({formatBytes(file.size)})</span>
-            </div>
-          )}
-
           <div className="ml-auto flex items-center gap-2">
-            {preview && (
+            {(combinedPreview || commitResult || files.length > 0) && (
               <Button variant="secondary" size="sm" onClick={handleReset}>
                 Start over
               </Button>
             )}
-            <Button size="sm" disabled={!file || isPending} onClick={handlePreview}>
-              {isPending ? 'Parsing…' : preview ? 'Re-parse' : 'Preview'}
+            <Button
+              size="sm"
+              disabled={files.length === 0 || isPending}
+              onClick={handlePreview}
+            >
+              {isPending ? 'Parsing…' : allFilesParsed ? 'Re-parse all' : `Preview ${files.length} file${files.length === 1 ? '' : 's'}`}
             </Button>
           </div>
         </div>
+
+        {/* Stage list — one row per file */}
+        {files.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {files.map((fe) => (
+              <div
+                key={fe.id}
+                className="flex items-center gap-2 text-sm py-1.5 px-2 rounded-md hover:bg-gray-50 group"
+              >
+                <FileText className="w-4 h-4 text-eq-sky shrink-0" />
+                <span className="font-medium text-eq-ink truncate">{fe.file.name}</span>
+                <span className="text-xs text-eq-grey shrink-0">({formatBytes(fe.file.size)})</span>
+                <div className="ml-auto flex items-center gap-2 shrink-0">
+                  {isPending && !fe.preview && !fe.parseError && (
+                    <Loader2 className="w-3.5 h-3.5 text-eq-grey animate-spin" />
+                  )}
+                  {fe.preview && (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-700">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {fe.preview.parsedRowCount} row{fe.preview.parsedRowCount === 1 ? '' : 's'}
+                    </span>
+                  )}
+                  {fe.parseError && (
+                    <span
+                      className="inline-flex items-center gap-1 text-xs text-red-700"
+                      title={fe.parseError}
+                    >
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Parse error
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeFile(fe.id)}
+                    className="text-eq-grey hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label={`Remove ${fe.file.name}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {anyParseError && (
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-md p-3 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800">
+              One or more files failed to parse — hover the error badge for detail, or remove the file and continue.
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="mt-3 bg-red-50 border border-red-200 rounded-md p-3 flex items-start gap-2">
@@ -222,10 +391,10 @@ export function ImportWizard() {
         <CommitSuccess summary={commitResult} onDone={handleReset} />
       )}
 
-      {/* Preview */}
-      {preview && !commitResult && (
+      {/* Preview — combined across all staged files */}
+      {combinedPreview && !commitResult && (
         <Preview
-          preview={preview}
+          preview={combinedPreview}
           resolutions={resolutions}
           setResolution={setResolution}
           rowResolutions={rowResolutions}
