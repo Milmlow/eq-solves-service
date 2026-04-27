@@ -66,18 +66,21 @@ export async function createTestingCheckAction(input: {
       String(input.year),
     ].filter(Boolean).join(' ')
 
-    // Create the testing check
+    // Create the maintenance check (post-merge — testing_checks merged into
+    // maintenance_checks in migration 0080). Stamp `kind` so the row is
+    // queryable as a test-bench check; date columns derived from month/year.
+    const monthDate = new Date(input.year, input.month - 1, 1).toISOString().slice(0, 10)
     const { data: check, error: checkErr } = await supabase
-      .from('testing_checks')
+      .from('maintenance_checks')
       .insert({
         tenant_id: tenantId,
         site_id: input.site_id,
         job_plan_id: input.job_plan_id,
-        name: checkName,
-        check_type: input.check_type,
+        custom_name: checkName,
+        kind: input.check_type,
         frequency: input.frequency,
-        month: input.month,
-        year: input.year,
+        start_date: monthDate,
+        due_date: monthDate,
         status: 'scheduled',
         created_by: user.id,
         notes: input.notes || null,
@@ -126,15 +129,16 @@ export async function createTestingCheckAction(input: {
 
     await logAuditEvent({
       action: 'create',
-      entityType: 'testing_check',
+      entityType: 'maintenance_check',
       entityId: check.id,
-      summary: `Created testing check "${checkName}" with ${input.asset_ids.length} assets`,
+      summary: `Created ${input.check_type.toUpperCase()} check "${checkName}" with ${input.asset_ids.length} assets`,
       mutationId,
     })
 
     revalidatePath('/testing')
     revalidatePath('/testing/summary')
     revalidatePath('/testing/acb')
+    revalidatePath('/maintenance')
     return { success: true, data: { checkId: check.id, checkName } }
   })
 }
@@ -144,6 +148,8 @@ export async function createTestingCheckAction(input: {
  * The set_deleted_at trigger from migration 0035 stamps deleted_at,
  * starting the auto-purge countdown. Restorable from /admin/archive
  * inside the grace window.
+ *
+ * Post-merge: writes to maintenance_checks (rows with kind in acb/nsx/general).
  */
 export async function archiveTestingCheckAction(checkId: string) {
   try {
@@ -151,15 +157,15 @@ export async function archiveTestingCheckAction(checkId: string) {
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const { data: existing, error: fetchErr } = await supabase
-      .from('testing_checks')
-      .select('id, name')
+      .from('maintenance_checks')
+      .select('id, custom_name, kind')
       .eq('id', checkId)
       .maybeSingle()
     if (fetchErr) return { success: false, error: fetchErr.message }
     if (!existing) return { success: false, error: 'Check not found.' }
 
     const { error } = await supabase
-      .from('testing_checks')
+      .from('maintenance_checks')
       .update({ is_active: false })
       .eq('id', checkId)
 
@@ -167,13 +173,14 @@ export async function archiveTestingCheckAction(checkId: string) {
 
     await logAuditEvent({
       action: 'delete',
-      entityType: 'testing_check',
+      entityType: 'maintenance_check',
       entityId: checkId,
-      summary: `Archived testing check "${existing.name}"`,
+      summary: `Archived ${(existing.kind ?? 'maintenance').toUpperCase()} check "${existing.custom_name ?? checkId}"`,
     })
 
     revalidatePath('/testing/summary')
     revalidatePath('/admin/archive')
+    revalidatePath('/maintenance')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -181,7 +188,9 @@ export async function archiveTestingCheckAction(checkId: string) {
 }
 
 /**
- * Update status of a testing check (e.g. mark complete, cancel)
+ * Update status of a testing check (e.g. mark complete, cancel).
+ *
+ * Post-merge: writes to maintenance_checks (rows with kind in acb/nsx/general).
  */
 export async function updateTestingCheckStatusAction(checkId: string, status: string) {
   try {
@@ -189,7 +198,7 @@ export async function updateTestingCheckStatusAction(checkId: string, status: st
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const { error } = await supabase
-      .from('testing_checks')
+      .from('maintenance_checks')
       .update({ status })
       .eq('id', checkId)
 
@@ -197,12 +206,13 @@ export async function updateTestingCheckStatusAction(checkId: string, status: st
 
     await logAuditEvent({
       action: 'update',
-      entityType: 'testing_check',
+      entityType: 'maintenance_check',
       entityId: checkId,
-      summary: `Updated testing check status to ${status}`,
+      summary: `Updated check status to ${status}`,
     })
 
     revalidatePath('/testing/summary')
+    revalidatePath('/maintenance')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

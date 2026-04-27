@@ -79,10 +79,17 @@ export async function hardDeleteEntityAction(formData: FormData) {
 
   const table = TABLE_BY_ENTITY[parsed.data.entity_type]
 
+  // maintenance_checks doesn't have a `name` column — the human label is in
+  // `custom_name`. Alias it via Supabase's column-renaming select syntax so
+  // the rest of this action treats `row.name` uniformly across entities.
+  const selectCols = table === 'maintenance_checks'
+    ? 'id, name:custom_name, is_active, tenant_id'
+    : 'id, name, is_active, tenant_id'
+
   // Confirm row exists, still archived, tenant-scoped, name matches
   const { data: row, error: fetchErr } = await supabase
     .from(table)
-    .select('id, name, is_active, tenant_id')
+    .select(selectCols)
     .eq('id', parsed.data.entity_id)
     .eq('tenant_id', tenantId)
     .maybeSingle()

@@ -51,15 +51,19 @@ export default async function TestingSummaryPage({
 
   const siteMap = Object.fromEntries((sites ?? []).map((s) => [s.id, s.name]))
 
-  // Fetch testing checks
+  // Fetch test-bench checks. Post-merge (migration 0080) these live in
+  // maintenance_checks with kind in (acb/nsx/general); the legacy
+  // testing_checks view also resolves but we query the source table
+  // directly for clarity and so kindFilter targets the canonical column.
   let checksQuery = supabase
-    .from('testing_checks')
-    .select('*')
+    .from('maintenance_checks')
+    .select('id, site_id, kind, frequency, custom_name, status, start_date, due_date, created_at')
     .eq('is_active', true)
+    .in('kind', ['acb', 'nsx', 'general'])
     .order('created_at', { ascending: false })
 
   if (siteId) checksQuery = checksQuery.eq('site_id', siteId)
-  if (kindFilter) checksQuery = checksQuery.eq('check_type', kindFilter.toLowerCase())
+  if (kindFilter) checksQuery = checksQuery.eq('kind', kindFilter.toLowerCase())
   if (statusFilter) checksQuery = checksQuery.eq('status', statusFilter)
 
   const { data: checks } = await checksQuery
@@ -72,7 +76,7 @@ export default async function TestingSummaryPage({
     let completedCount = 0
     let inProgressCount = 0
 
-    if (check.check_type === 'acb') {
+    if (check.kind === 'acb') {
       const { data: tests } = await supabase
         .from('acb_tests')
         .select('id, asset_id, step1_status, step2_status, step3_status, assets(id, name, asset_type, serial_number)')
@@ -99,7 +103,7 @@ export default async function TestingSummaryPage({
           detail_href: `/testing/acb?asset_id=${assetId}${siteQ}`,
         })
       }
-    } else if (check.check_type === 'nsx') {
+    } else if (check.kind === 'nsx') {
       const { data: tests } = await supabase
         .from('nsx_tests')
         .select('id, asset_id, step1_status, step2_status, step3_status, overall_result, assets(id, name, asset_type, serial_number)')
@@ -136,14 +140,20 @@ export default async function TestingSummaryPage({
       else if (completedCount > 0 || inProgressCount > 0) derivedStatus = 'in_progress'
     }
 
+    // Derive month/year from due_date (post-merge — testing_checks no
+    // longer stores them as separate columns).
+    const dueDate = check.due_date as string | null
+    const month = dueDate ? parseInt(dueDate.slice(5, 7), 10) : null
+    const year  = dueDate ? parseInt(dueDate.slice(0, 4), 10) : null
+
     checkRows.push({
       id: check.id as string,
-      name: check.name as string,
-      check_type: check.check_type as 'acb' | 'nsx' | 'general',
+      name: (check.custom_name as string | null) ?? '(unnamed check)',
+      check_type: check.kind as 'acb' | 'nsx' | 'general',
       site_name: siteMap[check.site_id as string] ?? '—',
       frequency: check.frequency as string | null,
-      month: check.month as number | null,
-      year: check.year as number | null,
+      month,
+      year,
       status: derivedStatus,
       created_at: check.created_at as string,
       total_assets: assets.length,

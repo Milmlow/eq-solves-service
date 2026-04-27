@@ -39,7 +39,10 @@ export const TABLE_BY_ENTITY: Record<ArchiveEntityType, string> = {
   asset:             'assets',
   job_plan:          'job_plans',
   maintenance_check: 'maintenance_checks',
-  testing_check:     'testing_checks',
+  // Post-merge (migration 0080): testing_checks is a read-only view backed
+  // by maintenance_checks where kind in (acb,nsx,general). Writes must
+  // target the underlying table.
+  testing_check:     'maintenance_checks',
 }
 
 // ------------------------------------------------------------
@@ -64,13 +67,14 @@ export async function countDependencies(
       return count ?? 0
     }
     case 'site': {
-      const [a, jp, mc, tc] = await Promise.all([
+      // Post-merge: testing_checks is now part of maintenance_checks
+      // (kind in acb/nsx/general). The single mc count covers both.
+      const [a, jp, mc] = await Promise.all([
         supabase.from('assets').select('*', { count: 'exact', head: true }).eq('site_id', entityId),
         supabase.from('job_plans').select('*', { count: 'exact', head: true }).eq('site_id', entityId),
         supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('site_id', entityId),
-        supabase.from('testing_checks').select('*', { count: 'exact', head: true }).eq('site_id', entityId),
       ])
-      return (a.count ?? 0) + (jp.count ?? 0) + (mc.count ?? 0) + (tc.count ?? 0)
+      return (a.count ?? 0) + (jp.count ?? 0) + (mc.count ?? 0)
     }
     case 'asset': {
       const [acb, nsx] = await Promise.all([
