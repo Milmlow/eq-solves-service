@@ -137,7 +137,9 @@ export async function previewCheckAssetsAction(
     const col = freqColumn(frequency)
 
     // RCD overlay path: every surfaced asset shares the same task list pulled
-    // from the RCD plan. No per-asset task lookup needed.
+    // from the RCD plan. No per-asset task lookup needed. Also surface the
+    // prior-circuit count so the form can preview "X circuits will be
+    // pre-populated from last visit" before the user commits.
     if (rcdOverlayPlanId) {
       const { data: rcdItems } = await supabase
         .from('job_plan_items')
@@ -150,16 +152,54 @@ export async function previewCheckAssetsAction(
         return { success: true, assets: [], totalTasks: 0 }
       }
 
+      // Find the latest rcd_test per asset and count its circuits — this is
+      // what'll be cloned onto the new check via createCheckAction's spawn
+      // block. One query for the latest rcd_tests, one query for circuit
+      // counts grouped by parent.
+      const assetIds = assets.map((a) => a.id)
+      // RLS already scopes by tenant — no explicit tenant_id filter needed.
+      const { data: priorTests } = await supabase
+        .from('rcd_tests')
+        .select('id, asset_id, test_date')
+        .in('asset_id', assetIds)
+        .eq('is_active', true)
+        .order('test_date', { ascending: false })
+
+      const latestTestByAsset = new Map<string, string>()
+      for (const t of priorTests ?? []) {
+        if (!latestTestByAsset.has(t.asset_id)) latestTestByAsset.set(t.asset_id, t.id)
+      }
+
+      const latestTestIds = Array.from(latestTestByAsset.values())
+      const circuitCountByTest = new Map<string, number>()
+      if (latestTestIds.length > 0) {
+        const { data: circuitRows } = await supabase
+          .from('rcd_test_circuits')
+          .select('rcd_test_id')
+          .in('rcd_test_id', latestTestIds)
+        for (const r of circuitRows ?? []) {
+          circuitCountByTest.set(
+            r.rcd_test_id,
+            (circuitCountByTest.get(r.rcd_test_id) ?? 0) + 1,
+          )
+        }
+      }
+
       return {
         success: true,
-        assets: assets.map((a) => ({
-          id: a.id,
-          name: a.name,
-          maximo_id: a.maximo_id,
-          location: a.location,
-          job_plan_name: rcdOverlayPlanName,
-          task_count: taskCount,
-        })),
+        assets: assets.map((a) => {
+          const latestId = latestTestByAsset.get(a.id) ?? null
+          const priorCircuits = latestId ? circuitCountByTest.get(latestId) ?? 0 : 0
+          return {
+            id: a.id,
+            name: a.name,
+            maximo_id: a.maximo_id,
+            location: a.location,
+            job_plan_name: rcdOverlayPlanName,
+            task_count: taskCount,
+            prior_circuit_count: priorCircuits,
+          }
+        }),
         totalTasks: assets.length * taskCount,
       }
     }
@@ -214,7 +254,7 @@ export async function previewCheckAssetsAction(
  */
 export async function createCheckAction(formData: FormData) {
   try {
-    const { supabase, tenantId, role } = await requireUser()
+    const { supabase, tenantId, role, user } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
     // Parse manual_asset_ids from JSON if present
@@ -459,7 +499,112 @@ export async function createCheckAction(formData: FormData) {
       if (itemsError) return { success: false, error: itemsError.message }
     }
 
-    // 7. Notification if assigned
+    // 7. RCD overlay: spawn one rcd_tests per asset, copying the circuit
+    //    structure (section, circuit_no, rating, jemena id, critical flag)
+    //    from the most recent prior test for that asset. Timing values are
+    //    left null so the tech overwrites them onsite via /testing/rcd/[id].
+    //
+    //    No prior test for an asset → empty rcd_tests row spawned anyway,
+    //    so /maintenance > check page shows the link and onsite tech can
+    //    enumerate circuits manually (or import xlsx).
+    let rcdTestsCreated = 0
+    let circuitsCopied = 0
+    if (rcdOverlayPlanId && !parsedManualIds?.length) {
+      const assetIds = assetsWithTasks.map((a) => a.id)
+
+      // Single query to fetch every prior rcd_test for these assets,
+      // ordered newest-first so the first row per asset is the latest.
+      const { data: priorTests } = await supabase
+        .from('rcd_tests')
+        .select('id, asset_id, test_date')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .in('asset_id', assetIds)
+        .order('test_date', { ascending: false })
+
+      const latestByAsset = new Map<string, string>()
+      for (const t of priorTests ?? []) {
+        if (!latestByAsset.has(t.asset_id)) latestByAsset.set(t.asset_id, t.id)
+      }
+
+      // Resolve site customer_id once (rcd_tests carries it for filtering).
+      const { data: siteRow } = await supabase
+        .from('sites')
+        .select('customer_id')
+        .eq('id', parsed.data.site_id)
+        .maybeSingle()
+
+      const newTestRows = assetsWithTasks.map((a) => ({
+        tenant_id: tenantId,
+        customer_id: siteRow?.customer_id ?? null,
+        site_id: parsed.data.site_id,
+        asset_id: a.id,
+        check_id: check.id,
+        test_date: parsed.data.due_date,
+        technician_user_id: user.id,
+        status: 'draft',
+      }))
+
+      const { data: newTests, error: newTestsErr } = await supabase
+        .from('rcd_tests')
+        .insert(newTestRows)
+        .select('id, asset_id')
+
+      if (newTestsErr) {
+        return { success: false, error: `Failed to spawn RCD tests: ${newTestsErr.message}` }
+      }
+      rcdTestsCreated = newTests?.length ?? 0
+
+      // Copy circuit structure from prior test → new test, blanking timing
+      // values. Per-asset because the source test id varies; in practice this
+      // is at most ~50 boards per check so the overhead is negligible.
+      for (const newTest of newTests ?? []) {
+        const priorId = latestByAsset.get(newTest.asset_id)
+        if (!priorId) continue
+
+        const { data: priorCircuits } = await supabase
+          .from('rcd_test_circuits')
+          .select(
+            'section_label, circuit_no, normal_trip_current_ma, jemena_circuit_asset_id, is_critical_load, sort_order',
+          )
+          .eq('rcd_test_id', priorId)
+          .order('sort_order')
+
+        if (!priorCircuits || priorCircuits.length === 0) continue
+
+        const newCircuits = priorCircuits.map((c) => ({
+          tenant_id: tenantId,
+          rcd_test_id: newTest.id,
+          section_label: c.section_label,
+          circuit_no: c.circuit_no,
+          normal_trip_current_ma: c.normal_trip_current_ma,
+          jemena_circuit_asset_id: c.jemena_circuit_asset_id,
+          is_critical_load: c.is_critical_load,
+          sort_order: c.sort_order,
+          // Timing values + button check + action_taken intentionally left
+          // at column defaults (null / false). Tech captures fresh values
+          // on the visit.
+        }))
+
+        for (let i = 0; i < newCircuits.length; i += 500) {
+          const batch = newCircuits.slice(i, i + 500)
+          const { error: copyErr } = await supabase
+            .from('rcd_test_circuits')
+            .insert(batch)
+          if (copyErr) {
+            return {
+              success: false,
+              error: `Failed to copy circuits for asset ${newTest.asset_id}: ${copyErr.message}`,
+            }
+          }
+          circuitsCopied += batch.length
+        }
+      }
+
+      revalidatePath('/testing/rcd')
+    }
+
+    // 8. Notification if assigned
     if (parsed.data.assigned_to) {
       const siteName = parsed.data.custom_name ?? 'Maintenance Check'
       await createNotification({
@@ -476,11 +621,20 @@ export async function createCheckAction(formData: FormData) {
     await logAuditEvent({
       action: 'create',
       entityType: 'maintenance_check',
-      summary: `Created check: ${assetsWithTasks.length} assets, ${checkItems.length} tasks (${freq})`,
+      summary: rcdOverlayPlanId
+        ? `Created RCD check: ${assetsWithTasks.length} assets, ${rcdTestsCreated} RCD tests pre-populated (${circuitsCopied} circuits copied) (${freq})`
+        : `Created check: ${assetsWithTasks.length} assets, ${checkItems.length} tasks (${freq})`,
     })
 
     revalidateMaintenanceSurfaces()
-    return { success: true, checkId: check.id, assetCount: assetsWithTasks.length, taskCount: checkItems.length }
+    return {
+      success: true,
+      checkId: check.id,
+      assetCount: assetsWithTasks.length,
+      taskCount: checkItems.length,
+      rcdTestsCreated,
+      circuitsCopied,
+    }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }

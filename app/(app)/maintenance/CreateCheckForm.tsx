@@ -29,6 +29,13 @@ interface PreviewAsset {
   location: string | null
   job_plan_name: string | null
   task_count: number
+  /**
+   * RCD overlay only — count of circuits on the most recent prior rcd_test
+   * for this asset. Tells the user how many circuits will be pre-populated
+   * onto the new check (timing values blank, ready to fill onsite).
+   * Undefined for non-RCD checks.
+   */
+  prior_circuit_count?: number
 }
 
 interface ScopeItem {
@@ -164,7 +171,12 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
         asset_type: (formData.get('job_plan_id') as string) || 'unknown',
       })
       setSuccess(true)
-      const msg = `Check created: ${result.assetCount ?? 0} assets, ${result.taskCount ?? 0} tasks`
+      const baseMsg = `Check created: ${result.assetCount ?? 0} assets, ${result.taskCount ?? 0} tasks`
+      const rcdSuffix =
+        (result.rcdTestsCreated ?? 0) > 0
+          ? ` · ${result.rcdTestsCreated} RCD test${result.rcdTestsCreated === 1 ? '' : 's'} pre-populated (${result.circuitsCopied ?? 0} circuit${result.circuitsCopied === 1 ? '' : 's'} from last visit)`
+          : ''
+      const msg = baseMsg + rcdSuffix
       setTimeout(() => { onClose(); resetForm() }, 1500)
       setError(null)
       // Show success with counts
@@ -338,15 +350,33 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
               <p className="text-sm text-eq-grey p-3">No assets found matching criteria.</p>
             ) : (
               <div className="max-h-48 overflow-y-auto divide-y divide-gray-100">
-                {previewAssets.map((a) => (
-                  <div key={a.id} className="px-3 py-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="font-medium text-eq-ink">{a.maximo_id ?? '—'}</span>
-                      <span className="text-eq-grey">{a.task_count} tasks</span>
+                {previewAssets.map((a) => {
+                  const isRcd = a.prior_circuit_count !== undefined
+                  return (
+                    <div key={a.id} className="px-3 py-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-eq-ink">{a.maximo_id ?? a.name}</span>
+                        <span className="text-eq-grey">{a.task_count} tasks</span>
+                      </div>
+                      <div className="text-eq-grey truncate">
+                        {a.maximo_id ? a.name : (a.location ?? '')}
+                      </div>
+                      {isRcd && (
+                        <div className="mt-0.5 text-[11px]">
+                          {a.prior_circuit_count && a.prior_circuit_count > 0 ? (
+                            <span className="text-eq-deep">
+                              ✨ {a.prior_circuit_count} circuit{a.prior_circuit_count === 1 ? '' : 's'} will be pre-populated from last visit
+                            </span>
+                          ) : (
+                            <span className="text-amber-700">
+                              ⚠ no previous test — circuits will need to be entered onsite
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-eq-grey truncate">{a.name}</div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
