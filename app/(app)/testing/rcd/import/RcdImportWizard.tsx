@@ -160,19 +160,33 @@ export function RcdImportWizard() {
               <strong>{commitResult.circuitsCreated}</strong> circuit
               {commitResult.circuitsCreated === 1 ? '' : 's'} stored
             </div>
+            {commitResult.checksCreated > 0 && (
+              <div>
+                <strong>{commitResult.checksCreated}</strong> maintenance check
+                {commitResult.checksCreated === 1 ? '' : 's'} created and linked
+              </div>
+            )}
             {commitResult.boardsSkipped > 0 && (
               <div className="text-amber-700">
                 <strong>{commitResult.boardsSkipped}</strong> board
                 {commitResult.boardsSkipped === 1 ? '' : 's'} skipped (unmatched site/asset, missing date, or duplicate)
               </div>
             )}
-            <div className="pt-2">
+            <div className="pt-2 flex gap-4">
               <a
                 href="/testing/rcd"
                 className="text-eq-deep hover:text-eq-sky underline"
               >
                 View RCD test records →
               </a>
+              {commitResult.checksCreated > 0 && (
+                <a
+                  href="/maintenance"
+                  className="text-eq-deep hover:text-eq-sky underline"
+                >
+                  View maintenance checks →
+                </a>
+              )}
             </div>
           </div>
         </div>

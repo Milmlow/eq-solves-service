@@ -48,6 +48,23 @@ function freqColumn(freq: string): string {
 }
 
 /**
+ * RCD test plans behave as a secondary overlay: their assets are RCD-bearing
+ * boards (assets.expected_rcd_circuits > 0), even though those boards are
+ * primarily pinned to a switchboard maintenance plan. Detect by code/name
+ * pattern so any tenant can add their own `<TENANT>-RCD-TEST` plan.
+ *
+ * Anchored on word-boundaries so we don't match something like
+ * "RCDS-Maintenance" or names that happen to contain the letters.
+ */
+function isRcdPlan(plan: { code: string | null; name: string | null }): boolean {
+  const code = plan.code ?? ''
+  const name = plan.name ?? ''
+  if (/(^|[^A-Z])RCD([^A-Z]|$)/i.test(code)) return true
+  if (/\brcd\b/i.test(name)) return true
+  return false
+}
+
+/**
  * Preview which assets would be included in a check.
  * Used by the form to show a preview before creating.
  *
@@ -72,9 +89,27 @@ export async function previewCheckAssetsAction(
         ? [jobPlanFilter]
         : []
 
+    // RCD overlay detection: when the user picked exactly one plan and that
+    // plan is an RCD test plan, switch from "pinned plan match" to "asset has
+    // RCD circuits" filtering. The switchboard maintenance plan is what the
+    // boards are primarily pinned to; the RCD plan rides on top.
+    let rcdOverlayPlanId: string | null = null
+    let rcdOverlayPlanName: string | null = null
+    if (jobPlanIds.length === 1) {
+      const { data: plan } = await supabase
+        .from('job_plans')
+        .select('id, code, name')
+        .eq('id', jobPlanIds[0])
+        .maybeSingle()
+      if (plan && isRcdPlan(plan)) {
+        rcdOverlayPlanId = plan.id
+        rcdOverlayPlanName = plan.name
+      }
+    }
+
     let query = supabase
       .from('assets')
-      .select('id, name, maximo_id, location, job_plan_id, job_plans(name, code)')
+      .select('id, name, maximo_id, location, job_plan_id, expected_rcd_circuits, job_plans(name, code)')
       .eq('site_id', siteId)
       .eq('is_active', true)
 
@@ -82,7 +117,12 @@ export async function previewCheckAssetsAction(
       query = query.eq('dark_site_test', true)
     }
 
-    if (jobPlanIds.length === 1) {
+    if (rcdOverlayPlanId) {
+      // RCD overlay: surface every RCD-bearing asset at the site, regardless
+      // of the asset's primary job_plan_id. Items come from the RCD plan
+      // itself, not from each asset's pinned plan.
+      query = query.gt('expected_rcd_circuits', 0)
+    } else if (jobPlanIds.length === 1) {
       query = query.eq('job_plan_id', jobPlanIds[0])
     } else if (jobPlanIds.length > 1) {
       query = query.in('job_plan_id', jobPlanIds)
@@ -94,11 +134,38 @@ export async function previewCheckAssetsAction(
       return { success: true, assets: [], totalTasks: 0 }
     }
 
-    // Get job plan IDs from the matched assets
-    const jpIds = [...new Set(assets.map((a) => a.job_plan_id).filter(Boolean))] as string[]
-
-    // Count how many tasks each job plan has for this frequency
     const col = freqColumn(frequency)
+
+    // RCD overlay path: every surfaced asset shares the same task list pulled
+    // from the RCD plan. No per-asset task lookup needed.
+    if (rcdOverlayPlanId) {
+      const { data: rcdItems } = await supabase
+        .from('job_plan_items')
+        .select('id')
+        .eq('job_plan_id', rcdOverlayPlanId)
+        .eq(col, true)
+
+      const taskCount = rcdItems?.length ?? 0
+      if (taskCount === 0) {
+        return { success: true, assets: [], totalTasks: 0 }
+      }
+
+      return {
+        success: true,
+        assets: assets.map((a) => ({
+          id: a.id,
+          name: a.name,
+          maximo_id: a.maximo_id,
+          location: a.location,
+          job_plan_name: rcdOverlayPlanName,
+          task_count: taskCount,
+        })),
+        totalTasks: assets.length * taskCount,
+      }
+    }
+
+    // Standard path — task counts looked up per asset's pinned job plan.
+    const jpIds = [...new Set(assets.map((a) => a.job_plan_id).filter(Boolean))] as string[]
     let taskCountMap: Record<string, number> = {}
     if (jpIds.length > 0) {
       const { data: items } = await supabase
@@ -113,7 +180,6 @@ export async function previewCheckAssetsAction(
       }, {} as Record<string, number>)
     }
 
-    // Filter to only assets whose job plan has tasks for this frequency
     const matchedAssets = assets.filter((a) => {
       if (!a.job_plan_id) return false
       return (taskCountMap[a.job_plan_id] ?? 0) > 0
@@ -222,9 +288,27 @@ export async function createCheckAction(formData: FormData) {
     if (checkError || !check) return { success: false, error: checkError?.message ?? 'Failed to create check.' }
 
     // 2. Find assets to include
+    //
+    // RCD overlay: when the user picked exactly one plan and that plan is an
+    // RCD test plan, surface every RCD-bearing asset at the site instead of
+    // matching `assets.job_plan_id`. The boards live primarily on the
+    // switchboard maintenance plan; the RCD plan rides on top.
+    const planIds = parsedJobPlanIds ?? []
+    let rcdOverlayPlanId: string | null = null
+    if (planIds.length === 1 && (!parsedManualIds || parsedManualIds.length === 0)) {
+      const { data: plan } = await supabase
+        .from('job_plans')
+        .select('id, code, name')
+        .eq('id', planIds[0])
+        .maybeSingle()
+      if (plan && isRcdPlan(plan)) {
+        rcdOverlayPlanId = plan.id
+      }
+    }
+
     let assetQuery = supabase
       .from('assets')
-      .select('id, job_plan_id')
+      .select('id, job_plan_id, expected_rcd_circuits')
       .eq('is_active', true)
 
     if (parsedManualIds && parsedManualIds.length > 0) {
@@ -236,11 +320,12 @@ export async function createCheckAction(formData: FormData) {
       if (parsed.data.is_dark_site) {
         assetQuery = assetQuery.eq('dark_site_test', true)
       }
-      // Multi-plan filter. Single id → .eq (uses idx_assets_job_plan_id);
-      // multiple → .in. Zero ids means "no plan filter" (all assets at
-      // the site). See lib/validations/maintenance-check.ts for shape.
-      const planIds = parsedJobPlanIds ?? []
-      if (planIds.length === 1) {
+      if (rcdOverlayPlanId) {
+        assetQuery = assetQuery.gt('expected_rcd_circuits', 0)
+      } else if (planIds.length === 1) {
+        // Multi-plan filter. Single id → .eq (uses idx_assets_job_plan_id);
+        // multiple → .in. Zero ids means "no plan filter" (all assets at
+        // the site). See lib/validations/maintenance-check.ts for shape.
         assetQuery = assetQuery.eq('job_plan_id', planIds[0])
       } else if (planIds.length > 1) {
         assetQuery = assetQuery.in('job_plan_id', planIds)
@@ -255,6 +340,30 @@ export async function createCheckAction(formData: FormData) {
 
     // 3. Get job plan items matching the selected frequency
     const col = freqColumn(freq)
+
+    // RCD overlay: items come from the RCD plan, not the asset's pinned plan.
+    // Every asset shares the same task list, so we build a single items array
+    // and replicate it per asset below.
+    let rcdOverlayItems: {
+      id: string
+      description: string
+      sort_order: number
+      is_required: boolean
+    }[] | null = null
+
+    if (rcdOverlayPlanId) {
+      const { data: rcdItems } = await supabase
+        .from('job_plan_items')
+        .select('id, description, sort_order, is_required')
+        .eq('job_plan_id', rcdOverlayPlanId)
+        .eq(col, true)
+        .order('sort_order')
+      rcdOverlayItems = rcdItems ?? []
+      if (rcdOverlayItems.length === 0) {
+        return { success: true, checkId: check.id, assetCount: 0, taskCount: 0 }
+      }
+    }
+
     const jpIds = [...new Set(assets.map((a) => a.job_plan_id).filter(Boolean))] as string[]
     let allItems: {
       id: string
@@ -264,7 +373,7 @@ export async function createCheckAction(formData: FormData) {
       is_required: boolean
     }[] = []
 
-    if (jpIds.length > 0) {
+    if (!rcdOverlayPlanId && jpIds.length > 0) {
       const { data: items } = await supabase
         .from('job_plan_items')
         .select('id, job_plan_id, description, sort_order, is_required')
@@ -283,7 +392,9 @@ export async function createCheckAction(formData: FormData) {
     }
 
     // 4. Filter to assets whose job plan has matching tasks
-    const assetsWithTasks = assets.filter((a) => a.job_plan_id && (itemsByJP[a.job_plan_id]?.length ?? 0) > 0)
+    const assetsWithTasks = rcdOverlayPlanId
+      ? assets
+      : assets.filter((a) => a.job_plan_id && (itemsByJP[a.job_plan_id]?.length ?? 0) > 0)
 
     if (assetsWithTasks.length === 0) {
       return { success: true, checkId: check.id, assetCount: 0, taskCount: 0 }
@@ -304,7 +415,8 @@ export async function createCheckAction(formData: FormData) {
 
     if (caError || !insertedCA) return { success: false, error: caError?.message ?? 'Failed to create check assets.' }
 
-    // 6. Create check_items for each asset (from its job plan items)
+    // 6. Create check_items for each asset (from its job plan items, or the
+    //    RCD overlay's items when the selected plan is RCD-TEST)
     const caLookup: Record<string, string> = {}
     for (const ca of insertedCA) {
       caLookup[ca.asset_id] = ca.id
@@ -323,7 +435,7 @@ export async function createCheckAction(formData: FormData) {
 
     for (const asset of assetsWithTasks) {
       const caId = caLookup[asset.id]
-      const jpItems = itemsByJP[asset.job_plan_id!] ?? []
+      const jpItems = rcdOverlayItems ?? itemsByJP[asset.job_plan_id!] ?? []
       for (const item of jpItems) {
         checkItems.push({
           tenant_id: tenantId,
