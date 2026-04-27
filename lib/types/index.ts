@@ -334,6 +334,57 @@ export interface RcdTestCircuit {
   updated_at: string
 }
 
+// ── Thermal scan types (migration 0070) ───────────────────────────────
+
+export type ThermalScanStatus = 'draft' | 'complete' | 'archived'
+export type ThermalEvaluationMode = 'qualitative' | 'quantitative'
+export type ThermalPriorityRating =
+  | 'monitor'
+  | 'repair_when_practical'
+  | 'repair_soon'
+  | 'urgent'
+  | 'critical'
+
+export interface ThermalScan {
+  id: string
+  tenant_id: string
+  customer_id: string | null
+  site_id: string
+  check_id: string | null
+  date_performed: string
+  performed_by_user_id: string | null
+  performed_by_snapshot: string | null
+  report_author: string | null
+  report_date: string | null
+  scope_of_survey: string | null
+  equipment_used: string | null
+  evaluation_mode: ThermalEvaluationMode
+  total_photos: number
+  anomalies_found: number
+  notes: string | null
+  status: ThermalScanStatus
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ThermalScanFinding {
+  id: string
+  tenant_id: string
+  thermal_scan_id: string
+  asset_id: string | null
+  ir_image_attachment_id: string | null
+  daylight_image_attachment_id: string | null
+  priority_rating: ThermalPriorityRating
+  observation: string | null
+  delta_temp_c: number | null
+  ambient_temp_c: number | null
+  apparent_load_pct: number | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 export type CheckAssetStatus = 'pending' | 'completed' | 'na'
 
 export interface CheckAsset {
