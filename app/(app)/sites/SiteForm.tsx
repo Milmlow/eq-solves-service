@@ -6,6 +6,7 @@ import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { MediaPicker } from '@/components/ui/MediaPicker'
 import { createSiteAction, updateSiteAction, toggleSiteActiveAction } from './actions'
+import { geocodeSiteAddressAction } from './geocode-action'
 import { cascadeArchiveAction } from '@/app/(app)/admin/archive/actions'
 import type { Site, Customer } from '@/lib/types'
 
@@ -28,6 +29,11 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
   const [logoUrlOnDark, setLogoUrlOnDark] = useState<string | null>(
     (site as unknown as { logo_url_on_dark?: string | null })?.logo_url_on_dark ?? null,
   )
+  // Lat/lng are controlled so the Geocode button can populate them.
+  const [latitude, setLatitude] = useState<string>(site?.latitude != null ? String(site.latitude) : '')
+  const [longitude, setLongitude] = useState<string>(site?.longitude != null ? String(site.longitude) : '')
+  const [geocoding, setGeocoding] = useState(false)
+  const [geocodeMsg, setGeocodeMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
   const isEdit = !!site
 
@@ -49,6 +55,34 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
     } else {
       setError(result.error ?? 'Something went wrong.')
     }
+  }
+
+  async function handleGeocode(form: HTMLFormElement) {
+    setGeocodeMsg(null)
+    const fd = new FormData(form)
+    // Only the address fields — strip everything else.
+    const trimmed = new FormData()
+    for (const k of ['address', 'city', 'state', 'postcode', 'country']) {
+      const v = fd.get(k)
+      if (typeof v === 'string') trimmed.set(k, v)
+    }
+    if (!String(trimmed.get('address') ?? '').trim()) {
+      setGeocodeMsg({ kind: 'err', text: 'Enter an address first.' })
+      return
+    }
+    setGeocoding(true)
+    const res = await geocodeSiteAddressAction(trimmed)
+    setGeocoding(false)
+    if (!res.ok) {
+      setGeocodeMsg({ kind: 'err', text: res.error })
+      return
+    }
+    setLatitude(String(res.latitude))
+    setLongitude(String(res.longitude))
+    setGeocodeMsg({
+      kind: 'ok',
+      text: `Geocoded to ${res.latitude.toFixed(6)}, ${res.longitude.toFixed(6)} — ${res.displayName}`,
+    })
   }
 
   async function handleToggleActive() {
@@ -142,13 +176,41 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
           />
         </div>
 
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <p className="text-xs text-eq-grey">
+            Geocoding fills the lat/lng below from the address fields above.
+            Save the form to persist.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            loading={geocoding}
+            onClick={(e) => {
+              const form = (e.currentTarget as HTMLButtonElement).closest('form')
+              if (form) void handleGeocode(form)
+            }}
+          >
+            Geocode from address
+          </Button>
+        </div>
+        {geocodeMsg && (
+          <p className={
+            'text-xs ' +
+            (geocodeMsg.kind === 'ok' ? 'text-green-600' : 'text-red-500')
+          }>
+            {geocodeMsg.text}
+          </p>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <FormInput
             label="Latitude"
             name="latitude"
             type="number"
             step="any"
-            defaultValue={site?.latitude ?? ''}
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
             placeholder="-33.9219"
           />
           <FormInput
@@ -156,7 +218,8 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
             name="longitude"
             type="number"
             step="any"
-            defaultValue={site?.longitude ?? ''}
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
             placeholder="151.1880"
           />
         </div>
