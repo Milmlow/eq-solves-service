@@ -76,7 +76,7 @@ export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEd
     setToggling(true)
     setError(null)
     setStaleNotice(false)
-    const res = await togglePmCalendarActiveAction(entry.id, !entry.is_active, entry.updated_at)
+    const res = await togglePmCalendarActiveAction(entry.id, !entry.is_active, entry.updated_at, crypto.randomUUID())
     setToggling(false)
     if (res.success) {
       onClose()

@@ -167,9 +167,9 @@ export function MaintenanceList({
           {canWriteRole && (
             <>
               <Link href="/maintenance/import">
-                <Button variant="secondary">Import</Button>
+                <Button size="sm" variant="secondary">Import</Button>
               </Link>
-              <Button onClick={() => setCreateOpen(true)}>Create Check</Button>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>Create Check</Button>
             </>
           )}
         </div>

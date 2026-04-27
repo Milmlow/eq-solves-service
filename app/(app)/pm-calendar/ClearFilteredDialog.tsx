@@ -40,7 +40,7 @@ export function ClearFilteredDialog({
     if (!matches) return
     setBusy(true)
     setError(null)
-    const res = await clearPmCalendarEntriesAction(ids, count)
+    const res = await clearPmCalendarEntriesAction(ids, count, crypto.randomUUID())
     setBusy(false)
     if (res.success) {
       onClose()

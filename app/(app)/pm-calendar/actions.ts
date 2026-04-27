@@ -5,8 +5,30 @@ import { headers } from 'next/headers'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { withIdempotency } from '@/lib/actions/idempotency'
 import { CreatePmCalendarSchema, UpdatePmCalendarSchema } from '@/lib/validations/pm-calendar'
 import { runSupervisorDigests, type SupervisorRunResult } from '@/lib/calendar/supervisor-digest'
+
+// Wall-clock-preserving day shift in Sydney TZ. Used by the drag-and-drop
+// move action so a 09:00 entry stays a 09:00 entry on the new date even
+// across DST boundaries (last Sun in Apr, first Sun in Oct).
+function shiftToSydneyDay(originalIso: string, newDateStr: string): string {
+  const original = new Date(originalIso)
+  const sydneyParts = original.toLocaleString('sv-SE', {
+    timeZone: 'Australia/Sydney',
+    hour12: false,
+  })
+  const [, timeStr] = sydneyParts.split(' ')
+  const candidateAest = new Date(`${newDateStr}T${timeStr}+10:00`)
+  const check = candidateAest.toLocaleString('sv-SE', {
+    timeZone: 'Australia/Sydney',
+    hour12: false,
+  })
+  if (check === `${newDateStr} ${timeStr}`) {
+    return candidateAest.toISOString()
+  }
+  return new Date(`${newDateStr}T${timeStr}+11:00`).toISOString()
+}
 
 // ===== Helper: compute AU FY quarter & year from a date =====
 function computeAuFyQuarter(dateStr: string): { quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4'; financial_year: string } {
@@ -151,36 +173,40 @@ export async function togglePmCalendarActiveAction(
   id: string,
   active: boolean,
   expectedUpdatedAt?: string | null,
+  mutationId?: string,
 ) {
-  try {
-    const { supabase, role } = await requireUser()
-    if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
+  return withIdempotency(mutationId, async () => {
+    try {
+      const { supabase, role } = await requireUser()
+      if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
 
-    let query = supabase
-      .from('pm_calendar')
-      .update({ is_active: active })
-      .eq('id', id)
-    if (expectedUpdatedAt) {
-      query = query.eq('updated_at', expectedUpdatedAt)
+      let query = supabase
+        .from('pm_calendar')
+        .update({ is_active: active })
+        .eq('id', id)
+      if (expectedUpdatedAt) {
+        query = query.eq('updated_at', expectedUpdatedAt)
+      }
+      const { data, error } = await query.select('id')
+
+      if (error) return { success: false, error: error.message }
+      if (expectedUpdatedAt && (!data || data.length === 0)) {
+        return { success: false, error: STALE_ERROR, stale: true as const }
+      }
+
+      await logAuditEvent({
+        action: active ? 'reactivate' : 'deactivate',
+        entityType: 'pm_calendar',
+        entityId: id,
+        summary: `${active ? 'Reactivated' : 'Deactivated'} PM calendar entry`,
+        mutationId,
+      })
+      revalidatePath('/calendar')
+      return { success: true }
+    } catch (e: unknown) {
+      return { success: false, error: (e as Error).message }
     }
-    const { data, error } = await query.select('id')
-
-    if (error) return { success: false, error: error.message }
-    if (expectedUpdatedAt && (!data || data.length === 0)) {
-      return { success: false, error: STALE_ERROR, stale: true as const }
-    }
-
-    await logAuditEvent({
-      action: active ? 'reactivate' : 'deactivate',
-      entityType: 'pm_calendar',
-      entityId: id,
-      summary: `${active ? 'Reactivated' : 'Deactivated'} PM calendar entry`,
-    })
-    revalidatePath('/calendar')
-    return { success: true }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+  })
 }
 
 // ===== SEED DATA =====
@@ -588,119 +614,126 @@ export async function sendSupervisorDigestNowAction(
 export async function clearPmCalendarEntriesAction(
   ids: string[],
   expectedCount: number,
+  mutationId?: string,
 ) {
-  try {
-    const { supabase, role } = await requireUser()
-    if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
+  return withIdempotency(mutationId, async () => {
+    try {
+      const { supabase, role } = await requireUser()
+      if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
 
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return { success: false, error: 'No entries selected.' }
-    }
-    if (ids.length !== expectedCount) {
-      return {
-        success: false,
-        error: `Selection drift: dialog showed ${expectedCount} entries but ${ids.length} were submitted. Refresh and try again.`,
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return { success: false, error: 'No entries selected.' }
       }
+      if (ids.length !== expectedCount) {
+        return {
+          success: false,
+          error: `Selection drift: dialog showed ${expectedCount} entries but ${ids.length} were submitted. Refresh and try again.`,
+        }
+      }
+      if (ids.length > 1000) {
+        return { success: false, error: 'Refusing to clear more than 1000 entries in one action.' }
+      }
+
+      const { error, count } = await supabase
+        .from('pm_calendar')
+        .update({ is_active: false }, { count: 'exact' })
+        .in('id', ids)
+        .eq('is_active', true)
+
+      if (error) return { success: false, error: error.message }
+
+      await logAuditEvent({
+        action: 'bulk_deactivate',
+        entityType: 'pm_calendar',
+        summary: `Cleared ${count ?? ids.length} PM calendar entries via Clear filtered`,
+        mutationId,
+      })
+      revalidatePath('/calendar')
+      return { success: true, cleared: count ?? ids.length }
+    } catch (e: unknown) {
+      return { success: false, error: (e as Error).message }
     }
-    if (ids.length > 1000) {
-      return { success: false, error: 'Refusing to clear more than 1000 entries in one action.' }
-    }
-
-    const { error, count } = await supabase
-      .from('pm_calendar')
-      .update({ is_active: false }, { count: 'exact' })
-      .in('id', ids)
-      .eq('is_active', true)
-
-    if (error) return { success: false, error: error.message }
-
-    await logAuditEvent({
-      action: 'bulk_deactivate',
-      entityType: 'pm_calendar',
-      summary: `Cleared ${count ?? ids.length} PM calendar entries via Clear filtered`,
-    })
-    revalidatePath('/calendar')
-    return { success: true, cleared: count ?? ids.length }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+  })
 }
 
 // ===== MOVE ENTRY TO ANOTHER DAY (drag-and-drop) =====
-// Preserves time-of-day. Computes the day delta in Sydney wall-clock and
-// shifts both start_time and end_time by that exact ms delta — so a 09:00
-// entry stays a 09:00 entry on the new date (modulo rare DST boundary cases).
+// Preserves Sydney wall-clock time even across DST transitions: an entry at
+// 09:00 stays at 09:00 on the new date, regardless of whether the source
+// day was AEDT (+11) and the target is AEST (+10) or vice versa. Duration
+// of multi-day blocks is preserved exactly via ms delta on end_time.
 export async function movePmCalendarEntryAction(
   id: string,
   newDate: string,
   expectedUpdatedAt?: string | null,
+  mutationId?: string,
 ) {
-  try {
-    const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+  return withIdempotency(mutationId, async () => {
+    try {
+      const { supabase, role } = await requireUser()
+      if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
-      return { success: false, error: 'newDate must be YYYY-MM-DD.' }
-    }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+        return { success: false, error: 'newDate must be YYYY-MM-DD.' }
+      }
 
-    const { data: existing, error: readErr } = await supabase
-      .from('pm_calendar')
-      .select('id, start_time, end_time, title, updated_at')
-      .eq('id', id)
-      .maybeSingle()
-    if (readErr) return { success: false, error: readErr.message }
-    if (!existing) return { success: false, error: 'Entry not found.' }
-    if (expectedUpdatedAt && existing.updated_at !== expectedUpdatedAt) {
-      return { success: false, error: STALE_ERROR, stale: true as const }
-    }
+      const { data: existing, error: readErr } = await supabase
+        .from('pm_calendar')
+        .select('id, start_time, end_time, title, updated_at')
+        .eq('id', id)
+        .maybeSingle()
+      if (readErr) return { success: false, error: readErr.message }
+      if (!existing) return { success: false, error: 'Entry not found.' }
+      if (expectedUpdatedAt && existing.updated_at !== expectedUpdatedAt) {
+        return { success: false, error: STALE_ERROR, stale: true as const }
+      }
 
-    const oldStart = new Date(existing.start_time)
-    const oldDayKey = oldStart.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
-    if (oldDayKey === newDate) {
-      return { success: true, moved: false }
-    }
+      const oldStart = new Date(existing.start_time)
+      const oldDayKey = oldStart.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
+      if (oldDayKey === newDate) {
+        return { success: true, moved: false }
+      }
 
-    const [oy, om, od] = oldDayKey.split('-').map(Number)
-    const [ny, nm, nd] = newDate.split('-').map(Number)
-    const deltaMs = Date.UTC(ny, nm - 1, nd) - Date.UTC(oy, om - 1, od)
+      const newStartIso = shiftToSydneyDay(existing.start_time, newDate)
+      const oldEnd = existing.end_time ? new Date(existing.end_time) : null
+      const duration = oldEnd ? oldEnd.getTime() - oldStart.getTime() : 0
+      const newEndIso = oldEnd
+        ? new Date(new Date(newStartIso).getTime() + duration).toISOString()
+        : null
 
-    const newStartIso = new Date(oldStart.getTime() + deltaMs).toISOString()
-    const newEndIso = existing.end_time
-      ? new Date(new Date(existing.end_time).getTime() + deltaMs).toISOString()
-      : null
+      const { quarter, financial_year } = computeAuFyQuarter(newStartIso)
 
-    const { quarter, financial_year } = computeAuFyQuarter(newStartIso)
+      let updateQuery = supabase
+        .from('pm_calendar')
+        .update({
+          start_time: newStartIso,
+          end_time: newEndIso,
+          quarter,
+          financial_year,
+        })
+        .eq('id', id)
+      if (expectedUpdatedAt) {
+        updateQuery = updateQuery.eq('updated_at', expectedUpdatedAt)
+      }
+      const { data: moved, error } = await updateQuery.select('id')
 
-    let updateQuery = supabase
-      .from('pm_calendar')
-      .update({
-        start_time: newStartIso,
-        end_time: newEndIso,
-        quarter,
-        financial_year,
+      if (error) return { success: false, error: error.message }
+      if (expectedUpdatedAt && (!moved || moved.length === 0)) {
+        return { success: false, error: STALE_ERROR, stale: true as const }
+      }
+
+      await logAuditEvent({
+        action: 'move',
+        entityType: 'pm_calendar',
+        entityId: id,
+        summary: `Moved "${existing.title}" from ${oldDayKey} to ${newDate}`,
+        mutationId,
       })
-      .eq('id', id)
-    if (expectedUpdatedAt) {
-      updateQuery = updateQuery.eq('updated_at', expectedUpdatedAt)
+      revalidatePath('/calendar')
+      return { success: true, moved: true }
+    } catch (e: unknown) {
+      return { success: false, error: (e as Error).message }
     }
-    const { data: moved, error } = await updateQuery.select('id')
-
-    if (error) return { success: false, error: error.message }
-    if (expectedUpdatedAt && (!moved || moved.length === 0)) {
-      return { success: false, error: STALE_ERROR, stale: true as const }
-    }
-
-    await logAuditEvent({
-      action: 'move',
-      entityType: 'pm_calendar',
-      entityId: id,
-      summary: `Moved "${existing.title}" from ${oldDayKey} to ${newDate}`,
-    })
-    revalidatePath('/calendar')
-    return { success: true, moved: true }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+  })
 }
 
 // Resolve the public URL the digest links should point at. Prefers
