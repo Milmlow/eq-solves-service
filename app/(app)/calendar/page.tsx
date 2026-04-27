@@ -56,11 +56,11 @@ export default async function CalendarPage({
   // disambiguate duplicate site codes across customers)
   const { data: sitesRaw } = await supabase
     .from('sites')
-    .select('id, name, code, address, customers(name)')
+    .select('id, name, code, address, customers(id, name)')
     .eq('is_active', true)
     .order('name')
   const sites = (sitesRaw ?? []) as (Pick<Site, 'id' | 'name' | 'code' | 'address'> & {
-    customers?: { name?: string | null } | { name?: string | null }[] | null
+    customers?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null
   })[]
 
   // Build query

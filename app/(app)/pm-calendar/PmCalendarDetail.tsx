@@ -1,14 +1,23 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { togglePmCalendarActiveAction } from './actions'
+import { ExternalLink } from 'lucide-react'
 import type { PmCalendarEntry } from '@/lib/types'
 
 type EntryRow = PmCalendarEntry & { site_name: string }
+
+interface SiteLookup {
+  id: string
+  name: string
+  code: string | null
+  customers?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null
+}
 
 interface PmCalendarDetailProps {
   open: boolean
@@ -17,6 +26,12 @@ interface PmCalendarDetailProps {
   isAdmin: boolean
   canWrite: boolean
   onEdit: () => void
+  site?: SiteLookup | null
+}
+
+function resolveCustomer(site: SiteLookup | null | undefined): { id?: string | null; name?: string | null } | null {
+  if (!site?.customers) return null
+  return Array.isArray(site.customers) ? (site.customers[0] ?? null) : site.customers
 }
 
 function statusToBadge(status: string): 'active' | 'not-started' | 'complete' | 'inactive' {
@@ -51,7 +66,7 @@ const categoryColours: Record<string, string> = {
   'WOs': 'bg-orange-100 text-orange-700',
 }
 
-export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEdit }: PmCalendarDetailProps) {
+export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEdit, site }: PmCalendarDetailProps) {
   const router = useRouter()
   const [toggling, setToggling] = useState(false)
   const [staleNotice, setStaleNotice] = useState(false)
@@ -95,8 +110,36 @@ export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEd
         {/* Details grid */}
         <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
           <div>
+            <div className="text-xs text-eq-grey font-medium uppercase">Customer</div>
+            {(() => {
+              const c = resolveCustomer(site)
+              if (c?.id && c.name) {
+                return (
+                  <Link
+                    href={`/customers/${c.id}`}
+                    className="text-eq-deep hover:text-eq-sky inline-flex items-center gap-1 group"
+                  >
+                    <span className="underline-offset-2 group-hover:underline">{c.name}</span>
+                    <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100" />
+                  </Link>
+                )
+              }
+              return <div className="text-eq-grey italic">—</div>
+            })()}
+          </div>
+          <div>
             <div className="text-xs text-eq-grey font-medium uppercase">Site</div>
-            <div className="text-eq-ink">{entry.site_name}</div>
+            {site?.id ? (
+              <Link
+                href={`/sites/${site.id}`}
+                className="text-eq-deep hover:text-eq-sky inline-flex items-center gap-1 group"
+              >
+                <span className="underline-offset-2 group-hover:underline">{entry.site_name}</span>
+                <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100" />
+              </Link>
+            ) : (
+              <div className="text-eq-ink">{entry.site_name}</div>
+            )}
           </div>
           <div>
             <div className="text-xs text-eq-grey font-medium uppercase">Location</div>

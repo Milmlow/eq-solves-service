@@ -11,6 +11,7 @@ import { SearchFilter } from '@/components/ui/SearchFilter'
 import { PmCalendarForm } from './PmCalendarForm'
 import { PmCalendarDetail } from './PmCalendarDetail'
 import { ClearFilteredDialog } from './ClearFilteredDialog'
+import { KpiBucketDrawer } from './KpiBucketDrawer'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import {
   seedPmCalendarAction,
@@ -29,7 +30,7 @@ import type { PmCalendarEntry, Site, PmCalendarCategory, AuFyQuarter } from '@/l
 import { formatSiteLabel } from '@/lib/utils/format'
 
 type SiteOption = Pick<Site, 'id' | 'name' | 'code' | 'address'> & {
-  customers?: { name?: string | null } | { name?: string | null }[] | null
+  customers?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null
 }
 
 type EntryRow = PmCalendarEntry & { site_name: string } & Record<string, unknown>
@@ -68,28 +69,33 @@ function CategoryBadge({ category }: { category: string }) {
 /**
  * Top-of-page summary card — a single number on a tinted background. Renders
  * the four timing buckets (Overdue / This Week / Looking Ahead / Completed)
- * so the user sees the headline counts before any filtering.
+ * so the user sees the headline counts before any filtering. When `onClick`
+ * is supplied (and count > 0) the card becomes a button that opens the
+ * KpiBucketDrawer with the entries in that bucket.
  */
 function StatusStripCard({
   label,
   count,
   tone,
   hint,
+  onClick,
 }: {
   label: string
   count: number
   tone: 'red' | 'amber' | 'blue' | 'green'
   hint?: string
+  onClick?: () => void
 }) {
-  const toneClasses: Record<typeof tone, { bar: string; text: string; bg: string }> = {
-    red:   { bar: 'bg-red-500',   text: 'text-red-700',   bg: 'bg-red-50/50 border-red-200/70' },
-    amber: { bar: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50/50 border-amber-200/70' },
-    blue:  { bar: 'bg-eq-sky',    text: 'text-eq-deep',   bg: 'bg-eq-ice/40 border-eq-sky/30' },
-    green: { bar: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-50/50 border-green-200/70' },
+  const toneClasses: Record<typeof tone, { bar: string; text: string; bg: string; hover: string }> = {
+    red:   { bar: 'bg-red-500',   text: 'text-red-700',   bg: 'bg-red-50/50 border-red-200/70',     hover: 'hover:bg-red-50' },
+    amber: { bar: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50/50 border-amber-200/70', hover: 'hover:bg-amber-50' },
+    blue:  { bar: 'bg-eq-sky',    text: 'text-eq-deep',   bg: 'bg-eq-ice/40 border-eq-sky/30',      hover: 'hover:bg-eq-ice/70' },
+    green: { bar: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-50/50 border-green-200/70', hover: 'hover:bg-green-50' },
   }
   const c = toneClasses[tone]
-  return (
-    <div className={`relative border rounded-lg overflow-hidden ${c.bg}`}>
+  const interactive = onClick && count > 0
+  const Body = (
+    <div className={`relative border rounded-lg overflow-hidden text-left w-full transition-colors ${c.bg} ${interactive ? c.hover : ''}`}>
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${c.bar}`} />
       <div className="px-4 py-3 pl-5">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-eq-grey">{label}</div>
@@ -98,6 +104,19 @@ function StatusStripCard({
       </div>
     </div>
   )
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-eq-sky rounded-lg"
+        aria-label={`Open ${label} entries`}
+      >
+        {Body}
+      </button>
+    )
+  }
+  return Body
 }
 
 function DigestStatusBadge({ status, error }: { status: SupervisorRunResult['status']; error?: string }) {
@@ -181,6 +200,7 @@ export function PmCalendarView({
   const [seeding, setSeeding] = useState(false)
   const [seedMsg, setSeedMsg] = useState<string | null>(null)
   const [clearOpen, setClearOpen] = useState(false)
+  const [bucketOpen, setBucketOpen] = useState<'overdue' | 'this_week' | 'looking_ahead' | 'completed' | null>(null)
 
   // Supervisor digest state
   const [digestBusy, setDigestBusy] = useState<'preview' | 'send' | null>(null)
@@ -463,23 +483,29 @@ export function PmCalendarView({
   // Sprint 4.2 (26-Apr): give site teams a single glance at "what should I be
   // worrying about" before they dig into months. Uses the same timingBucket
   // classifier as the list view so the numbers match across views.
-  const timingCounts = useMemo(() => {
-    let overdue = 0
-    let today = 0
-    let upcoming = 0
-    let completed = 0
+  const timingBuckets = useMemo(() => {
+    const overdue: EntryRow[] = []
+    const thisWeek: EntryRow[] = []
+    const lookingAhead: EntryRow[] = []
+    const completed: EntryRow[] = []
     for (const e of entries) {
       if (e.status === 'completed') {
-        completed += 1
+        completed.push(e)
         continue
       }
       const b = timingBucket(e.start_time, e.status)
-      if (b === 'overdue') overdue += 1
-      else if (b === 'today') today += 1
-      else if (b === 'upcoming') upcoming += 1
+      if (b === 'overdue') overdue.push(e)
+      else if (b === 'today' || b === 'upcoming') thisWeek.push(e)
+      else lookingAhead.push(e)
     }
-    return { overdue, today, upcoming, completed }
+    return { overdue, thisWeek, lookingAhead, completed }
   }, [entries])
+  const timingCounts = {
+    overdue: timingBuckets.overdue.length,
+    thisWeek: timingBuckets.thisWeek.length,
+    lookingAhead: timingBuckets.lookingAhead.length,
+    completed: timingBuckets.completed.length,
+  }
 
   return (
     <>
@@ -492,24 +518,28 @@ export function PmCalendarView({
           count={timingCounts.overdue}
           tone="red"
           hint="Past due, not completed"
+          onClick={() => setBucketOpen('overdue')}
         />
         <StatusStripCard
           label="This Week"
-          count={timingCounts.today + timingCounts.upcoming}
+          count={timingCounts.thisWeek}
           tone="amber"
           hint="Due in the next 7 days"
+          onClick={() => setBucketOpen('this_week')}
         />
         <StatusStripCard
           label="Looking Ahead"
-          count={Math.max(0, entries.length - timingCounts.overdue - timingCounts.today - timingCounts.upcoming - timingCounts.completed)}
+          count={timingCounts.lookingAhead}
           tone="blue"
           hint="Beyond next week"
+          onClick={() => setBucketOpen('looking_ahead')}
         />
         <StatusStripCard
           label="Completed"
           count={timingCounts.completed}
           tone="green"
           hint="Already done"
+          onClick={() => setBucketOpen('completed')}
         />
       </div>
 
@@ -816,6 +846,7 @@ export function PmCalendarView({
           isAdmin={isAdmin}
           canWrite={canWriteRole}
           onEdit={() => { setEditEntry(detailEntry); setDetailEntry(null) }}
+          site={detailEntry.site_id ? sites.find((s) => s.id === detailEntry.site_id) : null}
         />
       )}
 
@@ -825,6 +856,40 @@ export function PmCalendarView({
         onClose={() => setClearOpen(false)}
         ids={entries.map((e) => e.id)}
         filterSummary={buildFilterSummary(searchParams, sites, isAdmin && showArchived)}
+      />
+
+      {/* KPI Bucket drawers — open when a top-of-page tile is clicked */}
+      <KpiBucketDrawer
+        open={bucketOpen === 'overdue'}
+        onClose={() => setBucketOpen(null)}
+        label="Overdue"
+        description="Entries past their start time that haven't been marked completed."
+        entries={timingBuckets.overdue}
+        onEntryClick={(e) => { setBucketOpen(null); setDetailEntry(e as EntryRow) }}
+      />
+      <KpiBucketDrawer
+        open={bucketOpen === 'this_week'}
+        onClose={() => setBucketOpen(null)}
+        label="This Week"
+        description="Entries scheduled today or in the next 7 days."
+        entries={timingBuckets.thisWeek}
+        onEntryClick={(e) => { setBucketOpen(null); setDetailEntry(e as EntryRow) }}
+      />
+      <KpiBucketDrawer
+        open={bucketOpen === 'looking_ahead'}
+        onClose={() => setBucketOpen(null)}
+        label="Looking Ahead"
+        description="Entries scheduled beyond the next 7 days."
+        entries={timingBuckets.lookingAhead}
+        onEntryClick={(e) => { setBucketOpen(null); setDetailEntry(e as EntryRow) }}
+      />
+      <KpiBucketDrawer
+        open={bucketOpen === 'completed'}
+        onClose={() => setBucketOpen(null)}
+        label="Completed"
+        description="Entries marked as completed."
+        entries={timingBuckets.completed}
+        onEntryClick={(e) => { setBucketOpen(null); setDetailEntry(e as EntryRow) }}
       />
     </>
   )
