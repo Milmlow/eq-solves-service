@@ -495,7 +495,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
               <span className="text-sm font-medium text-eq-ink flex-1">
                 {selectedAssetIds.size} asset(s) selected
               </span>
-              <Button size="sm" onClick={handleBatchComplete} disabled={loading}>
+              <Button size="sm" onClick={handleBatchComplete} loading={loading}>
                 <CheckCheck className="w-4 h-4 mr-1" /> Complete {selectedAssetIds.size} Selected
               </Button>
               <Button size="sm" variant="secondary" onClick={() => setSelectedAssetIds(new Set())}>

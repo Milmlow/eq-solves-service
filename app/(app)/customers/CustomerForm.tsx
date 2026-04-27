@@ -274,8 +274,8 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
                 </div>
               ) : null}
               {logoFile && isEdit && (
-                <Button type="button" variant="secondary" size="sm" onClick={handleUploadLogo} disabled={uploading}>
-                  {uploading ? 'Uploading...' : 'Upload Logo'}
+                <Button type="button" variant="secondary" size="sm" onClick={handleUploadLogo} loading={uploading}>
+                  Upload Logo
                 </Button>
               )}
             </>

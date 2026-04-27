@@ -420,9 +420,9 @@ function Step1AssetCollection({ test, loading, setLoading, setError, onUpdate }:
       </div>
 
       <div className="flex gap-2 pt-2">
-        <Button onClick={handleSave} disabled={loading}>
+        <Button onClick={handleSave} loading={loading}>
           <Save className="w-4 h-4 mr-1" />
-          {loading ? 'Saving...' : 'Complete Asset Collection'}
+          Complete Asset Collection
         </Button>
       </div>
     </Card>
@@ -545,9 +545,9 @@ function Step2VisualFunctional({ test, readings, loading, setLoading, setError, 
       )}
 
       <div className="flex gap-2 pt-2">
-        <Button onClick={handleSave} disabled={loading}>
+        <Button onClick={handleSave} loading={loading}>
           <Save className="w-4 h-4 mr-1" />
-          {loading ? 'Saving...' : 'Complete Visual & Functional'}
+          Complete Visual & Functional
         </Button>
       </div>
     </Card>
@@ -780,9 +780,9 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
       </div>
 
       <div className="flex gap-2 pt-2">
-        <Button onClick={handleSave} disabled={loading}>
+        <Button onClick={handleSave} loading={loading}>
           <Zap className="w-4 h-4 mr-1" />
-          {loading ? 'Saving...' : 'Complete Electrical Testing'}
+          Complete Electrical Testing
         </Button>
       </div>
     </Card>
