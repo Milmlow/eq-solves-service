@@ -71,10 +71,14 @@ Configurable report template with section toggles (cover, overview, contents, su
 - DB columns added in migration `0031_report_settings_expansion`
 
 ## Job Plans
-- Job plans may be global (`site_id = null`) or site-specific
+- Job plans have three scope tiers (shown in the **Scope** column on `/job-plans`):
+  - **Site-scoped** — `site_id` set, plan applies to one site only
+  - **Customer-scoped** — `customer_id` set + `site_id` null, plan applies to all sites of that customer (e.g. JEMENA-SWB-MAINT). Added migration 0066.
+  - **Global** — both null, plan available everywhere in the tenant (the legacy default; all 47 SKS Equinix/Maximo plans are global)
 - Columns: code (Job Code), name (Job Plan e.g. E1.25), type (descriptive Name e.g. "Low Voltage Air Circuit Breaker")
-- Assets link via `assets.job_plan_id` → `job_plans.id`
+- Assets link via `assets.job_plan_id` → `job_plans.id` (1:1; an asset has one primary plan, but maintenance checks can be created against other plans too)
 - Toolbar: Items Register, Import, Export, Add Job Plan
+- `/job-plans` filters: search, customer, site
 
 ## Contract Scope
 - `/contract-scope` — tracks included/excluded scope items per customer per FY
@@ -88,8 +92,24 @@ Configurable report template with section toggles (cover, overview, contents, su
 - Month ordering: January to December (calendar year)
 
 ## Assets Page
-- Filterable by site and job plan (dropdown shows `name - type` e.g. "E1.25 - Low Voltage Air Circuit Breaker")
+- Filterable by customer, site, and job plan (dropdown shows `name - type` e.g. "E1.25 - Low Voltage Air Circuit Breaker")
 - Grouped view and table view with site-based grouping
+- Customer filter resolves to the customer's sites (joined through `sites.customer_id`); same logic in the page query and in the `get_assets_for_grouping` RPC (migration 0067)
+
+## Jemena NSW
+Customer onboarded April 2026 under SKS tenant — first non-Equinix customer, first use of the customer-scoped job plan tier.
+
+- **Customer ID:** `556f999a-2023-50e3-ab07-a90056333cfe` · code `JEMENA-NSW`
+- **16 sites** all in NSW with `JEM-XXX` codes (e.g. `JEM-NSY` North Sydney, `JEM-GRE` Greystanes). See `supabase/seeds/jemena-onboarding.sql` for full list.
+- **47 assets** across 5 types: Distribution Board, Main Switchboard, UPS Distribution Board, ESS Distribution Board, Generator. Each board has `assets.jemena_asset_id` (JM######) populated where Jemena has assigned a JM number, and `assets.expected_rcd_circuits` set for boards (used as Phase 1 RCD import QC). Total expected circuits across all boards: 611.
+- **Two customer-scoped job plans:**
+  - `JEMENA-SWB-MAINT` (Switchboard PPM, frequency `annual`) — 3 items: DB Maintenance, MSB Maintenance (N/A on sites without MSB), Thermographic FLIR. Technicians use N/A liberally — items don't apply equally to every board. Default plan for all 47 Jemena assets.
+  - `JEMENA-RCD-TEST` (RCD PPM, frequency `biannual`) — 2 items: RCD Time Test (annual, May visit only) and RCD Push Button Test (semi-annual, May + Nov). Per AS/NZS 3760. RCD checks are run as separate maintenance/test records; assets don't point to this plan via `job_plan_id`.
+- **6-monthly cycle** — May visit covers full SWB-MAINT + RCD time-trip + push-button. November visit is RCD push-button only (one item, runs semi-annual).
+- **Calendar:** 16 entries in `pm_calendar` for May 1–15 2026, category `RCD testing`, with SKS Job Code in the description.
+- **Phase 1 (post-May)** will add `rcd_tests` + `rcd_test_circuits` schema, `/testing/rcd` workflow, and an xlsx importer mirroring the 2025 Jemena RCD report template. Gotenberg/PDF report generator parked short-term — May cycle uses the existing field xlsx workflow.
+- **Sites missing data (per SOW review):** site contact name/mobile/after-hrs are null on all 16 sites (TO POPULATE on first visit); some assets missing JM numbers (acquired on-site).
+- **Subcontractor exclusions:** UPS PPM owned by Vertiv, generator 6-monthly by Cummins (note in calendar entry descriptions only — no scope flag on assets yet).
 
 ## Conventions
 - `requireUser()` at the top of every server action — resolves user, tenant, role
