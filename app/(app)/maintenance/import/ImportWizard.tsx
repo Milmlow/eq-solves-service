@@ -138,6 +138,20 @@ export function ImportWizard() {
     }
   }, [files])
 
+  // Map: group.key → source filename. Built alongside combinedPreview so the
+  // Preview sub-component can render a "from <file>" badge per group when
+  // there are 2+ files staged. Empty map = badges suppressed.
+  const sourceByGroupKey = useMemo(() => {
+    const m = new Map<string, string>()
+    if (files.length < 2) return m
+    for (const fe of files) {
+      const p = fe.preview
+      if (!p) continue
+      for (const g of p.groups) m.set(g.key, fe.file.name)
+    }
+    return m
+  }, [files])
+
   const allFilesParsed = files.length > 0 && files.every((f) => f.preview)
   const anyParseError = files.some((f) => f.parseError)
 
@@ -546,6 +560,7 @@ export function ImportWizard() {
       {combinedPreview && !commitResult && (
         <Preview
           preview={combinedPreview}
+          sourceByGroupKey={sourceByGroupKey}
           resolutions={resolutions}
           setResolution={setResolution}
           rowResolutions={rowResolutions}
@@ -571,6 +586,7 @@ function cryptoRandomId(): string {
 
 function Preview({
   preview,
+  sourceByGroupKey,
   resolutions,
   setResolution,
   rowResolutions,
@@ -579,6 +595,7 @@ function Preview({
   isCommitting,
 }: {
   preview: PreviewResult
+  sourceByGroupKey?: Map<string, string>
   resolutions: ResolutionsMap
   setResolution: (groupKey: string, resolution: GroupResolution | null) => void
   rowResolutions: RowResolutionsMap
@@ -866,6 +883,7 @@ function Preview({
             <GroupCard
               key={g.key}
               group={g}
+              sourceFilename={sourceByGroupKey?.get(g.key) ?? null}
               resolution={resolutions[g.key] ?? null}
               setResolution={(r) => setResolution(g.key, r)}
               plans={plans}
@@ -1001,6 +1019,7 @@ function CommitSuccess({
 
 function GroupCard({
   group,
+  sourceFilename,
   resolution,
   setResolution,
   plans,
@@ -1016,6 +1035,7 @@ function GroupCard({
   showOnlyReview,
 }: {
   group: PreviewGroup
+  sourceFilename?: string | null
   resolution: GroupResolution | null
   setResolution: (resolution: GroupResolution | null) => void
   plans: JobPlanOption[] | null
@@ -1096,6 +1116,18 @@ function GroupCard({
             </span>
             <span className="text-eq-grey">·</span>
             <span className="text-xs text-eq-grey">{group.startDate}</span>
+            {sourceFilename && (
+              <>
+                <span className="text-eq-grey">·</span>
+                <span
+                  className="inline-flex items-center gap-1 text-xs text-eq-grey font-normal"
+                  title={`Source: ${sourceFilename}`}
+                >
+                  <FileText className="w-3 h-3 shrink-0" />
+                  <span className="truncate max-w-[200px]">{sourceFilename}</span>
+                </span>
+              </>
+            )}
           </div>
           <div className="text-xs text-eq-grey mt-0.5">
             {group.assetCount} asset{group.assetCount === 1 ? '' : 's'}
