@@ -116,7 +116,7 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
             `customers-export-${new Date().toISOString().slice(0, 10)}`
           )} />
           {isAdmin && (
-            <Button onClick={openCreate}>Add Customer</Button>
+            <Button size="sm" onClick={openCreate}>Add Customer</Button>
           )}
         </div>
       </div>

@@ -83,8 +83,17 @@ export async function createPmCalendarAction(formData: FormData) {
   }
 }
 
+// Sentinel returned when an optimistic-concurrency check fails. The client
+// uses `stale: true` to trigger a "refreshing to show their changes" toast
+// and a router.refresh() instead of treating it as a generic error.
+const STALE_ERROR = 'STALE: this entry was changed by someone else.'
+
 // ===== UPDATE =====
-export async function updatePmCalendarAction(id: string, formData: FormData) {
+export async function updatePmCalendarAction(
+  id: string,
+  formData: FormData,
+  expectedUpdatedAt?: string | null,
+) {
   try {
     const { supabase, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
@@ -115,12 +124,19 @@ export async function updatePmCalendarAction(id: string, formData: FormData) {
       extra = { quarter, financial_year }
     }
 
-    const { error } = await supabase
+    let query = supabase
       .from('pm_calendar')
       .update({ ...parsed.data, ...extra })
       .eq('id', id)
+    if (expectedUpdatedAt) {
+      query = query.eq('updated_at', expectedUpdatedAt)
+    }
+    const { data, error } = await query.select('id')
 
     if (error) return { success: false, error: error.message }
+    if (expectedUpdatedAt && (!data || data.length === 0)) {
+      return { success: false, error: STALE_ERROR, stale: true as const }
+    }
 
     await logAuditEvent({ action: 'update', entityType: 'pm_calendar', entityId: id, summary: 'Updated PM calendar entry' })
     revalidatePath('/calendar')
@@ -131,17 +147,28 @@ export async function updatePmCalendarAction(id: string, formData: FormData) {
 }
 
 // ===== TOGGLE ACTIVE =====
-export async function togglePmCalendarActiveAction(id: string, active: boolean) {
+export async function togglePmCalendarActiveAction(
+  id: string,
+  active: boolean,
+  expectedUpdatedAt?: string | null,
+) {
   try {
     const { supabase, role } = await requireUser()
     if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
 
-    const { error } = await supabase
+    let query = supabase
       .from('pm_calendar')
       .update({ is_active: active })
       .eq('id', id)
+    if (expectedUpdatedAt) {
+      query = query.eq('updated_at', expectedUpdatedAt)
+    }
+    const { data, error } = await query.select('id')
 
     if (error) return { success: false, error: error.message }
+    if (expectedUpdatedAt && (!data || data.length === 0)) {
+      return { success: false, error: STALE_ERROR, stale: true as const }
+    }
 
     await logAuditEvent({
       action: active ? 'reactivate' : 'deactivate',
@@ -549,6 +576,128 @@ export async function sendSupervisorDigestNowAction(
 
     revalidatePath('/calendar')
     return { success: true, sent, skipped, errored, results }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+// ===== CLEAR FILTERED ENTRIES (bulk soft-delete) =====
+// Admin-only. Soft-deletes (is_active=false) every entry in the supplied id
+// list, after re-checking that the count matches what the user typed in the
+// confirm dialog (catches concurrent inserts between page render and click).
+export async function clearPmCalendarEntriesAction(
+  ids: string[],
+  expectedCount: number,
+) {
+  try {
+    const { supabase, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Admin only.' }
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return { success: false, error: 'No entries selected.' }
+    }
+    if (ids.length !== expectedCount) {
+      return {
+        success: false,
+        error: `Selection drift: dialog showed ${expectedCount} entries but ${ids.length} were submitted. Refresh and try again.`,
+      }
+    }
+    if (ids.length > 1000) {
+      return { success: false, error: 'Refusing to clear more than 1000 entries in one action.' }
+    }
+
+    const { error, count } = await supabase
+      .from('pm_calendar')
+      .update({ is_active: false }, { count: 'exact' })
+      .in('id', ids)
+      .eq('is_active', true)
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'bulk_deactivate',
+      entityType: 'pm_calendar',
+      summary: `Cleared ${count ?? ids.length} PM calendar entries via Clear filtered`,
+    })
+    revalidatePath('/calendar')
+    return { success: true, cleared: count ?? ids.length }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+// ===== MOVE ENTRY TO ANOTHER DAY (drag-and-drop) =====
+// Preserves time-of-day. Computes the day delta in Sydney wall-clock and
+// shifts both start_time and end_time by that exact ms delta — so a 09:00
+// entry stays a 09:00 entry on the new date (modulo rare DST boundary cases).
+export async function movePmCalendarEntryAction(
+  id: string,
+  newDate: string,
+  expectedUpdatedAt?: string | null,
+) {
+  try {
+    const { supabase, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      return { success: false, error: 'newDate must be YYYY-MM-DD.' }
+    }
+
+    const { data: existing, error: readErr } = await supabase
+      .from('pm_calendar')
+      .select('id, start_time, end_time, title, updated_at')
+      .eq('id', id)
+      .maybeSingle()
+    if (readErr) return { success: false, error: readErr.message }
+    if (!existing) return { success: false, error: 'Entry not found.' }
+    if (expectedUpdatedAt && existing.updated_at !== expectedUpdatedAt) {
+      return { success: false, error: STALE_ERROR, stale: true as const }
+    }
+
+    const oldStart = new Date(existing.start_time)
+    const oldDayKey = oldStart.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
+    if (oldDayKey === newDate) {
+      return { success: true, moved: false }
+    }
+
+    const [oy, om, od] = oldDayKey.split('-').map(Number)
+    const [ny, nm, nd] = newDate.split('-').map(Number)
+    const deltaMs = Date.UTC(ny, nm - 1, nd) - Date.UTC(oy, om - 1, od)
+
+    const newStartIso = new Date(oldStart.getTime() + deltaMs).toISOString()
+    const newEndIso = existing.end_time
+      ? new Date(new Date(existing.end_time).getTime() + deltaMs).toISOString()
+      : null
+
+    const { quarter, financial_year } = computeAuFyQuarter(newStartIso)
+
+    let updateQuery = supabase
+      .from('pm_calendar')
+      .update({
+        start_time: newStartIso,
+        end_time: newEndIso,
+        quarter,
+        financial_year,
+      })
+      .eq('id', id)
+    if (expectedUpdatedAt) {
+      updateQuery = updateQuery.eq('updated_at', expectedUpdatedAt)
+    }
+    const { data: moved, error } = await updateQuery.select('id')
+
+    if (error) return { success: false, error: error.message }
+    if (expectedUpdatedAt && (!moved || moved.length === 0)) {
+      return { success: false, error: STALE_ERROR, stale: true as const }
+    }
+
+    await logAuditEvent({
+      action: 'move',
+      entityType: 'pm_calendar',
+      entityId: id,
+      summary: `Moved "${existing.title}" from ${oldDayKey} to ${newDate}`,
+    })
+    revalidatePath('/calendar')
+    return { success: true, moved: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }

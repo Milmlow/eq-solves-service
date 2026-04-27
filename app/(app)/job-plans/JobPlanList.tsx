@@ -167,7 +167,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
             `job-plans-export-${new Date().toISOString().slice(0, 10)}`
           )} />
           {canWriteRole && (
-            <Button onClick={openCreate}>Add Job Plan</Button>
+            <Button size="sm" onClick={openCreate}>Add Job Plan</Button>
           )}
         </div>
       </div>

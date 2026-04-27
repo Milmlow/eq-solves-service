@@ -187,7 +187,7 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
             `sites-export-${new Date().toISOString().slice(0, 10)}`
           )} />
           {isAdmin && (
-            <Button onClick={openCreate}>Add Site</Button>
+            <Button size="sm" onClick={openCreate}>Add Site</Button>
           )}
         </div>
       </div>
