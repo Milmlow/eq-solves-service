@@ -41,6 +41,8 @@ interface PmCalendarViewProps {
   categories: string[]
   financialYears: string[]
   technicians: { id: string; email: string; full_name: string | null }[]
+  notificationRecipients: { email: string; name: string | null }[]
+  siteLocations: Record<string, string[]>
   page: number
   totalPages: number
   viewMode: 'list' | 'calendar' | 'quarterly'
@@ -189,6 +191,7 @@ const QUARTER_LABELS: Record<AuFyQuarter, string> = {
 
 export function PmCalendarView({
   entries, sites, categories, financialYears, technicians,
+  notificationRecipients, siteLocations,
   page, totalPages, viewMode, isAdmin, canWrite: canWriteRole,
 }: PmCalendarViewProps) {
   const router = useRouter()
@@ -824,6 +827,8 @@ export function PmCalendarView({
         sites={sites}
         categories={categories}
         technicians={technicians}
+        notificationRecipients={notificationRecipients}
+        siteLocations={siteLocations}
       />
 
       {editEntry && (
@@ -834,6 +839,8 @@ export function PmCalendarView({
           sites={sites}
           categories={categories}
           technicians={technicians}
+          notificationRecipients={notificationRecipients}
+          siteLocations={siteLocations}
         />
       )}
 
