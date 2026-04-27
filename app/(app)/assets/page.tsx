@@ -10,11 +10,12 @@ const ALLOWED_PER_PAGE = [25, 50, 100, 250]
 export default async function AssetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; asset_type?: string; job_plan_id?: string; page?: string; per_page?: string; show_archived?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; customer_id?: string; asset_type?: string; job_plan_id?: string; page?: string; per_page?: string; show_archived?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
+  const customerId = params.customer_id ?? ''
   const assetType = params.asset_type ?? ''
   const jobPlanId = params.job_plan_id ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
@@ -42,7 +43,14 @@ export default async function AssetsPage({
   // disambiguate duplicate site codes across customers)
   const { data: sites } = await supabase
     .from('sites')
-    .select('id, name, code, customers(name)')
+    .select('id, name, code, customer_id, customers(name)')
+    .eq('is_active', true)
+    .order('name')
+
+  // Fetch customers for the customer filter dropdown
+  const { data: customers } = await supabase
+    .from('customers')
+    .select('id, name')
     .eq('is_active', true)
     .order('name')
 
@@ -68,6 +76,17 @@ export default async function AssetsPage({
   }
   if (siteId) {
     query = query.eq('site_id', siteId)
+  }
+  if (customerId) {
+    const customerSiteIds = (sites ?? [])
+      .filter((s) => s.customer_id === customerId)
+      .map((s) => s.id)
+    if (customerSiteIds.length > 0) {
+      query = query.in('site_id', customerSiteIds)
+    } else {
+      // No sites for this customer — return zero rows.
+      query = query.eq('site_id', '00000000-0000-0000-0000-000000000000')
+    }
   }
   if (assetType) {
     query = query.eq('asset_type', assetType)
@@ -95,6 +114,7 @@ export default async function AssetsPage({
     p_site_id: siteId || null,
     p_asset_type: assetType || null,
     p_job_plan_id: jobPlanId || null,
+    p_customer_id: customerId || null,
   })
   const allAssets = (allAssetsJson ?? []) as unknown[]
 
@@ -115,6 +135,7 @@ export default async function AssetsPage({
         assets={(assets ?? []) as never}
         allAssets={(allAssets ?? []) as never}
         sites={sites ?? []}
+        customers={customers ?? []}
         assetTypes={assetTypes}
         allJobPlans={(allJobPlans ?? []) as { id: string; name: string; code: string | null; type: string | null }[]}
         page={page}

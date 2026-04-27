@@ -111,7 +111,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
         const r = row as JobPlanWithSite
         if (r.sites?.name) return r.sites.name
         if (r.customers?.name) return `All ${r.customers.name} sites`
-        return 'Tenant-global'
+        return 'Global'
       },
     },
     {
@@ -154,7 +154,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
             jobPlans.map(jp => ({
               ...jp,
               scope_label: jp.sites?.name
-                ?? (jp.customers?.name ? `All ${jp.customers.name} sites` : 'Tenant-global'),
+                ?? (jp.customers?.name ? `All ${jp.customers.name} sites` : 'Global'),
             })),
             [
               { key: 'code', header: 'Job Code' },

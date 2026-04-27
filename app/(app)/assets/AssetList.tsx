@@ -9,7 +9,7 @@ import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { AssetForm } from './AssetForm'
 import { ImportAssetsModal } from './ImportAssetsModal'
-import type { Asset, Site, JobPlan } from '@/lib/types'
+import type { Asset, Site, JobPlan, Customer } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
 import { cn } from '@/lib/utils/cn'
@@ -26,13 +26,17 @@ interface AssetWithSite extends Asset {
 
 type SiteOption = Pick<Site, 'id' | 'name'> & {
   code?: string | null
+  customer_id?: string | null
   customers?: { name?: string | null } | { name?: string | null }[] | null
 }
+
+type CustomerOption = Pick<Customer, 'id' | 'name'>
 
 interface AssetListProps {
   assets: AssetWithSite[]
   allAssets: AssetWithSite[]
   sites: SiteOption[]
+  customers: CustomerOption[]
   assetTypes: string[]
   allJobPlans: Pick<JobPlan, 'id' | 'name' | 'code' | 'type'>[]
   page: number
@@ -43,7 +47,7 @@ interface AssetListProps {
   canWrite: boolean
 }
 
-export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, page, totalPages, total, perPage, isAdmin, canWrite: canWriteRole }: AssetListProps) {
+export function AssetList({ assets, allAssets, sites, customers, assetTypes, allJobPlans, page, totalPages, total, perPage, isAdmin, canWrite: canWriteRole }: AssetListProps) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -112,6 +116,7 @@ export function AssetList({ assets, allAssets, sites, assetTypes, allJobPlans, p
         <SearchFilter
           placeholder="Search assets..."
           filters={[
+            { key: 'customer_id', label: 'All Customers', options: customers.map((c) => ({ value: c.id, label: c.name })) },
             { key: 'site_id', label: 'All Sites', options: siteFilterOptions },
             { key: 'job_plan_id', label: 'All Job Plans', options: jobPlanFilterOptions },
           ]}
