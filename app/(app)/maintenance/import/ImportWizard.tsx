@@ -16,11 +16,13 @@ import {
   SkipForward,
   Search,
   X,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import {
   previewDeltaImportAction,
   commitDeltaImportAction,
+  commitConsolidatedDeltaImportAction,
   listJobPlansForImportAction,
   listAssetsForSiteAction,
   type CommitSummary,
@@ -56,95 +58,304 @@ interface JobPlanOption {
 }
 
 /**
+ * One staged file in the wizard. Each file goes through its own preview
+ * call; results are combined client-side into a single virtual PreviewResult
+ * that the existing Preview sub-component renders unchanged.
+ */
+interface FileEntry {
+  id: string
+  file: File
+  preview: PreviewResult | null
+  parseError: string | null
+}
+
+/**
  * Delta WO import wizard.
  *
- * Step 1: choose file → call `previewDeltaImportAction`
- * Step 2: show preview — unresolved items, groups, per-asset detail
- * Step 3: (not yet wired) commit server action + redirect to /maintenance
+ * Step 1: choose one or more .xlsx files → call `previewDeltaImportAction`
+ *         per file (sequential), combine results into one preview view
+ * Step 2: show combined preview — unresolved items, groups, per-asset detail
+ * Step 3: commit per-file (sequential) — currently creates one
+ *         maintenance_check per file's groups. Phase 2 will add a
+ *         "Consolidate into one check" toggle that creates a single
+ *         multi-plan check spanning all files.
  */
 export function ImportWizard() {
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<PreviewResult | null>(null)
+  const [files, setFiles] = useState<FileEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [commitResult, setCommitResult] = useState<CommitSummary | null>(null)
   const [resolutions, setResolutions] = useState<ResolutionsMap>({})
   const [rowResolutions, setRowResolutions] = useState<RowResolutionsMap>({})
   const [isPending, startTransition] = useTransition()
   const [isCommitting, startCommit] = useTransition()
+  // Consolidation toggle — when on, all files commit into ONE check
+  // (job_plan_id null, custom_name). Defaults from same-site detection
+  // below: true when all files share a site, false + disabled otherwise.
+  const [consolidate, setConsolidate] = useState(true)
+  // User-editable name for the consolidated check. Auto-suggested from
+  // site + period + plan codes once the preview lands; user can edit.
+  const [consolidatedName, setConsolidatedName] = useState('')
+  // Has the user manually edited the name? If true, don't overwrite from
+  // the auto-suggester when groups change.
+  const [nameEdited, setNameEdited] = useState(false)
+
+  // Combined preview: aggregate all per-file PreviewResults into one virtual
+  // PreviewResult so the existing Preview sub-component renders all groups
+  // together. Available only when every staged file has a successful preview.
+  const combinedPreview: PreviewResult | null = useMemo(() => {
+    if (files.length === 0) return null
+    if (!files.every((f) => f.preview)) return null
+
+    const allGroups: PreviewGroup[] = []
+    const allParseErrors: { rowNumber: number; message: string }[] = []
+    const unresolvedSites = new Set<string>()
+    const unresolvedPlans = new Set<string>()
+    let totalRows = 0
+
+    for (const fe of files) {
+      const p = fe.preview
+      if (!p) continue
+      totalRows += p.parsedRowCount
+      for (const e of p.parseErrors) allParseErrors.push(e)
+      for (const c of p.unresolvedSiteCodes) unresolvedSites.add(c)
+      for (const c of p.unresolvedJobPlanCodes) unresolvedPlans.add(c)
+      // Group keys naturally partition by file because they include
+      // siteCode + jobPlanCode + frequencySuffix and each file is a
+      // single-classification Maximo export. No collision risk.
+      for (const g of p.groups) allGroups.push(g)
+    }
+
+    return {
+      success: true,
+      filename: files.length === 1 ? files[0].file.name : `${files.length} files`,
+      parsedRowCount: totalRows,
+      parseErrors: allParseErrors,
+      groups: allGroups,
+      unresolvedJobPlanCodes: Array.from(unresolvedPlans),
+      unresolvedSiteCodes: Array.from(unresolvedSites),
+    }
+  }, [files])
+
+  const allFilesParsed = files.length > 0 && files.every((f) => f.preview)
+  const anyParseError = files.some((f) => f.parseError)
+
+  // Same-site detection (used to enable/disable the Consolidate toggle).
+  const distinctSiteCodes = useMemo(() => {
+    const s = new Set<string>()
+    if (combinedPreview) for (const g of combinedPreview.groups) s.add(g.siteCode)
+    return s
+  }, [combinedPreview])
+  const sameSite = distinctSiteCodes.size === 1
+  const canConsolidate = allFilesParsed && sameSite && files.length > 1
+
+  // Auto-suggest consolidated check name from preview metadata.
+  const suggestedConsolidatedName = useMemo(() => {
+    if (!combinedPreview || combinedPreview.groups.length === 0) return ''
+    const siteCode = Array.from(distinctSiteCodes)[0] ?? ''
+    if (!siteCode) return ''
+    // Pick the earliest startDate across groups for the period label.
+    let earliest: Date | null = null
+    for (const g of combinedPreview.groups) {
+      const d = new Date(g.startDate)
+      if (!earliest || d < earliest) earliest = d
+    }
+    const period = earliest
+      ? earliest.toLocaleString('en-AU', { month: 'long', year: 'numeric' })
+      : ''
+    const planCodes = Array.from(
+      new Set(combinedPreview.groups.map((g) => g.jobPlanCode)),
+    ).slice(0, 6)
+    return `${siteCode} — ${period} — Combined: ${planCodes.join(', ')}`
+  }, [combinedPreview, distinctSiteCodes])
+
+  // Keep consolidatedName in sync with suggestion until user edits.
+  useEffect(() => {
+    if (!nameEdited && suggestedConsolidatedName) {
+      setConsolidatedName(suggestedConsolidatedName)
+    }
+  }, [suggestedConsolidatedName, nameEdited])
+
+  // When same-site flips false (mixed sites), force consolidate off and disable.
+  useEffect(() => {
+    if (!sameSite && consolidate) setConsolidate(false)
+  }, [sameSite, consolidate])
 
   function handleChoose(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = e.target.files?.[0] ?? null
-    setFile(picked)
-    setPreview(null)
+    const picked = Array.from(e.target.files ?? [])
+    if (picked.length === 0) return
+    const newEntries: FileEntry[] = picked.map((f) => ({
+      id: cryptoRandomId(),
+      file: f,
+      preview: null,
+      parseError: null,
+    }))
+    setFiles((prev) => [...prev, ...newEntries])
     setError(null)
     setCommitResult(null)
     setResolutions({})
     setRowResolutions({})
+    if (fileInput.current) fileInput.current.value = ''
+  }
+
+  function removeFile(id: string) {
+    setFiles((prev) => prev.filter((f) => f.id !== id))
+    // Resolutions are keyed by group.key — when files change, drop them all
+    // rather than try to figure out which keys belonged to which file.
+    setResolutions({})
+    setRowResolutions({})
+    setCommitResult(null)
+    setError(null)
   }
 
   function handlePreview() {
-    if (!file) return
+    if (files.length === 0) return
     setError(null)
     setCommitResult(null)
     setResolutions({})
     setRowResolutions({})
     analyticsEvents.deltaImportStarted()
     startTransition(async () => {
-      const fd = new FormData()
-      fd.append('file', file)
-      const result = await previewDeltaImportAction(fd)
-      if (!result.success) {
-        setError(result.error)
-        setPreview(null)
-        return
+      // Sequential parse — each file independently. Cheaper to debug than
+      // Promise.all and the parse cost is low (Maximo exports are small).
+      const updated: FileEntry[] = []
+      for (const fe of files) {
+        const fd = new FormData()
+        fd.append('file', fe.file)
+        const result = await previewDeltaImportAction(fd)
+        if (!result.success) {
+          updated.push({ ...fe, preview: null, parseError: result.error })
+        } else {
+          updated.push({ ...fe, preview: result, parseError: null })
+        }
       }
-      setPreview(result)
+      setFiles(updated)
     })
   }
 
   function handleCommit() {
-    if (!file) return
+    if (!combinedPreview) return
     setError(null)
-    startCommit(async () => {
-      const fd = new FormData()
-      fd.append('file', file)
-      // Only send non-empty resolutions to keep the payload small.
-      if (Object.keys(resolutions).length > 0) {
-        fd.append('resolutions', JSON.stringify(resolutions))
-      }
-      if (Object.keys(rowResolutions).length > 0) {
-        fd.append('rowResolutions', JSON.stringify(rowResolutions))
-      }
-      // Generate an idempotency key scoped to this commit attempt. A client
-      // retry inside the same tab reuses the same id — safe replay.
-      const mutationId = cryptoRandomId()
-      const result = await commitDeltaImportAction(fd, mutationId)
-      if (!result.success) {
-        setError(result.error)
+
+    // Branch: consolidate path → single new server action with ALL files.
+    // Separate path → existing per-file loop.
+    if (consolidate && canConsolidate) {
+      if (!consolidatedName.trim()) {
+        setError('Please enter a name for the consolidated check.')
         return
       }
-      setCommitResult(result.data ?? null)
-      const summary = result.data
-      if (summary) {
-        analyticsEvents.deltaImportCommitted({
-          rows_linked: summary.rowsLinked ?? 0,
-          rows_created: summary.rowsCreated ?? 0,
-          rows_skipped: summary.rowsSkipped ?? 0,
-        })
+      startCommit(async () => {
+        const fd = new FormData()
+        files.forEach((fe, idx) => fd.append(`file_${idx}`, fe.file))
+        fd.append('customName', consolidatedName.trim())
+        if (Object.keys(resolutions).length > 0) {
+          fd.append('resolutions', JSON.stringify(resolutions))
+        }
+        if (Object.keys(rowResolutions).length > 0) {
+          fd.append('rowResolutions', JSON.stringify(rowResolutions))
+        }
+        const mutationId = cryptoRandomId()
+        const result = await commitConsolidatedDeltaImportAction(fd, mutationId)
+        if (!result.success) {
+          setError(result.error)
+          return
+        }
+        const summary = result.data
+        if (summary) {
+          setCommitResult(summary)
+          analyticsEvents.deltaImportCommitted({
+            rows_linked: summary.rowsLinked ?? 0,
+            rows_created: summary.rowsCreated ?? 0,
+            rows_skipped: summary.rowsSkipped ?? 0,
+          })
+        }
+        router.refresh()
+      })
+      return
+    }
+
+    // Separate path: aggregate summary across per-file commits.
+    startCommit(async () => {
+      const aggregate: CommitSummary = {
+        checksCreated: 0,
+        checkAssetsCreated: 0,
+        checkItemsCreated: 0,
+        rowsLinked: 0,
+        rowsCreated: 0,
+        rowsSkipped: 0,
+        groupsCreated: [],
+      }
+      const errors: string[] = []
+
+      for (const fe of files) {
+        const p = fe.preview
+        if (!p) continue
+
+        // Filter resolutions to keys that belong to this file's groups so
+        // the per-file commit only sees its own resolutions.
+        const fileGroupKeys = new Set(p.groups.map((g) => g.key))
+        const fileResolutions: ResolutionsMap = {}
+        for (const [k, v] of Object.entries(resolutions)) {
+          if (fileGroupKeys.has(k)) fileResolutions[k] = v
+        }
+        const fileRowResolutions: RowResolutionsMap = {}
+        for (const [k, v] of Object.entries(rowResolutions)) {
+          // Row resolution keys are `${groupKey}:${rowNumber}`.
+          const groupKey = k.split(':')[0]
+          if (groupKey && fileGroupKeys.has(groupKey)) fileRowResolutions[k] = v
+        }
+
+        const fd = new FormData()
+        fd.append('file', fe.file)
+        if (Object.keys(fileResolutions).length > 0) {
+          fd.append('resolutions', JSON.stringify(fileResolutions))
+        }
+        if (Object.keys(fileRowResolutions).length > 0) {
+          fd.append('rowResolutions', JSON.stringify(fileRowResolutions))
+        }
+        const mutationId = cryptoRandomId()
+        const result = await commitDeltaImportAction(fd, mutationId)
+        if (!result.success) {
+          errors.push(`${fe.file.name}: ${result.error}`)
+          continue
+        }
+        const summary = result.data
+        if (summary) {
+          aggregate.checksCreated += summary.checksCreated
+          aggregate.checkAssetsCreated += summary.checkAssetsCreated
+          aggregate.checkItemsCreated += summary.checkItemsCreated
+          aggregate.rowsLinked += summary.rowsLinked
+          aggregate.rowsCreated += summary.rowsCreated
+          aggregate.rowsSkipped += summary.rowsSkipped
+          aggregate.groupsCreated.push(...summary.groupsCreated)
+          analyticsEvents.deltaImportCommitted({
+            rows_linked: summary.rowsLinked ?? 0,
+            rows_created: summary.rowsCreated ?? 0,
+            rows_skipped: summary.rowsSkipped ?? 0,
+          })
+        }
+      }
+
+      if (errors.length > 0) {
+        setError(`${errors.length} file(s) failed: ${errors.join('; ')}`)
+      }
+      if (aggregate.checksCreated > 0) {
+        setCommitResult(aggregate)
       }
       router.refresh()
     })
   }
 
   function handleReset() {
-    setFile(null)
-    setPreview(null)
+    setFiles([])
     setError(null)
     setCommitResult(null)
     setResolutions({})
     setRowResolutions({})
+    setConsolidate(true)
+    setConsolidatedName('')
+    setNameEdited(false)
     if (fileInput.current) fileInput.current.value = ''
   }
 
@@ -177,6 +388,7 @@ export function ImportWizard() {
             ref={fileInput}
             type="file"
             accept=".xlsx"
+            multiple
             onChange={handleChoose}
             className="hidden"
           />
@@ -186,28 +398,77 @@ export function ImportWizard() {
             onClick={() => fileInput.current?.click()}
           >
             <Upload className="w-4 h-4 mr-1.5" />
-            {file ? 'Change file' : 'Choose .xlsx'}
+            {files.length > 0 ? 'Add more files' : 'Choose .xlsx file(s)'}
           </Button>
 
-          {file && (
-            <div className="flex items-center gap-2 text-sm text-eq-ink">
-              <FileText className="w-4 h-4 text-eq-sky" />
-              <span className="font-medium">{file.name}</span>
-              <span className="text-eq-grey">({formatBytes(file.size)})</span>
-            </div>
-          )}
-
           <div className="ml-auto flex items-center gap-2">
-            {preview && (
+            {(combinedPreview || commitResult || files.length > 0) && (
               <Button variant="secondary" size="sm" onClick={handleReset}>
                 Start over
               </Button>
             )}
-            <Button size="sm" disabled={!file || isPending} onClick={handlePreview}>
-              {isPending ? 'Parsing…' : preview ? 'Re-parse' : 'Preview'}
+            <Button
+              size="sm"
+              disabled={files.length === 0 || isPending}
+              onClick={handlePreview}
+            >
+              {isPending ? 'Parsing…' : allFilesParsed ? 'Re-parse all' : `Preview ${files.length} file${files.length === 1 ? '' : 's'}`}
             </Button>
           </div>
         </div>
+
+        {/* Stage list — one row per file */}
+        {files.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {files.map((fe) => (
+              <div
+                key={fe.id}
+                className="flex items-center gap-2 text-sm py-1.5 px-2 rounded-md hover:bg-gray-50 group"
+              >
+                <FileText className="w-4 h-4 text-eq-sky shrink-0" />
+                <span className="font-medium text-eq-ink truncate">{fe.file.name}</span>
+                <span className="text-xs text-eq-grey shrink-0">({formatBytes(fe.file.size)})</span>
+                <div className="ml-auto flex items-center gap-2 shrink-0">
+                  {isPending && !fe.preview && !fe.parseError && (
+                    <Loader2 className="w-3.5 h-3.5 text-eq-grey animate-spin" />
+                  )}
+                  {fe.preview && (
+                    <span className="inline-flex items-center gap-1 text-xs text-green-700">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {fe.preview.parsedRowCount} row{fe.preview.parsedRowCount === 1 ? '' : 's'}
+                    </span>
+                  )}
+                  {fe.parseError && (
+                    <span
+                      className="inline-flex items-center gap-1 text-xs text-red-700"
+                      title={fe.parseError}
+                    >
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Parse error
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeFile(fe.id)}
+                    className="text-eq-grey hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label={`Remove ${fe.file.name}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {anyParseError && (
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-md p-3 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800">
+              One or more files failed to parse — hover the error badge for detail, or remove the file and continue.
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="mt-3 bg-red-50 border border-red-200 rounded-md p-3 flex items-start gap-2">
@@ -217,15 +478,74 @@ export function ImportWizard() {
         )}
       </div>
 
+      {/* Consolidate-into-one-check toggle (Phase 2) */}
+      {combinedPreview && combinedPreview.groups.length > 0 && !commitResult && files.length > 1 && (
+        <div className="border border-gray-200 rounded-lg bg-white p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <input
+              id="consolidate-toggle"
+              type="checkbox"
+              checked={consolidate && canConsolidate}
+              disabled={!canConsolidate}
+              onChange={(e) => setConsolidate(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-eq-sky focus:ring-eq-sky disabled:opacity-50"
+            />
+            <div className="flex-1">
+              <label
+                htmlFor="consolidate-toggle"
+                className={`text-sm font-medium ${canConsolidate ? 'text-eq-ink cursor-pointer' : 'text-eq-grey'}`}
+              >
+                Consolidate {files.length} files into one check
+              </label>
+              <p className="text-xs text-eq-grey mt-0.5">
+                {canConsolidate
+                  ? 'Creates a single maintenance check covering all work orders across these files. Each asset still gets its job-plan-specific tasks.'
+                  : !sameSite
+                    ? `Disabled — files target different sites (${Array.from(distinctSiteCodes).join(', ')}). Consolidation requires one site.`
+                    : 'Disabled — only one file uploaded.'}
+              </p>
+            </div>
+          </div>
+
+          {consolidate && canConsolidate && (
+            <div className="ml-7">
+              <label htmlFor="consolidated-name" className="block text-xs font-medium text-eq-ink mb-1">
+                Consolidated check name
+              </label>
+              <input
+                id="consolidated-name"
+                type="text"
+                value={consolidatedName}
+                onChange={(e) => {
+                  setConsolidatedName(e.target.value)
+                  setNameEdited(true)
+                }}
+                placeholder={suggestedConsolidatedName}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-eq-sky"
+              />
+              {nameEdited && (
+                <button
+                  type="button"
+                  onClick={() => { setNameEdited(false); setConsolidatedName(suggestedConsolidatedName) }}
+                  className="text-xs text-eq-sky hover:underline mt-1"
+                >
+                  Reset to suggested
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Commit result takes precedence over preview */}
       {commitResult && (
         <CommitSuccess summary={commitResult} onDone={handleReset} />
       )}
 
-      {/* Preview */}
-      {preview && !commitResult && (
+      {/* Preview — combined across all staged files */}
+      {combinedPreview && !commitResult && (
         <Preview
-          preview={preview}
+          preview={combinedPreview}
           resolutions={resolutions}
           setResolution={setResolution}
           rowResolutions={rowResolutions}

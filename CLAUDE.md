@@ -96,6 +96,13 @@ Configurable report template with section toggles (cover, overview, contents, su
 - Grouped view and table view with site-based grouping
 - Customer filter resolves to the customer's sites (joined through `sites.customer_id`); same logic in the page query and in the `get_assets_for_grouping` RPC (migration 0067)
 
+## Maintenance Import (Delta / Maximo)
+- `/maintenance/import` — wizard for the monthly Equinix Delta WO export (`.xlsx`)
+- Accepts **multiple files in one upload pass** (Phase 1, PR #4) — stage list shows each file with its parse status + remove button; per-file preview/commit happens sequentially with a combined preview view
+- **Consolidate toggle** (Phase 2, PR #5) — when ≥2 files for the same site are staged, a single switch merges them into ONE `maintenance_check` (`job_plan_id = NULL`, user-supplied `custom_name`) covering all files' work orders. Each `check_asset` still derives its own `check_items` from its underlying job plan, so per-asset task fidelity is preserved.
+- **Locked behaviours:** consolidated frequency = most common across resolved groups (ties → earliest); same WO# across files = hard error before any write; mixed-site upload = consolidate disabled with explanatory warning.
+- Two server actions: `commitDeltaImportAction` (single file, unchanged) and `commitConsolidatedDeltaImportAction` (multi-file → 1 check). Wizard branches on the toggle.
+
 ## Jemena NSW
 Customer onboarded April 2026 under SKS tenant — first non-Equinix customer, first use of the customer-scoped job plan tier.
 
