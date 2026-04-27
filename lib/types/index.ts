@@ -209,6 +209,7 @@ export interface Asset {
   expected_rcd_circuits: number | null
   install_date: string | null
   location: string | null
+  building: string | null
   job_plan_id: string | null
   dark_site_test: boolean
   is_active: boolean
@@ -276,6 +277,11 @@ export interface MaintenanceCheck {
   started_at: string | null
   completed_at: string | null
   notes: string | null
+  signature_technician_url: string | null
+  signature_site_url: string | null
+  signature_initials: string | null
+  gps_lat: number | null
+  gps_lng: number | null
   created_at: string
   updated_at: string
 }
