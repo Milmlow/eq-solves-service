@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
-import { updateTenantSettingsAction, uploadLogoAction } from './actions'
+import { MediaPicker } from '@/components/ui/MediaPicker'
+import { updateTenantSettingsAction } from './actions'
 import { extractColoursFromImage } from '@/lib/utils/extract-colours'
 import type { TenantSettings } from '@/lib/types'
-import { Upload, Wand2, RotateCcw } from 'lucide-react'
+import { Wand2, RotateCcw } from 'lucide-react'
 
 const DEFAULT_COLOURS = {
   primary: '#3DA8D8',
@@ -30,16 +31,14 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
   const [ice, setIce] = useState(settings.ice_colour)
   const [ink, setInk] = useState(settings.ink_colour)
 
-  // Logo
+  // Logos — picked from Media Library (single source of truth).
+  // Uploads happen in Admin → Media Library; this form just references.
   const [logoUrl, setLogoUrl] = useState(settings.logo_url ?? '')
   const [logoUrlOnDark, setLogoUrlOnDark] = useState(
     (settings as unknown as { logo_url_on_dark?: string | null }).logo_url_on_dark ?? '',
   )
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
   const [extracting, setExtracting] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [extractError, setExtractError] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -48,7 +47,6 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     setLoading(true)
 
     const formData = new FormData(e.currentTarget)
-    // Ensure logo URLs are current
     formData.set('logo_url', logoUrl)
     formData.set('logo_url_on_dark', logoUrlOnDark)
     const result = await updateTenantSettingsAction(formData)
@@ -61,42 +59,14 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     }
   }
 
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setLogoFile(file)
-    setUploading(true)
-    setUploadError(null)
-
-    const formData = new FormData()
-    formData.append('logo', file)
-    const result = await uploadLogoAction(formData)
-
-    setUploading(false)
-    if (result.success && result.url) {
-      setLogoUrl(result.url)
-      // Auto-extract colours from the just-uploaded file
-      setExtracting(true)
-      const colours = await extractColoursFromImage(file)
-      setExtracting(false)
-      if (colours) {
-        setPrimary(colours.primary)
-        setDeep(colours.deep)
-        setIce(colours.ice)
-        setInk(colours.ink)
-      }
-    } else {
-      setUploadError(result.error ?? 'Upload failed.')
-    }
-  }
-
   async function handleExtractColours() {
-    if (!logoUrl && !logoFile) return
+    if (!logoUrl) {
+      setExtractError('Pick a logo from Media Library first.')
+      return
+    }
+    setExtractError(null)
     setExtracting(true)
-    // Prefer the local file (avoids CORS), fall back to URL
-    const source = logoFile ?? logoUrl
-    const colours = await extractColoursFromImage(source)
+    const colours = await extractColoursFromImage(logoUrl)
     setExtracting(false)
     if (colours) {
       setPrimary(colours.primary)
@@ -104,7 +74,7 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
       setIce(colours.ice)
       setInk(colours.ink)
     } else {
-      setUploadError('Could not extract colours. Try uploading the logo directly.')
+      setExtractError('Could not extract colours from this logo.')
     }
   }
 
@@ -129,101 +99,64 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
             placeholder="e.g. EQ Solves"
           />
 
-          {/* Logo Upload */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Logo</label>
-            <div className="flex items-start gap-4">
-              {/* Preview */}
-              <div className="w-24 h-24 border border-gray-200 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden shrink-0">
-                {logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoUrl} alt="Logo" className="max-w-full max-h-full object-contain" />
-                ) : (
-                  <span className="text-xs text-eq-grey">No logo</span>
-                )}
-              </div>
-              <div className="space-y-2 flex-1">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                  onChange={handleLogoUpload}
-                  className="hidden"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                  >
-                    <Upload className="w-4 h-4 mr-1" />
-                    {uploading ? 'Uploading...' : 'Upload Logo'}
-                  </Button>
-                  {(logoUrl || logoFile) && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleExtractColours}
-                      disabled={extracting}
-                    >
-                      <Wand2 className="w-4 h-4 mr-1" />
-                      {extracting ? 'Extracting...' : 'Extract Colours'}
-                    </Button>
-                  )}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRestoreDefaults}
-                  >
-                    <RotateCcw className="w-4 h-4 mr-1" />
-                    Restore Defaults
-                  </Button>
-                </div>
-                <p className="text-xs text-eq-grey">PNG, JPEG, SVG or WebP. Max 2MB.</p>
-                {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
-                <FormInput
-                  label="Or enter URL"
-                  name="logo_url_display"
-                  value={logoUrl}
-                  onChange={(e) => setLogoUrl(e.target.value)}
-                  placeholder="https://example.com/logo.svg"
-                />
-              </div>
-            </div>
-          </div>
-          {/* Hidden input for form submission */}
-          <input type="hidden" name="logo_url" value={logoUrl} />
+          {/* Light-surface logo — single source of truth: Media Library.
+              Upload via Admin → Media Library, then pick here. */}
+          <MediaPicker
+            label="Logo (Light Surface)"
+            value={logoUrl || null}
+            onChange={(url) => setLogoUrl(url ?? '')}
+            category="report_image"
+            surface="light"
+            previewBackground="light"
+            placeholder="Select tenant logo from Media Library…"
+          />
+          <p className="text-xs text-eq-grey -mt-2">
+            Used in headers, body sections, and email signatures.
+            Upload variants via Admin → Media Library.
+          </p>
 
           {/* Dark-surface logo variant */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Logo on Dark Surfaces</label>
-            <div className="flex items-start gap-4">
-              {/* Preview */}
-              <div className="w-24 h-24 border border-gray-200 rounded-lg flex items-center justify-center bg-eq-ink overflow-hidden shrink-0">
-                {logoUrlOnDark ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoUrlOnDark} alt="Dark-surface logo" className="max-w-full max-h-full object-contain p-1" />
-                ) : (
-                  <span className="text-xs text-white/50">No dark logo</span>
-                )}
-              </div>
-              <div className="space-y-2 flex-1">
-                <FormInput
-                  label="URL"
-                  name="logo_url_on_dark_display"
-                  value={logoUrlOnDark}
-                  onChange={(e) => setLogoUrlOnDark(e.target.value)}
-                  placeholder="https://example.com/logo-white.svg"
-                />
-                <p className="text-xs text-eq-grey">Used on report covers and dark banners. Leave empty to fall back to the light logo. Upload variants via Admin → Media Library.</p>
-              </div>
-            </div>
-          </div>
+          <MediaPicker
+            label="Logo on Dark Surfaces"
+            value={logoUrlOnDark || null}
+            onChange={(url) => setLogoUrlOnDark(url ?? '')}
+            category="report_image"
+            surface="dark"
+            previewBackground="dark"
+            placeholder="Select dark-surface logo from Media Library…"
+          />
+          <p className="text-xs text-eq-grey -mt-2">
+            Used on report covers and dark banners. Leave empty to fall back
+            to the light logo.
+          </p>
+
+          {/* Hidden inputs for form submission */}
+          <input type="hidden" name="logo_url" value={logoUrl} />
           <input type="hidden" name="logo_url_on_dark" value={logoUrlOnDark} />
+
+          {/* Extract / Restore actions */}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleExtractColours}
+              disabled={extracting || !logoUrl}
+            >
+              <Wand2 className="w-4 h-4 mr-1" />
+              {extracting ? 'Extracting…' : 'Extract Colours from Logo'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleRestoreDefaults}
+            >
+              <RotateCcw className="w-4 h-4 mr-1" />
+              Restore Defaults
+            </Button>
+          </div>
+          {extractError && <p className="text-xs text-red-500">{extractError}</p>}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
