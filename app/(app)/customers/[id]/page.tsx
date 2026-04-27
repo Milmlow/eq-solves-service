@@ -7,6 +7,7 @@ import { isAdmin as checkIsAdmin } from '@/lib/utils/roles'
 import type { Customer, CustomerContact, Site, Role } from '@/lib/types'
 import { CustomerContacts } from './CustomerContacts'
 import { CustomerSitesTable } from './CustomerSitesTable'
+import { CustomerDangerZone } from './CustomerDangerZone'
 
 export default async function CustomerDetailPage({
   params,
@@ -166,6 +167,15 @@ export default async function CustomerDetailPage({
         <h2 className="text-lg font-bold text-eq-ink mb-3">Sites</h2>
         <CustomerSitesTable sites={sitesData} />
       </div>
+
+      {/* Danger Zone — admin only */}
+      {userIsAdmin && (
+        <CustomerDangerZone
+          customerId={customer.id}
+          customerName={customer.name}
+          isActive={customer.is_active}
+        />
+      )}
     </div>
   )
 }
