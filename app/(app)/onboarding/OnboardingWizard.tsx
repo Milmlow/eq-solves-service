@@ -129,9 +129,9 @@ export function OnboardingWizard({ userName, companyName }: OnboardingWizardProp
                 <button type="button" onClick={handleSkip} className="text-xs text-eq-grey hover:text-eq-ink transition-colors">
                   Skip setup for now
                 </button>
-                <Button type="submit" disabled={loading}>
-                  {loading ? 'Saving...' : 'Next'}
-                  {!loading && <ChevronRight className="w-4 h-4 ml-1" />}
+                <Button type="submit" loading={loading}>
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             </form>
@@ -160,9 +160,9 @@ export function OnboardingWizard({ userName, companyName }: OnboardingWizardProp
                 <button type="button" onClick={() => setStep(2)} className="text-xs text-eq-grey hover:text-eq-ink transition-colors">
                   Skip this step
                 </button>
-                <Button type="submit" disabled={loading}>
-                  {loading ? 'Creating...' : 'Create Site'}
-                  {!loading && <ChevronRight className="w-4 h-4 ml-1" />}
+                <Button type="submit" loading={loading}>
+                  Create Site
+                  <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             </form>

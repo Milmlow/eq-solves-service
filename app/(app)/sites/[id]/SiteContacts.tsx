@@ -99,8 +99,8 @@ export function SiteContacts({ siteId, contacts, isAdmin }: SiteContactsProps) {
             </label>
             {error && <p className="text-sm text-red-500">{error}</p>}
             <div className="flex items-center gap-2">
-              <Button type="submit" size="sm" disabled={loading}>
-                {loading ? 'Saving...' : editing ? 'Update' : 'Add'}
+              <Button type="submit" size="sm" loading={loading}>
+                {editing ? 'Update' : 'Add'}
               </Button>
               <Button type="button" variant="secondary" size="sm" onClick={cancelForm}>Cancel</Button>
             </div>

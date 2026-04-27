@@ -205,8 +205,8 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : isEdit ? 'Update Site' : 'Create Site'}
+          <Button type="submit" loading={loading}>
+            {isEdit ? 'Update Site' : 'Create Site'}
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel

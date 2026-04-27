@@ -170,8 +170,8 @@ export function TestRecordForm({ open, onClose, record, assets, sites, technicia
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : isEdit ? 'Update Record' : 'Create Record'}
+          <Button type="submit" loading={loading}>
+            {isEdit ? 'Update Record' : 'Create Record'}
           </Button>
           <Button type="button" variant="secondary" onClick={handleClose}>
             Cancel

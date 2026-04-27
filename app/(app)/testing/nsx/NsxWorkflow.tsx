@@ -397,8 +397,8 @@ function Step1AssetCollection({
         </div>
 
         <div className="flex gap-2 pt-2 border-t border-gray-100">
-          <Button type="submit" disabled={pending}>
-            {pending ? 'Saving…' : 'Save Collection'}
+          <Button type="submit" loading={pending}>
+            Save Collection
           </Button>
           <Button type="button" variant="secondary" onClick={onMarkComplete} disabled={pending}>
             Mark Step Complete

@@ -247,8 +247,8 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
       {error && <p className="text-sm text-red-500">{error}</p>}
       {success && <p className="text-sm text-green-600">Settings saved. Reload to see colour changes across the app.</p>}
 
-      <Button type="submit" disabled={loading}>
-        {loading ? 'Saving...' : 'Save Settings'}
+      <Button type="submit" loading={loading}>
+        Save Settings
       </Button>
     </form>
   )

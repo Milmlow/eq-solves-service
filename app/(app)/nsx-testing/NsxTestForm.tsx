@@ -176,8 +176,8 @@ export function NsxTestForm({ open, onClose, test, assets, sites, technicians }:
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : isEdit ? 'Update Test' : 'Create Test'}
+          <Button type="submit" loading={loading}>
+            {isEdit ? 'Update Test' : 'Create Test'}
           </Button>
           <Button type="button" variant="secondary" onClick={handleClose}>
             Cancel

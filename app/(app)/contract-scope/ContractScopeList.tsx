@@ -306,7 +306,7 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
             <div className="flex items-center gap-2">
-              <Button type="submit" size="sm" disabled={loading}>{loading ? 'Saving...' : editing ? 'Update' : 'Add Item'}</Button>
+              <Button type="submit" size="sm" loading={loading}>{editing ? 'Update' : 'Add Item'}</Button>
               <Button type="button" variant="secondary" size="sm" onClick={cancelForm}>Cancel</Button>
             </div>
           </form>

@@ -424,8 +424,8 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
         {success && <p id="create-check-success" className="text-sm text-green-600">Check created successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading || (!siteId || !frequency)}>
-            {loading ? 'Creating...' : 'Create Check'}
+          <Button type="submit" loading={loading} disabled={!siteId || !frequency}>
+            Create Check
           </Button>
           <Button type="button" variant="secondary" onClick={handleClose}>
             Cancel

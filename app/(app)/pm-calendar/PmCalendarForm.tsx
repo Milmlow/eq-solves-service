@@ -222,8 +222,8 @@ export function PmCalendarForm({ open, onClose, entry, sites, categories, techni
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : isEdit ? 'Update Entry' : 'Create Entry'}
+          <Button type="submit" loading={loading}>
+            {isEdit ? 'Update Entry' : 'Create Entry'}
           </Button>
           <Button type="button" variant="secondary" onClick={handleClose}>Cancel</Button>
         </div>
