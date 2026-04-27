@@ -6,6 +6,7 @@ import { canWrite, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import { createNotification } from '@/lib/actions/notifications'
+import { firstRow } from '@/lib/db/relation'
 import {
   CreateMaintenanceCheckSchema,
   UpdateMaintenanceCheckSchema,
@@ -129,7 +130,7 @@ export async function previewCheckAssetsAction(
         name: a.name,
         maximo_id: a.maximo_id,
         location: a.location,
-        job_plan_name: (a.job_plans as unknown as { name: string; code: string | null } | null)?.name ?? null,
+        job_plan_name: firstRow(a.job_plans as { name: string; code: string | null } | { name: string; code: string | null }[] | null)?.name ?? null,
         task_count: taskCountMap[a.job_plan_id!] ?? 0,
       })),
       totalTasks,
@@ -411,7 +412,7 @@ export async function updateCheckAction(id: string, formData: FormData) {
 
     // Create notification if assigned_to changed
     if (formData.has('assigned_to') && parsed.data.assigned_to && parsed.data.assigned_to !== existing.assigned_to) {
-      const jpData = existing.job_plans as unknown as { name: string } | null
+      const jpData = firstRow(existing.job_plans as { name: string } | { name: string }[] | null)
       const jobPlanName = jpData?.name ?? 'Maintenance Check'
       await createNotification({
         tenantId,
@@ -510,7 +511,7 @@ export async function completeCheckAction(id: string) {
 
     // Create notification to assigned technician's supervisor (if assigned)
     if (existing.assigned_to && existing.assigned_to !== user.id) {
-      const jpData = existing.job_plans as unknown as { name: string } | null
+      const jpData = firstRow(existing.job_plans as { name: string } | { name: string }[] | null)
       const jobPlanName = jpData?.name ?? 'Maintenance Check'
       await createNotification({
         tenantId,

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils/format'
+import { firstRow } from '@/lib/db/relation'
 import { SiteMapDynamic } from './SiteMapDynamic'
 import type { MapSite } from './SiteMapLeaflet'
 import type { Role } from '@/lib/types'
@@ -164,7 +165,7 @@ export default async function DashboardPage({
   }
 
   const mapSites: MapSite[] = (sitesForMap.data ?? []).map((site) => {
-    const customerName = (site.customers as unknown as { name: string } | null)?.name ?? null
+    const customerName = firstRow(site.customers as { name: string } | { name: string }[] | null)?.name ?? null
     return {
       id: site.id,
       name: site.name,
@@ -244,10 +245,8 @@ export default async function DashboardPage({
           </div>
           <div className="space-y-1">
             {[...myAcbTests.map(t => ({ ...t, kind: 'ACB' })), ...myNsxTests.map(t => ({ ...t, kind: 'NSX' }))].map(test => {
-              const rawAsset = test.assets
-              const assetName = Array.isArray(rawAsset) ? rawAsset[0]?.name ?? '—' : (rawAsset as { name: string } | null)?.name ?? '—'
-              const rawSite = test.sites
-              const siteName = Array.isArray(rawSite) ? rawSite[0]?.name ?? '' : (rawSite as { name: string } | null)?.name ?? ''
+              const assetName = firstRow(test.assets as { name: string } | { name: string }[] | null)?.name ?? '—'
+              const siteName = firstRow(test.sites as { name: string } | { name: string }[] | null)?.name ?? ''
               const isDefect = test.overall_result === 'Defect'
               const isPending = test.overall_result === 'Pending'
               return (
@@ -368,7 +367,7 @@ export default async function DashboardPage({
           ) : (
             <div className="space-y-1">
               {(upcomingChecks.data ?? []).map((check: { id: string; custom_name: string | null; status: string; due_date: string; sites: unknown }) => {
-                const siteName = (check.sites as unknown as { name: string } | null)?.name ?? '—'
+                const siteName = firstRow(check.sites as { name: string } | { name: string }[] | null)?.name ?? '—'
                 const isOverdue = check.status === 'overdue'
                 const isActive = check.status === 'in_progress'
                 return (
@@ -405,7 +404,7 @@ export default async function DashboardPage({
           ) : (
             <div className="space-y-1">
               {(recentChecks.data ?? []).map((check: { id: string; custom_name: string | null; status: string; completed_at: string; sites: unknown }) => {
-                const siteName = (check.sites as unknown as { name: string } | null)?.name ?? '—'
+                const siteName = firstRow(check.sites as { name: string } | { name: string }[] | null)?.name ?? '—'
                 return (
                   <Link key={check.id} href={`/maintenance/${check.id}`}
                     className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
