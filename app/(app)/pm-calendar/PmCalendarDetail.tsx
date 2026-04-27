@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
@@ -51,13 +52,30 @@ const categoryColours: Record<string, string> = {
 }
 
 export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEdit }: PmCalendarDetailProps) {
+  const router = useRouter()
   const [toggling, setToggling] = useState(false)
+  const [staleNotice, setStaleNotice] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleToggleActive() {
     setToggling(true)
-    await togglePmCalendarActiveAction(entry.id, !entry.is_active)
+    setError(null)
+    setStaleNotice(false)
+    const res = await togglePmCalendarActiveAction(entry.id, !entry.is_active, entry.updated_at)
     setToggling(false)
-    onClose()
+    if (res.success) {
+      onClose()
+      return
+    }
+    if ('stale' in res && res.stale) {
+      setStaleNotice(true)
+      setTimeout(() => {
+        router.refresh()
+        onClose()
+      }, 2000)
+      return
+    }
+    setError(res.error ?? 'Failed to update.')
   }
 
   const cls = categoryColours[entry.category] ?? 'bg-gray-100 text-gray-600'
@@ -114,6 +132,17 @@ export function PmCalendarDetail({ open, onClose, entry, isAdmin, canWrite, onEd
               {entry.last_notified_at && <div>Last included in a digest: {formatDateTime(entry.last_notified_at)}</div>}
             </div>
           </div>
+        )}
+
+        {staleNotice && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+            This entry was changed by someone else. Refreshing to show their changes...
+          </p>
+        )}
+        {error && (
+          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+            {error}
+          </p>
         )}
 
         {/* Actions */}

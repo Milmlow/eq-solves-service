@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
@@ -21,7 +22,9 @@ interface PmCalendarFormProps {
 }
 
 export function PmCalendarForm({ open, onClose, entry, sites, categories, technicians }: PmCalendarFormProps) {
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [staleNotice, setStaleNotice] = useState(false)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -41,18 +44,25 @@ export function PmCalendarForm({ open, onClose, entry, sites, categories, techni
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setStaleNotice(false)
     setSuccess(false)
     setLoading(true)
 
     const formData = new FormData(e.currentTarget)
     const result = isEdit
-      ? await updatePmCalendarAction(entry!.id, formData)
+      ? await updatePmCalendarAction(entry!.id, formData, entry!.updated_at)
       : await createPmCalendarAction(formData)
 
     setLoading(false)
     if (result.success) {
       setSuccess(true)
       setTimeout(() => handleClose(), 500)
+    } else if ('stale' in result && result.stale) {
+      setStaleNotice(true)
+      setTimeout(() => {
+        router.refresh()
+        handleClose()
+      }, 2000)
     } else {
       setError(result.error ?? 'Something went wrong.')
     }
@@ -61,6 +71,7 @@ export function PmCalendarForm({ open, onClose, entry, sites, categories, techni
   function handleClose() {
     onClose()
     setError(null)
+    setStaleNotice(false)
     setSuccess(false)
   }
 
@@ -203,6 +214,11 @@ export function PmCalendarForm({ open, onClose, entry, sites, categories, techni
 
         {/* Feedback */}
         {error && <p className="text-sm text-red-500">{error}</p>}
+        {staleNotice && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+            This entry was changed by someone else. Refreshing to show their changes...
+          </p>
+        )}
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">

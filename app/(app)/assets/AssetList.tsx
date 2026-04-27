@@ -166,7 +166,7 @@ export function AssetList({ assets, allAssets, sites, customers, assetTypes, all
             `assets-export-${new Date().toISOString().slice(0, 10)}`
           )} />
           {canWriteRole && (
-            <Button onClick={openCreate}>Add Asset</Button>
+            <Button size="sm" onClick={openCreate}>Add Asset</Button>
           )}
         </div>
       </div>

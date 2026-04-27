@@ -10,15 +10,18 @@ import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
 import { PmCalendarForm } from './PmCalendarForm'
 import { PmCalendarDetail } from './PmCalendarDetail'
+import { ClearFilteredDialog } from './ClearFilteredDialog'
+import { MonthGrid } from '@/components/calendar/MonthGrid'
 import {
   seedPmCalendarAction,
   togglePmCalendarActiveAction,
   importPmCalendarCsvAction,
   previewSupervisorDigestAction,
   sendSupervisorDigestNowAction,
+  movePmCalendarEntryAction,
 } from './actions'
 import type { SupervisorRunResult } from '@/lib/calendar/supervisor-digest'
-import { CalendarDays, List, LayoutGrid, Loader2, Archive, Upload, Mail, Eye } from 'lucide-react'
+import { CalendarDays, List, LayoutGrid, Loader2, Archive, Upload, Mail, Eye, Trash2 } from 'lucide-react'
 import { CsvExportButton } from '@/components/ui/CsvExportButton'
 import { parseCsv } from '@/lib/utils/csv'
 import { events as analyticsEvents } from '@/lib/analytics'
@@ -97,20 +100,6 @@ function StatusStripCard({
   )
 }
 
-/**
- * Returns the left-border colour class for an entry, based on its timing
- * bucket. Used inside the calendar view so each entry chip carries a quick
- * visual signal of urgency without needing a status badge.
- */
-function timingBorderClass(startTimeIso: string, status: string): string {
-  const bucket = timingBucket(startTimeIso, status)
-  if (status === 'completed') return 'border-l-2 border-l-green-400'
-  if (bucket === 'overdue') return 'border-l-2 border-l-red-500'
-  if (bucket === 'today') return 'border-l-2 border-l-amber-500'
-  if (bucket === 'upcoming') return 'border-l-2 border-l-eq-sky'
-  return 'border-l-2 border-l-gray-200'
-}
-
 function DigestStatusBadge({ status, error }: { status: SupervisorRunResult['status']; error?: string }) {
   const config: Record<SupervisorRunResult['status'], { cls: string; label: string }> = {
     sent: { cls: 'bg-green-100 text-green-700', label: 'Sent' },
@@ -179,8 +168,6 @@ const QUARTER_LABELS: Record<AuFyQuarter, string> = {
   Q4: 'Q4 (Apr–Jun)',
 }
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
 export function PmCalendarView({
   entries, sites, categories, financialYears, technicians,
   page, totalPages, viewMode, isAdmin, canWrite: canWriteRole,
@@ -193,6 +180,7 @@ export function PmCalendarView({
   const [detailEntry, setDetailEntry] = useState<EntryRow | null>(null)
   const [seeding, setSeeding] = useState(false)
   const [seedMsg, setSeedMsg] = useState<string | null>(null)
+  const [clearOpen, setClearOpen] = useState(false)
 
   // Supervisor digest state
   const [digestBusy, setDigestBusy] = useState<'preview' | 'send' | null>(null)
@@ -225,13 +213,34 @@ export function PmCalendarView({
   async function handleArchiveRow(id: string, title: string, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm(`Archive "${title}"? It will be hidden from the list (use the Show Archived toggle to restore).`)) return
-    const result = await togglePmCalendarActiveAction(id, false)
+    const row = entries.find((entry) => entry.id === id)
+    const result = await togglePmCalendarActiveAction(id, false, row?.updated_at)
     if (result.success) {
       analyticsEvents.archivedCheckToggled({ new_state: false })
+      router.refresh()
+    } else if ('stale' in result && result.stale) {
+      alert('This entry was changed by someone else. Refreshing to show their changes.')
       router.refresh()
     } else {
       alert(`Error: ${result.error}`)
     }
+  }
+
+  // Drag-and-drop move handler (called from MonthGrid)
+  async function handleMoveEntry(id: string, newDate: string) {
+    const sourceEntry = entries.find((entry) => entry.id === id)
+    const res = await movePmCalendarEntryAction(id, newDate, sourceEntry?.updated_at)
+    if (res.success) {
+      router.refresh()
+      return
+    }
+    if ('stale' in res && res.stale) {
+      // Auto-refresh on stale conflict; don't throw — MonthGrid would
+      // surface a scary banner, but the right UX is silent recovery.
+      router.refresh()
+      return
+    }
+    throw new Error(res.error ?? 'Move failed.')
   }
 
   // CSV import handler
@@ -338,20 +347,6 @@ export function PmCalendarView({
       summary[q][site].count += 1
     }
     return summary
-  }, [entries])
-
-  // ===== CALENDAR VIEW DATA =====
-  const calendarData = useMemo(() => {
-    // Group entries by calendar month (Jan=0, Feb=1, ..., Dec=11)
-    const months: Record<number, EntryRow[]> = {}
-    for (let i = 0; i < 12; i++) months[i] = []
-
-    for (const e of entries) {
-      const d = new Date(e.start_time)
-      const m = d.getMonth() // 0=Jan, 1=Feb, ..., 11=Dec
-      if (months[m]) months[m].push(e)
-    }
-    return months
   }, [entries])
 
   // Filter options
@@ -596,6 +591,16 @@ export function PmCalendarView({
                     : <Mail className="w-3.5 h-3.5 mr-1" />}
                   Send Digest Now
                 </button>
+                {entries.length > 0 && (
+                  <button
+                    onClick={() => setClearOpen(true)}
+                    className="inline-flex items-center h-8 px-3 text-xs font-medium rounded-md border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                    title="Soft-delete every entry currently shown by your filters"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                    Clear filtered ({entries.length})
+                  </button>
+                )}
               </>
             )}
             {canWriteRole && (
@@ -619,7 +624,7 @@ export function PmCalendarView({
               headers={csvHeaders}
             />
             {canWriteRole && (
-              <Button onClick={() => setCreateOpen(true)}>Add Entry</Button>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>Add Entry</Button>
             )}
           </div>
         </div>
@@ -723,43 +728,13 @@ export function PmCalendarView({
         )
       )}
 
-      {/* ===== CALENDAR VIEW ===== */}
+      {/* ===== CALENDAR VIEW (Outlook-style month grid) ===== */}
       {viewMode === 'calendar' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {MONTH_NAMES.map((monthName, idx) => {
-            const monthEntries = calendarData[idx] ?? []
-            return (
-              <div key={monthName} className="border border-gray-200 rounded-lg bg-white overflow-hidden">
-                <div className="px-4 py-2 bg-eq-sky/5 border-b border-gray-100">
-                  <h3 className="font-semibold text-eq-ink text-sm">{monthName}</h3>
-                  <span className="text-xs text-eq-grey">{monthEntries.length} tasks</span>
-                </div>
-                <div className="p-3 space-y-2 max-h-64 overflow-y-auto">
-                  {monthEntries.length === 0 ? (
-                    <p className="text-xs text-eq-grey italic">No tasks scheduled</p>
-                  ) : (
-                    monthEntries.map((e) => (
-                      <button
-                        key={e.id}
-                        onClick={() => setDetailEntry(e)}
-                        className={`w-full text-left p-2 rounded-md hover:bg-gray-50 border border-gray-100 transition-colors ${timingBorderClass(e.start_time, e.status)}`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium text-eq-ink truncate">{e.title}</span>
-                          <span className="text-[10px] text-eq-grey shrink-0">{e.site_name.split(' — ')[0]}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <CategoryBadge category={e.category} />
-                          <span className="text-[10px] text-eq-grey">{formatDate(e.start_time)}</span>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        <MonthGrid
+          entries={entries}
+          onEntryClick={(e) => setDetailEntry(e as EntryRow)}
+          onMoveEntry={canWriteRole ? handleMoveEntry : undefined}
+        />
       )}
 
       {/* ===== QUARTERLY VIEW ===== */}
@@ -843,6 +818,39 @@ export function PmCalendarView({
           onEdit={() => { setEditEntry(detailEntry); setDetailEntry(null) }}
         />
       )}
+
+      {/* Clear Filtered (admin-only, danger) */}
+      <ClearFilteredDialog
+        open={clearOpen}
+        onClose={() => setClearOpen(false)}
+        ids={entries.map((e) => e.id)}
+        filterSummary={buildFilterSummary(searchParams, sites, isAdmin && showArchived)}
+      />
     </>
   )
+}
+
+function buildFilterSummary(
+  searchParams: ReturnType<typeof useSearchParams>,
+  sites: SiteOption[],
+  showArchivedActive: boolean,
+): string {
+  const parts: string[] = []
+  const search = searchParams.get('search')
+  const siteId = searchParams.get('site')
+  const category = searchParams.get('category')
+  const quarter = searchParams.get('quarter')
+  const status = searchParams.get('status')
+
+  if (search) parts.push(`search "${search}"`)
+  if (siteId) {
+    const site = sites.find((s) => s.id === siteId)
+    parts.push(`site ${site ? formatSiteLabel(site) : siteId}`)
+  }
+  if (category) parts.push(`category ${category}`)
+  if (quarter) parts.push(`quarter ${quarter}`)
+  if (status) parts.push(`status ${status}`)
+  if (showArchivedActive) parts.push('including archived')
+
+  return parts.length === 0 ? 'All entries (no filters applied).' : parts.join(' · ')
 }
