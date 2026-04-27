@@ -89,6 +89,13 @@ export default async function RcdTestingPage({
             Per-board RCD time-trip tests. {count ?? 0} record{(count ?? 0) === 1 ? '' : 's'}.
           </p>
         </div>
+        <Link
+          href="/testing/rcd/import"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-eq-sky hover:bg-eq-deep rounded-md"
+        >
+          <ShieldCheck className="w-4 h-4" />
+          Import xlsx
+        </Link>
       </div>
 
       {!tests || tests.length === 0 ? (
