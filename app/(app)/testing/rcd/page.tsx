@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { TestingNav } from '../TestingNav'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ShieldCheck } from 'lucide-react'
 
@@ -80,8 +79,6 @@ export default async function RcdTestingPage({
 
   return (
     <div className="space-y-6">
-      <TestingNav />
-
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-eq-ink">RCD Test Records</h2>

@@ -10,6 +10,7 @@ import { HelpWidget } from '@/components/ui/HelpWidget'
 import { EqFooter } from '@/components/ui/EqFooter'
 import { DemoBanner } from '@/components/ui/DemoBanner'
 import { AnalyticsIdentify } from '@/components/ui/AnalyticsIdentify'
+import { NavigationProgress } from '@/components/ui/NavigationProgress'
 import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
@@ -131,6 +132,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-gray-50" style={tenantStyle}>
+      <NavigationProgress />
       <Sidebar isAdmin={isAdmin} settings={settings} />
       <div className="flex flex-1 min-w-0 flex-col">
         {isDemoSession && <DemoBanner shareUrl={demoShareUrl} />}
