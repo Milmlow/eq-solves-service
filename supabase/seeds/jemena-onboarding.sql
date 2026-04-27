@@ -261,4 +261,36 @@ INSERT INTO pm_calendar (id, tenant_id, site_id, title, description, category, s
 SELECT 'd524b7e7-9b51-5b0a-af2c-0f2d697a3e6c', 'ccca00fc-cbc8-442e-9489-0f1f216ddca8', 'eddeec6a-b0fe-522f-9a26-a3940ab62a26', 'Jemena PPM — Bathurst', 'May 2026 PPM cycle. SKS Job Code: 2665620. Standard scope: DB Maintenance, MSB Maintenance, Thermographic (FLIR), RCD Time Test.', 'RCD testing', '2026-05-15T08:00:00+10:00'::timestamptz, '2026-05-15T17:00:00+10:00'::timestamptz, '2025-2026', 'Q4', 'scheduled', true
 WHERE NOT EXISTS (SELECT 1 FROM pm_calendar WHERE id = 'd524b7e7-9b51-5b0a-af2c-0f2d697a3e6c');
 
+-- ====== Backfill site code/city/state/postcode (data-quality audit fix) ======
+-- The Sites sheet of the Master Asset Register doesn't break the address into
+-- city/state/postcode columns, so the initial INSERTs leave those null. The
+-- data-quality audit (audits/run.sql) treats null code/city/state/postcode as
+-- ERROR-level. This UPDATE backfills with well-known NSW postcodes and unique
+-- JEM-prefixed site codes. Idempotent — only fires on rows still missing data.
+UPDATE sites SET
+  code = v.code,
+  city = v.city,
+  state = v.state,
+  postcode = v.postcode
+FROM (VALUES
+  ('9fcbe8a4-d3b9-5f7c-9dee-0f2549c50039', 'JEM-NSY', 'North Sydney', 'NSW', '2060'),
+  ('ec9bfc89-3488-5060-80d7-65018124ea5e', 'JEM-GRE', 'Greystanes', 'NSW', '2145'),
+  ('94c19afe-b12c-5ffb-a9f7-1ebb66ab1c46', 'JEM-NRO', 'North Rocks', 'NSW', '2151'),
+  ('100b63eb-470f-5c64-a63f-3cf272d0d010', 'JEM-WET', 'Wetherill Park', 'NSW', '2164'),
+  ('305a13f0-3117-5285-a67e-e73627f90886', 'JEM-RIV', 'Riverwood', 'NSW', '2210'),
+  ('c92f99d5-2b1e-5d54-a0f0-d3483058b3ee', 'JEM-OGU', 'Old Guildford', 'NSW', '2161'),
+  ('f2e69a7f-a86e-523f-bc11-167623322e2f', 'JEM-MIT', 'Mittagong', 'NSW', '2575'),
+  ('03778bfd-d028-539d-ad2d-50548df4e585', 'JEM-UNA', 'Unanderra', 'NSW', '2526'),
+  ('254779f9-22a0-5bc1-8e18-459034dd4ef8', 'JEM-TUG', 'Tuggerah', 'NSW', '2259'),
+  ('c763a1bb-754e-53e9-83c2-6d97026a3be4', 'JEM-CAR', 'Cardiff', 'NSW', '2285'),
+  ('e1ebc65c-5825-514a-b27d-dd9ce2a0f324', 'JEM-GBL', 'Goulburn', 'NSW', '2580'),
+  ('c1da126e-3631-50da-b0e3-7b8edcfb8523', 'JEM-GFI', 'Goulburn', 'NSW', '2580'),
+  ('3fcca550-cafa-5e50-b1c0-24258604c30e', 'JEM-YOU', 'Young', 'NSW', '2594'),
+  ('3b1c23a1-c126-5b5c-b8ef-afcb006edb03', 'JEM-GRI', 'Griffith', 'NSW', '2680'),
+  ('591c2252-6ad1-5b40-b7a5-15ee0490dfd8', 'JEM-DUB', 'Dubbo', 'NSW', '2830'),
+  ('eddeec6a-b0fe-522f-9a26-a3940ab62a26', 'JEM-BAT', 'Bathurst', 'NSW', '2795')
+) AS v(id, code, city, state, postcode)
+WHERE sites.id = v.id::uuid
+  AND (sites.code IS NULL OR sites.city IS NULL OR sites.state IS NULL OR sites.postcode IS NULL);
+
 COMMIT;
