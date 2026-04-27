@@ -81,12 +81,15 @@ export async function generateAndStoreReport(
   // is now always shown on the cover when present.
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, report_company_name, report_logo_url')
+    .select('product_name, primary_colour, deep_colour, ice_colour, ink_colour, report_company_name, report_logo_url')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
+  const deepColour = tenantSettings?.deep_colour ?? null
+  const iceColour = tenantSettings?.ice_colour ?? null
+  const inkColour = tenantSettings?.ink_colour ?? null
   const companyName = tenantSettings?.report_company_name ?? null
   const reportLogoUrl = tenantSettings?.report_logo_url ?? null
 
@@ -151,6 +154,9 @@ export async function generateAndStoreReport(
     assignedTo: check.assigned_to ? (userMap[check.assigned_to] ?? null) : null,
     tenantProductName: productName,
     primaryColour: primaryColour.replace('#', ''),
+    deepColour,
+    iceColour,
+    inkColour,
     items: reportItems,
     companyName: companyName ?? productName,
     tenantLogoImage: tenantLogoImage ?? null,
@@ -289,12 +295,15 @@ export async function generateAndStoreWorkOrderDetailsReport(
   // report_customer_logo dropped 26-Apr-2026 (audit item 8).
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, report_company_name, report_logo_url')
+    .select('product_name, primary_colour, deep_colour, ice_colour, ink_colour, report_company_name, report_logo_url')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
+  const deepColour = tenantSettings?.deep_colour ?? null
+  const iceColour = tenantSettings?.ice_colour ?? null
+  const inkColour = tenantSettings?.ink_colour ?? null
   const companyName = tenantSettings?.report_company_name ?? null
   const reportLogoUrl = tenantSettings?.report_logo_url ?? null
 
@@ -404,6 +413,9 @@ export async function generateAndStoreWorkOrderDetailsReport(
     companyName: companyName ?? productName,
     tenantProductName: productName,
     primaryColour: primaryColour.replace('#', ''),
+    deepColour,
+    iceColour,
+    inkColour,
     tenantLogoImage: tenantLogoImage ?? null,
     customerLogoImage: customerLogoImage ?? null,
     reportTypeLabel: 'Work Order Details',

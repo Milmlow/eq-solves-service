@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
 
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, report_company_name, report_company_abn, primary_colour')
+    .select('product_name, report_company_name, report_company_abn, primary_colour, deep_colour, ice_colour, ink_colour')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
@@ -74,6 +74,9 @@ export async function GET(request: NextRequest) {
   const reportCompanyAbn = tenantSettings?.report_company_abn ?? null
   const productName = tenantSettings?.product_name ?? 'EQ Solves Service'
   const reportPrimaryColour = (tenantSettings?.primary_colour ?? tenant?.primary_colour ?? '3DA8D8').replace('#', '')
+  const reportDeepColour = tenantSettings?.deep_colour ?? null
+  const reportIceColour = tenantSettings?.ice_colour ?? null
+  const reportInkColour = tenantSettings?.ink_colour ?? null
 
   // Sites for name lookup and customer filtering
   const { data: sites } = await supabase
@@ -217,6 +220,9 @@ export async function GET(request: NextRequest) {
     companyName: reportCompanyName,
     companyAbn: reportCompanyAbn,
     primaryColour: reportPrimaryColour,
+    deepColour: reportDeepColour,
+    iceColour: reportIceColour,
+    inkColour: reportInkColour,
     complexity,
     maintenance,
     testing: { total: tTotal, pass: tPass, fail: tFail, defect: tDefect, pending: tPending, passRate: tPassRate },

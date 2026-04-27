@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
   // Fetch tenant settings for branding + report config
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
-    .select('product_name, primary_colour, report_complexity, report_company_name, report_company_abn, report_company_phone, report_company_address, report_header_text, report_footer_text, report_show_cover_page, report_show_contents, report_show_executive_summary, report_show_sign_off, report_sign_off_fields, logo_url, logo_url_on_dark, report_logo_url, report_logo_url_on_dark')
+    .select('product_name, primary_colour, deep_colour, ice_colour, ink_colour, report_complexity, report_company_name, report_company_abn, report_company_phone, report_company_address, report_header_text, report_footer_text, report_show_cover_page, report_show_contents, report_show_executive_summary, report_show_sign_off, report_sign_off_fields, logo_url, logo_url_on_dark, report_logo_url, report_logo_url_on_dark')
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
@@ -166,6 +166,9 @@ export async function GET(request: NextRequest) {
     siteCode: site.code ?? null,
     tenantProductName: productName,
     primaryColour: primaryColour,
+    deepColour: tenantSettings?.deep_colour ?? null,
+    iceColour: tenantSettings?.ice_colour ?? null,
+    inkColour: tenantSettings?.ink_colour ?? null,
     complexity,
     tests,
     // Report settings

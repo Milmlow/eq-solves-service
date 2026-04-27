@@ -35,11 +35,23 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY } from '@/lib/reports/typography'
-import { EQ_MID_GREY, EQ_BORDER, EQ_ICE, EQ_INK } from '@/lib/reports/colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_ICE, EQ_INK, tenantIce } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
-export interface NsxReportInput {
+/**
+ * Tenant palette overrides — supplied by the route from
+ * tenant_settings.deep_colour / ice_colour / ink_colour. When present,
+ * the generator uses these explicit values instead of deriving from
+ * primaryColour. See lib/reports/colours.ts::tenantIce for resolution.
+ */
+export interface TenantPaletteOverrides {
+  deepColour?: string | null
+  iceColour?: string | null
+  inkColour?: string | null
+}
+
+export interface NsxReportInput extends TenantPaletteOverrides {
   siteName: string
   siteCode: string | null
   tenantProductName: string
@@ -110,6 +122,18 @@ const BORDER = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
 const CELL_MARGINS = { top: 60, bottom: 60, left: 100, right: 100 }
 
+// Per-render header fill — set once at the top of generateNsxReport from
+// tenantIce(primaryColour, iceColour). Builder functions and headerCell
+// read this instead of hardcoded EQ_ICE so SKS reports get SKS-flavoured
+// table headers without threading `fill` through every builder.
+//
+// Trade-off: assumes one render per Node process at a time. Two concurrent
+// renders for different tenants could race on this value and produce a
+// cosmetic mismatch (one tenant's table headers in another tenant's ice).
+// Acceptable for current scale; revisit if/when concurrent generation is
+// a real workload.
+let _activeIce: string = EQ_ICE
+
 // CB detail attributes (left, right)
 const CB_ATTR_ROWS: [string, string][] = [
   ['Brand', 'Trip Unit'],
@@ -177,7 +201,7 @@ function headerCell(text: string, width: number): TableCell {
   return new TableCell({
     borders: BORDERS,
     width: { size: width, type: WidthType.DXA },
-    shading: { fill: EQ_ICE, type: ShadingType.CLEAR },
+    shading: { fill: _activeIce, type: ShadingType.CLEAR },
     margins: CELL_MARGINS,
     children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
   })
@@ -254,17 +278,17 @@ function buildHeaderTable(test: NsxReportTest, siteName: string): Table {
     rows: [
       new TableRow({
         children: [
-          cell('Site', c1, { bold: true, shading: EQ_ICE }),
+          cell('Site', c1, { bold: true, shading: _activeIce }),
           cell(siteName, c2),
-          cell('Asset', c3, { bold: true, shading: EQ_ICE }),
+          cell('Asset', c3, { bold: true, shading: _activeIce }),
           cell(test.assetName, c4),
         ],
       }),
       new TableRow({
         children: [
-          cell('Location', c1, { bold: true, shading: EQ_ICE }),
+          cell('Location', c1, { bold: true, shading: _activeIce }),
           cell(test.location ?? '', c2),
-          cell('ID', c3, { bold: true, shading: EQ_ICE }),
+          cell('ID', c3, { bold: true, shading: _activeIce }),
           cell(test.assetId ?? '', c4),
         ],
       }),
@@ -638,6 +662,10 @@ function fmtDate(d: string): string {
 
 export async function generateNsxReport(input: NsxReportInput): Promise<Buffer> {
   const brand = input.primaryColour.replace('#', '')
+  // Set the per-render header fill from the tenant palette. Read by
+  // headerCell() and the cell shading literals throughout this file.
+  // See _activeIce comment near top of file for trade-offs.
+  _activeIce = tenantIce(input.primaryColour, input.iceColour)
   const complexity = input.complexity ?? 'standard'
   const showCover = input.showCoverPage ?? true
   const showContents = input.showContents ?? true

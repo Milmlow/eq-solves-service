@@ -59,6 +59,15 @@ export interface PmCheckReportInput {
   customerLogoImage?: { data: Buffer; type: 'png' | 'jpg'; width: number; height: number } | null
   reportTypeLabel?: string
   maximoWONumber?: string | null
+
+  // Tenant palette overrides (from tenant_settings).
+  // When supplied, table-header tints use the explicit ice colour instead
+  // of the colour derived from primaryColour. Deep/Ink reserved for
+  // future-use (accent borders, body text). Null/undefined falls back
+  // to derive-from-primary or EQ default.
+  deepColour?: string | null
+  iceColour?: string | null
+  inkColour?: string | null
 }
 
 export interface PmCheckReportItem {
@@ -319,7 +328,7 @@ function buildCheckItemsTable(input: PmCheckReportInput): Table {
   const c5 = 1400 // Completed By
   const c6 = 1026 // Completed At
   const totalW = c1 + c2 + c3 + c4 + c5 + c6
-  const fill = tenantIce(input.primaryColour)
+  const fill = tenantIce(input.primaryColour, input.iceColour)
 
   const itemRows = input.items.map((item) =>
     new TableRow({

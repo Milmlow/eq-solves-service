@@ -38,11 +38,16 @@ import {
 } from '@/lib/reports/report-shell'
 import { buildMasthead } from '@/lib/reports/report-branding'
 import { FONT_BODY } from '@/lib/reports/typography'
-import { EQ_MID_GREY, EQ_BORDER, EQ_ICE } from '@/lib/reports/colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_ICE, tenantIce } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
 export interface WorkOrderDetailsInput {
+  /** Tenant palette overrides. See lib/reports/colours.ts::tenantIce. */
+  deepColour?: string | null
+  iceColour?: string | null
+  inkColour?: string | null
+
   // Branding
   companyName: string
   tenantProductName: string
@@ -116,6 +121,9 @@ const MARGIN = 1440       // 1 inch
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2
 
 const BORDER = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
+
+// Per-render header fill — see nsx-report.ts for the full rationale.
+let _activeIce: string = EQ_ICE
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
 const CELL_MARGINS = { top: 60, bottom: 60, left: 100, right: 100 }
 
@@ -153,7 +161,7 @@ function headerCell(text: string, width: number): TableCell {
   return new TableCell({
     borders: BORDERS,
     width: { size: width, type: WidthType.DXA },
-    shading: { fill: EQ_ICE, type: ShadingType.CLEAR },
+    shading: { fill: _activeIce, type: ShadingType.CLEAR },
     margins: CELL_MARGINS,
     children: [new Paragraph({
       children: [new TextRun({
@@ -426,6 +434,8 @@ export async function generateWorkOrderDetailsReport(
   input: WorkOrderDetailsInput,
 ): Promise<Buffer> {
   const brand = input.primaryColour.replace('#', '')
+  // Set per-render header fill from tenant palette (see _activeIce comment).
+  _activeIce = tenantIce(input.primaryColour, input.iceColour)
 
   // Sprint 2.3 (26-Apr-2026): adopt shared ReportShell for header/footer.
   const shell = await prepareShell(

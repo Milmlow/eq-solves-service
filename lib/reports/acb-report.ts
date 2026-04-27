@@ -36,11 +36,16 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY } from '@/lib/reports/typography'
-import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_ICE } from '@/lib/reports/colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_ICE, tenantIce } from '@/lib/reports/colours'
 
 // ---------- types ----------
 
 export interface AcbReportInput {
+  /** Tenant palette overrides. See lib/reports/colours.ts::tenantIce. */
+  deepColour?: string | null
+  iceColour?: string | null
+  inkColour?: string | null
+
   siteName: string
   siteCode: string | null
   tenantProductName: string
@@ -109,6 +114,11 @@ const MARGIN = 1440 // 1 inch
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2 // 9026
 
 const BORDER = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
+
+// Per-render header fill — set once in generateAcbReport from
+// tenantIce(primaryColour, iceColour). Read by headerCell + cell-shading
+// literals. Trade-off: serial renders only (acceptable for current scale).
+let _activeIce: string = EQ_ICE
 const BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER }
 const CELL_MARGINS = { top: 60, bottom: 60, left: 100, right: 100 }
 
@@ -203,7 +213,7 @@ function headerCell(text: string, width: number): TableCell {
   return new TableCell({
     borders: BORDERS,
     width: { size: width, type: WidthType.DXA },
-    shading: { fill: EQ_ICE, type: ShadingType.CLEAR },
+    shading: { fill: _activeIce, type: ShadingType.CLEAR },
     margins: CELL_MARGINS,
     children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 18, font: FONT_BODY })] })],
   })
@@ -280,23 +290,23 @@ function buildHeaderTable(test: AcbReportTest, siteName: string): Table {
     rows: [
       new TableRow({
         children: [
-          cell('Site', col1, { bold: true, shading: EQ_ICE }),
+          cell('Site', col1, { bold: true, shading: _activeIce }),
           cell(siteName, col2),
-          cell('Asset', col3, { bold: true, shading: EQ_ICE }),
+          cell('Asset', col3, { bold: true, shading: _activeIce }),
           cell(test.assetName, col4),
         ],
       }),
       new TableRow({
         children: [
-          cell('Location', col1, { bold: true, shading: EQ_ICE }),
+          cell('Location', col1, { bold: true, shading: _activeIce }),
           cell(test.location ?? '', col2),
-          cell('ID', col3, { bold: true, shading: EQ_ICE }),
+          cell('ID', col3, { bold: true, shading: _activeIce }),
           cell(test.assetId ?? '', col4),
         ],
       }),
       new TableRow({
         children: [
-          cell('Job Plan', col1, { bold: true, shading: EQ_ICE }),
+          cell('Job Plan', col1, { bold: true, shading: _activeIce }),
           cell(test.jobPlan ?? '', col2),
           cell('', col3),
           cell('', col4),
@@ -886,6 +896,8 @@ function fmtDate(d: string): string {
 
 export async function generateAcbReport(input: AcbReportInput): Promise<Buffer> {
   const brand = input.primaryColour.replace('#', '')
+  // Set per-render header fill from tenant palette (see _activeIce comment).
+  _activeIce = tenantIce(input.primaryColour, input.iceColour)
   const complexity = input.complexity ?? 'standard'
   const showCover = input.showCoverPage ?? true
   const showContents = input.showContents ?? true

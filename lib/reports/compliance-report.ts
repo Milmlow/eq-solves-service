@@ -38,7 +38,7 @@ import {
   type ShellSettings,
 } from './report-shell'
 import { FONT_BODY, FONT_HEADING } from './typography'
-import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_WHITE, EQ_ICE, EQ_SKY, STATUS_PASS, STATUS_FAIL, STATUS_WARN } from './colours'
+import { EQ_MID_GREY, EQ_BORDER, EQ_INK, EQ_WHITE, EQ_ICE, EQ_SKY, STATUS_PASS, STATUS_FAIL, STATUS_WARN, tenantIce } from './colours'
 
 // ---------- types ----------
 
@@ -57,6 +57,10 @@ export interface ComplianceReportInput {
   /** Tenant ABN, shown on cover when present. */
   companyAbn?: string | null
   primaryColour: string // hex without #
+  /** Tenant palette overrides — see lib/reports/colours.ts::tenantIce. */
+  deepColour?: string | null
+  iceColour?: string | null
+  inkColour?: string | null
   complexity: 'summary' | 'standard' | 'detailed'
 
   // Maintenance
@@ -110,6 +114,9 @@ export interface ComplianceReportInput {
 const thin = { style: BorderStyle.SINGLE, size: 1, color: EQ_BORDER }
 const cellBorders = { top: thin, bottom: thin, left: thin, right: thin }
 
+// Per-render header fill — see nsx-report.ts for full rationale.
+let _activeIce: string = EQ_ICE
+
 /**
  * Header cell for compliance tables.
  *
@@ -125,7 +132,7 @@ const cellBorders = { top: thin, bottom: thin, left: thin, right: thin }
 function headerCell(text: string, _colour: string, widthPct?: number): TableCell {
   return new TableCell({
     borders: cellBorders,
-    shading: { type: ShadingType.CLEAR, fill: EQ_ICE },
+    shading: { type: ShadingType.CLEAR, fill: _activeIce },
     verticalAlign: VerticalAlign.CENTER,
     width: widthPct ? { size: widthPct, type: WidthType.PERCENTAGE } : undefined,
     children: [new Paragraph({ spacing: { before: 40, after: 40 }, children: [new TextRun({ text, bold: true, size: 18, color: EQ_INK, font: FONT_BODY })] })],
@@ -166,6 +173,8 @@ function kpiLine(label: string, value: string | number, color?: string): Paragra
 
 export async function generateComplianceReport(input: ComplianceReportInput): Promise<Buffer> {
   const colour = input.primaryColour || EQ_SKY
+  // Set per-render header fill from tenant palette (see _activeIce comment).
+  _activeIce = tenantIce(input.primaryColour, input.iceColour)
   const m = input.maintenance
   const t = input.testing
   const isDetailed = input.complexity === 'detailed'
