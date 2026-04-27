@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { withIdempotency } from '@/lib/actions/idempotency'
 import {
   CreateTestRecordSchema,
   UpdateTestRecordSchema,
@@ -11,8 +12,13 @@ import {
   UpdateTestReadingSchema,
 } from '@/lib/validations/test-record'
 
-export async function createTestRecordAction(formData: FormData) {
-  try {
+/**
+ * Create a test record. Idempotent when called with a mutationId — safe
+ * to replay from a flaky-network jobsite tablet without inserting the
+ * same record twice. (B4 idempotency adoption — 2026-04-27.)
+ */
+export async function createTestRecordAction(formData: FormData, mutationId?: string) {
+  return withIdempotency(mutationId, async () => {
     const { supabase, tenantId, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
@@ -38,13 +44,16 @@ export async function createTestRecordAction(formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
-    await logAuditEvent({ action: 'create', entityType: 'test_record', summary: 'Created test record' })
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'test_record',
+      summary: 'Created test record',
+      mutationId,
+    })
 
     revalidatePath('/testing')
-    return { success: true, recordId: record?.id }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+    return { success: true, data: { recordId: record?.id } }
+  })
 }
 
 export async function updateTestRecordAction(id: string, formData: FormData) {
@@ -97,8 +106,12 @@ export async function toggleTestRecordActiveAction(id: string, isActive: boolean
 
 // --- Readings ---
 
-export async function createReadingAction(testRecordId: string, formData: FormData) {
-  try {
+/**
+ * Create a test reading. Idempotent when called with a mutationId.
+ * (B4 — 2026-04-27.)
+ */
+export async function createReadingAction(testRecordId: string, formData: FormData, mutationId?: string) {
+  return withIdempotency(mutationId, async () => {
     const { supabase, tenantId, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
@@ -119,11 +132,16 @@ export async function createReadingAction(testRecordId: string, formData: FormDa
 
     if (error) return { success: false, error: error.message }
 
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'test_record_reading',
+      summary: 'Created test reading',
+      mutationId,
+    })
+
     revalidatePath('/testing')
     return { success: true }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+  })
 }
 
 export async function deleteReadingAction(readingId: string) {

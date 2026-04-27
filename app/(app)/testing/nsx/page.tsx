@@ -230,13 +230,13 @@ export default function NsxTestingPage() {
         year: checkYear,
         asset_ids: Array.from(selectedAssetIds),
       })
-      if (result.success && result.checkId) {
+      if (result.success && result.data?.checkId) {
         setShowCreateCheck(false)
         setSelectedAssetIds(new Set())
-        router.push(`/testing/summary?created=${result.checkId}`)
+        router.push(`/testing/summary?created=${result.data.checkId}`)
         return
       }
-      setCheckError(result.error ?? 'Failed to create check.')
+      setCheckError(result.success ? 'Failed to create check.' : result.error)
     } catch {
       setCheckError('An unexpected error occurred.')
     }

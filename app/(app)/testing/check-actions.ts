@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { withIdempotency } from '@/lib/actions/idempotency'
 import type { TestingCheckType } from '@/lib/types'
 
 const MONTH_NAMES = [
@@ -14,6 +15,10 @@ const MONTH_NAMES = [
 /**
  * Creates a testing check and batch-creates test records for each selected asset.
  * Name is auto-generated: "{Site} {Frequency} {JobPlanCode} {Month} {Year}"
+ *
+ * Idempotent when called with a mutationId — bulk-creating N test records
+ * across the asset list is the exact "I clicked retry on a flaky network"
+ * scenario where duplicate writes could land. (B4 — 2026-04-27.)
  */
 export async function createTestingCheckAction(input: {
   site_id: string
@@ -24,8 +29,8 @@ export async function createTestingCheckAction(input: {
   year: number
   asset_ids: string[]
   notes?: string
-}) {
-  try {
+}, mutationId?: string) {
+  return withIdempotency(mutationId, async () => {
     const { supabase, tenantId, user, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
@@ -124,15 +129,14 @@ export async function createTestingCheckAction(input: {
       entityType: 'testing_check',
       entityId: check.id,
       summary: `Created testing check "${checkName}" with ${input.asset_ids.length} assets`,
+      mutationId,
     })
 
     revalidatePath('/testing')
     revalidatePath('/testing/summary')
     revalidatePath('/testing/acb')
-    return { success: true, checkId: check.id, checkName }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+    return { success: true, data: { checkId: check.id, checkName } }
+  })
 }
 
 /**
