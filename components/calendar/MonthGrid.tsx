@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
 import type { PmCalendarEntry } from '@/lib/types'
 
@@ -69,11 +69,34 @@ export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: 
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
+  // Optimistic moves: id → dayKey the user dragged the entry onto. Cleared
+  // once the revalidated `entries` prop reflects the new position (so we
+  // don't flash back to the old day during the server roundtrip).
+  const [optimisticMoves, setOptimisticMoves] = useState<Map<string, string>>(() => new Map())
 
   const today = useMemo(() => new Date(), [])
   const year = cursor.getFullYear()
   const month = cursor.getMonth()
   const dndEnabled = !!onMoveEntry
+
+  // Reconcile: drop optimistic entries that now match server-side reality.
+  useEffect(() => {
+    if (optimisticMoves.size === 0) return
+    setOptimisticMoves((prev) => {
+      let changed = false
+      const next = new Map(prev)
+      for (const [id, expectedKey] of prev) {
+        const entry = entries.find((e) => e.id === id)
+        if (!entry) continue
+        const actualKey = formatDateKey(new Date(entry.start_time))
+        if (actualKey === expectedKey) {
+          next.delete(id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [entries, optimisticMoves])
 
   const cells = useMemo(() => {
     const firstOfMonth = new Date(year, month, 1)
@@ -91,7 +114,7 @@ export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: 
     const map = new Map<string, EntryRow[]>()
     for (const e of entries) {
       const d = new Date(e.start_time)
-      const key = formatDateKey(d)
+      const key = optimisticMoves.get(e.id) ?? formatDateKey(d)
       const list = map.get(key) ?? []
       list.push(e)
       map.set(key, list)
@@ -100,7 +123,7 @@ export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: 
       list.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     }
     return map
-  }, [entries])
+  }, [entries, optimisticMoves])
 
   const monthEntryCount = useMemo(
     () => entries.filter((e) => {
@@ -131,11 +154,26 @@ export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: 
     if (!sourceEntry) return
     const sourceKey = formatDateKey(new Date(sourceEntry.start_time))
     if (sourceKey === dayKey) return
+
+    // Optimistic: pill jumps to the new day immediately. Reconciled or
+    // rolled back below once the server settles.
+    setMoveError(null)
+    setOptimisticMoves((prev) => {
+      const next = new Map(prev)
+      next.set(id, dayKey)
+      return next
+    })
+
     try {
-      setMoveError(null)
       await onMoveEntry(id, dayKey)
     } catch (err) {
       setMoveError((err as Error).message ?? 'Move failed.')
+      setOptimisticMoves((prev) => {
+        if (!prev.has(id)) return prev
+        const next = new Map(prev)
+        next.delete(id)
+        return next
+      })
     }
   }
 
@@ -249,6 +287,7 @@ export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: 
               <div className="space-y-1">
                 {visible.map((e) => {
                   const isDragging = draggingId === e.id
+                  const isPendingMove = optimisticMoves.has(e.id)
                   return (
                     <button
                       key={e.id}
@@ -265,8 +304,8 @@ export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: 
                       onClick={() => onEntryClick(e)}
                       className={`w-full text-left px-1.5 py-0.5 rounded text-[10.5px] font-medium truncate ${pillClass(e.category)} ${statusRing(e.status, e.start_time)} ${
                         isDragging ? 'opacity-40' : ''
-                      } ${dndEnabled ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                      title={`${e.title} — ${e.site_name}${dndEnabled ? ' (drag to move)' : ''}`}
+                      } ${isPendingMove ? 'opacity-70 animate-pulse' : ''} ${dndEnabled ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      title={`${e.title} — ${e.site_name}${isPendingMove ? ' (saving...)' : dndEnabled ? ' (drag to move)' : ''}`}
                     >
                       {e.title}
                     </button>
