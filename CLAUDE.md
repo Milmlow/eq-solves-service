@@ -109,9 +109,11 @@ Customer onboarded April 2026 under SKS tenant — first non-Equinix customer, f
 - **Customer ID:** `556f999a-2023-50e3-ab07-a90056333cfe` · code `JEMENA-NSW`
 - **16 sites** all in NSW with `JEM-XXX` codes (e.g. `JEM-NSY` North Sydney, `JEM-GRE` Greystanes). See `supabase/seeds/jemena-onboarding.sql` for full list.
 - **47 assets** across 5 types: Distribution Board, Main Switchboard, UPS Distribution Board, ESS Distribution Board, Generator. Each board has `assets.jemena_asset_id` (JM######) populated where Jemena has assigned a JM number, and `assets.expected_rcd_circuits` set for boards (used as Phase 1 RCD import QC). Total expected circuits across all boards: 611.
-- **Two customer-scoped job plans:**
-  - `JEMENA-SWB-MAINT` (Switchboard PPM, frequency `annual`) — 3 items: DB Maintenance, MSB Maintenance (N/A on sites without MSB), Thermographic FLIR. Technicians use N/A liberally — items don't apply equally to every board. Default plan for all 47 Jemena assets.
+- **Four customer-scoped job plans:**
+  - `JEMENA-SWB-MAINT` (Switchboard PPM, frequency `annual`) — 3 items: DB Maintenance, MSB Maintenance (N/A on sites without MSB), Thermographic FLIR. Technicians use N/A liberally — items don't apply equally to every board. Default plan for the 45 DB/MSB Jemena assets.
   - `JEMENA-RCD-TEST` (RCD PPM, frequency `biannual`) — 2 items: RCD Time Test (annual, May visit only) and RCD Push Button Test (semi-annual, May + Nov). Per AS/NZS 3760. RCD checks are run as separate maintenance/test records; assets don't point to this plan via `job_plan_id`.
+  - `JEMENA-GEN-RUN-START` (Generator PPM, frequency `biannual`) — 8 items split between semi_annual (6-monthly minor: visual, coolant, fuel, batteries, hoses, hours, standby) and annual (major: under-load run for 15 min). The 2 FG Wilson generators (Greystanes + North Sydney) point at this plan. Only those 2 sites have generators per the SOW.
+  - `JEMENA-LIGHTING-AUDIT` (Lighting PPM, frequency `quarterly`) — 5 items: Building 1/2/3 walk-throughs (Building 2/3 N/A on smaller sites), defect notes, technician sign-off. Currently only Old Guildford + Unanderra per SOW. Quarterly frequency assumed; confirm with Jemena after first cycle.
 - **6-monthly cycle** — May visit covers full SWB-MAINT + RCD time-trip + push-button. November visit is RCD push-button only (one item, runs semi-annual).
 - **Calendar:** 16 entries in `pm_calendar` for May 1–15 2026, category `RCD testing`, with SKS Job Code in the description.
 - **Phase 1 (post-May)** will add `rcd_tests` + `rcd_test_circuits` schema, `/testing/rcd` workflow, and an xlsx importer mirroring the 2025 Jemena RCD report template. Gotenberg/PDF report generator parked short-term — May cycle uses the existing field xlsx workflow.
