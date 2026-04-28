@@ -62,11 +62,11 @@ function statusToTone(status: string | null): 'active' | 'inactive' | 'in-progre
 
 interface Props {
   checkId: string
-  /** Site id for deep-linking back into the workflow tabs (carries the site filter) */
+  /** Site id — kept for parity with the legacy deep-link shape; no longer used. */
   siteId: string | null
 }
 
-export async function LinkedTestsPanel({ checkId, siteId }: Props) {
+export async function LinkedTestsPanel({ checkId }: Props) {
   const supabase = await createClient()
 
   // Fetch all three test types in parallel — a check might have any
@@ -98,8 +98,6 @@ export async function LinkedTestsPanel({ checkId, siteId }: Props) {
   const total = acb.length + nsx.length + rcd.length
   if (total === 0) return null
 
-  const siteQ = siteId ? `&site_id=${siteId}` : ''
-
   return (
     <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
       <div className="px-4 py-2.5 border-b border-gray-200 bg-eq-ice flex items-center justify-between">
@@ -117,11 +115,10 @@ export async function LinkedTestsPanel({ checkId, siteId }: Props) {
           {acb.map((t) => {
             const asset = one(t.assets)
             const { done, total } = progressDots(t)
-            const assetId = asset?.id ?? t.asset_id
             return (
               <TestRow
                 key={t.id}
-                href={`/testing/acb?asset_id=${assetId}${siteQ}`}
+                href={`/testing/acb/${t.id}`}
                 primary={asset?.name ?? '—'}
                 middle={<ProgressDots done={done} total={total} />}
                 trailing={
@@ -141,11 +138,10 @@ export async function LinkedTestsPanel({ checkId, siteId }: Props) {
           {nsx.map((t) => {
             const asset = one(t.assets)
             const { done, total } = progressDots(t)
-            const assetId = asset?.id ?? t.asset_id
             return (
               <TestRow
                 key={t.id}
-                href={`/testing/nsx?asset_id=${assetId}${siteQ}`}
+                href={`/testing/nsx/${t.id}`}
                 primary={asset?.name ?? '—'}
                 middle={<ProgressDots done={done} total={total} />}
                 trailing={
