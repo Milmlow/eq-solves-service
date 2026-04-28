@@ -65,6 +65,7 @@ export type ReportType =
   | 'general_test'
   | 'maintenance_check'
   | 'defect_register'
+  | 'customer_scope_statement'
 
 const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   compliance: 'Compliance Report',
@@ -73,6 +74,7 @@ const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   general_test: 'General Test Report',
   maintenance_check: 'Maintenance Check Report',
   defect_register: 'Defect Register',
+  customer_scope_statement: 'Customer Scope Statement',
 }
 
 export interface ShellSettings {

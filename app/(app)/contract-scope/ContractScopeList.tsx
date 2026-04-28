@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
 import { Card } from '@/components/ui/Card'
 import { createScopeItemAction, updateScopeItemAction, deleteScopeItemAction, setContractScopePeriodStatusAction } from './actions'
+import { generateScopeStatementAction } from './scope-statement-action'
 import type { ContractScope, ContractScopePeriodStatus, Customer, Site } from '@/lib/types'
-import { Plus, Pencil, Trash2, X, CheckCircle2, XCircle, Filter, Upload, Download, Lock, Unlock, Archive, FileText } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, CheckCircle2, XCircle, Filter, Upload, Download, Lock, Unlock, Archive, FileText, FileDown } from 'lucide-react'
 import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importScopeItemsAction } from './actions'
@@ -28,11 +29,13 @@ interface ContractScopeListProps {
   canWrite: boolean
   isAdmin: boolean
   /**
-   * Tenant-level commercial-features flag (migration 0085). When true the
-   * lock/unlock/archive controls + locked-row enforcement are surfaced.
-   * When false the period_status badge is still visible (so the data is
-   * never hidden) but the action buttons stay off — matches what the
-   * BEFORE UPDATE/DELETE trigger on the DB does.
+   * Tenant-level commercial-features flag (migration 0085). When true:
+   *   - lock/unlock/archive controls + locked-row enforcement are surfaced
+   *     (Phase 5 UI)
+   *   - the "Scope Statement" download button appears (Phase 8)
+   * When false the period_status badge is still visible for non-default
+   * states (so data is never hidden) but action buttons stay off — matches
+   * the BEFORE UPDATE/DELETE trigger on the DB.
    */
   commercialEnabled: boolean
 }
@@ -248,6 +251,41 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
     setError(null)
   }
 
+  /**
+   * Phase 8 — generate the customer-facing scope statement docx (or PDF
+   * if a conversion backend is configured). Requires the filter to have
+   * narrowed to a single customer + a single FY so we know which slice
+   * of scope rows to bake into the document.
+   */
+  async function handleScopeStatement(format: 'docx' | 'pdf') {
+    if (!filterCustomer || !filterFY) {
+      setError('Pick a single customer and a single financial year before exporting the scope statement.')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    const fd = new FormData()
+    fd.set('customer_id', filterCustomer)
+    fd.set('financial_year', filterFY)
+    fd.set('format', format)
+    fd.set('include_variations', 'true')
+    const result = await generateScopeStatementAction(fd)
+    setLoading(false)
+    if (!result.success || !('data_b64' in result) || !result.data_b64) {
+      setError(('error' in result && result.error) || 'Could not generate scope statement.')
+      return
+    }
+    // Trigger browser download from the base64 payload.
+    const bytes = Uint8Array.from(atob(result.data_b64), c => c.charCodeAt(0))
+    const blob = new Blob([bytes], { type: result.content_type ?? 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = result.filename ?? 'scope-statement.docx'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const includedCount = filtered.filter(i => i.is_included).length
   const excludedCount = filtered.filter(i => !i.is_included).length
 
@@ -307,6 +345,27 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
           <Button variant="secondary" size="sm" onClick={handleExport} disabled={filtered.length === 0}>
             <Download className="w-4 h-4 mr-1" /> Export
           </Button>
+          {/* Phase 8 — customer-facing scope statement. Only available on
+              the commercial tier, and the operator must have narrowed to a
+              single customer + single FY first. The button stays visible
+              when the filter isn't narrow enough so the affordance is
+              always discoverable; clicking surfaces the prompt as an
+              error. */}
+          {commercialEnabled && canWriteRole && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleScopeStatement('docx')}
+              disabled={loading}
+              title={
+                filterCustomer && filterFY
+                  ? 'Generate the customer-facing scope statement (DOCX)'
+                  : 'Pick a customer and a year first'
+              }
+            >
+              <FileDown className="w-4 h-4 mr-1" /> Scope Statement
+            </Button>
+          )}
           {canWriteRole && !showForm && (
             <Button size="sm" onClick={() => { setShowForm(true); setEditing(null); setError(null) }}>
               <Plus className="w-3.5 h-3.5 mr-1" /> Add Scope Item
