@@ -118,6 +118,11 @@ export interface PmAssetReportInput {
   // Assets
   assets: PmAssetSection[]
 
+  // Linked test records (ACB / NSX / RCD) — Phase 5 of Testing
+  // simplification. Optional; renders the Test Records section only when
+  // any kind has rows. See AcbTestSummary / NsxTestSummary / RcdTestSummary.
+  linkedTests?: LinkedTestsBundle
+
   // Overall notes
   overallNotes?: string
 
@@ -156,6 +161,49 @@ export interface PmAssetTask {
   description: string
   result: 'pass' | 'fail' | 'na' | 'yes' | 'no' | 'requires_followup' | null
   notes?: string
+}
+
+/**
+ * Per-asset summary rows for ACB / NSX / RCD tests linked to the same
+ * maintenance check. Surfaced under a "Test Records" section in the report
+ * so a single PDF reflects all the work done at a site visit (Phase 5 of
+ * the Testing simplification — 2026-04-28).
+ *
+ * MVP shape: one row per asset with overall result + light progress info.
+ * Full per-circuit / per-reading detail is deferred to a follow-up.
+ */
+export interface AcbTestSummary {
+  assetName: string
+  cbMakeModel: string
+  testType: string                // 'Initial' / 'Routine' / 'Special'
+  testDate: string                // ISO
+  stepsDone: number               // 0..3
+  stepsTotal: number              // always 3 for current ACB/NSX workflow
+  overallResult: 'Pass' | 'Fail' | 'Defect' | 'Pending'
+}
+
+export interface NsxTestSummary {
+  assetName: string
+  cbMakeModel: string
+  testType: string
+  testDate: string
+  stepsDone: number
+  stepsTotal: number
+  overallResult: 'Pass' | 'Fail' | 'Defect' | 'Pending'
+}
+
+export interface RcdTestSummary {
+  assetName: string                  // board name
+  jemenaAssetId: string | null
+  testDate: string
+  circuitCount: number               // total circuits tested
+  status: 'draft' | 'complete' | 'archived'
+}
+
+export interface LinkedTestsBundle {
+  acb?: AcbTestSummary[]
+  nsx?: NsxTestSummary[]
+  rcd?: RcdTestSummary[]
 }
 
 // ─────────── Constants ───────────
@@ -1266,6 +1314,193 @@ function buildAssetSummary(input: PmAssetReportInput): (Paragraph | Table)[] {
   return children
 }
 
+/**
+ * Test Records section — one summary table per linked test type
+ * (ACB / NSX / RCD). Renders nothing when no tests are linked. Phase 5
+ * of the Testing simplification — single PDF reflects every kind of work
+ * done at the visit, not just the maintenance items.
+ */
+function buildLinkedTestsSummary(input: PmAssetReportInput): (Paragraph | Table)[] {
+  const brand = getBrand(input)
+  const linked = input.linkedTests ?? {}
+  const acb = linked.acb ?? []
+  const nsx = linked.nsx ?? []
+  const rcd = linked.rcd ?? []
+  if (acb.length === 0 && nsx.length === 0 && rcd.length === 0) return []
+
+  const children: (Paragraph | Table)[] = []
+
+  children.push(new Paragraph({
+    heading: HeadingLevel.HEADING_1,
+    children: [new Bookmark({
+      id: 'test_records',
+      children: [new TextRun({ text: 'Test Records', bold: true, size: 28, font: FONT_HEADING, color: brand })],
+    })],
+  }))
+
+  children.push(divider(brand))
+
+  children.push(new Paragraph({
+    spacing: { after: 120 },
+    children: [new TextRun({
+      text: `${acb.length + nsx.length + rcd.length} test record${acb.length + nsx.length + rcd.length === 1 ? '' : 's'} linked to this check across ${[acb.length && 'ACB', nsx.length && 'NSX', rcd.length && 'RCD'].filter(Boolean).join(' / ')}.`,
+      size: 18,
+      font: FONT,
+      color: EQ_MID_GREY,
+    })],
+  }))
+
+  if (acb.length > 0) children.push(...buildAcbNsxSummaryTable('ACB Tests', acb, brand))
+  if (nsx.length > 0) children.push(...buildAcbNsxSummaryTable('NSX Tests', nsx, brand))
+  if (rcd.length > 0) children.push(...buildRcdSummaryTable(rcd, brand))
+
+  return children
+}
+
+function buildAcbNsxSummaryTable(
+  title: string,
+  rows: AcbTestSummary[] | NsxTestSummary[],
+  brand: string,
+): (Paragraph | Table)[] {
+  const children: (Paragraph | Table)[] = []
+
+  children.push(new Paragraph({
+    spacing: { before: 200, after: 80 },
+    children: [new TextRun({ text: title, bold: true, size: 22, font: FONT_HEADING, color: brand })],
+  }))
+
+  const wAsset = 2200
+  const wMakeModel = 2400
+  const wType = 1200
+  const wDate = 1500
+  const wProgress = 1100
+  const wResult = CONTENT_WIDTH - (wAsset + wMakeModel + wType + wDate + wProgress)
+  const tw = wAsset + wMakeModel + wType + wDate + wProgress + wResult
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+      makeHeaderCell('Asset', wAsset, brand),
+      makeHeaderCell('Breaker', wMakeModel, brand),
+      makeHeaderCell('Type', wType, brand),
+      makeHeaderCell('Date', wDate, brand),
+      makeHeaderCell('Steps', wProgress, brand),
+      makeHeaderCell('Result', wResult, brand),
+    ],
+  })
+
+  const dataRows = rows.map((r) =>
+    new TableRow({
+      children: [
+        makeCell(r.assetName, wAsset, { bold: true, size: 17 }),
+        makeCell(r.cbMakeModel || '—', wMakeModel, { size: 17 }),
+        makeCell(r.testType || '—', wType, { size: 17 }),
+        makeCell(fmtDate(r.testDate), wDate, { size: 17 }),
+        makeCell(`${r.stepsDone}/${r.stepsTotal}`, wProgress, { size: 17, align: AlignmentType.CENTER }),
+        makeCell(r.overallResult, wResult, {
+          size: 17,
+          bold: true,
+          shading: resultShadingForTest(r.overallResult),
+          color: resultColorForTest(r.overallResult),
+        }),
+      ],
+    }),
+  )
+
+  children.push(new Table({
+    width: { size: tw, type: WidthType.DXA },
+    columnWidths: [wAsset, wMakeModel, wType, wDate, wProgress, wResult],
+    rows: [headerRow, ...dataRows],
+  }))
+
+  return children
+}
+
+function buildRcdSummaryTable(
+  rows: RcdTestSummary[],
+  brand: string,
+): (Paragraph | Table)[] {
+  const children: (Paragraph | Table)[] = []
+
+  children.push(new Paragraph({
+    spacing: { before: 200, after: 80 },
+    children: [new TextRun({ text: 'RCD Tests', bold: true, size: 22, font: FONT_HEADING, color: brand })],
+  }))
+
+  const wBoard = 2600
+  const wJemena = 1700
+  const wDate = 1700
+  const wCircuits = 1400
+  const wStatus = CONTENT_WIDTH - (wBoard + wJemena + wDate + wCircuits)
+  const tw = wBoard + wJemena + wDate + wCircuits + wStatus
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+      makeHeaderCell('Board', wBoard, brand),
+      makeHeaderCell('Jemena ID', wJemena, brand),
+      makeHeaderCell('Date', wDate, brand),
+      makeHeaderCell('Circuits', wCircuits, brand),
+      makeHeaderCell('Status', wStatus, brand),
+    ],
+  })
+
+  const dataRows = rows.map((r) =>
+    new TableRow({
+      children: [
+        makeCell(r.assetName, wBoard, { bold: true, size: 17 }),
+        makeCell(r.jemenaAssetId ?? '—', wJemena, { size: 17, font: FONT }),
+        makeCell(fmtDate(r.testDate), wDate, { size: 17 }),
+        makeCell(String(r.circuitCount), wCircuits, { size: 17, align: AlignmentType.CENTER }),
+        makeCell(rcdStatusLabel(r.status), wStatus, {
+          size: 17,
+          bold: true,
+          shading: rcdStatusShading(r.status),
+          color: rcdStatusColor(r.status),
+        }),
+      ],
+    }),
+  )
+
+  children.push(new Table({
+    width: { size: tw, type: WidthType.DXA },
+    columnWidths: [wBoard, wJemena, wDate, wCircuits, wStatus],
+    rows: [headerRow, ...dataRows],
+  }))
+
+  return children
+}
+
+function resultShadingForTest(r: 'Pass' | 'Fail' | 'Defect' | 'Pending'): string | undefined {
+  if (r === 'Pass') return 'E8F5E9'
+  if (r === 'Fail' || r === 'Defect') return 'FFEBEE'
+  return undefined
+}
+
+function resultColorForTest(r: 'Pass' | 'Fail' | 'Defect' | 'Pending'): string | undefined {
+  if (r === 'Pass') return STATUS_PASS
+  if (r === 'Fail' || r === 'Defect') return STATUS_FAIL
+  return EQ_INK
+}
+
+function rcdStatusLabel(s: 'draft' | 'complete' | 'archived'): string {
+  if (s === 'complete') return 'Complete'
+  if (s === 'archived') return 'Archived'
+  return 'Draft'
+}
+
+function rcdStatusShading(s: 'draft' | 'complete' | 'archived'): string | undefined {
+  if (s === 'complete') return 'E8F5E9'
+  if (s === 'archived') return undefined
+  return 'FFF8E1'
+}
+
+function rcdStatusColor(s: 'draft' | 'complete' | 'archived'): string | undefined {
+  if (s === 'complete') return STATUS_PASS
+  if (s === 'draft') return STATUS_WARN
+  return EQ_MID_GREY
+}
+
 function buildDefectsRegister(input: PmAssetReportInput): (Paragraph | Table)[] {
   const brand = getBrand(input)
   const children: (Paragraph | Table)[] = []
@@ -1477,6 +1712,16 @@ export async function generatePMAssetReport(input: PmAssetReportInput): Promise<
   }
 
   bodyChildren.push(...assetSectionChildren)
+
+  // Phase 5: Test Records section. Renders only when linkedTests has rows
+  // (returns [] otherwise). Sits after per-asset detail and before the
+  // defects register so the PDF flows: maintenance work → test work →
+  // defects → sign-off.
+  const testRecordsSection = buildLinkedTestsSummary(input)
+  if (testRecordsSection.length > 0) {
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+    bodyChildren.push(...testRecordsSection)
+  }
 
   if (showDefectsRegister) {
     bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
