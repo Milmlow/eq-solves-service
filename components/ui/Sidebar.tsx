@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  Zap, FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle, Contact2, FileSpreadsheet
+  FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle, Contact2, FileSpreadsheet
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -19,7 +19,12 @@ const navItems = [
   { label: 'Job Plans',   href: '/job-plans',    icon: FileCheck },
   { label: 'Maintenance', href: '/maintenance',  icon: ClipboardCheck },
   { label: 'Calendar',    href: '/calendar',     icon: CalendarDays },
-  { label: 'Testing',     href: '/testing',      icon: Zap },
+  // 2026-04-28 (Royce review Q4): Testing folded into Maintenance.
+  // ACB / NSX / RCD checks live in maintenance_checks alongside PPM
+  // (after migration 0080 + the kind discriminator), and the linked
+  // tests panel inside /maintenance/[id] is the entry point. The
+  // /testing/* routes still resolve for direct URLs and existing deep
+  // links, but no longer have a top-level sidebar entry.
   { label: 'Defects',     href: '/defects',      icon: AlertTriangle },
   { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
   { label: 'Reports',     href: '/reports',      icon: FileText },
