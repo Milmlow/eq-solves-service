@@ -932,8 +932,13 @@ export async function updateCheckItemAction(
       .single()
 
     if (!check) return { success: false, error: 'Check not found.' }
-    if (check.status !== 'in_progress') {
-      return { success: false, error: 'Check must be in progress to update items.' }
+    // 2026-04-28: items remain editable when the check is `complete`. Royce's
+    // workflow: bulk-complete all assets first (most pass), then go back and
+    // downgrade the few failures. The previous lock fired too early. Audit
+    // log captures every flip so the change history stays auditable.
+    // Scheduled / cancelled remain blocked — those are pre-work or terminal.
+    if (check.status !== 'in_progress' && check.status !== 'complete') {
+      return { success: false, error: 'Check must be in progress or complete to update items.' }
     }
 
     const isAssigned = check.assigned_to === user.id
