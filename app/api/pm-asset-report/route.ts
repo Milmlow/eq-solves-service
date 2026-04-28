@@ -221,28 +221,73 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  // RCD circuit counts come from a separate query — bulk lookup keyed by test id.
+  // RCD per-circuit data — bulk fetch ALL circuits for the linked tests
+  // and bucket by parent rcd_test_id. Phase 5 follow-up (PR O — 2026-04-28):
+  // the report now includes a deep "RCD Circuit Timing" section per board
+  // when this data is present, giving customers per-circuit compliance
+  // evidence (AS/NZS 3760).
   const rcdRows = rcdLinkedRes.data ?? []
   const rcdIds = rcdRows.map((r) => r.id)
-  const circuitCountByTest = new Map<string, number>()
+  type CircuitRow = {
+    rcd_test_id: string
+    section_label: string | null
+    circuit_no: string
+    normal_trip_current_ma: number
+    jemena_circuit_asset_id: string | null
+    x1_no_trip_0_ms: string | null
+    x1_no_trip_180_ms: string | null
+    x1_trip_0_ms: string | null
+    x1_trip_180_ms: string | null
+    x5_fast_0_ms: string | null
+    x5_fast_180_ms: string | null
+    trip_test_button_ok: boolean
+    is_critical_load: boolean
+    action_taken: string | null
+    sort_order: number
+  }
+  const circuitsByTest = new Map<string, CircuitRow[]>()
   if (rcdIds.length > 0) {
     const { data: circuitRows } = await supabase
       .from('rcd_test_circuits')
-      .select('rcd_test_id')
+      .select(
+        'rcd_test_id, section_label, circuit_no, normal_trip_current_ma, jemena_circuit_asset_id, x1_no_trip_0_ms, x1_no_trip_180_ms, x1_trip_0_ms, x1_trip_180_ms, x5_fast_0_ms, x5_fast_180_ms, trip_test_button_ok, is_critical_load, action_taken, sort_order',
+      )
       .in('rcd_test_id', rcdIds)
-    for (const c of circuitRows ?? []) {
-      circuitCountByTest.set(c.rcd_test_id, (circuitCountByTest.get(c.rcd_test_id) ?? 0) + 1)
+      .order('sort_order')
+    for (const c of (circuitRows ?? []) as CircuitRow[]) {
+      const arr = circuitsByTest.get(c.rcd_test_id) ?? []
+      arr.push(c)
+      circuitsByTest.set(c.rcd_test_id, arr)
     }
   }
 
   const rcdSummaries: RcdTestSummary[] = rcdRows.map((t) => {
     const asset = unwrap(t.assets as { name: string; jemena_asset_id: string | null } | { name: string; jemena_asset_id: string | null }[] | null)
+    const ckts = circuitsByTest.get(t.id) ?? []
     return {
       assetName: asset?.name ?? '—',
       jemenaAssetId: asset?.jemena_asset_id ?? null,
       testDate: t.test_date,
-      circuitCount: circuitCountByTest.get(t.id) ?? 0,
+      circuitCount: ckts.length,
       status: (t.status as 'draft' | 'complete' | 'archived') ?? 'draft',
+      // Map column names → camelCase for the report builder.
+      circuits: ckts.length > 0
+        ? ckts.map((c) => ({
+            sectionLabel: c.section_label,
+            circuitNo: c.circuit_no,
+            normalTripCurrentMa: c.normal_trip_current_ma,
+            jemenaCircuitAssetId: c.jemena_circuit_asset_id,
+            x1NoTrip0Ms: c.x1_no_trip_0_ms,
+            x1NoTrip180Ms: c.x1_no_trip_180_ms,
+            x1Trip0Ms: c.x1_trip_0_ms,
+            x1Trip180Ms: c.x1_trip_180_ms,
+            x5Fast0Ms: c.x5_fast_0_ms,
+            x5Fast180Ms: c.x5_fast_180_ms,
+            tripTestButtonOk: c.trip_test_button_ok,
+            isCriticalLoad: c.is_critical_load,
+            actionTaken: c.action_taken,
+          }))
+        : undefined,
     }
   })
 
