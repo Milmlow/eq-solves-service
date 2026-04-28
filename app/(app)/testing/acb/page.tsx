@@ -8,12 +8,14 @@ import { Button } from '@/components/ui/Button'
 import { AcbWorkflow } from './AcbWorkflow'
 import { AcbSiteCollection } from './AcbSiteCollection'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight, Download, Upload, Plus } from 'lucide-react'
+import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight, Download, Upload, Plus, FileText } from 'lucide-react'
 import type { AcbTest, AcbTestReading, Asset } from '@/lib/types'
 import { createAcbTestAction, updateAcbDetailsAction } from '@/app/(app)/acb-testing/actions'
 import { exportAcbCollectionXlsx, parseAcbCollectionXlsx } from '@/lib/utils/acb-excel'
 import { createTestingCheckAction } from '@/app/(app)/testing/check-actions'
 import { formatSiteLabel } from '@/lib/utils/format'
+import { ReportDownloadDialog, type ReportComplexity } from '@/components/ui/ReportDownloadDialog'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 type SitePick = {
   id: string
@@ -46,6 +48,7 @@ export default function AcbTestingPage() {
   const [noAssets, setNoAssets] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ success: number; errors: number } | null>(null)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
   // Create Check form state
   const [checkFrequency, setCheckFrequency] = useState<string>('Annual')
   const [checkMonth, setCheckMonth] = useState<number>(new Date().getMonth() + 1)
@@ -223,6 +226,35 @@ export default function AcbTestingPage() {
   function handleExport() {
     const siteName = sites.find(s => s.id === selectedSite)?.name ?? 'Site'
     exportAcbCollectionXlsx(siteName, assets)
+  }
+
+  // Generate the per-site ACB test report PDF. Migrated from the legacy
+  // /acb-testing list page (now 308-redirected). Same /api/acb-report
+  // endpoint, same complexity options.
+  async function handleGenerateReport(complexity: ReportComplexity) {
+    if (!selectedSite) return
+    const res = await fetch(`/api/acb-report?site_id=${selectedSite}&complexity=${complexity}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Download failed' }))
+      alert(err.error ?? 'Report generation failed')
+      throw new Error(err.error)
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const disposition = res.headers.get('Content-Disposition')
+    const match = disposition?.match(/filename="(.+?)"/)
+    a.download = match?.[1] ?? 'ACB Test Report.docx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+
+    analyticsEvents.reportGenerated({
+      report_type: `acb_${complexity}`,
+      asset_count: assets.length,
+    })
   }
 
   // Excel import
@@ -644,6 +676,14 @@ export default function AcbTestingPage() {
               </Button>
               <Button
                 size="sm"
+                variant="secondary"
+                onClick={() => setReportDialogOpen(true)}
+              >
+                <FileText className="w-4 h-4 mr-1" />
+                Report
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => {
                   setShowCreateCheck(true)
                   setSelectedAssetIds(new Set())
@@ -790,6 +830,13 @@ export default function AcbTestingPage() {
           )}
         </div>
       )}
+
+      <ReportDownloadDialog
+        open={reportDialogOpen}
+        onClose={() => setReportDialogOpen(false)}
+        onDownload={handleGenerateReport}
+        title="ACB Test Report"
+      />
     </div>
   )
 }

@@ -12,12 +12,14 @@ import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { CheckCircle2, Clock, Play, ChevronRight, Plus } from 'lucide-react'
+import { CheckCircle2, Clock, Play, ChevronRight, Plus, FileText } from 'lucide-react'
 import type { Asset, NsxTest, NsxTestReading } from '@/lib/types'
 import { createNsxTestAction } from '@/app/(app)/nsx-testing/actions'
 import { createTestingCheckAction } from '@/app/(app)/testing/check-actions'
 import { NsxWorkflow } from './NsxWorkflow'
 import { formatSiteLabel } from '@/lib/utils/format'
+import { ReportDownloadDialog, type ReportComplexity } from '@/components/ui/ReportDownloadDialog'
+import { events as analyticsEvents } from '@/lib/analytics'
 
 type SitePick = {
   id: string
@@ -56,6 +58,7 @@ export default function NsxTestingPage() {
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
   const [creatingCheck, setCreatingCheck] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
 
   const supabase = createClient()
 
@@ -212,6 +215,35 @@ export default function NsxTestingPage() {
       await loadSiteData()
       setSelectedAsset(asset.id)
     }
+  }
+
+  // Generate the per-site NSX test report PDF. Migrated from the legacy
+  // /nsx-testing list page (now 308-redirected). Same /api/nsx-report
+  // endpoint, same complexity options.
+  async function handleGenerateReport(complexity: ReportComplexity) {
+    if (!selectedSite) return
+    const res = await fetch(`/api/nsx-report?site_id=${selectedSite}&complexity=${complexity}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Download failed' }))
+      alert(err.error ?? 'Report generation failed')
+      throw new Error(err.error)
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const disposition = res.headers.get('Content-Disposition')
+    const match = disposition?.match(/filename="(.+?)"/)
+    a.download = match?.[1] ?? 'NSX Test Report.docx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+
+    analyticsEvents.reportGenerated({
+      report_type: `nsx_${complexity}`,
+      asset_count: assets.length,
+    })
   }
 
   // Create Check handler — on success, route straight to the Testing Summary
@@ -525,10 +557,20 @@ export default function NsxTestingPage() {
           <p className="text-eq-grey text-sm mt-1">Site-based NSX / MCCB testing — framework mirroring ACB.</p>
         </div>
         {selectedSite && !noAssets && (
-          <Button size="sm" onClick={() => setShowCreateCheck(true)}>
-            <Plus className="w-3 h-3 mr-1" />
-            Create Check
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setReportDialogOpen(true)}
+            >
+              <FileText className="w-3 h-3 mr-1" />
+              Report
+            </Button>
+            <Button size="sm" onClick={() => setShowCreateCheck(true)}>
+              <Plus className="w-3 h-3 mr-1" />
+              Create Check
+            </Button>
+          </div>
         )}
       </div>
 
@@ -637,6 +679,13 @@ export default function NsxTestingPage() {
           )}
         </Card>
       )}
+
+      <ReportDownloadDialog
+        open={reportDialogOpen}
+        onClose={() => setReportDialogOpen(false)}
+        onDownload={handleGenerateReport}
+        title="NSX Test Report"
+      />
     </div>
   )
 }
