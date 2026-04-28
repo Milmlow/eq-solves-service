@@ -146,6 +146,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('maximo_id')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [filterText, setFilterText] = useState('')
   const [showPasteModal, setShowPasteModal] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
@@ -207,6 +208,20 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     return arr
   }, [checkAssets, items, sortKey, sortDir])
 
+  // Free-text filter on asset name + Maximo ID. Case-insensitive substring
+  // match. Royce 2026-04-28: scanning a 100-row table by eye is painful.
+  const displayedAssets = useMemo(() => {
+    const q = filterText.trim().toLowerCase()
+    if (!q) return sortedAssets
+    return sortedAssets.filter((ca) => {
+      const a = ca.assets
+      const name = (a?.name ?? '').toLowerCase()
+      const mx = (a?.maximo_id ?? '').toLowerCase()
+      const loc = (a?.location ?? '').toLowerCase()
+      return name.includes(q) || mx.includes(q) || loc.includes(q)
+    })
+  }, [sortedAssets, filterText])
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -233,7 +248,9 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 
   function toggleAllAssets(checked: boolean) {
     if (checked) {
-      setSelectedAssetIds(new Set(sortedAssets.map(a => a.id)))
+      // Select only what's currently visible (filter-respecting), so the
+      // header checkbox + Complete N Selected works on the filtered view.
+      setSelectedAssetIds(new Set(displayedAssets.map(a => a.id)))
     } else {
       setSelectedAssetIds(new Set())
     }
@@ -533,6 +550,19 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
         />
       )}
 
+      {/* Attachments — moved above the asset table 2026-04-28 (issue 2 in
+          Royce's review). Eye lands on summary + linked tests + supporting
+          docs first; the long breaker table sits at the bottom. */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <AttachmentList
+          entityType="maintenance_check"
+          entityId={check.id}
+          attachments={attachments}
+          canWrite={canWriteRole || isAssigned}
+          isAdmin={isAdmin}
+        />
+      </div>
+
       {/* Asset Table — full width */}
       {checkAssets.length > 0 && (
         <>
@@ -551,13 +581,22 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           )}
 
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-              <span className="text-sm font-bold text-eq-ink">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
+              <span className="text-sm font-bold text-eq-ink shrink-0">
                 Maintenance Check Assets ({checkAssets.length})
               </span>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-eq-grey">
-                  {completedAssets}/{checkAssets.length} completed
+              <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+                {/* Free-text filter (Royce 2026-04-28 — scanning a 100-row
+                    table by eye is painful). Empty = all assets. */}
+                <input
+                  type="text"
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  placeholder="Filter by name, Maximo ID, or location…"
+                  className="h-8 px-2 text-sm border border-gray-200 rounded focus:outline-none focus:border-eq-deep focus:ring-1 focus:ring-eq-sky/30 w-56 max-w-[40%]"
+                />
+                <span className="text-sm text-eq-grey shrink-0">
+                  {filterText ? `${displayedAssets.length}/${checkAssets.length}` : `${completedAssets}/${checkAssets.length} completed`}
                 </span>
                 {canAct && (
                   <Button size="sm" variant="secondary" onClick={() => setShowPasteModal(true)}>
@@ -576,7 +615,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                     <th className="w-10 px-4 py-2.5">
                       <input
                         type="checkbox"
-                        checked={selectedAssetIds.size === sortedAssets.length && sortedAssets.length > 0}
+                        checked={selectedAssetIds.size === displayedAssets.length && displayedAssets.length > 0}
                         onChange={(e) => toggleAllAssets(e.target.checked)}
                         className="cursor-pointer"
                       />
@@ -602,7 +641,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {sortedAssets.map(ca => (
+                {displayedAssets.map(ca => (
                   <AssetRow
                     key={ca.id}
                     ca={ca}
@@ -620,6 +659,13 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                     onAssetWO={(wo) => handleAssetWO(ca.id, wo)}
                   />
                 ))}
+                {displayedAssets.length === 0 && filterText && (
+                  <tr>
+                    <td colSpan={canAct ? 9 : 8} className="px-4 py-8 text-center text-sm text-eq-grey">
+                      No assets match &ldquo;{filterText}&rdquo;.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -632,17 +678,6 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           <p className="text-eq-grey text-sm">No assets linked to this maintenance check.</p>
         </div>
       )}
-
-      {/* Attachments */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <AttachmentList
-          entityType="maintenance_check"
-          entityId={check.id}
-          attachments={attachments}
-          canWrite={canWriteRole || isAssigned}
-          isAdmin={isAdmin}
-        />
-      </div>
     </div>
   )
 }
