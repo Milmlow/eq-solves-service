@@ -9,12 +9,13 @@ const PER_PAGE = 25
 export default async function MaintenancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; status?: string; page?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; status?: string; kind?: string; page?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
   const status = params.status ?? ''
+  const kind = params.kind ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
 
   const supabase = await createClient()
@@ -92,6 +93,11 @@ export default async function MaintenancePage({
   }
   if (status) {
     query = query.eq('status', status)
+  }
+  if (kind) {
+    // Server-side kind filter — wired to the new "Type" dropdown on the
+    // maintenance list (2026-04-28 chrome polish).
+    query = query.eq('kind', kind)
   }
 
   const from = (page - 1) * PER_PAGE
