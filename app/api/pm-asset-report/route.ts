@@ -21,7 +21,6 @@ import type {
 } from '@/lib/reports/pm-asset-report'
 import {
   resolveReportLogos,
-  resolveCustomerLogos,
   fetchSitePhoto,
 } from '@/lib/reports/logo-variants'
 import type { Role } from '@/lib/types'
@@ -128,10 +127,10 @@ export async function GET(request: NextRequest) {
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
   const complexity = complexityOverride ?? (tenantSettings?.report_complexity as 'summary' | 'standard' | 'detailed' | null) ?? 'standard'
 
-  // Resolve tenant + customer logos for both surfaces — see lib/reports/logo-variants
+  // Resolve tenant logo. Customer logo dropped from the cover 2026-04-28
+  // (see report-input section below) — the resolveCustomerLogos call is
+  // gone too so we don't waste a fetch on something that won't render.
   const reportLogos = await resolveReportLogos(tenantSettings, tenantRow)
-  const customerRow = site?.customers as { name: string; logo_url?: string | null; logo_url_on_dark?: string | null } | null
-  const customerLogos = await resolveCustomerLogos(customerRow, { width: 140, height: 48 })
   const sitePhoto = check.site_id ? await fetchSitePhoto(supabase, check.site_id, tenantId) : undefined
 
   // Resolve user names (assigned_to, completed_by, etc.)
@@ -319,8 +318,12 @@ export async function GET(request: NextRequest) {
     logoImageOnDark:  reportLogos.onDark,
 
     // Customer logo variants (cover page "Prepared for" lockup)
-    customerLogoOnLight: customerLogos.onLight,
-    customerLogoOnDark:  customerLogos.onDark,
+    // Customer logo dropped from cover 2026-04-28 (Royce review issue 9):
+    // the cover already names the customer in headline type; rendering a
+    // small customer logo alongside the tenant logo created a "two-logo
+    // mosaic" that looked municipal-tender. Tenant logo only on the cover.
+    customerLogoOnLight: undefined,
+    customerLogoOnDark:  undefined,
 
     // Site photo (cover page hero, below customer lockup)
     sitePhoto,
