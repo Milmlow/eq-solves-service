@@ -61,10 +61,21 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
   const [importOpen, setImportOpen] = useState(false)
 
   // Distinct plans for the plan dropdown — derived from current rows.
+  // 2026-04-28 (Royce review): Equinix plans store the descriptive label in
+  // `type` ("24v /48v Battery Charger") and use `name` for the version
+  // identifier ("E1.29.2"). Jemena's plans put the description in `name`.
+  // To show readable labels regardless of which convention a tenant uses,
+  // we concatenate the human-readable parts (deduped) so the dropdown reads
+  // as e.g. "24VBTCHGR — E1.29.2 · 24v /48v Battery Charger" for Equinix
+  // and "JEMENA-RCD-TEST — Jemena RCD Testing" for Jemena.
   const planOptions = useMemo(() => {
     const map = new Map<string, { id: string; label: string }>()
     for (const r of initialRows) {
-      const label = r.plan_code ? `${r.plan_code} — ${r.plan_name}` : r.plan_name
+      const descriptors = [r.plan_name, r.plan_type]
+        .filter((v): v is string => !!v)
+        .filter((v, i, arr) => arr.indexOf(v) === i)  // dedupe
+      const desc = descriptors.join(' · ')
+      const label = r.plan_code ? `${r.plan_code} — ${desc || r.plan_name}` : desc || r.plan_name
       if (!map.has(r.plan_id)) map.set(r.plan_id, { id: r.plan_id, label })
     }
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label))
