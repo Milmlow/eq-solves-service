@@ -10,27 +10,64 @@ import { useState, useEffect } from 'react'
 import { NotificationBell } from '@/components/ui/NotificationBell'
 import type { TenantSettings } from '@/lib/types'
 
-const navItems = [
-  { label: 'Dashboard',   href: '/dashboard',   icon: LayoutDashboard },
-  { label: 'Customers',   href: '/customers',   icon: Building2 },
-  { label: 'Sites',       href: '/sites',        icon: MapPin },
-  { label: 'Contacts',    href: '/contacts',     icon: Contact2 },
-  { label: 'Assets',      href: '/assets',       icon: Package },
-  { label: 'Job Plans',   href: '/job-plans',    icon: FileCheck },
-  { label: 'Maintenance', href: '/maintenance',  icon: ClipboardCheck },
-  { label: 'Calendar',    href: '/calendar',     icon: CalendarDays },
-  // 2026-04-28 (Royce review Q4): Testing folded into Maintenance.
-  // ACB / NSX / RCD checks live in maintenance_checks alongside PPM
-  // (after migration 0080 + the kind discriminator), and the linked
-  // tests panel inside /maintenance/[id] is the entry point. The
-  // /testing/* routes still resolve for direct URLs and existing deep
-  // links, but no longer have a top-level sidebar entry.
-  { label: 'Defects',     href: '/defects',      icon: AlertTriangle },
-  { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
-  { label: 'Reports',     href: '/reports',      icon: FileText },
-  { label: 'Analytics',   href: '/analytics',    icon: BarChart3 },
-  { label: 'Search',      href: '/search',       icon: Search },
-  { label: 'Settings',    href: '/settings',     icon: Settings },
+/**
+ * Sidebar navigation grouped into sections for visual structure.
+ *
+ * 2026-04-28 polish (PR J): the previous flat 14-item list felt unbalanced
+ * after the Testing fold. Grouped by intent — Data (the records), Operations
+ * (daily-driver work), Insight (strategic / reporting), with Dashboard at
+ * top and Search/Settings at the bottom in their own unlabeled groups.
+ *
+ * Section labels match the existing Admin block's styling (uppercase 10px
+ * tracking-wider white/30) so the Admin block reads as just one more
+ * section, not a special case.
+ */
+const navSections: Array<{
+  label?: string
+  items: Array<{ label: string; href: string; icon: typeof LayoutDashboard }>
+}> = [
+  {
+    items: [
+      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: 'Data',
+    items: [
+      { label: 'Customers', href: '/customers', icon: Building2 },
+      { label: 'Sites',     href: '/sites',     icon: MapPin },
+      { label: 'Contacts',  href: '/contacts',  icon: Contact2 },
+      { label: 'Assets',    href: '/assets',    icon: Package },
+      { label: 'Job Plans', href: '/job-plans', icon: FileCheck },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      // Testing folded into Maintenance 2026-04-28 (Royce review Q4) —
+      // ACB/NSX/RCD live in maintenance_checks via the `kind` discriminator
+      // (migration 0080). /testing/* routes still resolve for direct URLs
+      // and LinkedTestsPanel deep links, but no longer have a top-level
+      // sidebar entry.
+      { label: 'Maintenance', href: '/maintenance', icon: ClipboardCheck },
+      { label: 'Calendar',    href: '/calendar',    icon: CalendarDays },
+      { label: 'Defects',     href: '/defects',     icon: AlertTriangle },
+    ],
+  },
+  {
+    label: 'Insight',
+    items: [
+      { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
+      { label: 'Reports',        href: '/reports',        icon: FileText },
+      { label: 'Analytics',      href: '/analytics',      icon: BarChart3 },
+    ],
+  },
+  {
+    items: [
+      { label: 'Search',   href: '/search',   icon: Search },
+      { label: 'Settings', href: '/settings', icon: Settings },
+    ],
+  },
 ]
 
 interface SidebarProps {
@@ -92,24 +129,33 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
         </div>
       </div>
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {navItems.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
-                active
-                  ? 'bg-white/10 text-white'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>{label}</span>}
-            </Link>
-          )
-        })}
+        {navSections.map((section, sIdx) => (
+          <div key={sIdx} className={sIdx > 0 ? 'mt-3' : undefined}>
+            {section.label && (
+              <div className={cn('mb-1 px-3 text-[10px] uppercase tracking-wider text-white/30', collapsed && 'sr-only')}>
+                {section.label}
+              </div>
+            )}
+            {section.items.map(({ label, href, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href + '/')
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
+                    active
+                      ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
+                      : 'text-white/60 hover:text-white hover:bg-white/10'
+                  )}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  {!collapsed && <span>{label}</span>}
+                </Link>
+              )
+            })}
+          </div>
+        ))}
         {isAdmin && (
           <>
             <div className={cn('mt-4 mb-1 px-3 text-[10px] uppercase tracking-wider text-white/30', collapsed && 'sr-only')}>
@@ -118,9 +164,9 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             <Link
               href="/admin/users"
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
                 pathname.startsWith('/admin/users')
-                  ? 'bg-white/10 text-white'
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
@@ -130,9 +176,9 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             <Link
               href="/audit-log"
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
                 pathname.startsWith('/audit-log')
-                  ? 'bg-white/10 text-white'
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
@@ -142,9 +188,9 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             <Link
               href="/admin/settings"
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
                 pathname === '/admin/settings'
-                  ? 'bg-white/10 text-white'
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
@@ -154,9 +200,9 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             <Link
               href="/admin/media"
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
                 pathname.startsWith('/admin/media')
-                  ? 'bg-white/10 text-white'
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
@@ -166,9 +212,9 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             <Link
               href="/admin/reports"
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
                 pathname.startsWith('/admin/reports')
-                  ? 'bg-white/10 text-white'
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
@@ -178,9 +224,9 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             <Link
               href="/admin/archive"
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
                 pathname.startsWith('/admin/archive')
-                  ? 'bg-white/10 text-white'
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
@@ -190,9 +236,9 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
             <Link
               href="/admin/contract-scopes/import"
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium',
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
                 pathname.startsWith('/admin/contract-scopes')
-                  ? 'bg-white/10 text-white'
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
