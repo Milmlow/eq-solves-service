@@ -141,6 +141,8 @@ export interface ReportDelivery {
   updated_at: string
 }
 
+export type ContractScopePeriodStatus = 'draft' | 'committed' | 'locked' | 'archived'
+
 export interface ContractScope {
   id: string
   tenant_id: string
@@ -150,6 +152,14 @@ export interface ContractScope {
   scope_item: string
   is_included: boolean
   notes: string | null
+  /**
+   * Lifecycle stage. Added in migration 0084. Defaults to 'committed' so
+   * legacy data behaves as before; year-end close flips to 'locked' which
+   * makes the row immutable except via super_admin override (enforced by
+   * the BD trigger, gated by the tenant's commercial_features_enabled flag
+   * — migration 0085).
+   */
+  period_status: ContractScopePeriodStatus
   created_at: string
   updated_at: string
 }

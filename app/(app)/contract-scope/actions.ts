@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
+import type { ContractScopePeriodStatus } from '@/lib/types'
 
 export async function createScopeItemAction(formData: FormData) {
   try {
@@ -116,6 +117,85 @@ export async function importScopeItemsAction(items: {
     await logAuditEvent({ action: 'create', entityType: 'contract_scope', summary: `Imported ${imported} scope items` })
     revalidatePath('/contract-scope')
     return { success: true, imported, skipped }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Phase 5 of the contract-scope bridge plan — period_status transition
+ * action. Used by the lock/unlock/archive controls on /contract-scope.
+ *
+ * - Admin role required (super_admin can do everything; admin can flip
+ *   draft⇄committed and committed→locked. Only super_admin bypasses the
+ *   DB-level lock-gate trigger when going locked→anything else, so for
+ *   non-super_admin we early-out before issuing the UPDATE rather than
+ *   relying on the trigger to raise.)
+ * - Surfaces the new status + reason into audit_logs.metadata so the
+ *   history viewer can correlate.
+ * - Server action is a no-op gate when the tenant doesn't have the
+ *   commercial-tier feature enabled — the DB trigger short-circuits in
+ *   that case anyway, but we want a clean error message instead of an
+ *   ineffective UPDATE.
+ */
+export async function setContractScopePeriodStatusAction(
+  id: string,
+  newStatus: 'draft' | 'committed' | 'locked' | 'archived',
+  reason: string | null,
+) {
+  try {
+    const { supabase, role, tenantId } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Admin role required to change scope status.' }
+
+    // Read current row + tenant flag in parallel.
+    const [scopeRes, settingsRes] = await Promise.all([
+      supabase
+        .from('contract_scopes')
+        .select('id, period_status, scope_item, financial_year')
+        .eq('id', id)
+        .maybeSingle(),
+      supabase
+        .from('tenant_settings')
+        .select('commercial_features_enabled')
+        .eq('tenant_id', tenantId)
+        .maybeSingle(),
+    ])
+    if (scopeRes.error || !scopeRes.data) {
+      return { success: false, error: scopeRes.error?.message ?? 'Scope item not found.' }
+    }
+    if (!settingsRes.data?.commercial_features_enabled) {
+      return { success: false, error: 'Period locking is a commercial-tier feature. Enable it in Admin → Settings first.' }
+    }
+
+    const oldStatus = scopeRes.data.period_status as 'draft' | 'committed' | 'locked' | 'archived'
+    if (oldStatus === newStatus) return { success: true } // no-op
+
+    // App-layer guard for non-super_admin trying to leave 'locked' state —
+    // the DB trigger will block, but we'd rather not issue a doomed UPDATE.
+    if (oldStatus === 'locked' && role !== 'super_admin') {
+      return { success: false, error: 'Only super_admin can unlock a locked period. Contact your system owner.' }
+    }
+
+    const { error } = await supabase
+      .from('contract_scopes')
+      .update({ period_status: newStatus })
+      .eq('id', id)
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'contract_scope',
+      entityId: id,
+      summary: `${oldStatus} → ${newStatus}: ${scopeRes.data.scope_item} (FY ${scopeRes.data.financial_year})`,
+      metadata: {
+        period_status_old: oldStatus,
+        period_status_new: newStatus,
+        reason: reason ?? null,
+      },
+    })
+    revalidatePath('/contract-scope')
+    return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }
