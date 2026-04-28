@@ -11,7 +11,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generatePMAssetReport } from '@/lib/reports/pm-asset-report'
-import type { PmAssetReportInput, PmAssetSection, PmAssetTask } from '@/lib/reports/pm-asset-report'
+import type {
+  PmAssetReportInput,
+  PmAssetSection,
+  PmAssetTask,
+  AcbTestSummary,
+  NsxTestSummary,
+  RcdTestSummary,
+} from '@/lib/reports/pm-asset-report'
 import {
   resolveReportLogos,
   resolveCustomerLogos,
@@ -150,6 +157,96 @@ export async function GET(request: NextRequest) {
   const outstandingAssets = checkAssets.filter(ca => ca.status !== 'completed' && ca.status !== 'na').length
   const outstandingWOs = checkAssets.filter(ca => !ca.work_order_number).length
 
+  // Phase 5: Linked test records — fetch ACB / NSX / RCD tests that point
+  // at this maintenance_check, summarise to one row per asset, and pass
+  // through to the report builder. Renders a Test Records section in the
+  // PDF when any kind has rows; silently absent for plain PPM checks.
+  const [acbLinkedRes, nsxLinkedRes, rcdLinkedRes] = await Promise.all([
+    supabase
+      .from('acb_tests')
+      .select(
+        'id, test_date, test_type, cb_make, cb_model, step1_status, step2_status, step3_status, overall_result, assets(name)',
+      )
+      .eq('testing_check_id', checkId)
+      .eq('is_active', true),
+    supabase
+      .from('nsx_tests')
+      .select(
+        'id, test_date, test_type, cb_make, cb_model, step1_status, step2_status, step3_status, overall_result, assets(name)',
+      )
+      .eq('testing_check_id', checkId)
+      .eq('is_active', true),
+    supabase
+      .from('rcd_tests')
+      .select('id, test_date, status, assets(name, jemena_asset_id)')
+      .eq('check_id', checkId)
+      .eq('is_active', true)
+      .order('test_date', { ascending: false }),
+  ])
+
+  function unwrap<T>(v: T | T[] | null): T | null {
+    if (!v) return null
+    return Array.isArray(v) ? v[0] ?? null : v
+  }
+  function stepCount(t: { step1_status: string | null; step2_status: string | null; step3_status: string | null }): number {
+    return (
+      (t.step1_status === 'complete' ? 1 : 0) +
+      (t.step2_status === 'complete' ? 1 : 0) +
+      (t.step3_status === 'complete' ? 1 : 0)
+    )
+  }
+
+  const acbSummaries: AcbTestSummary[] = (acbLinkedRes.data ?? []).map((t) => {
+    const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
+    return {
+      assetName: asset?.name ?? '—',
+      cbMakeModel: [t.cb_make, t.cb_model].filter(Boolean).join(' ') || '—',
+      testType: t.test_type ?? '—',
+      testDate: t.test_date,
+      stepsDone: stepCount(t),
+      stepsTotal: 3,
+      overallResult: (t.overall_result as 'Pass' | 'Fail' | 'Defect' | 'Pending') ?? 'Pending',
+    }
+  })
+
+  const nsxSummaries: NsxTestSummary[] = (nsxLinkedRes.data ?? []).map((t) => {
+    const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
+    return {
+      assetName: asset?.name ?? '—',
+      cbMakeModel: [t.cb_make, t.cb_model].filter(Boolean).join(' ') || '—',
+      testType: t.test_type ?? '—',
+      testDate: t.test_date,
+      stepsDone: stepCount(t),
+      stepsTotal: 3,
+      overallResult: (t.overall_result as 'Pass' | 'Fail' | 'Defect' | 'Pending') ?? 'Pending',
+    }
+  })
+
+  // RCD circuit counts come from a separate query — bulk lookup keyed by test id.
+  const rcdRows = rcdLinkedRes.data ?? []
+  const rcdIds = rcdRows.map((r) => r.id)
+  const circuitCountByTest = new Map<string, number>()
+  if (rcdIds.length > 0) {
+    const { data: circuitRows } = await supabase
+      .from('rcd_test_circuits')
+      .select('rcd_test_id')
+      .in('rcd_test_id', rcdIds)
+    for (const c of circuitRows ?? []) {
+      circuitCountByTest.set(c.rcd_test_id, (circuitCountByTest.get(c.rcd_test_id) ?? 0) + 1)
+    }
+  }
+
+  const rcdSummaries: RcdTestSummary[] = rcdRows.map((t) => {
+    const asset = unwrap(t.assets as { name: string; jemena_asset_id: string | null } | { name: string; jemena_asset_id: string | null }[] | null)
+    return {
+      assetName: asset?.name ?? '—',
+      jemenaAssetId: asset?.jemena_asset_id ?? null,
+      testDate: t.test_date,
+      circuitCount: circuitCountByTest.get(t.id) ?? 0,
+      status: (t.status as 'draft' | 'complete' | 'archived') ?? 'draft',
+    }
+  })
+
   // Build per-asset sections
   const assetSections: PmAssetSection[] = checkAssets.map(ca => {
     const asset = ca.assets as { name: string; maximo_id: string | null; location: string | null; job_plans: { name: string; code: string | null } | null } | null
@@ -235,6 +332,14 @@ export async function GET(request: NextRequest) {
     companyPhone: tenantSettings?.report_company_phone ?? undefined,
 
     assets: assetSections,
+    linkedTests:
+      acbSummaries.length > 0 || nsxSummaries.length > 0 || rcdSummaries.length > 0
+        ? {
+            acb: acbSummaries.length > 0 ? acbSummaries : undefined,
+            nsx: nsxSummaries.length > 0 ? nsxSummaries : undefined,
+            rcd: rcdSummaries.length > 0 ? rcdSummaries : undefined,
+          }
+        : undefined,
     overallNotes: check.notes ?? undefined,
 
     // Report template config
