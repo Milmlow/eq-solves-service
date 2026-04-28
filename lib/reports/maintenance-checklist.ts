@@ -13,6 +13,8 @@
 
 import {
   Document,
+  Footer,
+  PageNumber,
   Packer,
   Paragraph,
   TextRun,
@@ -30,7 +32,6 @@ import {
 import { buildMasthead } from '@/lib/reports/report-branding'
 import {
   buildHeader as buildShellHeader,
-  buildFooter as buildShellFooter,
   prepareShell,
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
@@ -42,6 +43,8 @@ import { EQ_WHITE, EQ_MID_GREY, bareHex, tenantIce, adjustHex } from '@/lib/repo
 export interface MaintenanceChecklistInput {
   // Tenant branding
   companyName: string
+  /** Optional ABN — appears in the footer next to companyName when supplied. */
+  companyAbn?: string | null
   checkName: string
   siteName: string
   dueDate: string
@@ -165,6 +168,53 @@ function makeCheckboxCell(width: number): TableCell {
 
 function spacer(pts = 200): Paragraph {
   return new Paragraph({ spacing: { before: pts } })
+}
+
+/**
+ * Brand-coloured horizontal rule used between the master register and the
+ * detail cards (standard format) so the supervisor → tech handover lands
+ * with a visible accent. PR L (2026-04-28 subtle branding).
+ */
+function buildBrandedRule(brandHex: string): Paragraph {
+  return new Paragraph({
+    spacing: { before: 80, after: 80 },
+    border: {
+      bottom: { style: BorderStyle.SINGLE, size: 18, color: brandHex, space: 4 },
+    },
+  })
+}
+
+/**
+ * Run-sheet specific footer. Mirrors the shared shell footer's layout but
+ * uses the tenant brand colour for the page numbers (subtle accent) and
+ * appends the company ABN to the left text when supplied. The rest of the
+ * footer line stays mid-grey to keep the body content the visual focus.
+ *
+ * Built locally rather than extending report-shell.buildFooter so other
+ * report types (pm-asset, acb, nsx, compliance) keep their grey page
+ * numbers. PR L — subtle branding scoped to the run-sheet only.
+ */
+function buildBrandedRunSheetFooter(input: MaintenanceChecklistInput, brandHex: string): Footer {
+  const company = input.companyName ?? input.tenantProductName
+  const reportTypeLabel = input.reportTypeLabel || 'Field Run-Sheet'
+  const abnPart = input.companyAbn ? `  ·  ABN ${input.companyAbn}` : ''
+  const left = `${company}${abnPart} — ${reportTypeLabel}`
+
+  return new Footer({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.JUSTIFIED,
+        children: [
+          new TextRun({ text: left, size: 14, font: FONT, color: EQ_MID_GREY }),
+          new TextRun({ text: '\t' }),
+          new TextRun({ text: 'Page ', size: 14, font: FONT, color: EQ_MID_GREY }),
+          new TextRun({ children: [PageNumber.CURRENT], size: 14, font: FONT, color: brandHex, bold: true }),
+          new TextRun({ text: ' of ', size: 14, font: FONT, color: EQ_MID_GREY }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 14, font: FONT, color: brandHex, bold: true }),
+        ],
+      }),
+    ],
+  })
 }
 
 function divider(): Paragraph {
@@ -642,8 +692,13 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
     // Combined: master register THEN per-asset detail cards.
     bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
     bodyChildren.push(...buildAssetRegister(input.assets, brandHex))
+    // 2026-04-28 (PR L — subtle branding): brand-coloured rule on its own
+    // page break separates the supervisor's master from the tech's detail
+    // cards. Visual handover, no extra wording.
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+    bodyChildren.push(buildBrandedRule(brandHex))
     for (let i = 0; i < input.assets.length; i++) {
-      bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+      if (i > 0) bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
       bodyChildren.push(...buildAssetSection(input.assets[i], brandHex, iceOverride))
     }
   } else {
@@ -675,7 +730,9 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
           },
         },
         headers: { default: buildShellHeader(shell) },
-        footers: { default: buildShellFooter(shell) },
+        // PR L: run-sheet specific footer with brand-coloured page numbers
+        // + ABN (when supplied). Other reports keep the shared shell footer.
+        footers: { default: buildBrandedRunSheetFooter(input, brandHex) },
         children: bodyChildren,
       },
     ],

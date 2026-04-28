@@ -78,6 +78,7 @@ const assets: ChecklistAsset[] = [
 
 const baseInput: Omit<MaintenanceChecklistInput, 'format'> = {
   companyName: 'SKS Technologies Pty Ltd',
+  companyAbn: '40 651 962 935',
   checkName: 'SY3 Annual LVACB April 2026 (Smoke)',
   siteName: 'SY3',
   dueDate: '01 April 2026',
