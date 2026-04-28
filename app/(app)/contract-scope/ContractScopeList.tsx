@@ -11,15 +11,24 @@ import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importScopeItemsAction } from './actions'
 
-// Australian FY options
-const FY_OPTIONS = [
+// Default FY presets (Aus FY format). Customers using calendar-year fiscal
+// basis (e.g. Equinix per migration 0072) write financial_year as '2026'
+// rather than '2025-2026', so we also surface every distinct value present
+// in the data — see `fyOptions` in the component.
+const FY_PRESETS = [
   '2024-2025',
   '2025-2026',
   '2026-2027',
   '2027-2028',
 ]
 
+/**
+ * Render a financial_year value. Hyphenated values are Aus FY (Jul-Jun);
+ * 4-digit values are calendar-year (Equinix-style). Both formats coexist
+ * because customer.fiscal_year_basis varies per customer.
+ */
 function fyLabel(fy: string) {
+  if (/^\d{4}$/.test(fy)) return `CY ${fy}`
   return `FY ${fy}`
 }
 
@@ -109,6 +118,23 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
     return sites.filter(s => s.customer_id === formCustomerId)
   }, [sites, formCustomerId])
 
+  // Distinct financial_year values present in items + the Aus FY presets.
+  // Sorts calendar-year (4-digit) values descending first, then Aus-FY
+  // hyphenated descending — so '2026' shows above 'FY 2025-2026'.
+  const fyOptions = useMemo(() => {
+    const seen = new Set<string>()
+    for (const i of items) {
+      if (i.financial_year) seen.add(i.financial_year)
+    }
+    for (const p of FY_PRESETS) seen.add(p)
+    return Array.from(seen).sort((a, b) => {
+      const aIsCal = /^\d{4}$/.test(a)
+      const bIsCal = /^\d{4}$/.test(b)
+      if (aIsCal !== bIsCal) return aIsCal ? -1 : 1
+      return b.localeCompare(a)
+    })
+  }, [items])
+
   const filtered = useMemo(() => {
     let result = items
     if (filterCustomer) result = result.filter(i => i.customer_id === filterCustomer)
@@ -186,7 +212,7 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
             className="h-9 px-3 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-sky"
           >
             <option value="">All Years</option>
-            {FY_OPTIONS.map(fy => (
+            {fyOptions.map(fy => (
               <option key={fy} value={fy}>{fyLabel(fy)}</option>
             ))}
           </select>
@@ -283,7 +309,7 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
                   defaultValue={editing?.financial_year ?? (filterFY || currentFY())}
                   className="h-10 px-3 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-sky"
                 >
-                  {FY_OPTIONS.map(fy => (
+                  {fyOptions.map(fy => (
                     <option key={fy} value={fy}>{fyLabel(fy)}</option>
                   ))}
                 </select>
