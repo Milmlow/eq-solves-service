@@ -231,7 +231,11 @@ const BORDERS_NONE: typeof BORDERS_LIGHT = {
   left: BORDER_NONE as unknown as typeof BORDER_LIGHT,
   right: BORDER_NONE as unknown as typeof BORDER_LIGHT,
 }
-const CELL_PAD = { top: 60, bottom: 60, left: 100, right: 100 }
+// Cell padding bumped 2026-04-28 (Royce review issue 9 — "improve sexiness").
+// More breathing room across every table cell makes the report read like a
+// modern document rather than a municipal-tender form. Vertical 60→90,
+// horizontal 100→140. Tight variant left alone — used for nested grids.
+const CELL_PAD = { top: 90, bottom: 90, left: 140, right: 140 }
 const CELL_PAD_TIGHT = { top: 40, bottom: 40, left: 80, right: 80 }
 
 // ─────────── Helpers ───────────
@@ -798,25 +802,25 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
     rows: [
       new TableRow({
         children: [
-          makeCell('Site', c1, { bold: true, shading: 'F8F9FA', size: 18 }),
-          makeCell(asset.site, c2, { size: 18 }),
-          makeCell('Asset', c3, { bold: true, shading: 'F8F9FA', size: 18 }),
-          makeCell(asset.assetName, c4, { size: 18 }),
+          makeCell('Site', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(asset.site, c2, { size: 18, bold: true }),
+          makeCell('Asset', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(asset.assetName, c4, { size: 18, bold: true }),
         ],
       }),
       new TableRow({
         children: [
-          makeCell('Location', c1, { bold: true, shading: 'F8F9FA', size: 18 }),
+          makeCell('Location', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
           makeCell(asset.location, c2, { size: 18 }),
-          makeCell('Maximo ID', c3, { bold: true, shading: 'F8F9FA', size: 18 }),
+          makeCell('Maximo ID', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
           makeCell(asset.assetId, c4, { size: 18 }),
         ],
       }),
       new TableRow({
         children: [
-          makeCell('Work Order #', c1, { bold: true, shading: 'F8F9FA', size: 18 }),
+          makeCell('Work Order #', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
           makeCell(asset.workOrderNumber ?? '—', c2, { size: 18 }),
-          makeCell('Job Plan', c3, { bold: true, shading: 'F8F9FA', size: 18 }),
+          makeCell('Job Plan', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
           makeCell(asset.jobPlanName, c4, { size: 18 }),
         ],
       }),
