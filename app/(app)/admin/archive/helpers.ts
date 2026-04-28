@@ -97,8 +97,8 @@ export async function countDependencies(
       // acb_tests / nsx_tests use ON DELETE SET NULL so they don't
       // block the delete; count them anyway so Royce sees impact
       const [acb, nsx] = await Promise.all([
-        supabase.from('acb_tests').select('*', { count: 'exact', head: true }).eq('testing_check_id', entityId),
-        supabase.from('nsx_tests').select('*', { count: 'exact', head: true }).eq('testing_check_id', entityId),
+        supabase.from('acb_tests').select('*', { count: 'exact', head: true }).eq('check_id', entityId),
+        supabase.from('nsx_tests').select('*', { count: 'exact', head: true }).eq('check_id', entityId),
       ])
       return (acb.count ?? 0) + (nsx.count ?? 0)
     }

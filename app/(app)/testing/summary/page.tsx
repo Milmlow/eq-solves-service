@@ -80,7 +80,7 @@ export default async function TestingSummaryPage({
       const { data: tests } = await supabase
         .from('acb_tests')
         .select('id, asset_id, step1_status, step2_status, step3_status, assets(id, name, asset_type, serial_number)')
-        .eq('testing_check_id', check.id)
+        .eq('check_id', check.id)
         .eq('is_active', true)
 
       for (const t of tests ?? []) {
@@ -107,7 +107,7 @@ export default async function TestingSummaryPage({
       const { data: tests } = await supabase
         .from('nsx_tests')
         .select('id, asset_id, step1_status, step2_status, step3_status, overall_result, assets(id, name, asset_type, serial_number)')
-        .eq('testing_check_id', check.id)
+        .eq('check_id', check.id)
         .eq('is_active', true)
 
       for (const t of tests ?? []) {

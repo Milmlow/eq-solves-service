@@ -167,14 +167,14 @@ export async function GET(request: NextRequest) {
       .select(
         'id, test_date, test_type, cb_make, cb_model, step1_status, step2_status, step3_status, overall_result, assets(name)',
       )
-      .eq('testing_check_id', checkId)
+      .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
       .from('nsx_tests')
       .select(
         'id, test_date, test_type, cb_make, cb_model, step1_status, step2_status, step3_status, overall_result, assets(name)',
       )
-      .eq('testing_check_id', checkId)
+      .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
       .from('rcd_tests')

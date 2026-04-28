@@ -32,7 +32,7 @@ export default async function AcbTestDetailPage({
 
   const { data: test, error } = await supabase
     .from('acb_tests')
-    .select('*, assets(name), sites(name), maintenance_checks!testing_check_id(id, custom_name)')
+    .select('*, assets(name), sites(name), maintenance_checks!check_id(id, custom_name)')
     .eq('id', testId)
     .eq('is_active', true)
     .maybeSingle()

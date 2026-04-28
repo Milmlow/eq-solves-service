@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
  * Phase 3 of the Testing simplification plan — surface linked test records
  * directly inside `/maintenance/[id]` instead of forcing the user to hop into
  * the Testing tab. After Phase 2 merged testing_checks into maintenance_checks,
- * the FK story is uniform: acb/nsx_tests link via `testing_check_id`,
+ * the FK story is uniform: acb/nsx_tests link via `check_id`,
  * rcd_tests via `check_id`. Both resolve to the maintenance_checks row.
  *
  * Server component so the data fetch happens server-side alongside the parent
@@ -76,12 +76,12 @@ export async function LinkedTestsPanel({ checkId }: Props) {
     supabase
       .from('acb_tests')
       .select('id, asset_id, step1_status, step2_status, step3_status, overall_result, assets(id, name)')
-      .eq('testing_check_id', checkId)
+      .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
       .from('nsx_tests')
       .select('id, asset_id, step1_status, step2_status, step3_status, overall_result, assets(id, name)')
-      .eq('testing_check_id', checkId)
+      .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
       .from('rcd_tests')

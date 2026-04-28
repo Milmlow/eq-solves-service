@@ -11,8 +11,8 @@
  * existing `completed_at` timestamp.
  *
  * Linkage:
- *   acb_tests.testing_check_id  → maintenance_checks.id
- *   nsx_tests.testing_check_id  → maintenance_checks.id
+ *   acb_tests.check_id  → maintenance_checks.id
+ *   nsx_tests.check_id  → maintenance_checks.id
  *   rcd_tests.check_id          → maintenance_checks.id
  *
  * "Complete" definition per type:
@@ -62,12 +62,12 @@ export async function propagateCheckCompletionIfReady(
       supabase
         .from('acb_tests')
         .select('step3_status, overall_result')
-        .eq('testing_check_id', checkId)
+        .eq('check_id', checkId)
         .eq('is_active', true),
       supabase
         .from('nsx_tests')
         .select('step3_status, overall_result')
-        .eq('testing_check_id', checkId)
+        .eq('check_id', checkId)
         .eq('is_active', true),
       supabase
         .from('rcd_tests')
