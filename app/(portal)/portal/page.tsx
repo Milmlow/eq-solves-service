@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { Card } from '@/components/ui/Card'
 import { formatDate } from '@/lib/utils/format'
 import { PortalAnalytics } from './PortalAnalytics'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 
 /**
  * Customer portal — "Your Reports" page.
@@ -78,8 +79,8 @@ export default async function PortalPage() {
                     <p className="text-xs text-eq-grey mt-0.5">
                       {customerName}{siteName ? ` · ${siteName}` : ''}
                       {delivery.revision > 1 && (
-                        <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                          Revision {delivery.revision}
+                        <span className="ml-2 inline-block align-middle">
+                          <StatusBadge status="overdue" label={`Revision ${delivery.revision}`} dot={false} />
                         </span>
                       )}
                     </p>
@@ -93,9 +94,9 @@ export default async function PortalPage() {
                   <div className="text-right shrink-0 space-y-1">
                     <p className="text-xs text-eq-grey">{formatDate(delivery.delivered_at)}</p>
                     {isExpired ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-eq-grey">Link expired</span>
+                      <StatusBadge status="inactive" label="Link expired" />
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">Available</span>
+                      <StatusBadge status="active" label="Available" />
                     )}
                   </div>
                 </div>

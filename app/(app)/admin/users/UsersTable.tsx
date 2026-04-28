@@ -9,6 +9,7 @@ import {
   repairUserTenantAction,
   hardDeleteUserAction,
 } from './actions'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 
 interface Profile {
   id: string
@@ -194,23 +195,14 @@ export function UsersTable({
                 </td>
                 <td className="px-4 py-3">
                   {removedFromTenant ? (
-                    <span
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-amber-50 text-amber-700"
-                      title="Archived from this tenant. Use Attach to re-add or (super_admin) Delete permanently to wipe."
-                    >
-                      Archived
+                    <span title="Archived from this tenant. Use Attach to re-add or (super_admin) Delete permanently to wipe.">
+                      <StatusBadge status="overdue" label="Archived" />
                     </span>
                   ) : (
-                    <span
-                      className={
-                        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ' +
-                        (u.is_active
-                          ? 'bg-green-50 text-green-700'
-                          : 'bg-gray-100 text-gray-500')
-                      }
-                    >
-                      {u.is_active ? 'Active' : 'Disabled'}
-                    </span>
+                    <StatusBadge
+                      status={u.is_active ? 'active' : 'inactive'}
+                      label={u.is_active ? 'Active' : 'Disabled'}
+                    />
                   )}
                 </td>
                 <td className="px-4 py-3 text-eq-grey text-xs">{fmtDate(u.last_login_at)}</td>

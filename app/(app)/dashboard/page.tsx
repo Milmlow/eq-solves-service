@@ -8,6 +8,7 @@ import type { MapSite } from './SiteMapLeaflet'
 import type { Role } from '@/lib/types'
 import { DashboardViewToggle } from './DashboardViewToggle'
 import { DashboardAnalytics } from './DashboardAnalytics'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 
 type View = 'mine' | 'all'
 
@@ -261,12 +262,8 @@ export default async function DashboardPage({
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-3">
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-gray-100 text-eq-grey">{test.kind}</span>
-                    {isDefect && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-100 text-red-700">Defect</span>
-                    )}
-                    {isPending && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-sky-100 text-eq-sky">Pending</span>
-                    )}
+                    {isDefect && <StatusBadge status="blocked" label="Defect" />}
+                    {isPending && <StatusBadge status="not-started" label="Pending" />}
                     <span className="text-xs text-eq-grey">{formatDate(test.test_date)}</span>
                   </div>
                 </Link>
@@ -378,12 +375,8 @@ export default async function DashboardPage({
                       <p className="text-xs text-eq-grey">{siteName}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3">
-                      {isOverdue && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-700">Overdue</span>
-                      )}
-                      {isActive && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-sky-100 text-eq-sky">Active</span>
-                      )}
+                      {isOverdue && <StatusBadge status="overdue" />}
+                      {isActive && <StatusBadge status="in-progress" label="Active" />}
                       <span className="text-xs text-eq-grey">{formatDate(check.due_date)}</span>
                     </div>
                   </Link>
@@ -413,7 +406,7 @@ export default async function DashboardPage({
                       <p className="text-xs text-eq-grey">{siteName}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-green-100 text-green-700">Done</span>
+                      <StatusBadge status="complete" label="Done" />
                       <span className="text-xs text-eq-grey">{formatDate(check.completed_at)}</span>
                     </div>
                   </Link>
