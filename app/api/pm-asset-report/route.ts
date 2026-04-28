@@ -25,6 +25,7 @@ import {
 } from '@/lib/reports/logo-variants'
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
+import type { AcbTestDetail, BreakerTestReading } from '@/lib/reports/pm-asset-report'
 
 export async function GET(request: NextRequest) {
   const checkId = request.nextUrl.searchParams.get('check_id')
@@ -160,18 +161,22 @@ export async function GET(request: NextRequest) {
   // at this maintenance_check, summarise to one row per asset, and pass
   // through to the report builder. Renders a Test Records section in the
   // PDF when any kind has rows; silently absent for plain PPM checks.
+  // PR Q (2026-04-28): pull deep ACB/NSX columns + readings so the report
+  // can render per-test detail cards alongside the existing summary tables.
+  // Bulk-fetch readings via .in() so cost stays at 2 round-trips per type
+  // regardless of test count.
   const [acbLinkedRes, nsxLinkedRes, rcdLinkedRes] = await Promise.all([
     supabase
       .from('acb_tests')
       .select(
-        'id, test_date, test_type, cb_make, cb_model, step1_status, step2_status, step3_status, overall_result, assets(name)',
+        'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, performance_level, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
       )
       .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
       .from('nsx_tests')
       .select(
-        'id, test_date, test_type, cb_make, cb_model, step1_status, step2_status, step3_status, overall_result, assets(name)',
+        'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
       )
       .eq('check_id', checkId)
       .eq('is_active', true),
@@ -182,6 +187,64 @@ export async function GET(request: NextRequest) {
       .eq('is_active', true)
       .order('test_date', { ascending: false }),
   ])
+
+  // Bulk-fetch readings for each test type. One round-trip per type.
+  const acbIds = (acbLinkedRes.data ?? []).map((t) => t.id)
+  const nsxIds = (nsxLinkedRes.data ?? []).map((t) => t.id)
+  type ReadingRow = { acb_test_id?: string; nsx_test_id?: string; label: string; value: string; unit: string | null; is_pass: boolean | null; sort_order: number }
+  const acbReadingsByTest = new Map<string, BreakerTestReading[]>()
+  const nsxReadingsByTest = new Map<string, BreakerTestReading[]>()
+  if (acbIds.length > 0) {
+    const { data: rows } = await supabase
+      .from('acb_test_readings')
+      .select('acb_test_id, label, value, unit, is_pass, sort_order')
+      .in('acb_test_id', acbIds)
+      .order('sort_order')
+    for (const r of (rows ?? []) as ReadingRow[]) {
+      const arr = acbReadingsByTest.get(r.acb_test_id!) ?? []
+      arr.push({ label: r.label, value: r.value, unit: r.unit, isPass: r.is_pass })
+      acbReadingsByTest.set(r.acb_test_id!, arr)
+    }
+  }
+  if (nsxIds.length > 0) {
+    const { data: rows } = await supabase
+      .from('nsx_test_readings')
+      .select('nsx_test_id, label, value, unit, is_pass, sort_order')
+      .in('nsx_test_id', nsxIds)
+      .order('sort_order')
+    for (const r of (rows ?? []) as ReadingRow[]) {
+      const arr = nsxReadingsByTest.get(r.nsx_test_id!) ?? []
+      arr.push({ label: r.label, value: r.value, unit: r.unit, isPass: r.is_pass })
+      nsxReadingsByTest.set(r.nsx_test_id!, arr)
+    }
+  }
+
+  function buildAcbDetail(t: typeof acbLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
+    return {
+      cbMake: (t as { cb_make: string | null }).cb_make,
+      cbModel: (t as { cb_model: string | null }).cb_model,
+      cbSerial: (t as { cb_serial: string | null }).cb_serial,
+      cbRating: (t as { cb_rating: string | null }).cb_rating,
+      poles: (t as { cb_poles: string | null }).cb_poles,
+      tripUnit: (t as { trip_unit: string | null }).trip_unit,
+      performanceLevel: (t as { performance_level: string | null }).performance_level,
+      fixedWithdrawable: (t as { fixed_withdrawable: string | null }).fixed_withdrawable,
+      readings: acbReadingsByTest.get((t as { id: string }).id) ?? [],
+    }
+  }
+  function buildNsxDetail(t: typeof nsxLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
+    return {
+      cbMake: (t as { cb_make: string | null }).cb_make,
+      cbModel: (t as { cb_model: string | null }).cb_model,
+      cbSerial: (t as { cb_serial: string | null }).cb_serial,
+      cbRating: (t as { cb_rating: string | null }).cb_rating,
+      poles: (t as { cb_poles: string | null }).cb_poles,
+      tripUnit: (t as { trip_unit: string | null }).trip_unit,
+      performanceLevel: null,                              // NSX has no PerformanceLevel
+      fixedWithdrawable: (t as { fixed_withdrawable: string | null }).fixed_withdrawable,
+      readings: nsxReadingsByTest.get((t as { id: string }).id) ?? [],
+    }
+  }
 
   function unwrap<T>(v: T | T[] | null): T | null {
     if (!v) return null
@@ -205,6 +268,7 @@ export async function GET(request: NextRequest) {
       stepsDone: stepCount(t),
       stepsTotal: 3,
       overallResult: (t.overall_result as 'Pass' | 'Fail' | 'Defect' | 'Pending') ?? 'Pending',
+      detail: buildAcbDetail(t),
     }
   })
 
@@ -218,6 +282,7 @@ export async function GET(request: NextRequest) {
       stepsDone: stepCount(t),
       stepsTotal: 3,
       overallResult: (t.overall_result as 'Pass' | 'Fail' | 'Defect' | 'Pending') ?? 'Pending',
+      detail: buildNsxDetail(t),
     }
   })
 

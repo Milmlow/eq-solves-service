@@ -172,6 +172,27 @@ export interface PmAssetTask {
  * MVP shape: one row per asset with overall result + light progress info.
  * Full per-circuit / per-reading detail is deferred to a follow-up.
  */
+export interface BreakerTestReading {
+  label: string                    // e.g. "Contact Resistance R-phase"
+  value: string                    // raw text — preserved exactly
+  unit: string | null              // e.g. "µΩ" / "MΩ" / "°C"
+  isPass: boolean | null           // null = not assessed
+}
+
+export interface AcbTestDetail {
+  /** Compact breaker-info card (bands of key/value pairs). */
+  cbMake: string | null
+  cbModel: string | null
+  cbSerial: string | null
+  cbRating: string | null          // e.g. "1600A"
+  poles: string | null             // e.g. "3" / "4"
+  tripUnit: string | null
+  performanceLevel: string | null  // e.g. "N1" / "H1"
+  fixedWithdrawable: string | null
+  /** Numerical readings (Visual + Electrical entries on acb_test_readings). */
+  readings: BreakerTestReading[]
+}
+
 export interface AcbTestSummary {
   assetName: string
   cbMakeModel: string
@@ -180,6 +201,12 @@ export interface AcbTestSummary {
   stepsDone: number               // 0..3
   stepsTotal: number              // always 3 for current ACB/NSX workflow
   overallResult: 'Pass' | 'Fail' | 'Defect' | 'Pending'
+  /**
+   * Phase 5 follow-up (PR Q — 2026-04-28): when supplied, the report
+   * renders a deep "Test Detail" section per ACB with breaker info +
+   * readings table. Absent → just the summary row.
+   */
+  detail?: AcbTestDetail
 }
 
 export interface NsxTestSummary {
@@ -190,6 +217,8 @@ export interface NsxTestSummary {
   stepsDone: number
   stepsTotal: number
   overallResult: 'Pass' | 'Fail' | 'Defect' | 'Pending'
+  /** Same shape as ACB — see AcbTestDetail. */
+  detail?: AcbTestDetail
 }
 
 export interface RcdTestSummary {
@@ -1361,6 +1390,35 @@ function buildLinkedTestsSummary(input: PmAssetReportInput): (Paragraph | Table)
   if (nsx.length > 0) children.push(...buildAcbNsxSummaryTable('NSX Tests', nsx, brand))
   if (rcd.length > 0) children.push(...buildRcdSummaryTable(rcd, brand))
 
+  // Phase 5 follow-up (PR Q): ACB / NSX deep detail. When any test in
+  // either set carries a `detail` payload (breaker info + readings),
+  // render a deep section per test below the summary tables. Mirrors
+  // RCD's per-board section. Customer-facing compliance evidence.
+  const acbWithDetail = acb.filter((t): t is AcbTestSummary & { detail: AcbTestDetail } => !!t.detail)
+  const nsxWithDetail = nsx.filter((t): t is NsxTestSummary & { detail: AcbTestDetail } => !!t.detail)
+  if (acbWithDetail.length > 0 || nsxWithDetail.length > 0) {
+    children.push(new Paragraph({
+      spacing: { before: 320, after: 100 },
+      children: [new TextRun({
+        text: 'Breaker Test Detail',
+        bold: true, size: 22, font: FONT_HEADING, color: brand,
+      })],
+    }))
+    children.push(new Paragraph({
+      spacing: { after: 120 },
+      children: [new TextRun({
+        text: 'Per-breaker identification and recorded readings. Visual / functional pass-fail entries collapse into reading rows; numerical readings keep their original units.',
+        size: 16, font: FONT, color: EQ_MID_GREY, italics: true,
+      })],
+    }))
+    for (const t of acbWithDetail) {
+      children.push(...buildBreakerTestDetail('ACB', t, brand))
+    }
+    for (const t of nsxWithDetail) {
+      children.push(...buildBreakerTestDetail('NSX', t, brand))
+    }
+  }
+
   // Phase 5 follow-up (PR O): when any RCD test carries detailed circuit
   // data, render a deep section per board with the full per-circuit timing
   // table. Customer-facing compliance evidence per AS/NZS 3760.
@@ -1467,6 +1525,124 @@ function buildRcdCircuitDetail(board: RcdTestSummary, brand: string): (Paragraph
     columnWidths: [wSec, wCkt, wRating, wX1NT, wX1T, wX5, wBtn, wAct],
     rows: [headerRow, ...dataRows],
   }))
+
+  return children
+}
+
+/**
+ * Per-breaker detail card — used for both ACB and NSX. Two stacked tables:
+ *   1. Breaker identification grid (Brand / Model / Serial / Rating /
+ *      Poles / Trip Unit / Performance Level / Fixed-Withdrawable)
+ *   2. Test readings table (label, value, unit, pass/fail) — straight
+ *      dump of acb_test_readings / nsx_test_readings entries.
+ */
+function buildBreakerTestDetail(
+  kind: 'ACB' | 'NSX',
+  test: (AcbTestSummary | NsxTestSummary) & { detail: AcbTestDetail },
+  brand: string,
+): (Paragraph | Table)[] {
+  const children: (Paragraph | Table)[] = []
+  const d = test.detail
+
+  // Heading
+  children.push(new Paragraph({
+    spacing: { before: 240, after: 60 },
+    children: [new TextRun({
+      text: `${test.assetName}  ·  ${kind}`,
+      bold: true, size: 18, font: FONT_HEADING, color: brand,
+    })],
+  }))
+  children.push(new Paragraph({
+    spacing: { after: 100 },
+    children: [new TextRun({
+      text: `Tested ${fmtDate(test.testDate)} · ${test.testType ?? '—'} · Result: ${test.overallResult}`,
+      size: 14, font: FONT, color: EQ_MID_GREY,
+    })],
+  }))
+
+  // Breaker info grid — 4 columns, 2 rows of pairs.
+  const cLabel = 1700
+  const cValue = 3119
+  const tw = (cLabel + cValue) * 2
+  const infoRows: Array<[string, string | null, string, string | null]> = [
+    ['Brand',             d.cbMake,            'Model',             d.cbModel],
+    ['Serial No',         d.cbSerial,          'Current Rating',    d.cbRating],
+    ['Number of Poles',   d.poles,             'Trip Unit',         d.tripUnit],
+    ['Performance Level', d.performanceLevel,  'Fixed / Withdrawable', d.fixedWithdrawable],
+  ]
+  children.push(new Table({
+    width: { size: tw, type: WidthType.DXA },
+    columnWidths: [cLabel, cValue, cLabel, cValue],
+    rows: infoRows.map(([l1, v1, l2, v2]) =>
+      new TableRow({
+        children: [
+          makeCell(l1, cLabel, { bold: true, color: EQ_MID_GREY, size: 14 }),
+          makeCell(v1 ?? '—', cValue, { size: 16, bold: true }),
+          makeCell(l2, cLabel, { bold: true, color: EQ_MID_GREY, size: 14 }),
+          makeCell(v2 ?? '—', cValue, { size: 16, bold: true }),
+        ],
+      }),
+    ),
+  }))
+
+  // Readings table
+  if (d.readings.length > 0) {
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      children: [new TextRun({
+        text: 'Test Readings',
+        bold: true, size: 16, font: FONT_HEADING, color: brand,
+      })],
+    }))
+    const rLabel = 4500
+    const rValue = 1900
+    const rUnit = 1100
+    const rPass = CONTENT_WIDTH - (rLabel + rValue + rUnit)
+    const rTw = rLabel + rValue + rUnit + rPass
+
+    const headerRow = new TableRow({
+      tableHeader: true,
+      children: [
+        makeHeaderCell('Reading', rLabel, brand),
+        makeHeaderCell('Value', rValue, brand),
+        makeHeaderCell('Unit', rUnit, brand),
+        makeHeaderCell('Pass / Fail', rPass, brand),
+      ],
+    })
+    const dataRows = d.readings.map((r) =>
+      new TableRow({
+        children: [
+          makeCell(r.label, rLabel, { size: 14 }),
+          makeCell(r.value || '—', rValue, { size: 14, bold: true, align: AlignmentType.CENTER }),
+          makeCell(r.unit ?? '—', rUnit, { size: 14, align: AlignmentType.CENTER, color: EQ_MID_GREY }),
+          makeCell(
+            r.isPass === null ? '—' : r.isPass ? 'Pass' : 'Fail',
+            rPass,
+            {
+              size: 14,
+              bold: r.isPass !== null,
+              align: AlignmentType.CENTER,
+              shading: r.isPass === true ? 'E8F5E9' : r.isPass === false ? 'FFEBEE' : undefined,
+              color: r.isPass === true ? STATUS_PASS : r.isPass === false ? STATUS_FAIL : undefined,
+            },
+          ),
+        ],
+      }),
+    )
+    children.push(new Table({
+      width: { size: rTw, type: WidthType.DXA },
+      columnWidths: [rLabel, rValue, rUnit, rPass],
+      rows: [headerRow, ...dataRows],
+    }))
+  } else {
+    children.push(new Paragraph({
+      spacing: { before: 80, after: 80 },
+      children: [new TextRun({
+        text: 'No readings recorded — workflow steps not yet completed.',
+        size: 14, font: FONT, color: EQ_MID_GREY, italics: true,
+      })],
+    }))
+  }
 
   return children
 }
