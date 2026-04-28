@@ -60,3 +60,6 @@ deploy-*.zip
 
 # Cowork agent worktrees & metadata
 .claude/
+
+# one-off smoke-test scripts (loaded via tsx during local dev)
+/scratch-*.ts
