@@ -8,6 +8,7 @@ import {
   UpdateRcdCircuitsBatchSchema,
   UpdateRcdTestHeaderSchema,
 } from '@/lib/validations/rcd-test'
+import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 
 interface ActionOk {
   success: true
@@ -55,26 +56,15 @@ export async function updateRcdTestHeaderAction(
       .eq('id', testId)
     if (updErr) return { success: false, error: updErr.message }
 
-    // Propagate status transitions onto the parent maintenance_check.
-    // 'complete' on the rcd_test only fires if the parent isn't already
-    // complete — avoid clobbering completed_at on re-saves.
+    // Phase 4 (2026-04-28): use the shared propagation helper. The previous
+    // inline logic was too eager — it propagated on the first complete RCD
+    // test even when sibling tests under the same check were still draft.
+    // The helper now requires every linked test (ACB + NSX + RCD) to be
+    // complete before flipping the parent.
     if (goingToComplete && existing.check_id) {
-      const { data: check } = await supabase
-        .from('maintenance_checks')
-        .select('status')
-        .eq('id', existing.check_id)
-        .maybeSingle()
-      if (check && check.status !== 'complete') {
-        await supabase
-          .from('maintenance_checks')
-          .update({
-            status: 'complete',
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', existing.check_id)
-        revalidatePath(`/maintenance/${existing.check_id}`)
-        revalidatePath('/maintenance')
-      }
+      await propagateCheckCompletionIfReady(supabase, existing.check_id)
+      revalidatePath(`/maintenance/${existing.check_id}`)
+      revalidatePath('/maintenance')
     }
 
     await logAuditEvent({

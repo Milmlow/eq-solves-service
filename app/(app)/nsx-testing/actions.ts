@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/actions/auth'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateNsxTestSchema, UpdateNsxTestSchema, CreateNsxReadingSchema } from '@/lib/validations/nsx-test'
+import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 
 export async function createNsxTestAction(formData: FormData) {
   try {
@@ -305,7 +306,20 @@ export async function saveNsxElectricalReadingAction(testId: string, readings: A
       entityId: testId,
       summary: 'Completed NSX electrical testing',
     })
+
+    // Phase 4 (2026-04-28): propagate parent check completion if all
+    // sibling tests are now done. Best-effort; failures are swallowed.
+    const { data: testRow } = await supabase
+      .from('nsx_tests')
+      .select('testing_check_id')
+      .eq('id', testId)
+      .maybeSingle()
+    if (testRow?.testing_check_id) {
+      await propagateCheckCompletionIfReady(supabase, testRow.testing_check_id)
+    }
+
     revalidatePath('/testing/nsx')
+    revalidatePath('/maintenance')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

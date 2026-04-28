@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/actions/auth'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateAcbTestSchema, UpdateAcbTestSchema, CreateAcbReadingSchema } from '@/lib/validations/acb-test'
+import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 
 export async function createAcbTestAction(formData: FormData) {
   try {
@@ -321,7 +322,22 @@ export async function saveAcbElectricalReadingAction(testId: string, readings: A
       .eq('id', testId)
 
     await logAuditEvent({ action: 'update', entityType: 'acb_test', entityId: testId, summary: 'Completed ACB electrical testing' })
+
+    // Phase 4 (2026-04-28): when an ACB test reaches all-steps-complete,
+    // check whether every other test under the linked maintenance_check
+    // is also complete and propagate the parent status if so. Best-effort
+    // — failures don't surface to the user.
+    const { data: testRow } = await supabase
+      .from('acb_tests')
+      .select('testing_check_id')
+      .eq('id', testId)
+      .maybeSingle()
+    if (testRow?.testing_check_id) {
+      await propagateCheckCompletionIfReady(supabase, testRow.testing_check_id)
+    }
+
     revalidatePath('/testing/acb')
+    revalidatePath('/maintenance')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
