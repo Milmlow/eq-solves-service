@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
   const { data: tenantSettings } = await supabase
     .from('tenant_settings')
     .select(`
-      product_name, report_company_name,
+      product_name, report_company_name, report_company_abn,
       primary_colour, deep_colour, ice_colour, ink_colour,
       report_logo_url, report_logo_url_on_dark, logo_url, logo_url_on_dark
     `)
@@ -120,6 +120,7 @@ export async function GET(request: NextRequest) {
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const companyName = tenantSettings?.report_company_name ?? productName
+  const companyAbn = tenantSettings?.report_company_abn ?? null
   const primaryColour = (tenantSettings?.primary_colour ?? '#3DA8D8').replace('#', '')
 
   // Customer logo (if site has a customer)
@@ -296,6 +297,7 @@ export async function GET(request: NextRequest) {
   // Build the checklist input
   const checklistInput: MaintenanceChecklistInput = {
     companyName,
+    companyAbn,
     checkName: check.custom_name ?? `${(check.job_plans as { name: string } | null)?.name ?? 'Check'} - ${frequency}`,
     siteName: (check.sites as { name: string } | null)?.name ?? 'Unknown Site',
     dueDate: dueDateStr,
