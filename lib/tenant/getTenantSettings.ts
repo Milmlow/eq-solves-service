@@ -30,6 +30,7 @@ const DEFAULTS: TenantSettings = {
   report_logo_url: null,
   report_logo_url_on_dark: null,
   report_complexity: 'standard',
+  commercial_features_enabled: false,
   updated_at: '',
 }
 

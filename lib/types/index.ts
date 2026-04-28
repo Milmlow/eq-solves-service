@@ -44,6 +44,13 @@ export interface TenantSettings {
   report_logo_url: string | null
   report_logo_url_on_dark: string | null
   report_complexity: 'summary' | 'standard' | 'detailed'
+  // When true, the commercial-tier features activate for this tenant:
+  // contract-scope period-locking + audit history view, variations register,
+  // service-credit risk surfacing, renewal pack generator, customer-visible
+  // scope statement. When false (default) only the universal tier
+  // (scope-context display, auto gap-close, out-of-scope block) is active.
+  // See migration 0085.
+  commercial_features_enabled: boolean
   updated_at: string
 }
 
