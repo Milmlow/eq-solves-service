@@ -112,14 +112,49 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
     setSavingEdit(true)
     setEditError(null)
     const categoriesArr = Array.from(editCategories) as MediaCategory[]
-    const result = await updateMediaAction(editing.id, {
-      name: trimmed,
-      categories: categoriesArr,
-      entity_type: editEntityType || null,
-      entity_id: editEntityId || null,
-      surface: editSurface,
+
+    // Race the server action against a 20s timeout so the button never
+    // gets stuck on "Saving…" forever — happens when the network blips
+    // mid-action or a stale-bundle deploy causes the action ID lookup
+    // to silently mismatch (the client awaits a Promise that never
+    // resolves because the matching server function is gone).
+    const TIMEOUT_MS = 20_000
+    let timedOut = false
+    const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) => {
+      setTimeout(() => {
+        timedOut = true
+        resolve({
+          success: false,
+          error: 'Server didn\'t respond within 20 seconds. The page bundle may be stale — try a hard refresh (Ctrl+Shift+R) and re-open the edit dialog.',
+        })
+      }, TIMEOUT_MS)
     })
+
+    let result: Awaited<ReturnType<typeof updateMediaAction>>
+    try {
+      result = await Promise.race([
+        updateMediaAction(editing.id, {
+          name: trimmed,
+          categories: categoriesArr,
+          entity_type: editEntityType || null,
+          entity_id: editEntityId || null,
+          surface: editSurface,
+        }),
+        timeoutPromise,
+      ])
+    } catch (err) {
+      // Server action threw an unhandled error (e.g. UnrecognizedActionError
+      // from a stale bundle). Surface it instead of swallowing.
+      result = {
+        success: false,
+        error: err instanceof Error ? err.message : 'Save failed: unknown client-side error.',
+      }
+    }
     setSavingEdit(false)
+    if (timedOut) {
+      setEditError(result.error ?? 'Save timed out.')
+      return
+    }
     if (!result.success) {
       setEditError(result.error ?? 'Update failed.')
       return
