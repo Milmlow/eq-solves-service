@@ -35,7 +35,7 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY, FONT_HEADING as FONT_HEADING_TOKEN } from '@/lib/reports/typography'
-import { EQ_WHITE, EQ_MID_GREY, bareHex, tenantIce, tenantDeep } from '@/lib/reports/colours'
+import { EQ_WHITE, EQ_MID_GREY, bareHex, tenantIce, adjustHex } from '@/lib/reports/colours'
 
 // ─────────── Types ───────────
 
@@ -189,12 +189,15 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
   // enough to make the document recognisably tenant-branded without
   // compromising printability.
   const brandHex = bareHex(input.primaryColour ?? '3DA8D8')
-  // 2026-04-28 (Royce review issue 6): SKS primaryColour (#7C77B9, light
-  // purple) gave poor contrast for white text on the strip — text faded
-  // into the fill. Use tenantDeep (the darker derived/explicit variant)
-  // for the strip fill so white text reads cleanly. Headings + accents
-  // below the strip still use brandHex (the lighter primary).
-  const stripFillHex = tenantDeep(input.primaryColour, input.deepColour)
+  // 2026-04-28 (Royce review issue 6 + later "flat colours, logo pop"):
+  // The strip fill was previously derived from tenantDeep, which honours
+  // the explicit deep_colour override on tenant_settings. SKS sets
+  // deep_colour to navy #1F335C — readable but generic. Royce wanted the
+  // SKS brand purple (#7C77B9) on the strip, just darker so the white
+  // logo pops. Auto-darken the primary directly (-0.20) and ignore the
+  // deep override for this surface. White logo reads cleanly on any
+  // tenant's darkened primary.
+  const stripFillHex = adjustHex(bareHex(input.primaryColour ?? '3DA8D8'), -0.20)
   const stripCellMargins = { top: 120, bottom: 120, left: 200, right: 200 }
   children.push(new Table({
     width: { size: CONTENT_WIDTH, type: WidthType.DXA },
@@ -616,17 +619,37 @@ export async function generateMaintenanceChecklist(input: MaintenanceChecklistIn
   // Header info
   bodyChildren.push(...buildInfoBlock(input))
 
-  const format = input.format ?? 'detailed'
+  // 2026-04-28: format semantics revised per Royce's "combine master +
+  // detail" feedback.
+  //
+  //   simple   = master register only (one-page register, supervisor's
+  //              hand-out / archive copy)
+  //   standard = NEW DEFAULT — master register THEN per-asset detail
+  //              cards. Supervisor keeps page 1 (the master), tech gets
+  //              the rest (the detail cards). One print, two audiences.
+  //   detailed = per-asset detail cards only (no master). Tech-only
+  //              print for when the supervisor already has the master.
+  //
+  // Cover/header always sits on its own page now — page break BEFORE
+  // any content so the first asset card never glues to the cover.
+  const format = input.format ?? 'standard'
 
   if (format === 'simple') {
-    // Simple: single asset register table only
+    // Master register only.
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
     bodyChildren.push(...buildAssetRegister(input.assets, brandHex))
-  } else {
-    // Detailed: per-asset task breakdown with page breaks
+  } else if (format === 'standard') {
+    // Combined: master register THEN per-asset detail cards.
+    bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+    bodyChildren.push(...buildAssetRegister(input.assets, brandHex))
     for (let i = 0; i < input.assets.length; i++) {
-      if (i > 0) {
-        bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
-      }
+      bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
+      bodyChildren.push(...buildAssetSection(input.assets[i], brandHex, iceOverride))
+    }
+  } else {
+    // detailed = cards only, no master.
+    for (let i = 0; i < input.assets.length; i++) {
+      bodyChildren.push(new Paragraph({ children: [new PageBreak()] }))
       bodyChildren.push(...buildAssetSection(input.assets[i], brandHex, iceOverride))
     }
   }

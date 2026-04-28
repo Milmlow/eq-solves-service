@@ -89,18 +89,18 @@ function PrintReportSplit({ checkId }: { checkId: string }) {
       options={[
         {
           label: 'Summary',
-          description: 'Asset register only — one-page overview',
+          description: 'Master register only — single page, supervisor hand-out',
           onSelect: () => open('summary'),
         },
         {
           label: 'Standard',
-          description: 'Default. Headline results + key tasks per asset.',
+          description: 'Default. Master register page + per-asset detail cards. Supervisor keeps page 1, tech gets the rest.',
           onSelect: () => open('standard'),
           recommended: true,
         },
         {
           label: 'Detailed',
-          description: 'Full task-by-task breakdown for every asset',
+          description: 'Per-asset detail cards only (no master). For when supervisor already has the master.',
           onSelect: () => open('detailed'),
         },
       ]}
