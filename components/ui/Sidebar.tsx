@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle, Contact2, FileSpreadsheet
+  FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle, Contact2, FileSpreadsheet, Wand2
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -237,13 +237,25 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
               href="/admin/contract-scopes/import"
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/admin/contract-scopes')
+                pathname.startsWith('/admin/contract-scopes/import')
                   ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
               <FileSpreadsheet className="w-4 h-4 flex-shrink-0" />
               {!collapsed && <span>Import Commercial Sheet</span>}
+            </Link>
+            <Link
+              href="/admin/contract-scopes/derive"
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
+                pathname.startsWith('/admin/contract-scopes/derive')
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              )}
+            >
+              <Wand2 className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Derive Scope from Work</span>}
             </Link>
           </>
         )}
