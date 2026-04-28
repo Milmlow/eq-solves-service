@@ -3,8 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireUser } from '@/lib/actions/auth'
 import { canWrite } from '@/lib/utils/roles'
-import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { ChevronLeft } from 'lucide-react'
+import { TestDetailHeader } from '@/components/ui/TestDetailHeader'
 import { RcdTestEditor, type RcdTestEditorCircuit } from './RcdTestEditor'
 
 type Joined<T> = T | T[] | null
@@ -63,45 +62,29 @@ export default async function RcdTestDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Breadcrumb
-          items={[
-            { label: 'Home', href: '/dashboard' },
-            { label: 'Testing', href: '/testing' },
-            { label: 'RCD Testing', href: '/testing/rcd' },
-            { label: asset?.name ?? 'Test' },
-          ]}
-        />
-        <div className="flex items-center justify-between mt-2">
-          <div>
-            <h1 className="text-3xl font-bold text-eq-sky">
-              {asset?.name ?? 'RCD Test'}
-            </h1>
-            <p className="text-sm text-eq-grey mt-1">
-              {site?.name ?? '—'}
-              {customer?.name && <span> · {customer.name}</span>}
-              <span> · {test.test_date}</span>
-              {test.check_id && (
-                <>
-                  {' · '}
-                  <Link
-                    href={`/maintenance/${test.check_id}`}
-                    className="text-eq-deep hover:text-eq-sky underline"
-                  >
-                    linked maintenance check
-                  </Link>
-                </>
-              )}
-            </p>
-          </div>
-          <Link
-            href="/testing/rcd"
-            className="text-sm text-eq-deep hover:text-eq-sky inline-flex items-center gap-1"
-          >
-            <ChevronLeft className="w-4 h-4" /> Back to list
-          </Link>
-        </div>
-      </div>
+      <TestDetailHeader
+        testTypeLabel="RCD Testing"
+        testTypePath="/testing/rcd"
+        title={asset?.name ?? 'RCD Test'}
+        subtitle={
+          <>
+            {site?.name ?? '—'}
+            {customer?.name && <span> · {customer.name}</span>}
+            <span> · {test.test_date}</span>
+            {test.check_id && (
+              <>
+                {' · '}
+                <Link
+                  href={`/maintenance/${test.check_id}`}
+                  className="text-eq-deep hover:text-eq-sky underline"
+                >
+                  linked maintenance check
+                </Link>
+              </>
+            )}
+          </>
+        }
+      />
 
       <RcdTestEditor
         test={{
