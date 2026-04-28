@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle, Contact2, FileSpreadsheet, Wand2
+  FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle, Contact2, FileSpreadsheet, Wand2, FileSignature
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -22,53 +22,67 @@ import type { TenantSettings } from '@/lib/types'
  * tracking-wider white/30) so the Admin block reads as just one more
  * section, not a special case.
  */
-const navSections: Array<{
-  label?: string
-  items: Array<{ label: string; href: string; icon: typeof LayoutDashboard }>
-}> = [
-  {
-    items: [
-      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: 'Data',
-    items: [
-      { label: 'Customers', href: '/customers', icon: Building2 },
-      { label: 'Sites',     href: '/sites',     icon: MapPin },
-      { label: 'Contacts',  href: '/contacts',  icon: Contact2 },
-      { label: 'Assets',    href: '/assets',    icon: Package },
-      { label: 'Job Plans', href: '/job-plans', icon: FileCheck },
-    ],
-  },
-  {
-    label: 'Operations',
-    items: [
-      // Testing folded into Maintenance 2026-04-28 (Royce review Q4) —
-      // ACB/NSX/RCD live in maintenance_checks via the `kind` discriminator
-      // (migration 0080). /testing/* routes still resolve for direct URLs
-      // and LinkedTestsPanel deep links, but no longer have a top-level
-      // sidebar entry.
-      { label: 'Maintenance', href: '/maintenance', icon: ClipboardCheck },
-      { label: 'Calendar',    href: '/calendar',    icon: CalendarDays },
-      { label: 'Defects',     href: '/defects',     icon: AlertTriangle },
-    ],
-  },
-  {
-    label: 'Insight',
-    items: [
-      { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
-      { label: 'Reports',        href: '/reports',        icon: FileText },
-      { label: 'Analytics',      href: '/analytics',      icon: BarChart3 },
-    ],
-  },
-  {
-    items: [
-      { label: 'Search',   href: '/search',   icon: Search },
-      { label: 'Settings', href: '/settings', icon: Settings },
-    ],
-  },
-]
+type NavItem = { label: string; href: string; icon: typeof LayoutDashboard }
+type NavSection = { label?: string; items: NavItem[] }
+
+/**
+ * Build the sidebar sections. The Insight section conditionally includes
+ * Variations when the tenant has commercial_features_enabled — Phase 4
+ * of the contract-scope bridge plan. Free-tier tenants don't see it.
+ */
+function buildNavSections(commercialEnabled: boolean): NavSection[] {
+  const insightItems: NavItem[] = [
+    { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
+  ]
+  if (commercialEnabled) {
+    insightItems.push({ label: 'Variations', href: '/variations', icon: FileSignature })
+  }
+  insightItems.push(
+    { label: 'Reports',   href: '/reports',   icon: FileText },
+    { label: 'Analytics', href: '/analytics', icon: BarChart3 },
+  )
+
+  return [
+    {
+      items: [
+        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      ],
+    },
+    {
+      label: 'Data',
+      items: [
+        { label: 'Customers', href: '/customers', icon: Building2 },
+        { label: 'Sites',     href: '/sites',     icon: MapPin },
+        { label: 'Contacts',  href: '/contacts',  icon: Contact2 },
+        { label: 'Assets',    href: '/assets',    icon: Package },
+        { label: 'Job Plans', href: '/job-plans', icon: FileCheck },
+      ],
+    },
+    {
+      label: 'Operations',
+      items: [
+        // Testing folded into Maintenance 2026-04-28 (Royce review Q4) —
+        // ACB/NSX/RCD live in maintenance_checks via the `kind`
+        // discriminator (migration 0080). /testing/* routes still resolve
+        // for direct URLs and LinkedTestsPanel deep links, but no longer
+        // have a top-level sidebar entry.
+        { label: 'Maintenance', href: '/maintenance', icon: ClipboardCheck },
+        { label: 'Calendar',    href: '/calendar',    icon: CalendarDays },
+        { label: 'Defects',     href: '/defects',     icon: AlertTriangle },
+      ],
+    },
+    {
+      label: 'Insight',
+      items: insightItems,
+    },
+    {
+      items: [
+        { label: 'Search',   href: '/search',   icon: Search },
+        { label: 'Settings', href: '/settings', icon: Settings },
+      ],
+    },
+  ]
+}
 
 interface SidebarProps {
   isAdmin?: boolean
@@ -81,6 +95,8 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
   const pathname = usePathname()
 
   const productName = settings?.product_name || 'EQ Solves'
+  const commercialEnabled = Boolean(settings?.commercial_features_enabled)
+  const navSections = buildNavSections(commercialEnabled)
   // Sidebar background is eq-ink (dark) — prefer the dark-surface logo
   // when configured, fall back to the light-surface one. Without this,
   // tenants with a dark logo (e.g. SKS coloured logo on the eq-ink bg)
