@@ -35,6 +35,19 @@ Multi-tenant maintenance management platform for electrical contractors — circ
 - Client components use `createClient()` from `lib/supabase/client`
 - `SearchFilter` component uses URL params for server-side filtering
 
+### UI cosmetic decisions (2026-04-28 sweep)
+
+These are the canonical decisions from PRs E–J. New surfaces should follow them; non-conforming surfaces get migrated when next touched.
+
+- **StatusBadge** (`components/ui/StatusBadge.tsx`) is the canonical status pill across the app. Has `tone="soft" | "solid"`, `size="sm" | "md"`, and a leading coloured `dot` (default true). Inline `<span>` pills with hard-coded `bg-*-50 text-*-700` are the targets for migration — replace as you find them.
+- **Sidebar grouping** (`components/ui/Sidebar.tsx`) — items live in `navSections` (Data / Operations / Insight + unlabeled Dashboard, Search/Settings groups). Active items get a left-side accent strip via `before:` pseudo-element. Section labels use the existing Admin block's `text-[10px] uppercase tracking-wider text-white/30` style.
+- **Maintenance check page (`/maintenance/[id]`)** has a status-driven hairline accent at the top (green=complete, red=overdue, amber=in_progress, gray=cancelled, sky=scheduled). Title is `text-3xl text-eq-ink tracking-tight`. Section order: header → Linked Tests → Attachments → Asset table (last). Asset table has a free-text filter (name / Maximo ID / location) and sortable column headers.
+- **Maintenance list (`/maintenance`)** has a `Type` (kind) column rendered as a coloured `KindPill` (PPM=sky, ACB=purple, NSX=indigo, RCD=amber, General=gray). The kind filter is wired through to the server-side query via the `kind` URL param.
+- **Customer Report (`/api/pm-asset-report`)** has bumped cell padding (vertical 90 / horizontal 140 dxa). Per-asset info grid label cells use mid-grey small caps (size 16) alongside bold value cells (size 18) — no shaded label backgrounds.
+- **Field Run-Sheet (`/api/maintenance-checklist`)** brand strip uses `tenantDeep` for the fill so white text reads on darker tenant brand colours like SKS purple `#7C77B9`.
+- **Job-plan-items filter** (`/job-plans/items`) renders the descriptive name regardless of which column the tenant uses (Equinix uses `type`, Jemena uses `name`). Concatenates `code — name · type` deduped.
+- **Sticky Create Check button** on `/testing/{acb,nsx}` Create Check views — bar pinned to top so the action stays visible while scrolling through 100-row asset lists.
+
 ## Maintenance Checks (unified model — 2026-04-28)
 
 There is **one** "check" concept across the whole app. A `maintenance_checks` row carries a `kind` discriminator that decides what the row is for:
