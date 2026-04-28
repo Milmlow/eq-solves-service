@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CheckDetailPage } from './CheckDetailPage'
+import { LinkedTestsPanel } from './LinkedTestsPanel'
 import { ContractScopeBanner } from '@/components/ui/ContractScopeBanner'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { notFound } from 'next/navigation'
@@ -90,6 +91,13 @@ export default async function MaintenanceCheckPage({
         siteId={check.site_id as string | null}
         jobPlanId={check.job_plan_id as string | null}
         hideWhenEmpty
+      />
+      {/* Phase 3 of the Testing simplification — surface linked ACB/NSX/RCD
+          tests inline so the user doesn't have to hunt across tabs. Renders
+          nothing when no tests are linked (most kind=maintenance checks). */}
+      <LinkedTestsPanel
+        checkId={id}
+        siteId={check.site_id as string | null}
       />
       <CheckDetailPage
         check={{ ...check, assignee_name: assigneeName } as never}
