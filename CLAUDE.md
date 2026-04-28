@@ -44,7 +44,13 @@ These are the canonical decisions from PRs E–J. New surfaces should follow the
 - **Maintenance check page (`/maintenance/[id]`)** has a status-driven hairline accent at the top (green=complete, red=overdue, amber=in_progress, gray=cancelled, sky=scheduled). Title is `text-3xl text-eq-ink tracking-tight`. Section order: header → Linked Tests → Attachments → Asset table (last). Asset table has a free-text filter (name / Maximo ID / location) and sortable column headers.
 - **Maintenance list (`/maintenance`)** has a `Type` (kind) column rendered as a coloured `KindPill` (PPM=sky, ACB=purple, NSX=indigo, RCD=amber, General=gray). The kind filter is wired through to the server-side query via the `kind` URL param.
 - **Customer Report (`/api/pm-asset-report`)** has bumped cell padding (vertical 90 / horizontal 140 dxa). Per-asset info grid label cells use mid-grey small caps (size 16) alongside bold value cells (size 18) — no shaded label backgrounds.
-- **Field Run-Sheet (`/api/maintenance-checklist`)** brand strip uses `tenantDeep` for the fill so white text reads on darker tenant brand colours like SKS purple `#7C77B9`.
+- **Field Run-Sheet (`/api/maintenance-checklist`)** has three formats with revised semantics (PR #55):
+  - `format=simple` (Summary button) → master asset register only, single-page supervisor hand-out
+  - `format=standard` (default) → master register page + per-asset detail cards. Supervisor keeps page 1, tech gets the rest. New combined behaviour.
+  - `format=detailed` → per-asset detail cards only (no master). For when supervisor already has the master separately.
+  - Cover always sits on its own page — every format starts content with a `PageBreak()`. First asset card never glues to the header.
+  - Brand strip uses `adjustHex(primaryColour, -0.20)` (auto-darken). SKS primary `#7C77B9` becomes deep purple, EQ sky becomes deep sky, etc. Tenants with explicit `deep_colour` set differently from primary lose that override on this surface only — the rest of the report still honours `deep_colour`.
+- **Run-sheet smoke test** at `tests/lib/reports/maintenance-checklist.smoke.test.ts` — produces three sample docx files in `tmp/smoke/` for visual review of layout / colour changes. Run with `npx vitest run tests/lib/reports/maintenance-checklist.smoke.test.ts`.
 - **Job-plan-items filter** (`/job-plans/items`) renders the descriptive name regardless of which column the tenant uses (Equinix uses `type`, Jemena uses `name`). Concatenates `code — name · type` deduped.
 - **Sticky Create Check button** on `/testing/{acb,nsx}` Create Check views — bar pinned to top so the action stays visible while scrolling through 100-row asset lists.
 
@@ -132,7 +138,7 @@ ACB toolbar button order (left to right): Import, Export, Breaker Details, Creat
 - `kind=maintenance` (PPM): renders one card per `check_asset` with its `maintenance_check_items` as task rows. Long-standing behaviour.
 - `kind=acb` or `kind=nsx`: synthesizes one card per linked test with a 5-row task list (breaker brand/model/serial · visual & functional · electrical readings · overall result · notes). Tech writes values in the comment column.
 - `kind=rcd`: synthesizes one card per board with one row per circuit (section · circuit no · trip rating · blank X1/X5 timing fields · button-test checkbox).
-- Brand strip uses `tenantDeep` for the fill (PR #39) so white text reads well on darker tenant brand colours like SKS purple `#7C77B9`.
+- Brand strip uses `adjustHex(primaryColour, -0.20)` to auto-darken the tenant's primary (PR #55 — was `tenantDeep` in PR #39). White text reads well, and the brand identity comes through directly: SKS purple `#7C77B9` becomes deep purple on the strip, not the navy `deep_colour` override.
 
 **Per-test-type Reports** were on `/testing/{acb,nsx}` toolbars but were removed in PR #35 — they produced a per-site whole-system PDF that didn't match how reports actually get generated. Reports live on `/maintenance/[id]` now (Customer Report bundles everything; Field Run-Sheet for the printable version).
 
