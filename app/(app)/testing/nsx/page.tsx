@@ -370,9 +370,21 @@ export default function NsxTestingPage() {
           <h1 className="text-3xl font-bold text-eq-sky mt-2">Create NSX Check</h1>
           <p className="text-eq-grey text-sm mt-1">Group assets under a named maintenance check for {siteName}</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => setShowCreateCheck(false)}>
-          Back to Asset List
-        </Button>
+
+        {/* Sticky action bar — Royce 2026-04-28: long asset lists meant the
+            Create button at the bottom forced scrolling. This bar stays
+            visible while you scroll through assets. */}
+        <div className="sticky top-0 z-10 -mx-4 lg:-mx-8 px-4 lg:px-8 py-2.5 bg-white/95 backdrop-blur-sm border-b border-gray-200 flex items-center justify-between gap-3">
+          <Button
+            onClick={handleCreateCheck}
+            disabled={creatingCheck || selectedAssetIds.size === 0}
+          >
+            {creatingCheck ? 'Creating...' : `Create Check (${selectedAssetIds.size} assets)`}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setShowCreateCheck(false)}>
+            Back to Asset List
+          </Button>
+        </div>
 
         {/* Check Details */}
         <Card>
