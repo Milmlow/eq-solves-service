@@ -311,11 +311,11 @@ export async function saveNsxElectricalReadingAction(testId: string, readings: A
     // sibling tests are now done. Best-effort; failures are swallowed.
     const { data: testRow } = await supabase
       .from('nsx_tests')
-      .select('testing_check_id')
+      .select('check_id')
       .eq('id', testId)
       .maybeSingle()
-    if (testRow?.testing_check_id) {
-      await propagateCheckCompletionIfReady(supabase, testRow.testing_check_id)
+    if (testRow?.check_id) {
+      await propagateCheckCompletionIfReady(supabase, testRow.check_id)
     }
 
     revalidatePath('/testing/nsx')

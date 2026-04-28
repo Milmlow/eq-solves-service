@@ -329,11 +329,11 @@ export async function saveAcbElectricalReadingAction(testId: string, readings: A
     // — failures don't surface to the user.
     const { data: testRow } = await supabase
       .from('acb_tests')
-      .select('testing_check_id')
+      .select('check_id')
       .eq('id', testId)
       .maybeSingle()
-    if (testRow?.testing_check_id) {
-      await propagateCheckCompletionIfReady(supabase, testRow.testing_check_id)
+    if (testRow?.check_id) {
+      await propagateCheckCompletionIfReady(supabase, testRow.check_id)
     }
 
     revalidatePath('/testing/acb')

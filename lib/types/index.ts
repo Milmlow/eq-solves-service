@@ -461,7 +461,7 @@ export interface AcbTest {
   tenant_id: string
   asset_id: string
   site_id: string
-  testing_check_id: string | null
+  check_id: string | null
   test_date: string
   tested_by: string | null
   test_type: AcbTestType
@@ -582,7 +582,7 @@ export interface NsxTest {
   tenant_id: string
   asset_id: string
   site_id: string
-  testing_check_id: string | null
+  check_id: string | null
   test_date: string
   tested_by: string | null
   test_type: NsxTestType
