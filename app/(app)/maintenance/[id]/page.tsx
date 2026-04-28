@@ -96,7 +96,7 @@ export default async function MaintenanceCheckPage({
         <h1 className="text-3xl font-bold text-eq-ink mt-3 tracking-tight">{checkName}</h1>
         <p className="text-sm text-eq-grey mt-1">
           {(check.sites as { name: string } | null)?.name ?? '—'}
-          {check.frequency && <span> · {check.frequency.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>}
+          {check.frequency && <span> · {(check.frequency as string).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>}
           {check.due_date && <span> · Due {new Date(check.due_date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
         </p>
       </div>
