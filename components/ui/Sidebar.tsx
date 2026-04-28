@@ -254,6 +254,18 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
               {!collapsed && <span>Archive</span>}
             </Link>
             <Link
+              href="/admin/renewal-pack"
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
+                pathname.startsWith('/admin/renewal-pack')
+                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
+                  : 'text-white/60 hover:text-white hover:bg-white/10'
+              )}
+            >
+              <FileText className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Renewal Pack</span>}
+            </Link>
+            <Link
               href="/admin/contract-scopes/import"
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
