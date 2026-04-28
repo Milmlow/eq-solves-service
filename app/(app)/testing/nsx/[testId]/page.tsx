@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { ChevronLeft } from 'lucide-react'
+import { TestDetailHeader } from '@/components/ui/TestDetailHeader'
 import { NsxTestWorkflowClient } from './NsxTestWorkflowClient'
 import type { NsxTest, NsxTestReading } from '@/lib/types'
 
@@ -13,9 +12,9 @@ function one<T>(v: Joined<T>): T | null {
 }
 
 /**
- * Phase 4 (2026-04-28) — dedicated, deep-linkable detail page for a single
- * NSX test. Mirrors /testing/rcd/[id] and /testing/acb/[testId] so all
- * three test types share a test-centric URL pattern.
+ * Dedicated, deep-linkable detail page for a single NSX test.
+ *
+ * Shell chrome lives in TestDetailHeader (PR P, Phase 4 medium).
  */
 export default async function NsxTestDetailPage({
   params,
@@ -48,44 +47,28 @@ export default async function NsxTestDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Breadcrumb
-          items={[
-            { label: 'Home', href: '/dashboard' },
-            { label: 'Testing', href: '/testing' },
-            { label: 'NSX Testing', href: '/testing/nsx' },
-            { label: asset?.name ?? 'Test' },
-          ]}
-        />
-        <div className="flex items-center justify-between mt-2">
-          <div>
-            <h1 className="text-3xl font-bold text-eq-sky">
-              {asset?.name ?? 'NSX Test'}
-            </h1>
-            <p className="text-sm text-eq-grey mt-1">
-              {site?.name ?? '—'}
-              <span> · {test.test_date}</span>
-              {linkedCheck && (
-                <>
-                  {' · '}
-                  <Link
-                    href={`/maintenance/${linkedCheck.id}`}
-                    className="text-eq-deep hover:text-eq-sky underline"
-                  >
-                    {linkedCheck.custom_name ?? 'linked check'}
-                  </Link>
-                </>
-              )}
-            </p>
-          </div>
-          <Link
-            href="/testing/nsx"
-            className="text-sm text-eq-deep hover:text-eq-sky inline-flex items-center gap-1"
-          >
-            <ChevronLeft className="w-4 h-4" /> Back to NSX list
-          </Link>
-        </div>
-      </div>
+      <TestDetailHeader
+        testTypeLabel="NSX Testing"
+        testTypePath="/testing/nsx"
+        title={asset?.name ?? 'NSX Test'}
+        subtitle={
+          <>
+            {site?.name ?? '—'}
+            <span> · {test.test_date}</span>
+            {linkedCheck && (
+              <>
+                {' · '}
+                <Link
+                  href={`/maintenance/${linkedCheck.id}`}
+                  className="text-eq-deep hover:text-eq-sky underline"
+                >
+                  {linkedCheck.custom_name ?? 'linked check'}
+                </Link>
+              </>
+            )}
+          </>
+        }
+      />
 
       <NsxTestWorkflowClient
         test={test as NsxTest}
