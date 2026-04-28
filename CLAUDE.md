@@ -35,6 +35,50 @@ Multi-tenant maintenance management platform for electrical contractors — circ
 - Client components use `createClient()` from `lib/supabase/client`
 - `SearchFilter` component uses URL params for server-side filtering
 
+## Maintenance Checks (unified model — 2026-04-28)
+
+There is **one** "check" concept across the whole app. A `maintenance_checks` row carries a `kind` discriminator that decides what the row is for:
+
+```
+maintenance_checks
+  ├─ kind = 'maintenance'  ← standard PPM (the original use)
+  ├─ kind = 'acb'          ← was testing_checks.check_type='acb'
+  ├─ kind = 'nsx'          ← was testing_checks.check_type='nsx'
+  ├─ kind = 'rcd'          ← RCD testing
+  └─ kind = 'general'      ← legacy general testing
+```
+
+Migration 0080 collapsed the parallel `testing_checks` table into `maintenance_checks` with the same UUIDs. Migration 0081 renamed `acb_tests.testing_check_id` and `nsx_tests.testing_check_id` to `check_id` so all three test types use the same column name.
+
+**Linkage:**
+```
+acb_tests.check_id  → maintenance_checks(id)
+nsx_tests.check_id  → maintenance_checks(id)
+rcd_tests.check_id  → maintenance_checks(id)
+```
+
+A read-only `testing_checks` view backed by `maintenance_checks WHERE kind IN ('acb','nsx','general')` exists during the transition (security_invoker = true so RLS still applies). Old archive helpers continue to read via the view; writes fail loudly. Drop in a follow-up once nothing reads it.
+
+**RLS — who can create checks:** super_admin / admin / supervisor / **technician** (loosened in migration 0080 so technicians can spin up a check on-site, matching the `canWrite()` helper).
+
+**Mark Complete propagation:** the shared helper `propagateCheckCompletionIfReady(supabase, checkId)` in `lib/actions/check-completion.ts` flips the parent `maintenance_check` to `complete + completed_at = now()` only when **every** linked test (acb + nsx + rcd) is in its complete state. Wired into the ACB step-3 save, NSX step-3 save, and RCD header save. Idempotent — never clobbers an already-complete parent.
+
+## Testing tab navigation (post 2026-04-28)
+
+Sidebar **Testing** lands on `/testing/summary` (KPIs + register of all test-bench checks).
+
+Per-test-type tabs:
+- `/testing/acb` — site selector → asset list → in-page 3-step workflow. Toolbar: Import / Export / Breaker Details / Report / Create Check.
+- `/testing/nsx` — same shape. Toolbar: Report / Create Check.
+- `/testing/rcd` — list view. Toolbar: Import xlsx.
+
+**Test-id deep links** — every test type has a dedicated, deep-linkable detail route used by the Linked Tests panel on `/maintenance/[id]`:
+- `/testing/acb/[testId]`
+- `/testing/nsx/[testId]`
+- `/testing/rcd/[id]`
+
+**Legacy URLs `/acb-testing` and `/nsx-testing` 308-redirect** to the canonical `/testing/{acb,nsx}` routes via `next.config.ts`. The route folders only contain `actions.ts` (still imported by the new pages) — old `page.tsx` + List/Form/Detail components were dropped in PR #33.
+
 ## ACB Testing Module
 
 3-step workflow for Air Circuit Breakers at `/testing/acb`:
@@ -56,11 +100,17 @@ ACB toolbar button order (left to right): Import, Export, Breaker Details, Creat
 
 ## Testing Summary
 
-`/testing/summary` — combined register of ACB, NSX and General test records with site / kind / status / date filters, KPI cards and progress bars. Used for tracking work-in-progress tests across all three modules. **Default landing page** when navigating to `/testing` (redirects automatically).
+`/testing/summary` — combined register of ACB, NSX and General test-bench checks with site / kind / status / date filters, KPI cards and progress bars. **Default landing page** when navigating to `/testing` (redirects automatically). Queries `maintenance_checks` directly filtered by `.in('kind', ['acb','nsx','general'])` (post-merge — was `testing_checks` before 2026-04-28).
 
 ## Reports
 
 `/reports` — compliance dashboard with maintenance compliance rate, overdue checks, test pass rate, ACB & NSX workflow progress, defects register summary (status + severity), maintenance compliance by site (top 10) and a 6-month trend chart (tests run vs maintenance checks due).
+
+**Customer Report on `/maintenance/[id]`** — the "Download Report" button on a maintenance check page calls `/api/pm-asset-report` and produces the customer-facing docx. Since 2026-04-28 (PR #31) it bundles a **Test Records** section with per-asset summary tables for any linked ACB / NSX / RCD tests — one button = one PDF reflecting everything done at the visit. Renders nothing extra when no tests are linked, so existing PPM check reports are unchanged.
+
+**Per-test-type Reports** — `/testing/acb` and `/testing/nsx` toolbars each have a Report button that produces a per-site test-only PDF via `/api/acb-report` / `/api/nsx-report`. Migrated from the legacy list pages in PR #30; same complexity dropdown (summary / standard / detailed).
+
+**Linked Tests panel on `/maintenance/[id]`** — server component `LinkedTestsPanel.tsx` surfaces every acb_test / nsx_test / rcd_test linked to the check. Click-through goes straight to `/testing/{kind}/[testId]`. Renders nothing for plain PPM checks.
 
 ### Report Settings (`/admin/reports`)
 Configurable report template with section toggles (cover, overview, contents, summary, sign-off), company details, header/footer text, sign-off fields, and:
