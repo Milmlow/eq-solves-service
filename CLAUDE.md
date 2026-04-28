@@ -63,19 +63,26 @@ A read-only `testing_checks` view backed by `maintenance_checks WHERE kind IN ('
 
 **Mark Complete propagation:** the shared helper `propagateCheckCompletionIfReady(supabase, checkId)` in `lib/actions/check-completion.ts` flips the parent `maintenance_check` to `complete + completed_at = now()` only when **every** linked test (acb + nsx + rcd) is in its complete state. Wired into the ACB step-3 save, NSX step-3 save, and RCD header save. Idempotent — never clobbers an already-complete parent.
 
+**Items unlock after Complete All (2026-04-28 review).** `updateCheckItemAction` accepts both `in_progress` AND `complete` parent statuses so the tech can bulk-pass via Complete All Assets first, then go back and downgrade specific failures. Audit log captures every flip. `scheduled` and `cancelled` remain blocked.
+
+**"Complete All Assets" button is PPM-only.** The button bulk-marks `check_assets` as completed — only meaningful for kind=maintenance checks where each asset has a fixed task list. Hidden on kind=acb/nsx/rcd checks (test workflows aren't bulk-passable; each test runs through its own 3-step workflow).
+
 ## Testing tab navigation (post 2026-04-28)
 
-Sidebar **Testing** lands on `/testing/summary` (KPIs + register of all test-bench checks).
+**Sidebar entry removed.** "Testing" is no longer in the sidebar (PR #38, Royce's review Q4). All test work lives under `/maintenance` now — open a check, see linked tests in the panel, click through. The `/testing/*` routes still resolve for direct URLs and existing deep links from the LinkedTestsPanel, but they're not a top-level destination.
 
-Per-test-type tabs:
-- `/testing/acb` — site selector → asset list → in-page 3-step workflow. Toolbar: Import / Export / Breaker Details / Report / Create Check.
-- `/testing/nsx` — same shape. Toolbar: Report / Create Check.
+The page-level routes remain:
+- `/testing/summary` — combined register, kept for ad-hoc "show me all test-bench checks" queries via direct URL.
+- `/testing/acb` — site selector → asset list → in-page 3-step workflow. Toolbar: Import / Export / Breaker Details / Create Check (Report button removed in PR #35 — reports live on `/maintenance/[id]`).
+- `/testing/nsx` — same shape. Toolbar: Create Check only.
 - `/testing/rcd` — list view. Toolbar: Import xlsx.
 
 **Test-id deep links** — every test type has a dedicated, deep-linkable detail route used by the Linked Tests panel on `/maintenance/[id]`:
 - `/testing/acb/[testId]`
 - `/testing/nsx/[testId]`
 - `/testing/rcd/[id]`
+
+**Sticky Create Check button** — on `/testing/acb` and `/testing/nsx` Create Check views (PR #37), the Create button sits in a sticky bar pinned to the top of the panel so it stays visible while scrolling through 100-row asset lists.
 
 **Legacy URLs `/acb-testing` and `/nsx-testing` 308-redirect** to the canonical `/testing/{acb,nsx}` routes via `next.config.ts`. The route folders only contain `actions.ts` (still imported by the new pages) — old `page.tsx` + List/Form/Detail components were dropped in PR #33.
 
@@ -106,11 +113,17 @@ ACB toolbar button order (left to right): Import, Export, Breaker Details, Creat
 
 `/reports` — compliance dashboard with maintenance compliance rate, overdue checks, test pass rate, ACB & NSX workflow progress, defects register summary (status + severity), maintenance compliance by site (top 10) and a 6-month trend chart (tests run vs maintenance checks due).
 
-**Customer Report on `/maintenance/[id]`** — the "Download Report" button on a maintenance check page calls `/api/pm-asset-report` and produces the customer-facing docx. Since 2026-04-28 (PR #31) it bundles a **Test Records** section with per-asset summary tables for any linked ACB / NSX / RCD tests — one button = one PDF reflecting everything done at the visit. Renders nothing extra when no tests are linked, so existing PPM check reports are unchanged.
+**Customer Report on `/maintenance/[id]`** — the "Customer Report" button on a maintenance check page calls `/api/pm-asset-report` and produces the customer-facing docx. Since 2026-04-28 (PR #31) it bundles a **Test Records** section with per-asset summary tables for any linked ACB / NSX / RCD tests — one button = one PDF reflecting everything done at the visit. Renders nothing extra when no tests are linked, so existing PPM check reports are unchanged. Cover redesigned in PR #39: tenant logo only (customer logo dropped — it duplicated the customer name in headline type), 56pt headline, more whitespace, italic subtitle line removed.
 
-**Per-test-type Reports** — `/testing/acb` and `/testing/nsx` toolbars each have a Report button that produces a per-site test-only PDF via `/api/acb-report` / `/api/nsx-report`. Migrated from the legacy list pages in PR #30; same complexity dropdown (summary / standard / detailed).
+**Field Run-Sheet on `/maintenance/[id]`** — the "Field Run-Sheet" SplitButton + the explicit "Print Blank for Onsite" button both call `/api/maintenance-checklist` (same endpoint, two entry points so the print-blank intent is obvious). Generator is **kind-aware** since PR #35:
+- `kind=maintenance` (PPM): renders one card per `check_asset` with its `maintenance_check_items` as task rows. Long-standing behaviour.
+- `kind=acb` or `kind=nsx`: synthesizes one card per linked test with a 5-row task list (breaker brand/model/serial · visual & functional · electrical readings · overall result · notes). Tech writes values in the comment column.
+- `kind=rcd`: synthesizes one card per board with one row per circuit (section · circuit no · trip rating · blank X1/X5 timing fields · button-test checkbox).
+- Brand strip uses `tenantDeep` for the fill (PR #39) so white text reads well on darker tenant brand colours like SKS purple `#7C77B9`.
 
-**Linked Tests panel on `/maintenance/[id]`** — server component `LinkedTestsPanel.tsx` surfaces every acb_test / nsx_test / rcd_test linked to the check. Click-through goes straight to `/testing/{kind}/[testId]`. Renders nothing for plain PPM checks.
+**Per-test-type Reports** were on `/testing/{acb,nsx}` toolbars but were removed in PR #35 — they produced a per-site whole-system PDF that didn't match how reports actually get generated. Reports live on `/maintenance/[id]` now (Customer Report bundles everything; Field Run-Sheet for the printable version).
+
+**Linked Tests panel on `/maintenance/[id]`** — server component `LinkedTestsPanel.tsx` surfaces every acb_test / nsx_test / rcd_test linked to the check. Click-through goes straight to `/testing/{kind}/[testId]`. Renders nothing for plain PPM checks. Sits between Contract Scope and Attachments in the page layout (PR #37 reorder: header → linked tests → attachments → asset table at the bottom).
 
 ### Report Settings (`/admin/reports`)
 Configurable report template with section toggles (cover, overview, contents, summary, sign-off), company details, header/footer text, sign-off fields, and:
