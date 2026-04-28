@@ -1,12 +1,14 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
+import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, X } from 'lucide-react'
 import {
   previewCommercialSheetAction,
   previewExistingCountsAction,
+  previewAssetCountsAction,
   commitImportAction,
   type CustomerOption,
   type SiteOption,
@@ -14,8 +16,6 @@ import {
   type ExistingCounts,
 } from './actions'
 
-// Local copy of the parsed-scope shape to avoid importing the parser into a
-// client module (it brings exceljs in via re-exports).
 interface PreviewScope {
   jp_code: string | null
   scope_item: string
@@ -35,18 +35,28 @@ function fmtCurrency(n: number | null | undefined): string {
   return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 2 })
 }
 
+function parseCurrencyInput(s: string): number | null {
+  if (!s.trim()) return null
+  const n = parseFloat(s.replace(/[$,\s]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
 export function CommercialSheetImporter() {
   const [phase, setPhase] = useState<Phase>('idle')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [counts, setCounts] = useState<ExistingCounts | null>(null)
+  const [hasPriorImport, setHasPriorImport] = useState<boolean>(false)
+  const [assetCountsByJp, setAssetCountsByJp] = useState<Record<string, number>>({})
   const [customerId, setCustomerId] = useState('')
   const [siteId, setSiteId] = useState('')
   const [year, setYear] = useState('2026')
   const [wipeFirst, setWipeFirst] = useState(true)
   const [confirmName, setConfirmName] = useState('')
+  const [expectedY1, setExpectedY1] = useState('')
   const [banner, setBanner] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
   const [pending, startTransition] = useTransition()
+  const [dragOver, setDragOver] = useState(false)
 
   const sitesForCustomer: SiteOption[] = useMemo(() => {
     if (!preview || !customerId) return []
@@ -57,6 +67,10 @@ export function CommercialSheetImporter() {
     () => preview?.customers.find((c) => c.id === customerId),
     [preview, customerId],
   )
+  const selectedSite: SiteOption | undefined = useMemo(
+    () => preview?.sites.find((s) => s.id === siteId),
+    [preview, siteId],
+  )
 
   const allScopes: PreviewScope[] = useMemo(() => {
     if (!preview) return []
@@ -64,25 +78,78 @@ export function CommercialSheetImporter() {
   }, [preview])
 
   const yearTotal = useMemo(() => {
-    return allScopes.reduce((sum, s) => sum + (s.year_totals[year] ?? 0), 0)
-  }, [allScopes, year])
+    if (!preview) return 0
+    return preview.parsedYearTotals[year] ?? 0
+  }, [preview, year])
+
+  // ── Live validation surfaced in the wizard (mirrors server-side checks) ──
+  const liveWarnings = useMemo(() => {
+    const w: string[] = []
+    if (!preview) return w
+    if (preview.parsed.site_hint && selectedCustomer?.contract_template &&
+        selectedCustomer.contract_template !== 'au_smca_v1') {
+      w.push(
+        `Customer template is '${selectedCustomer.contract_template}' but the filename ` +
+        `(DELTA ELCOM_${preview.parsed.site_hint}) looks like an AU SMCA workbook.`,
+      )
+    }
+    if (preview.parsed.site_hint && selectedSite?.code &&
+        selectedSite.code.toUpperCase() !== preview.parsed.site_hint) {
+      w.push(
+        `Filename hint says '${preview.parsed.site_hint}' but you've picked site '${selectedSite.code}'.`,
+      )
+    }
+    if (preview.workbookYears.length > 0 && /^\d{4}$/.test(year) &&
+        !preview.workbookYears.includes(year)) {
+      w.push(
+        `Picked year ${year} doesn't appear in the workbook (covers ${preview.workbookYears.join(', ')}).`,
+      )
+    }
+    if (!wipeFirst && hasPriorImport) {
+      w.push(
+        'This customer/year already has rows from a prior import. Wipe is OFF — committing would create duplicates.',
+      )
+    }
+    return w
+  }, [preview, selectedCustomer, selectedSite, year, wipeFirst, hasPriorImport])
+
+  // Y1 tie-out diff (null if user didn't supply expected).
+  const expectedY1Num = parseCurrencyInput(expectedY1)
+  const tieOutDiff =
+    expectedY1Num !== null && /^\d{4}$/.test(year)
+      ? +(yearTotal - expectedY1Num).toFixed(2)
+      : null
+  const tieOutBlocked = tieOutDiff !== null && Math.abs(tieOutDiff) > 1
 
   const confirmMatch =
     !!selectedCustomer && confirmName.trim() === (selectedCustomer.name ?? '').trim()
   const canCommit =
-    !!file && !!customerId && !!siteId && /^\d{4}$/.test(year) && confirmMatch && !pending
+    !!file &&
+    !!customerId &&
+    !!siteId &&
+    /^\d{4}$/.test(year) &&
+    confirmMatch &&
+    !tieOutBlocked &&
+    !pending &&
+    // Hard-blocking warnings
+    !(preview && preview.workbookYears.length > 0 && !preview.workbookYears.includes(year)) &&
+    !(!wipeFirst && hasPriorImport)
 
   function resetAll() {
     setPhase('idle')
     setFile(null)
     setPreview(null)
     setCounts(null)
+    setHasPriorImport(false)
+    setAssetCountsByJp({})
     setCustomerId('')
     setSiteId('')
     setYear('2026')
     setWipeFirst(true)
     setConfirmName('')
+    setExpectedY1('')
     setBanner(null)
+    setDragOver(false)
   }
 
   function handleFile(f: File) {
@@ -91,7 +158,10 @@ export function CommercialSheetImporter() {
     setCustomerId('')
     setSiteId('')
     setConfirmName('')
+    setExpectedY1('')
     setCounts(null)
+    setHasPriorImport(false)
+    setAssetCountsByJp({})
     setBanner(null)
     setPhase('parsing')
     const fd = new FormData()
@@ -105,7 +175,6 @@ export function CommercialSheetImporter() {
       }
       setPreview(res)
       setPhase('previewing')
-      // Pre-select customer + site if site_hint resolved.
       if (res.matchedSiteId) {
         const matchedSite = res.sites.find((s) => s.id === res.matchedSiteId)
         if (matchedSite) {
@@ -116,10 +185,11 @@ export function CommercialSheetImporter() {
     })
   }
 
-  // Whenever customer or year changes, refresh the existing-data counts.
+  // Refresh the existing-data counts whenever customer or year changes.
   function refreshCounts(custId: string, yr: string) {
     if (!custId || !/^\d{4}$/.test(yr)) {
       setCounts(null)
+      setHasPriorImport(false)
       return
     }
     const fd = new FormData()
@@ -127,10 +197,37 @@ export function CommercialSheetImporter() {
     fd.set('financial_year', yr)
     startTransition(async () => {
       const res = await previewExistingCountsAction(fd)
-      if (res.ok) setCounts(res.counts)
-      else setCounts(null)
+      if (res.ok) {
+        setCounts(res.counts)
+        setHasPriorImport(res.hasPriorImport)
+      } else {
+        setCounts(null)
+        setHasPriorImport(false)
+      }
     })
   }
+
+  // Refresh per-JP DB asset counts whenever the site changes (or preview lands).
+  useEffect(() => {
+    if (!preview || !siteId) {
+      setAssetCountsByJp({})
+      return
+    }
+    const codes = preview.parsed.scopes
+      .map((s) => s.jp_code)
+      .filter((c): c is string => !!c)
+    if (codes.length === 0) {
+      setAssetCountsByJp({})
+      return
+    }
+    const fd = new FormData()
+    fd.set('site_id', siteId)
+    fd.set('jp_codes', codes.join(','))
+    startTransition(async () => {
+      const res = await previewAssetCountsAction(fd)
+      if (res.ok) setAssetCountsByJp(res.countsByJp)
+    })
+  }, [preview, siteId])
 
   function handleCustomerChange(id: string) {
     setCustomerId(id)
@@ -138,7 +235,6 @@ export function CommercialSheetImporter() {
     setConfirmName('')
     refreshCounts(id, year)
   }
-
   function handleYearChange(y: string) {
     setYear(y)
     refreshCounts(customerId, y)
@@ -155,6 +251,7 @@ export function CommercialSheetImporter() {
     fd.set('financial_year', year)
     fd.set('confirm_name', confirmName)
     fd.set('wipe_first', wipeFirst ? 'true' : 'false')
+    if (expectedY1Num !== null) fd.set('expected_y1_total', String(expectedY1Num))
     startTransition(async () => {
       const res = await commitImportAction(fd)
       if (!res.ok) {
@@ -168,11 +265,26 @@ export function CommercialSheetImporter() {
           `Imported ${res.inserted.scopes} JP rows + ${res.inserted.additional_items} additional ` +
           `into ${selectedCustomer.name} (${year}). ` +
           (wipeFirst
-            ? `Wiped first: ${res.wiped.scopes} scopes, ${res.wiped.calendar} calendar, ${res.wiped.gaps} gaps.`
-            : 'No wipe.'),
+            ? `Wiped first: ${res.wiped.scopes} scopes, ${res.wiped.calendar} calendar, ${res.wiped.gaps} gaps. `
+            : 'No wipe. ') +
+          `import_id: ${res.source_import_id.slice(0, 8)}…`,
       })
       setPhase('done')
     })
+  }
+
+  // ── Drag-drop handlers ──────────────────────────────────────────────
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(true)
+  }
+  function onDragLeave() { setDragOver(false) }
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    const f = e.dataTransfer.files?.[0]
+    if (f && f.name.toLowerCase().endsWith('.xlsx')) handleFile(f)
+    else setBanner({ kind: 'err', msg: 'Drop a single .xlsx workbook.' })
   }
 
   return (
@@ -188,37 +300,78 @@ export function CommercialSheetImporter() {
         </div>
       )}
 
-      {/* File picker */}
+      {/* 1. Fancy drop-zone uploader */}
       <Card>
         <h2 className="text-base font-semibold text-eq-ink">1. Upload commercial-sheet workbook</h2>
         <p className="text-xs text-eq-grey mt-1">
-          One xlsx per site. Filename should follow the DELTA ELCOM pattern so the site
-          can be auto-detected.
+          One xlsx per site. Filename should follow the DELTA ELCOM pattern so the
+          site auto-matches.
         </p>
-        <div className="mt-3 flex items-center gap-3">
-          <input
-            type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            disabled={pending}
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) handleFile(f)
-            }}
-            className="text-sm text-eq-ink"
-          />
-          {file && (
-            <Button variant="secondary" size="sm" onClick={resetAll} disabled={pending}>
-              Reset
-            </Button>
+        <div className="mt-3">
+          {!file ? (
+            <label
+              htmlFor="cs-file-input"
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              className={
+                'flex flex-col items-center justify-center gap-3 ' +
+                'cursor-pointer rounded-lg border-2 border-dashed py-10 px-6 ' +
+                'transition-colors duration-150 text-center ' +
+                (dragOver
+                  ? 'border-eq-sky bg-eq-ice'
+                  : 'border-gray-300 bg-gray-50 hover:border-eq-sky hover:bg-eq-ice/40')
+              }
+            >
+              <div className={
+                'w-12 h-12 rounded-full flex items-center justify-center ' +
+                (dragOver ? 'bg-eq-sky text-white' : 'bg-white border border-gray-200 text-eq-deep')
+              }>
+                <Upload className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-eq-ink">
+                  Drop your DELTA ELCOM xlsx here
+                </p>
+                <p className="text-xs text-eq-grey mt-0.5">
+                  or <span className="text-eq-deep underline">click to browse</span>
+                </p>
+              </div>
+              <p className="text-[10px] text-eq-grey">
+                e.g. <span className="font-mono">DELTA ELCOM_SY3 Elec Maintenance_Commercial Sheet JPs 24Nov&#39;2025.xlsx</span>
+              </p>
+              <input
+                id="cs-file-input"
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                disabled={pending}
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleFile(f)
+                }}
+                className="sr-only"
+              />
+            </label>
+          ) : (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-md border border-eq-sky/30 bg-eq-ice/40">
+              <div className="flex items-center gap-3 min-w-0">
+                <FileSpreadsheet className="w-5 h-5 text-eq-deep flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-eq-ink truncate" title={file.name}>{file.name}</p>
+                  <p className="text-xs text-eq-grey">{(file.size / 1024).toFixed(1)} KB</p>
+                </div>
+              </div>
+              <Button variant="secondary" size="sm" onClick={resetAll} disabled={pending}>
+                <X className="w-3.5 h-3.5 mr-1" /> Reset
+              </Button>
+            </div>
           )}
         </div>
+
         {phase === 'parsing' && <p className="text-xs text-eq-grey mt-3">Parsing workbook…</p>}
+
         {preview && (
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-            <div>
-              <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">File</p>
-              <p className="text-eq-ink truncate" title={preview.filename}>{preview.filename}</p>
-            </div>
             <div>
               <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Site hint</p>
               <p className="text-eq-ink">{preview.parsed.site_hint ?? '—'}</p>
@@ -231,6 +384,10 @@ export function CommercialSheetImporter() {
               <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Additional items</p>
               <p className="text-eq-ink">{preview.parsed.additional_items.length}</p>
             </div>
+            <div>
+              <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Workbook years</p>
+              <p className="text-eq-ink">{preview.workbookYears.join(', ') || '—'}</p>
+            </div>
           </div>
         )}
         {preview && preview.parsed.warnings.length > 0 && (
@@ -240,7 +397,7 @@ export function CommercialSheetImporter() {
         )}
       </Card>
 
-      {/* Customer + site + year picker */}
+      {/* 2. Customer + site + year + wipe + Y1 tie-out */}
       {preview && (
         <Card>
           <h2 className="text-base font-semibold text-eq-ink">2. Target customer + site + year</h2>
@@ -290,8 +447,20 @@ export function CommercialSheetImporter() {
               inputMode="numeric"
             />
           </div>
+
+          {/* Live warnings — soft (yellow) */}
+          {liveWarnings.length > 0 && (
+            <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-900">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <ul className="space-y-1">
+                {liveWarnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {/* Existing-data + wipe toggle */}
           {customerId && counts && (counts.scopes + counts.calendar + counts.gaps) > 0 && (
-            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-900">
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-900">
               <p className="font-semibold">Existing data for this customer in {year}:</p>
               <p className="mt-1">
                 {counts.scopes} contract scope row{counts.scopes === 1 ? '' : 's'}, {' '}
@@ -311,10 +480,47 @@ export function CommercialSheetImporter() {
               </label>
             </div>
           )}
+
+          {/* Y1 tie-out gate */}
+          <div className="mt-4 p-3 rounded-md bg-eq-ice/40 border border-eq-sky/20">
+            <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-2">Y1 tie-out (optional but recommended)</p>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="flex-1">
+                <FormInput
+                  label={`Expected ${year} total from contract PDF`}
+                  value={expectedY1}
+                  onChange={(e) => setExpectedY1(e.target.value)}
+                  placeholder="e.g. 86677.00"
+                  inputMode="decimal"
+                />
+              </div>
+              <div className="flex-1 text-sm">
+                <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Parsed {year} total</p>
+                <p className={
+                  'font-semibold ' +
+                  (tieOutBlocked ? 'text-red-600' : 'text-eq-deep')
+                }>
+                  {fmtCurrency(yearTotal)}
+                </p>
+                {tieOutDiff !== null && (
+                  <p className={
+                    'text-xs mt-0.5 flex items-center gap-1 ' +
+                    (tieOutBlocked ? 'text-red-600' : 'text-green-600')
+                  }>
+                    {tieOutBlocked ? (
+                      <><AlertTriangle className="w-3 h-3" /> Mismatch: {fmtCurrency(tieOutDiff)} (commit blocked)</>
+                    ) : (
+                      <><CheckCircle2 className="w-3 h-3" /> Tied within $1.00</>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
         </Card>
       )}
 
-      {/* Preview table */}
+      {/* 3. Preview parsed rows */}
       {preview && allScopes.length > 0 && (
         <Card>
           <div className="flex items-center justify-between mb-3">
@@ -330,11 +536,11 @@ export function CommercialSheetImporter() {
                   <th className="text-left px-2 py-2 font-bold">JP</th>
                   <th className="text-left px-2 py-2 font-bold">Scope</th>
                   <th className="text-right px-2 py-2 font-bold">Qty</th>
+                  <th className="text-right px-2 py-2 font-bold" title="Active assets at this site mapped to this JP code">DB count</th>
                   <th className="text-left px-2 py-2 font-bold">Intervals</th>
                   <th className="text-left px-2 py-2 font-bold">Cycle costs</th>
                   <th className="text-right px-2 py-2 font-bold">{year}</th>
                   <th className="text-left px-2 py-2 font-bold">Due years</th>
-                  <th className="text-left px-2 py-2 font-bold">Source</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -345,28 +551,47 @@ export function CommercialSheetImporter() {
                   const dueStr = Object.entries(s.due_years)
                     .map(([y, c]) => `${y}: ${c}`)
                     .join(', ')
+                  const dbCount = s.jp_code ? assetCountsByJp[s.jp_code] : undefined
+                  const dbCountMismatch =
+                    s.jp_code !== null &&
+                    dbCount !== undefined &&
+                    siteId !== '' &&
+                    dbCount !== s.asset_qty
                   return (
                     <tr key={i}>
                       <td className="px-2 py-1.5 text-eq-deep font-mono">{s.jp_code ?? '—'}</td>
                       <td className="px-2 py-1.5 text-eq-ink">{s.scope_item}</td>
-                      <td className="px-2 py-1.5 text-right text-eq-ink">{s.asset_qty || (s.unit_rate_per_asset !== null ? '—' : '0')}</td>
+                      <td className="px-2 py-1.5 text-right text-eq-ink">
+                        {s.asset_qty || (s.unit_rate_per_asset !== null ? '—' : '0')}
+                      </td>
+                      <td className={
+                        'px-2 py-1.5 text-right ' +
+                        (dbCount === undefined ? 'text-eq-grey' :
+                         dbCountMismatch ? 'text-amber-700 font-semibold' : 'text-eq-ink')
+                      }
+                        title={dbCountMismatch ? `Parsed asset_qty=${s.asset_qty} but DB has ${dbCount}` : undefined}
+                      >
+                        {s.jp_code === null ? '—' : (dbCount ?? '?')}
+                      </td>
                       <td className="px-2 py-1.5 text-eq-grey">{s.intervals_text || '—'}</td>
                       <td className="px-2 py-1.5 text-eq-grey">
                         {cycleStr || (s.unit_rate_per_asset !== null ? `unit: ${fmtCurrency(s.unit_rate_per_asset)}` : '—')}
                       </td>
                       <td className="px-2 py-1.5 text-right text-eq-ink">{fmtCurrency(s.year_totals[year] ?? 0)}</td>
                       <td className="px-2 py-1.5 text-eq-grey">{dueStr || '—'}</td>
-                      <td className="px-2 py-1.5 text-eq-grey">{s.source_sheet}</td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
+          <p className="mt-2 text-xs text-eq-grey">
+            <span className="text-amber-700">Amber DB count</span> = parsed JP asset_qty differs from the count of active assets at this site mapped to that job-plan code. Could mean the asset register is stale, demo data is mixed in, or job_plan_id linkage is missing.
+          </p>
         </Card>
       )}
 
-      {/* Confirm + commit */}
+      {/* 4. Confirm + commit */}
       {preview && customerId && siteId && (
         <Card className="border-red-200">
           <h2 className="text-base font-semibold text-eq-ink">4. Confirm + commit</h2>
@@ -394,9 +619,7 @@ export function CommercialSheetImporter() {
             >
               {pending && phase === 'committing'
                 ? 'Importing…'
-                : wipeFirst
-                  ? `Wipe ${year} & import`
-                  : `Import ${year}`}
+                : wipeFirst ? `Wipe ${year} & import` : `Import ${year}`}
             </Button>
           </div>
         </Card>
