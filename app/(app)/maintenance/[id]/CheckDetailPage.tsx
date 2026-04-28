@@ -45,6 +45,36 @@ import { SplitButton } from '@/components/ui/SplitButton'
  * the customer-facing PDF. The customer-facing PDF is the separate
  * "Customer Report" button (Download Report) elsewhere on this page.
  */
+/**
+ * Single-action button that opens the Field Run-Sheet in standard format
+ * — explicitly labelled "Print Blank for Onsite" so techs know this is the
+ * empty-form-for-handwriting use case. Calls the same `/api/maintenance-
+ * checklist` endpoint as the SplitButton's standard option, just with a
+ * clearer entry point. Royce 2026-04-28: "sometimes we print empty and
+ * the guys complete on site".
+ *
+ * Survives a check.kind discriminator: the route synthesizes
+ * ChecklistAsset entries from linked acb/nsx/rcd_tests when no
+ * check_assets exist, so this works for test-bench checks too.
+ */
+function PrintBlankButton({ checkId }: { checkId: string }) {
+  return (
+    <button
+      onClick={() =>
+        window.open(
+          `/api/maintenance-checklist?check_id=${checkId}&format=standard`,
+          '_blank',
+          'noopener',
+        )
+      }
+      title="Print an empty run-sheet for the technician to complete onsite by hand. Same as Field Run-Sheet > Standard."
+      className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium border border-gray-300 bg-white text-eq-ink rounded hover:border-eq-deep hover:text-eq-deep transition-colors"
+    >
+      <Printer className="w-4 h-4" /> Print Blank for Onsite
+    </button>
+  )
+}
+
 function PrintReportSplit({ checkId }: { checkId: string }) {
   function open(format: 'summary' | 'standard' | 'detailed') {
     window.open(`/api/maintenance-checklist?check_id=${checkId}&format=${format}`, '_blank', 'noopener')
@@ -398,9 +428,17 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           )}
           {check.status === 'in_progress' && canAct && (
             <>
-              <Button size="sm" onClick={handleCompleteAll} loading={loading}>
-                <CheckCheck className="w-4 h-4 mr-1" /> Complete All Assets
-              </Button>
+              {/* "Complete All Assets" is the bulk-pass button — only meaningful
+                  for kind=maintenance (PPM) checks where each asset has a fixed
+                  task list. ACB/NSX/RCD assets are multi-step test workflows,
+                  not bulk-passable. Hidden on those kinds (Royce 2026-04-28). */}
+              {(check as { kind?: string | null }).kind !== 'acb' &&
+               (check as { kind?: string | null }).kind !== 'nsx' &&
+               (check as { kind?: string | null }).kind !== 'rcd' && (
+                <Button size="sm" onClick={handleCompleteAll} loading={loading}>
+                  <CheckCheck className="w-4 h-4 mr-1" /> Complete All Assets
+                </Button>
+              )}
               <Button size="sm" onClick={handleComplete} loading={loading} disabled={requiredIncomplete > 0}
                 title={requiredIncomplete > 0 ? `${requiredIncomplete} required tasks incomplete` : ''}>
                 Complete Check
@@ -435,11 +473,19 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
               {/* Print Report is now available on completed checks too — was
                   scheduled/in_progress only before, which surprised users
                   during testing. */}
-              {canWriteRole && <PrintReportSplit checkId={check.id} />}
+              {canWriteRole && (
+                <>
+                  <PrintBlankButton checkId={check.id} />
+                  <PrintReportSplit checkId={check.id} />
+                </>
+              )}
             </>
           )}
           {(check.status === 'scheduled' || check.status === 'in_progress' || check.status === 'overdue') && canWriteRole && (
-            <PrintReportSplit checkId={check.id} />
+            <>
+              <PrintBlankButton checkId={check.id} />
+              <PrintReportSplit checkId={check.id} />
+            </>
           )}
           {isAdmin && (
             <Button size="sm" variant="danger" onClick={handleDelete} loading={loading}>Delete</Button>

@@ -160,8 +160,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Build per-asset sections
-  const checklistAssets: ChecklistAsset[] = checkAssets.map(ca => {
+  // Build per-asset sections from check_assets (kind=maintenance flow).
+  let checklistAssets: ChecklistAsset[] = checkAssets.map(ca => {
     const asset = ca.assets as { name: string; maximo_id: string | null; location: string | null } | null
     const items = itemsByCheckAsset[ca.id] ?? []
 
@@ -177,6 +177,109 @@ export async function GET(request: NextRequest) {
       notes: ca.notes ?? null,
     }
   })
+
+  // Phase A (2026-04-28): when this is a test-bench check (kind in
+  // acb/nsx/rcd) AND check_assets is empty, synthesize ChecklistAsset
+  // entries from the linked tests so the run-sheet has something useful
+  // to print. Without this the tech got a blank page (cover + sign-off
+  // only) — confirmed by Royce printing the SY6 NSX run-sheet today.
+  //
+  // Each linked test → one ChecklistAsset with a compact 5-row task list
+  // (breaker details, visual, electrical, overall, notes) for ACB/NSX,
+  // or one row per circuit for RCD. Tech writes values into the comment
+  // cells and types them into the app afterwards.
+  const kind = (check as { kind?: string | null }).kind ?? 'maintenance'
+  const isTestKind = kind === 'acb' || kind === 'nsx' || kind === 'rcd'
+
+  if (isTestKind && checklistAssets.length === 0) {
+    if (kind === 'acb' || kind === 'nsx') {
+      const table = kind === 'acb' ? 'acb_tests' : 'nsx_tests'
+      const { data: tests } = await supabase
+        .from(table)
+        .select('id, asset_id, cb_make, cb_model, cb_serial, assets(name, maximo_id, location)')
+        .eq('check_id', checkId)
+        .eq('is_active', true)
+        .order('created_at')
+
+      checklistAssets = (tests ?? []).map((t) => {
+        const a = t.assets as { name: string; maximo_id: string | null; location: string | null } | { name: string; maximo_id: string | null; location: string | null }[] | null
+        const asset = Array.isArray(a) ? a[0] ?? null : a
+        const make = (t.cb_make as string | null) ?? ''
+        const model = (t.cb_model as string | null) ?? ''
+        const serial = (t.cb_serial as string | null) ?? ''
+        const breakerLine =
+          [make, model, serial].filter(Boolean).join(' / ') || '_______________________________________________'
+        return {
+          assetName: asset?.name ?? 'Breaker',
+          assetId: asset?.maximo_id ?? '—',
+          location: asset?.location ?? '—',
+          workOrderNumber: null,
+          tasks: [
+            { order: 1, description: `Breaker (Brand / Model / Serial): ${breakerLine}` },
+            { order: 2, description: 'Visual & Functional checks (record anomalies in comment)' },
+            { order: 3, description: 'Electrical readings — Contact resistance R/W/B (µΩ), IR closed/open (MΩ), temperature (°C)' },
+            { order: 4, description: 'Overall result: Pass / Fail / Defect (circle one)' },
+            { order: 5, description: 'Notes / follow-up' },
+          ],
+          notes: null,
+        }
+      })
+    } else if (kind === 'rcd') {
+      // RCD: per-board card with one row per circuit. Pull the rcd_tests +
+      // their circuits and build a card per board.
+      const { data: rcdTests } = await supabase
+        .from('rcd_tests')
+        .select('id, asset_id, assets(name, jemena_asset_id, location)')
+        .eq('check_id', checkId)
+        .eq('is_active', true)
+        .order('created_at')
+
+      const testIds = (rcdTests ?? []).map((t) => t.id)
+      const circuitsByTest = new Map<string, Array<{ section_label: string | null; circuit_no: string; normal_trip_current_ma: number | null }>>()
+      if (testIds.length > 0) {
+        const { data: allCircuits } = await supabase
+          .from('rcd_test_circuits')
+          .select('rcd_test_id, section_label, circuit_no, normal_trip_current_ma, sort_order')
+          .in('rcd_test_id', testIds)
+          .order('sort_order')
+        for (const c of allCircuits ?? []) {
+          const arr = circuitsByTest.get(c.rcd_test_id) ?? []
+          arr.push({
+            section_label: c.section_label as string | null,
+            circuit_no: c.circuit_no as string,
+            normal_trip_current_ma: c.normal_trip_current_ma as number | null,
+          })
+          circuitsByTest.set(c.rcd_test_id, arr)
+        }
+      }
+
+      checklistAssets = (rcdTests ?? []).map((t) => {
+        const a = t.assets as { name: string; jemena_asset_id: string | null; location: string | null } | { name: string; jemena_asset_id: string | null; location: string | null }[] | null
+        const asset = Array.isArray(a) ? a[0] ?? null : a
+        const circuits = circuitsByTest.get(t.id) ?? []
+        const tasks = circuits.length > 0
+          ? circuits.map((c, idx) => {
+              const section = c.section_label ? `${c.section_label} · ` : ''
+              const rating = c.normal_trip_current_ma ? `${c.normal_trip_current_ma}mA` : ''
+              return {
+                order: idx + 1,
+                description: `${section}Circuit ${c.circuit_no} (${rating}) — X1 No-Trip 0°/180°: ___ / ___ ms · X1 Trip 0°/180°: ___ / ___ ms · X5 0°/180°: ___ / ___ ms · Btn ☐`,
+              }
+            })
+          : [
+              { order: 1, description: 'No circuits enumerated yet — record per-circuit timing values below' },
+            ]
+        return {
+          assetName: asset?.name ?? 'Board',
+          assetId: asset?.jemena_asset_id ?? '—',
+          location: asset?.location ?? '—',
+          workOrderNumber: null,
+          tasks,
+          notes: null,
+        }
+      })
+    }
+  }
 
   // Format dates as Australian long-form ("26 April 2026") to match the
   // other report generators. Without an explicit locale, Node defaults to
