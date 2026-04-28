@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
-import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, X } from 'lucide-react'
+import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, X, ArrowRight } from 'lucide-react'
+import Link from 'next/link'
 import {
   previewCommercialSheetAction,
   previewExistingCountsAction,
@@ -14,6 +15,7 @@ import {
   type SiteOption,
   type PreviewResult,
   type ExistingCounts,
+  type CommitResult,
 } from './actions'
 
 interface PreviewScope {
@@ -57,6 +59,17 @@ export function CommercialSheetImporter() {
   const [banner, setBanner] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
   const [pending, startTransition] = useTransition()
   const [dragOver, setDragOver] = useState(false)
+  const [commitResult, setCommitResult] = useState<CommitResult | null>(null)
+  // Snapshot of which customer/site/year was committed — frozen on done so
+  // the success card stays accurate even after we reset other state.
+  const [doneContext, setDoneContext] = useState<{
+    customerId: string
+    customerName: string
+    siteCode: string | null
+    siteName: string
+    year: string
+    filename: string
+  } | null>(null)
 
   const sitesForCustomer: SiteOption[] = useMemo(() => {
     if (!preview || !customerId) return []
@@ -150,6 +163,9 @@ export function CommercialSheetImporter() {
     setExpectedY1('')
     setBanner(null)
     setDragOver(false)
+    setCommitResult(null)
+    setDoneContext(null)
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleFile(f: File) {
@@ -241,7 +257,7 @@ export function CommercialSheetImporter() {
   }
 
   function handleCommit() {
-    if (!file || !customerId || !siteId || !selectedCustomer) return
+    if (!file || !customerId || !siteId || !selectedCustomer || !selectedSite) return
     setBanner(null)
     setPhase('committing')
     const fd = new FormData()
@@ -252,6 +268,15 @@ export function CommercialSheetImporter() {
     fd.set('confirm_name', confirmName)
     fd.set('wipe_first', wipeFirst ? 'true' : 'false')
     if (expectedY1Num !== null) fd.set('expected_y1_total', String(expectedY1Num))
+    // Freeze context now so the success card has stable values even after reset.
+    const context = {
+      customerId,
+      customerName: selectedCustomer.name,
+      siteCode: selectedSite.code,
+      siteName: selectedSite.name,
+      year,
+      filename: file.name,
+    }
     startTransition(async () => {
       const res = await commitImportAction(fd)
       if (!res.ok) {
@@ -259,17 +284,13 @@ export function CommercialSheetImporter() {
         setPhase('previewing')
         return
       }
-      setBanner({
-        kind: 'ok',
-        msg:
-          `Imported ${res.inserted.scopes} JP rows + ${res.inserted.additional_items} additional ` +
-          `into ${selectedCustomer.name} (${year}). ` +
-          (wipeFirst
-            ? `Wiped first: ${res.wiped.scopes} scopes, ${res.wiped.calendar} calendar, ${res.wiped.gaps} gaps. `
-            : 'No wipe. ') +
-          `import_id: ${res.source_import_id.slice(0, 8)}…`,
-      })
+      setCommitResult(res)
+      setDoneContext(context)
       setPhase('done')
+      // Scroll to top so the success card is visible — the wizard tends to
+      // leave the user scrolled near the bottom (commit button) and the
+      // banner alone wasn't enough signal that the import landed.
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
     })
   }
 
@@ -285,6 +306,96 @@ export function CommercialSheetImporter() {
     const f = e.dataTransfer.files?.[0]
     if (f && f.name.toLowerCase().endsWith('.xlsx')) handleFile(f)
     else setBanner({ kind: 'err', msg: 'Drop a single .xlsx workbook.' })
+  }
+
+  // ── Success state — replaces the wizard. Big, unmissable card. ──
+  if (phase === 'done' && commitResult && doneContext) {
+    const { customerName, siteCode, siteName, year: doneYear, filename } = doneContext
+    const w = commitResult.wiped
+    const wipedAny = w.scopes + w.calendar + w.gaps > 0
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-green-200 bg-green-50 p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
+              <CheckCircle2 className="w-7 h-7 text-white" strokeWidth={2.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-2xl font-bold text-green-900">Import successful</h2>
+              <p className="text-sm text-green-800 mt-1">
+                <span className="font-semibold">{customerName}</span> · {siteCode ?? siteName} · {doneYear}
+              </p>
+              <p className="text-xs text-green-700 mt-0.5 truncate" title={filename}>
+                from <span className="font-mono">{filename}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white rounded-md border border-green-200 px-3 py-2">
+              <p className="text-xs font-bold text-green-700 uppercase tracking-wide">Inserted</p>
+              <p className="text-2xl font-bold text-eq-ink">
+                {commitResult.inserted.scopes + commitResult.inserted.additional_items}
+              </p>
+              <p className="text-xs text-eq-grey">
+                {commitResult.inserted.scopes} JP + {commitResult.inserted.additional_items} additional
+              </p>
+            </div>
+            <div className="bg-white rounded-md border border-green-200 px-3 py-2">
+              <p className="text-xs font-bold text-green-700 uppercase tracking-wide">Wiped scopes</p>
+              <p className="text-2xl font-bold text-eq-ink">{w.scopes}</p>
+              <p className="text-xs text-eq-grey">{wipedAny ? 'replaced' : 'no prior data'}</p>
+            </div>
+            <div className="bg-white rounded-md border border-green-200 px-3 py-2">
+              <p className="text-xs font-bold text-green-700 uppercase tracking-wide">Wiped calendar</p>
+              <p className="text-2xl font-bold text-eq-ink">{w.calendar}</p>
+              <p className="text-xs text-eq-grey">SY3 {doneYear} entries</p>
+            </div>
+            <div className="bg-white rounded-md border border-green-200 px-3 py-2">
+              <p className="text-xs font-bold text-green-700 uppercase tracking-wide">Wiped gaps</p>
+              <p className="text-2xl font-bold text-eq-ink">{w.gaps}</p>
+              <p className="text-xs text-eq-grey">coverage gaps</p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+            <span className="text-green-700">
+              Trace ID:{' '}
+              <span className="font-mono text-eq-ink select-all">{commitResult.source_import_id}</span>
+            </span>
+            <span className="text-green-700">·</span>
+            <span className="text-green-700">
+              Audit-logged with full pre-wipe snapshot for recovery
+            </span>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <Button onClick={resetAll} size="sm">
+              <Upload className="w-4 h-4 mr-1.5" />
+              Import another file
+            </Button>
+            <Link
+              href={`/customers/${doneContext.customerId}`}
+              className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border border-eq-deep text-eq-deep bg-white hover:bg-eq-ice"
+            >
+              View customer <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <Link
+              href="/contract-scope"
+              className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border border-eq-deep text-eq-deep bg-white hover:bg-eq-ice"
+            >
+              View contract scopes <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <Link
+              href="/reports"
+              className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border border-eq-deep text-eq-deep bg-white hover:bg-eq-ice"
+            >
+              View reports <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -536,7 +647,7 @@ export function CommercialSheetImporter() {
                   <th className="text-left px-2 py-2 font-bold">JP</th>
                   <th className="text-left px-2 py-2 font-bold">Scope</th>
                   <th className="text-right px-2 py-2 font-bold">Qty</th>
-                  <th className="text-right px-2 py-2 font-bold" title="Active assets at this site mapped to this JP code">DB count</th>
+                  <th className="text-right px-2 py-2 font-bold" title="Active assets at this site already linked to this job-plan code">Linked assets</th>
                   <th className="text-left px-2 py-2 font-bold">Intervals</th>
                   <th className="text-left px-2 py-2 font-bold">Cycle costs</th>
                   <th className="text-right px-2 py-2 font-bold">{year}</th>
@@ -552,11 +663,21 @@ export function CommercialSheetImporter() {
                     .map(([y, c]) => `${y}: ${c}`)
                     .join(', ')
                   const dbCount = s.jp_code ? assetCountsByJp[s.jp_code] : undefined
-                  const dbCountMismatch =
+                  const isMatch =
                     s.jp_code !== null &&
                     dbCount !== undefined &&
                     siteId !== '' &&
+                    dbCount > 0 &&
+                    dbCount === s.asset_qty
+                  const isMismatch =
+                    s.jp_code !== null &&
+                    dbCount !== undefined &&
+                    siteId !== '' &&
+                    dbCount > 0 &&
                     dbCount !== s.asset_qty
+                  // No-link state: dbCount is 0. Treat as "nothing to compare yet" —
+                  // grey, neutral, no asterisk. The asset register either hasn't been
+                  // wired to job_plans, or this is a brand new site.
                   return (
                     <tr key={i}>
                       <td className="px-2 py-1.5 text-eq-deep font-mono">{s.jp_code ?? '—'}</td>
@@ -564,14 +685,34 @@ export function CommercialSheetImporter() {
                       <td className="px-2 py-1.5 text-right text-eq-ink">
                         {s.asset_qty || (s.unit_rate_per_asset !== null ? '—' : '0')}
                       </td>
-                      <td className={
-                        'px-2 py-1.5 text-right ' +
-                        (dbCount === undefined ? 'text-eq-grey' :
-                         dbCountMismatch ? 'text-amber-700 font-semibold' : 'text-eq-ink')
-                      }
-                        title={dbCountMismatch ? `Parsed asset_qty=${s.asset_qty} but DB has ${dbCount}` : undefined}
+                      <td
+                        className={
+                          'px-2 py-1.5 text-right ' +
+                          (s.jp_code === null || dbCount === undefined
+                            ? 'text-eq-grey'
+                            : isMismatch
+                              ? 'text-amber-700 font-semibold'
+                              : isMatch
+                                ? 'text-green-700 font-semibold'
+                                : 'text-eq-grey')
+                        }
+                        title={
+                          isMismatch
+                            ? `Parsed asset_qty = ${s.asset_qty}, but the asset register has ${dbCount} active assets linked to this job plan at this site.`
+                            : isMatch
+                              ? 'Matches the xlsx asset count exactly.'
+                              : dbCount === 0
+                                ? 'No assets at this site are linked to this job plan yet — nothing to compare against.'
+                                : undefined
+                        }
                       >
-                        {s.jp_code === null ? '—' : (dbCount ?? '?')}
+                        {s.jp_code === null
+                          ? '—'
+                          : dbCount === undefined
+                            ? '?'
+                            : isMatch
+                              ? `✓ ${dbCount}`
+                              : dbCount}
                       </td>
                       <td className="px-2 py-1.5 text-eq-grey">{s.intervals_text || '—'}</td>
                       <td className="px-2 py-1.5 text-eq-grey">
@@ -586,7 +727,9 @@ export function CommercialSheetImporter() {
             </table>
           </div>
           <p className="mt-2 text-xs text-eq-grey">
-            <span className="text-amber-700">Amber DB count</span> = parsed JP asset_qty differs from the count of active assets at this site mapped to that job-plan code. Could mean the asset register is stale, demo data is mixed in, or job_plan_id linkage is missing.
+            <span className="text-green-700 font-semibold">✓ green</span> = matches the xlsx · {' '}
+            <span className="text-eq-grey">grey 0</span> = no assets linked to this job plan yet · {' '}
+            <span className="text-amber-700 font-semibold">amber</span> = mismatch (asset register out of sync with the xlsx).
           </p>
         </Card>
       )}
