@@ -201,8 +201,9 @@ export function CommercialSheetImporter() {
     })
   }
 
-  // Refresh the existing-data counts whenever customer or year changes.
-  function refreshCounts(custId: string, yr: string) {
+  // Refresh the existing-data counts. Site-scoped when site is picked
+  // (matches the 0083 hotfix wipe scope), customer-wide otherwise.
+  function refreshCounts(custId: string, yr: string, sId: string) {
     if (!custId || !/^\d{4}$/.test(yr)) {
       setCounts(null)
       setHasPriorImport(false)
@@ -211,6 +212,7 @@ export function CommercialSheetImporter() {
     const fd = new FormData()
     fd.set('customer_id', custId)
     fd.set('financial_year', yr)
+    if (sId) fd.set('site_id', sId)
     startTransition(async () => {
       const res = await previewExistingCountsAction(fd)
       if (res.ok) {
@@ -249,11 +251,15 @@ export function CommercialSheetImporter() {
     setCustomerId(id)
     setSiteId('')
     setConfirmName('')
-    refreshCounts(id, year)
+    refreshCounts(id, year, '')
   }
   function handleYearChange(y: string) {
     setYear(y)
-    refreshCounts(customerId, y)
+    refreshCounts(customerId, y, siteId)
+  }
+  function handleSiteChange(id: string) {
+    setSiteId(id)
+    refreshCounts(customerId, year, id)
   }
 
   function handleCommit() {
@@ -533,7 +539,7 @@ export function CommercialSheetImporter() {
               <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Site</label>
               <select
                 value={siteId}
-                onChange={(e) => setSiteId(e.target.value)}
+                onChange={(e) => handleSiteChange(e.target.value)}
                 disabled={pending || !customerId}
                 className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20 disabled:bg-gray-50 disabled:text-eq-grey"
               >

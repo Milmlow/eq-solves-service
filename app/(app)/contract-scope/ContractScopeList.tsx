@@ -11,21 +11,10 @@ import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importScopeItemsAction } from './actions'
 
-// Default FY presets (Aus FY format). Customers using calendar-year fiscal
-// basis (e.g. Equinix per migration 0072) write financial_year as '2026'
-// rather than '2025-2026', so we also surface every distinct value present
-// in the data — see `fyOptions` in the component.
-const FY_PRESETS = [
-  '2024-2025',
-  '2025-2026',
-  '2026-2027',
-  '2027-2028',
-]
-
 /**
  * Render a financial_year value. Hyphenated values are Aus FY (Jul-Jun);
- * 4-digit values are calendar-year (Equinix-style). Both formats coexist
- * because customer.fiscal_year_basis varies per customer.
+ * 4-digit values are calendar-year (Equinix-style). The dropdown surfaces
+ * only what the data actually uses — see `fyOptions` in the component.
  */
 function fyLabel(fy: string) {
   if (/^\d{4}$/.test(fy)) return `CY ${fy}`
@@ -87,7 +76,7 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
       return {
         customer_name,
         site_name: row[columnMap['site']]?.trim() || null,
-        financial_year: row[columnMap['financial_year']]?.trim() || filterFY || currentFY(),
+        financial_year: row[columnMap['financial_year']]?.trim() || filterFY || currentCY(),
         scope_item,
         is_included: includedVal === 'no' ? false : true,
         notes: row[columnMap['notes']]?.trim() || null,
@@ -98,35 +87,43 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
 
   // Filters
   const [filterCustomer, setFilterCustomer] = useState('')
-  const [filterFY, setFilterFY] = useState(currentFY())
+  const [filterSite, setFilterSite] = useState('')
+  const [filterFY, setFilterFY] = useState(currentCY())
   const [filterIncluded, setFilterIncluded] = useState<'all' | 'yes' | 'no'>('all')
 
   // Form state for dynamic site filter
   const [formCustomerId, setFormCustomerId] = useState('')
 
-  function currentFY() {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = now.getMonth() + 1 // 1-12
-    // AU FY: Jul-Jun. If before July, current FY started previous year
-    if (month < 7) return `${year - 1}-${year}`
-    return `${year}-${year + 1}`
+  // Calendar-year default. Customers on Aus FY (e.g. Jemena) can still
+  // file scope under hyphenated FY values — those appear in `fyOptions`
+  // when data carries them — but new entries default to CY because that's
+  // the dominant tenant pattern (Equinix + future SKS-direct customers).
+  function currentCY() {
+    return String(new Date().getFullYear())
   }
 
+  // Sites filtered to the chosen customer (or all sites if none picked).
+  // Used by both the filter row at the top and the form picker below.
   const filteredSites = useMemo(() => {
     if (!formCustomerId) return sites
     return sites.filter(s => s.customer_id === formCustomerId)
   }, [sites, formCustomerId])
 
-  // Distinct financial_year values present in items + the Aus FY presets.
-  // Sorts calendar-year (4-digit) values descending first, then Aus-FY
-  // hyphenated descending — so '2026' shows above 'FY 2025-2026'.
+  const filterSites = useMemo(() => {
+    if (!filterCustomer) return sites
+    return sites.filter(s => s.customer_id === filterCustomer)
+  }, [sites, filterCustomer])
+
+  // Distinct financial_year values present in items. CY (4-digit) values
+  // sort first descending, then Aus-FY (hyphenated) descending. If the
+  // data has no rows yet, fall back to current CY so the picker isn't
+  // empty.
   const fyOptions = useMemo(() => {
     const seen = new Set<string>()
     for (const i of items) {
       if (i.financial_year) seen.add(i.financial_year)
     }
-    for (const p of FY_PRESETS) seen.add(p)
+    if (seen.size === 0) seen.add(currentCY())
     return Array.from(seen).sort((a, b) => {
       const aIsCal = /^\d{4}$/.test(a)
       const bIsCal = /^\d{4}$/.test(b)
@@ -135,14 +132,20 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
     })
   }, [items])
 
+  // Reset site filter if it no longer matches the customer filter.
+  if (filterSite && !filterSites.some((s) => s.id === filterSite)) {
+    setFilterSite('')
+  }
+
   const filtered = useMemo(() => {
     let result = items
     if (filterCustomer) result = result.filter(i => i.customer_id === filterCustomer)
+    if (filterSite) result = result.filter(i => i.site_id === filterSite)
     if (filterFY) result = result.filter(i => i.financial_year === filterFY)
     if (filterIncluded === 'yes') result = result.filter(i => i.is_included)
     if (filterIncluded === 'no') result = result.filter(i => !i.is_included)
     return result
-  }, [items, filterCustomer, filterFY, filterIncluded])
+  }, [items, filterCustomer, filterSite, filterFY, filterIncluded])
 
   // Group by customer
   const grouped = useMemo(() => {
@@ -218,12 +221,23 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
           </select>
           <select
             value={filterCustomer}
-            onChange={(e) => setFilterCustomer(e.target.value)}
+            onChange={(e) => { setFilterCustomer(e.target.value); setFilterSite('') }}
             className="h-9 px-3 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-sky"
           >
             <option value="">All Customers</option>
             {customers.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select
+            value={filterSite}
+            onChange={(e) => setFilterSite(e.target.value)}
+            disabled={filterSites.length === 0}
+            className="h-9 px-3 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-sky disabled:bg-gray-50 disabled:text-eq-grey"
+          >
+            <option value="">All Sites</option>
+            {filterSites.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
           <select
@@ -306,7 +320,7 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
                 <select
                   name="financial_year"
                   required
-                  defaultValue={editing?.financial_year ?? (filterFY || currentFY())}
+                  defaultValue={editing?.financial_year ?? (filterFY || currentCY())}
                   className="h-10 px-3 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-sky"
                 >
                   {fyOptions.map(fy => (

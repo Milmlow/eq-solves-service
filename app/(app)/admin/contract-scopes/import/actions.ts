@@ -142,10 +142,12 @@ export async function previewExistingCountsAction(
     .object({
       customer_id: z.string().uuid(),
       financial_year: z.string().regex(/^\d{4}$/),
+      site_id: z.string().uuid().optional(),
     })
     .safeParse({
       customer_id: formData.get('customer_id'),
       financial_year: formData.get('financial_year'),
+      site_id: formData.get('site_id') || undefined,
     })
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
 
@@ -154,55 +156,75 @@ export async function previewExistingCountsAction(
 
   const year = parseInt(parsed.data.financial_year, 10)
   const yearText = String(year)
+  const siteId = parsed.data.site_id ?? null
 
-  const { data: siteRows } = await supabase
-    .from('sites')
-    .select('id')
+  // The importer's wipe is site-scoped (per migration 0083). Counts query
+  // mirrors that exactly when site_id is supplied, so the "will wipe X"
+  // preview is accurate to the actual blast radius.
+  // When site_id is absent (customer just picked, site not yet), fall back
+  // to customer-wide counts so the user sees something rather than zero.
+  const scopeQuery = supabase
+    .from('contract_scopes')
+    .select('id', { count: 'exact', head: true })
     .eq('customer_id', parsed.data.customer_id)
     .eq('tenant_id', tenantId)
-  const siteIds = (siteRows ?? []).map((s) => s.id as string)
+    .eq('financial_year', yearText)
+  if (siteId) scopeQuery.eq('site_id', siteId)
+
+  const gapsQuery = supabase
+    .from('scope_coverage_gaps')
+    .select('id', { count: 'exact', head: true })
+    .eq('customer_id', parsed.data.customer_id)
+    .eq('tenant_id', tenantId)
+    .eq('contract_year', year)
+  if (siteId) gapsQuery.eq('site_id', siteId)
+
+  const priorImportsQuery = supabase
+    .from('contract_scopes')
+    .select('id', { count: 'exact', head: true })
+    .eq('customer_id', parsed.data.customer_id)
+    .eq('tenant_id', tenantId)
+    .eq('financial_year', yearText)
+    .not('source_import_id', 'is', null)
+  if (siteId) priorImportsQuery.eq('site_id', siteId)
+
+  // Calendar: when site picked, restrict to that site. Otherwise count
+  // across all customer's sites (visibility for the "is there anything
+  // here" preview).
+  let siteIdsForCalendar: string[]
+  if (siteId) {
+    siteIdsForCalendar = [siteId]
+  } else {
+    const { data: siteRows } = await supabase
+      .from('sites')
+      .select('id')
+      .eq('customer_id', parsed.data.customer_id)
+      .eq('tenant_id', tenantId)
+    siteIdsForCalendar = (siteRows ?? []).map((s) => s.id as string)
+  }
 
   const [scopes, gaps, calDated, calNull, priorImports] = await Promise.all([
-    supabase
-      .from('contract_scopes')
-      .select('id', { count: 'exact', head: true })
-      .eq('customer_id', parsed.data.customer_id)
-      .eq('tenant_id', tenantId)
-      .eq('financial_year', yearText),
-    supabase
-      .from('scope_coverage_gaps')
-      .select('id', { count: 'exact', head: true })
-      .eq('customer_id', parsed.data.customer_id)
-      .eq('tenant_id', tenantId)
-      .eq('contract_year', year),
-    siteIds.length > 0
+    scopeQuery,
+    gapsQuery,
+    siteIdsForCalendar.length > 0
       ? supabase
           .from('pm_calendar')
           .select('id', { count: 'exact', head: true })
-          .in('site_id', siteIds)
+          .in('site_id', siteIdsForCalendar)
           .eq('tenant_id', tenantId)
           .gte('start_time', `${yearText}-01-01`)
           .lt('start_time', `${year + 1}-01-01`)
       : Promise.resolve({ count: 0 } as { count: number | null }),
-    siteIds.length > 0
+    siteIdsForCalendar.length > 0
       ? supabase
           .from('pm_calendar')
           .select('id', { count: 'exact', head: true })
-          .in('site_id', siteIds)
+          .in('site_id', siteIdsForCalendar)
           .eq('tenant_id', tenantId)
           .is('start_time', null)
           .eq('financial_year', yearText)
       : Promise.resolve({ count: 0 } as { count: number | null }),
-    // Detect prior contract-sheet imports — any row with a non-null source_import_id
-    // for this customer + year suggests we've imported before. Drives the
-    // "use wipe" prompt when the operator picks wipe=false.
-    supabase
-      .from('contract_scopes')
-      .select('id', { count: 'exact', head: true })
-      .eq('customer_id', parsed.data.customer_id)
-      .eq('tenant_id', tenantId)
-      .eq('financial_year', yearText)
-      .not('source_import_id', 'is', null),
+    priorImportsQuery,
   ])
 
   return {
@@ -390,18 +412,20 @@ export async function commitImportAction(
     }
   }
 
-  // 5. Duplicate-import detection — block if !wipe AND prior import exists.
+  // 5. Duplicate-import detection — block if !wipe AND prior import exists
+  // for this site/year. Site-scoped to match the wipe scope (0083 hotfix).
   if (!wipeFirst) {
     const { count: priorCount } = await supabase
       .from('contract_scopes')
       .select('id', { count: 'exact', head: true })
       .eq('customer_id', customer_id)
+      .eq('site_id', site_id)
       .eq('tenant_id', tenantId)
       .eq('financial_year', yearText)
       .not('source_import_id', 'is', null)
     if ((priorCount ?? 0) > 0) {
       hardErrors.push(
-        `Customer/year already has ${priorCount} contract-scope rows from a prior import. Re-importing without wipe would create duplicates. Enable "Wipe first" or pick a different year.`,
+        `Site/year already has ${priorCount} contract-scope rows from a prior import. Re-importing without wipe would create duplicates. Enable "Wipe first" or pick a different year.`,
       )
     }
   }
