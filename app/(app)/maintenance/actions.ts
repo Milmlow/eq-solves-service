@@ -618,12 +618,48 @@ export async function createCheckAction(formData: FormData) {
       })
     }
 
+    // Phase 3 (Phase 1 of bridge plan, soft variant): if exactly one job
+    // plan was picked, look up scope context and stamp it into the audit
+    // log metadata. Doesn't block creation — the chip in CreateCheckForm
+    // already shows the operator the status and they consciously hit
+    // Create. The audit trail makes after-the-fact review of out-of-scope
+    // work straightforward.
+    let scopeStatusAtCreate: string | null = null
+    let scopeMatchedYear: string | null = null
+    if (jobPlanIds.length === 1) {
+      try {
+        const { getScopeContext } = await import('@/lib/scope-context/getScopeContext')
+        const { data: siteRow } = await supabase
+          .from('sites').select('customer_id').eq('id', checkData.site_id).maybeSingle()
+        if (siteRow?.customer_id) {
+          const ctx = await getScopeContext(supabase, {
+            customerId: siteRow.customer_id as string,
+            siteId: checkData.site_id,
+            jobPlanId: jobPlanIds[0],
+          })
+          scopeStatusAtCreate = ctx.status
+          scopeMatchedYear = ctx.matched_year
+        }
+      } catch {
+        // never block creation on a scope-lookup failure
+      }
+    }
+
     await logAuditEvent({
       action: 'create',
       entityType: 'maintenance_check',
+      entityId: check.id,
       summary: rcdOverlayPlanId
         ? `Created RCD check: ${assetsWithTasks.length} assets, ${rcdTestsCreated} RCD tests pre-populated (${circuitsCopied} circuits copied) (${freq})`
         : `Created check: ${assetsWithTasks.length} assets, ${checkItems.length} tasks (${freq})`,
+      metadata: scopeStatusAtCreate
+        ? {
+            scope_status_at_create: scopeStatusAtCreate,
+            scope_matched_year: scopeMatchedYear,
+            site_id: checkData.site_id,
+            job_plan_id: jobPlanIds[0],
+          }
+        : { site_id: checkData.site_id, job_plan_ids: jobPlanIds },
     })
 
     revalidateMaintenanceSurfaces()
