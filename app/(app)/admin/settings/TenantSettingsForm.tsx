@@ -98,7 +98,15 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     <form onSubmit={handleSubmit} className="space-y-8 max-w-2xl">
       {/* Branding Section */}
       <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <h2 className="text-sm font-bold text-eq-ink mb-4">Branding</h2>
+        <h2 className="text-sm font-bold text-eq-ink mb-1">Branding</h2>
+        <p className="text-xs text-eq-grey mb-4">
+          Logo dropdowns show images tagged with the{' '}
+          <span className="font-mono font-semibold text-eq-deep">Report Image</span>{' '}
+          category in the Media Library. Customer-scoped logos and site
+          photos are excluded by design — they live on the relevant
+          customer / site, not on the tenant brand. To make an image
+          eligible here, add the <em>Report Image</em> tag via Admin → Media Library.
+        </p>
         <div className="space-y-4">
           <FormInput
             label="Product Name"
