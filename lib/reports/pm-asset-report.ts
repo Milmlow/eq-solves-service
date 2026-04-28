@@ -375,54 +375,35 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
     )
   }
 
-  // Logo — cover page is currently a light surface in this template, but the
-  // picker is future-proof: if a "dark cover" variant is introduced later
-  // we'll just flip the surface argument here.
-  const coverLogo = pickReportLogo(input, 'light')
-  if (coverLogo && !tenantLogo) {  // Don't duplicate if already in masthead
-    children.push(new Paragraph({
-      spacing: { after: 200 },
-      children: [new ImageRun({
-        type: coverLogo.type,
-        data: coverLogo.data,
-        transformation: { width: coverLogo.width, height: coverLogo.height },
-        altText: { title: 'Company Logo', description: 'Company logo', name: 'company-logo' },
-      })],
-    }))
-  }
+  // 2026-04-28 (Royce review issue 9): cover redesign. Dropped the second
+  // cover-logo block (masthead already has the tenant logo — was rendering
+  // it twice). Bumped headline size + spacing for more whitespace. Removed
+  // the italic subtitle line — its content is repeated by the report-type
+  // label in the masthead.
 
   // Top accent bar
   children.push(new Paragraph({
-    spacing: { after: 600 },
+    spacing: { after: 800 },
     border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: brand, space: 1 } },
   }))
 
   // Spacer
-  children.push(spacer(coverLogo ? 400 : 1200))
+  children.push(spacer(1600))
 
   // Report title — uses tenant brand colour so the cover anchors on the
-  // tenant's identity, not a generic ink.
+  // tenant's identity, not a generic ink. Larger headline = stronger lede.
   children.push(new Paragraph({
     alignment: AlignmentType.LEFT,
-    spacing: { after: 120 },
+    spacing: { after: 200 },
     children: [new TextRun({
       text: input.reportTitle,
-      bold: true, size: 48, font: FONT_HEADING, color: brand,
+      bold: true, size: 56, font: FONT_HEADING, color: brand,
     })],
   }))
 
-  // Subtitle
+  // Generated date — kept, italic subtitle dropped.
   children.push(new Paragraph({
-    spacing: { after: 80 },
-    children: [new TextRun({
-      text: 'Preventive Maintenance Asset Report',
-      size: 28, font: FONT, color: EQ_MID_GREY, italics: true,
-    })],
-  }))
-
-  // Generated date
-  children.push(new Paragraph({
-    spacing: { after: 600 },
+    spacing: { after: 800 },
     children: [new TextRun({
       text: `Report Generated: ${fmtDate(input.reportGeneratedDate)}`,
       size: 20, font: FONT, color: EQ_MID_GREY,

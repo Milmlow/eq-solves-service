@@ -35,7 +35,7 @@ import {
   resolveShellSettings,
 } from '@/lib/reports/report-shell'
 import { FONT_BODY, FONT_HEADING as FONT_HEADING_TOKEN } from '@/lib/reports/typography'
-import { EQ_WHITE, EQ_MID_GREY, bareHex, tenantIce } from '@/lib/reports/colours'
+import { EQ_WHITE, EQ_MID_GREY, bareHex, tenantIce, tenantDeep } from '@/lib/reports/colours'
 
 // ─────────── Types ───────────
 
@@ -189,6 +189,12 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
   // enough to make the document recognisably tenant-branded without
   // compromising printability.
   const brandHex = bareHex(input.primaryColour ?? '3DA8D8')
+  // 2026-04-28 (Royce review issue 6): SKS primaryColour (#7C77B9, light
+  // purple) gave poor contrast for white text on the strip — text faded
+  // into the fill. Use tenantDeep (the darker derived/explicit variant)
+  // for the strip fill so white text reads cleanly. Headings + accents
+  // below the strip still use brandHex (the lighter primary).
+  const stripFillHex = tenantDeep(input.primaryColour, input.deepColour)
   const stripCellMargins = { top: 120, bottom: 120, left: 200, right: 200 }
   children.push(new Table({
     width: { size: CONTENT_WIDTH, type: WidthType.DXA },
@@ -199,7 +205,7 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
           new TableCell({
             borders: BORDERS_NONE,
             width: { size: Math.floor(CONTENT_WIDTH * 0.6), type: WidthType.DXA },
-            shading: { fill: brandHex, type: ShadingType.CLEAR },
+            shading: { fill: stripFillHex, type: ShadingType.CLEAR },
             margins: stripCellMargins,
             verticalAlign: VerticalAlign.CENTER,
             children: [new Paragraph({
@@ -221,7 +227,7 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
           new TableCell({
             borders: BORDERS_NONE,
             width: { size: Math.ceil(CONTENT_WIDTH * 0.4), type: WidthType.DXA },
-            shading: { fill: brandHex, type: ShadingType.CLEAR },
+            shading: { fill: stripFillHex, type: ShadingType.CLEAR },
             margins: stripCellMargins,
             verticalAlign: VerticalAlign.CENTER,
             children: [new Paragraph({
