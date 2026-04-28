@@ -52,6 +52,27 @@ interface MaintenanceListProps {
   canWrite: boolean
 }
 
+/**
+ * Per-kind pill on the maintenance check list. After the Phase 2 schema
+ * merge (PR #28) every check has a `kind` discriminator — without surfacing
+ * it in the list, users can't tell PPM from ACB from RCD at a glance.
+ */
+function KindPill({ kind }: { kind: string }) {
+  const config: Record<string, { label: string; cls: string }> = {
+    maintenance: { label: 'PPM',     cls: 'bg-eq-ice text-eq-deep' },
+    acb:         { label: 'ACB',     cls: 'bg-purple-50 text-purple-700' },
+    nsx:         { label: 'NSX',     cls: 'bg-indigo-50 text-indigo-700' },
+    rcd:         { label: 'RCD',     cls: 'bg-amber-50 text-amber-700' },
+    general:     { label: 'General', cls: 'bg-gray-100 text-gray-700' },
+  }
+  const c = config[kind] ?? config.maintenance
+  return (
+    <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-bold ${c.cls}`}>
+      {c.label}
+    </span>
+  )
+}
+
 function statusToBadge(status: CheckStatus) {
   const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
     scheduled: 'not-started',
@@ -76,8 +97,13 @@ export function MaintenanceList({
   const columns: DataTableColumn<CheckRow>[] = [
     {
       key: 'check_name',
-      header: 'ID',
+      header: 'Check',
       render: (row) => (row as CheckRow).custom_name ?? row.job_plans?.name ?? '—',
+    },
+    {
+      key: 'kind',
+      header: 'Type',
+      render: (row) => <KindPill kind={(row as { kind?: string | null }).kind ?? 'maintenance'} />,
     },
     {
       key: 'site_name',
@@ -126,6 +152,13 @@ export function MaintenanceList({
     { value: 'overdue', label: 'Overdue' },
     { value: 'cancelled', label: 'Cancelled' },
   ]
+  const kindFilterOptions = [
+    { value: 'maintenance', label: 'PPM' },
+    { value: 'acb',         label: 'ACB Test' },
+    { value: 'nsx',         label: 'NSX Test' },
+    { value: 'rcd',         label: 'RCD Test' },
+    { value: 'general',     label: 'General Test' },
+  ]
 
   return (
     <>
@@ -134,6 +167,7 @@ export function MaintenanceList({
           placeholder="Search checks..."
           filters={[
             { key: 'site_id', label: 'All Sites', options: siteFilterOptions },
+            { key: 'kind', label: 'All Types', options: kindFilterOptions },
             { key: 'status', label: 'All Statuses', options: statusFilterOptions },
           ]}
         />
