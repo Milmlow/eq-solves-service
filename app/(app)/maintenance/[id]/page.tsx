@@ -74,15 +74,31 @@ export default async function MaintenanceCheckPage({
 
   const checkName = check.custom_name ?? (check.job_plans as { name: string } | null)?.name ?? 'Maintenance Check'
 
+  // Status-driven page accent (2026-04-28 chrome polish). A hairline
+  // colour bar at the top of the page so the eye registers the check's
+  // health before reading the body. Subtle — doesn't dominate the page.
+  const statusAccent =
+    check.status === 'complete'    ? 'bg-green-500'  :
+    check.status === 'overdue'     ? 'bg-red-500'    :
+    check.status === 'in_progress' ? 'bg-amber-500'  :
+    check.status === 'cancelled'   ? 'bg-gray-400'   :
+                                     'bg-eq-sky'
+
   return (
     <div className="space-y-4">
+      <div className={`-mx-4 lg:-mx-8 -mt-4 lg:-mt-8 mb-2 h-1 ${statusAccent}`} aria-hidden />
       <div>
         <Breadcrumb items={[
           { label: 'Home', href: '/dashboard' },
           { label: 'Maintenance', href: '/maintenance' },
           { label: checkName },
         ]} />
-        <h1 className="text-2xl font-bold text-eq-sky mt-2">{checkName}</h1>
+        <h1 className="text-3xl font-bold text-eq-ink mt-3 tracking-tight">{checkName}</h1>
+        <p className="text-sm text-eq-grey mt-1">
+          {(check.sites as { name: string } | null)?.name ?? '—'}
+          {check.frequency && <span> · {(check.frequency as string).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>}
+          {check.due_date && <span> · Due {new Date(check.due_date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
+        </p>
       </div>
       {/* Contract scope context — shown above the detail body so site teams
           see what's in/out of scope before they pick assets to inspect.
