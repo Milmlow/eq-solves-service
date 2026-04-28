@@ -9,6 +9,7 @@ import type { JobPlan, Site, Profile } from '@/lib/types'
 import { formatSiteLabel } from '@/lib/utils/format'
 import { CheckCircle2, XCircle, Scale } from 'lucide-react'
 import { events as analyticsEvents } from '@/lib/analytics'
+import { ScopeContextChip } from '@/components/ui/ScopeContextChip'
 
 const FREQUENCIES = [
   { value: 'monthly', label: 'Monthly' },
@@ -324,6 +325,24 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
             Leave all unchecked to include every job plan at the site.
           </p>
         </div>
+
+        {/* Scope-context chip — only when exactly one JP is selected so we
+            can do an unambiguous lookup. Multi-plan checks skip this; the
+            site-level ContractScopeBanner on /maintenance/[id] still shows
+            the bigger picture once the check is created. */}
+        {siteId && jobPlanIds.size === 1 && (() => {
+          const site = sites.find((s) => s.id === siteId)
+          const onlyJp = Array.from(jobPlanIds)[0]
+          if (!site?.customer_id || !onlyJp) return null
+          return (
+            <ScopeContextChip
+              customerId={site.customer_id}
+              siteId={siteId}
+              jobPlanId={onlyJp}
+              surfaceOverrideField
+            />
+          )
+        })()}
 
         {/* Preview Button */}
         {siteId && frequency && !manualMode && (
