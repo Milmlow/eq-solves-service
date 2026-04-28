@@ -6,13 +6,16 @@ import type { Role } from '@/lib/types'
 import { DerivedScopeWizard } from './DerivedScopeWizard'
 
 /**
- * Reverse-engineering tool: pick a customer that has assets + check
+ * Build-scope-from-work tool. Pick a customer that has assets + check
  * history but no contract_scopes, and produce a draft contract scope
- * inferred from what we've actually delivered.
+ * inferred from what we've actually delivered for them.
+ *
+ * Operator-facing copy avoids "derive" (technical jargon) — the user
+ * sees "Build Scope from Work". URL keeps /derive for code clarity.
  *
  * Output shape mirrors the structured contract_scopes the importer
- * writes — so once committed (operator review → flip period_status to
- * 'committed') the same downstream flows (CPI escalation, reports,
+ * writes — so once committed (operator review → flip period_status
+ * to 'committed') the same downstream flows (CPI escalation, reports,
  * coverage gaps) apply automatically.
  */
 export default async function DeriveContractScopePage() {
@@ -36,12 +39,12 @@ export default async function DeriveContractScopePage() {
           items={[
             { label: 'Home', href: '/dashboard' },
             { label: 'Contract Scope', href: '/contract-scope' },
-            { label: 'Derive from work' },
+            { label: 'Build from work' },
           ]}
         />
-        <h1 className="text-3xl font-bold text-eq-sky mt-2">Derive Contract Scope from Delivered Work</h1>
+        <h1 className="text-3xl font-bold text-eq-sky mt-2">Build Contract Scope from Delivered Work</h1>
         <p className="text-sm text-eq-grey">
-          Admin role required. Ask a super_admin or admin to run the derivation.
+          Admin role required. Ask a super_admin or admin to build the draft scope.
         </p>
       </div>
     )
@@ -54,18 +57,23 @@ export default async function DeriveContractScopePage() {
           items={[
             { label: 'Home', href: '/dashboard' },
             { label: 'Contract Scope', href: '/contract-scope' },
-            { label: 'Derive from work' },
+            { label: 'Build from work' },
           ]}
         />
-        <h1 className="text-3xl font-bold text-eq-sky mt-2">Derive Contract Scope from Delivered Work</h1>
+        <h1 className="text-3xl font-bold text-eq-sky mt-2">Build Contract Scope from Delivered Work</h1>
         <p className="text-sm text-eq-grey mt-1">
-          For customers without a formal commercial sheet — pick a customer,
-          we'll look at their assets and the maintenance checks delivered to
-          date, infer a likely scope (frequency × labour × cost), and write
-          it as a <span className="font-semibold">draft</span> contract
-          scope. Review on <code>/contract-scope</code> before committing,
-          and use the result as the starting point for a Statement of Work
-          back to the customer.
+          For customers without a formal commercial sheet. Pick a customer
+          and we'll look at their assets + the maintenance checks SKS has
+          actually delivered, then build a likely contract scope (frequency
+          × labour × cost) as a <span className="font-semibold">draft</span>{' '}
+          for review. Use it as the starting point for a Statement of Work
+          back to the customer, or as the seed of next year's commercial
+          sheet for them.
+        </p>
+        <p className="text-xs text-eq-grey mt-2">
+          Best for relationships SKS picked up ad-hoc and never wrote down —
+          turns historical work into structured scope rows so the same
+          downstream flows (CPI, reports, coverage gaps) apply.
         </p>
       </div>
       <DerivedScopeWizard />

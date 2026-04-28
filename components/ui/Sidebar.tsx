@@ -81,7 +81,11 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
   const pathname = usePathname()
 
   const productName = settings?.product_name || 'EQ Solves'
-  const logoUrl = settings?.logo_url
+  // Sidebar background is eq-ink (dark) — prefer the dark-surface logo
+  // when configured, fall back to the light-surface one. Without this,
+  // tenants with a dark logo (e.g. SKS coloured logo on the eq-ink bg)
+  // render invisible.
+  const logoUrl = settings?.logo_url_on_dark || settings?.logo_url
   const whiteLogo = 'https://pub-409bd651f2e549f4907f5a856a9264ae.r2.dev/EQ_logo_white_transparent.svg'
 
   // Close mobile drawer on route change
@@ -255,7 +259,7 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
               )}
             >
               <Wand2 className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Derive Scope from Work</span>}
+              {!collapsed && <span>Build Scope from Work</span>}
             </Link>
           </>
         )}

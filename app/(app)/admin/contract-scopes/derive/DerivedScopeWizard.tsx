@@ -181,7 +181,7 @@ export function DerivedScopeWizard() {
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <Button onClick={reset} size="sm">
-            <Wand2 className="w-4 h-4 mr-1.5" /> Derive another customer
+            <Wand2 className="w-4 h-4 mr-1.5" /> Build another customer's scope
           </Button>
           <Link
             href="/contract-scope"
@@ -218,8 +218,8 @@ export function DerivedScopeWizard() {
         <h2 className="text-base font-semibold text-eq-ink">1. Pick a customer</h2>
         <p className="text-xs text-eq-grey mt-1">
           Candidates with assets and check history but no contract scope are
-          flagged. Customers that already have scope rows can still be derived
-          (e.g. to compare against an existing contract).
+          flagged. Customers that already have scope rows can still be processed
+          (e.g. to compare what we've delivered against an existing contract).
         </p>
         {!candidates ? (
           <p className="text-xs text-eq-grey mt-4">Loading customers…</p>
@@ -248,7 +248,7 @@ export function DerivedScopeWizard() {
                   )
                 })}
               </select>
-              <p className="text-[10px] text-eq-grey">★ = derive candidate (assets exist, no contract scope yet)</p>
+              <p className="text-[10px] text-eq-grey">★ = candidate (assets + history exist, no contract scope yet)</p>
             </div>
             <FormInput
               label="Financial Year"
@@ -274,7 +274,7 @@ export function DerivedScopeWizard() {
           <Card>
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <h2 className="text-base font-semibold text-eq-ink">
-                2. Review derived scope · {preview.customer.name}
+                2. Review draft scope · {preview.customer.name}
               </h2>
               <div className="flex items-center gap-4 text-sm">
                 <span className="text-eq-grey">{totals.rows} rows</span>
