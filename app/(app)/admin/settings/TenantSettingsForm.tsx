@@ -40,6 +40,15 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState<string | null>(null)
 
+  // Commercial-tier toggle. When off (default for SKS NSW etc.), the
+  // contract-scope period-locking, audit history view, variations register,
+  // service-credit risk, renewal pack and customer-facing scope statement
+  // all stay hidden. The universal tier (scope-context display on checks,
+  // auto gap-close, out-of-scope block) runs regardless.
+  const [commercialFeaturesEnabled, setCommercialFeaturesEnabled] = useState<boolean>(
+    settings.commercial_features_enabled ?? false,
+  )
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
@@ -242,6 +251,41 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
           defaultValue={settings.support_email ?? ''}
           placeholder="support@company.com"
         />
+      </div>
+
+      {/* Commercial features toggle */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h2 className="text-sm font-bold text-eq-ink mb-1">Commercial features</h2>
+        <p className="text-xs text-eq-grey mb-4">
+          The universal tier — scope-context display on maintenance checks,
+          auto gap-close, out-of-scope block — is always on for every tenant.
+          The commercial tier below is opt-in: useful for organisations whose
+          commercial managers run contract administration; overhead for small
+          electrical contractors.
+        </p>
+        <label className="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-gray-200 hover:bg-eq-ice/30 transition-colors">
+          <input
+            type="checkbox"
+            name="commercial_features_enabled"
+            checked={commercialFeaturesEnabled}
+            onChange={(e) => setCommercialFeaturesEnabled(e.target.checked)}
+            className="mt-0.5 w-4 h-4 cursor-pointer"
+          />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-eq-ink">
+              Enable commercial-tier features
+            </p>
+            <p className="text-xs text-eq-grey mt-1">
+              Activates: contract-scope period-locking + per-row audit
+              history; variations register for out-of-scope work capture;
+              service-credit risk surfacing on the dashboard; renewal-pack
+              generator at year-close; customer-visible scope statement PDF.
+            </p>
+            <p className="text-[10px] text-eq-grey mt-2 font-mono">
+              tenant_settings.commercial_features_enabled = {commercialFeaturesEnabled ? 'true' : 'false'}
+            </p>
+          </div>
+        </label>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
