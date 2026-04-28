@@ -198,6 +198,28 @@ export interface RcdTestSummary {
   testDate: string
   circuitCount: number               // total circuits tested
   status: 'draft' | 'complete' | 'archived'
+  /**
+   * Phase 5 follow-up (PR O — 2026-04-28): when supplied, the report
+   * renders a deep "Circuit Timing" section per board with the full
+   * per-circuit timing table. Absent → just the summary row.
+   */
+  circuits?: RcdCircuitRow[]
+}
+
+export interface RcdCircuitRow {
+  sectionLabel: string | null
+  circuitNo: string
+  normalTripCurrentMa: number
+  jemenaCircuitAssetId: string | null
+  x1NoTrip0Ms: string | null
+  x1NoTrip180Ms: string | null
+  x1Trip0Ms: string | null
+  x1Trip180Ms: string | null
+  x5Fast0Ms: string | null
+  x5Fast180Ms: string | null
+  tripTestButtonOk: boolean
+  isCriticalLoad: boolean
+  actionTaken: string | null
 }
 
 export interface LinkedTestsBundle {
@@ -1338,6 +1360,113 @@ function buildLinkedTestsSummary(input: PmAssetReportInput): (Paragraph | Table)
   if (acb.length > 0) children.push(...buildAcbNsxSummaryTable('ACB Tests', acb, brand))
   if (nsx.length > 0) children.push(...buildAcbNsxSummaryTable('NSX Tests', nsx, brand))
   if (rcd.length > 0) children.push(...buildRcdSummaryTable(rcd, brand))
+
+  // Phase 5 follow-up (PR O): when any RCD test carries detailed circuit
+  // data, render a deep section per board with the full per-circuit timing
+  // table. Customer-facing compliance evidence per AS/NZS 3760.
+  const rcdWithDetail = rcd.filter((r) => Array.isArray(r.circuits) && r.circuits.length > 0)
+  if (rcdWithDetail.length > 0) {
+    children.push(new Paragraph({
+      spacing: { before: 320, after: 100 },
+      children: [new TextRun({
+        text: 'RCD Circuit Timing — Per Board',
+        bold: true, size: 22, font: FONT_HEADING, color: brand,
+      })],
+    }))
+    children.push(new Paragraph({
+      spacing: { after: 120 },
+      children: [new TextRun({
+        text: 'All times in milliseconds. Empty / "" = no trip recorded. AS/NZS 3760 reference: x1 trip ≤ 300 ms · x5 fast ≤ 40 ms.',
+        size: 16, font: FONT, color: EQ_MID_GREY, italics: true,
+      })],
+    }))
+    for (const board of rcdWithDetail) {
+      children.push(...buildRcdCircuitDetail(board, brand))
+    }
+  }
+
+  return children
+}
+
+function buildRcdCircuitDetail(board: RcdTestSummary, brand: string): (Paragraph | Table)[] {
+  const children: (Paragraph | Table)[] = []
+  const circuits = board.circuits ?? []
+
+  // Per-board heading
+  const idSuffix = board.jemenaAssetId ? ` · ${board.jemenaAssetId}` : ''
+  children.push(new Paragraph({
+    spacing: { before: 240, after: 60 },
+    children: [new TextRun({
+      text: `${board.assetName}${idSuffix}`,
+      bold: true, size: 18, font: FONT_HEADING, color: brand,
+    })],
+  }))
+  children.push(new Paragraph({
+    spacing: { after: 80 },
+    children: [new TextRun({
+      text: `${circuits.length} circuit${circuits.length === 1 ? '' : 's'} · tested ${fmtDate(board.testDate)}`,
+      size: 14, font: FONT, color: EQ_MID_GREY,
+    })],
+  }))
+
+  // Column widths — total = CONTENT_WIDTH (9638 dxa)
+  const wSec = 1100   // Section
+  const wCkt = 700    // Circuit #
+  const wRating = 700 // Trip mA
+  const wX1NT = 1300  // X1 no-trip (combined 0/180)
+  const wX1T = 1300   // X1 trip
+  const wX5 = 1300    // X5 fast
+  const wBtn = 600    // Btn ✓
+  const wAct = CONTENT_WIDTH - (wSec + wCkt + wRating + wX1NT + wX1T + wX5 + wBtn)
+  const tw = wSec + wCkt + wRating + wX1NT + wX1T + wX5 + wBtn + wAct
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: [
+      makeHeaderCell('Section', wSec, brand),
+      makeHeaderCell('Cct #', wCkt, brand),
+      makeHeaderCell('Trip mA', wRating, brand),
+      makeHeaderCell('X1 No-Trip 0°/180°', wX1NT, brand),
+      makeHeaderCell('X1 Trip 0°/180°', wX1T, brand),
+      makeHeaderCell('X5 Fast 0°/180°', wX5, brand),
+      makeHeaderCell('Btn', wBtn, brand),
+      makeHeaderCell('Action / Notes', wAct, brand),
+    ],
+  })
+
+  const fmtPair = (a: string | null, b: string | null) =>
+    [a, b].map((v) => (v && v.length > 0 ? v : '—')).join(' / ')
+
+  const dataRows = circuits.map((c) =>
+    new TableRow({
+      children: [
+        makeCell(c.sectionLabel ?? '—', wSec, { size: 14 }),
+        makeCell(c.circuitNo, wCkt, { size: 14, bold: true }),
+        makeCell(String(c.normalTripCurrentMa), wRating, { size: 14, align: AlignmentType.CENTER }),
+        makeCell(fmtPair(c.x1NoTrip0Ms, c.x1NoTrip180Ms), wX1NT, { size: 14, align: AlignmentType.CENTER }),
+        makeCell(fmtPair(c.x1Trip0Ms, c.x1Trip180Ms), wX1T, { size: 14, align: AlignmentType.CENTER }),
+        makeCell(fmtPair(c.x5Fast0Ms, c.x5Fast180Ms), wX5, { size: 14, align: AlignmentType.CENTER }),
+        makeCell(c.tripTestButtonOk ? '✓' : '—', wBtn, { size: 14, align: AlignmentType.CENTER, bold: c.tripTestButtonOk }),
+        makeCell(
+          c.isCriticalLoad
+            ? `CRITICAL · ${c.actionTaken ?? '—'}`
+            : (c.actionTaken ?? '—'),
+          wAct,
+          {
+            size: 14,
+            shading: c.isCriticalLoad ? 'FFF8E1' : undefined,
+            color: c.isCriticalLoad ? STATUS_WARN : undefined,
+          },
+        ),
+      ],
+    }),
+  )
+
+  children.push(new Table({
+    width: { size: tw, type: WidthType.DXA },
+    columnWidths: [wSec, wCkt, wRating, wX1NT, wX1T, wX5, wBtn, wAct],
+    rows: [headerRow, ...dataRows],
+  }))
 
   return children
 }
