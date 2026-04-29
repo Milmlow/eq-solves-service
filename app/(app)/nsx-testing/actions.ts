@@ -6,6 +6,7 @@ import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateNsxTestSchema, UpdateNsxTestSchema, CreateNsxReadingSchema } from '@/lib/validations/nsx-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
+import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 
 export async function createNsxTestAction(formData: FormData) {
   try {
@@ -342,7 +343,7 @@ export async function raiseNsxTestDefectAction(data: {
     const { supabase, tenantId, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from('defects')
       .insert({
         tenant_id: tenantId,
@@ -353,8 +354,18 @@ export async function raiseNsxTestDefectAction(data: {
         severity: data.severity || 'medium',
         status: 'open',
       })
+      .select('id')
+      .single()
 
     if (error) return { success: false, error: error.message }
+
+    await notifyDefectRaised({
+      tenantId,
+      defectId: inserted.id,
+      title: data.title,
+      description: data.description ?? null,
+      severity: data.severity || 'medium',
+    })
 
     await logAuditEvent({
       action: 'create',

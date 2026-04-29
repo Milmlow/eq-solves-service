@@ -6,6 +6,7 @@ import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateAcbTestSchema, UpdateAcbTestSchema, CreateAcbReadingSchema } from '@/lib/validations/acb-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
+import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 
 export async function createAcbTestAction(formData: FormData) {
   try {
@@ -355,7 +356,7 @@ export async function raiseTestDefectAction(data: {
     const { supabase, tenantId, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from('defects')
       .insert({
         tenant_id: tenantId,
@@ -366,8 +367,18 @@ export async function raiseTestDefectAction(data: {
         severity: data.severity || 'medium',
         status: 'open',
       })
+      .select('id')
+      .single()
 
     if (error) return { success: false, error: error.message }
+
+    await notifyDefectRaised({
+      tenantId,
+      defectId: inserted.id,
+      title: data.title,
+      description: data.description ?? null,
+      severity: data.severity || 'medium',
+    })
 
     await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect from test: ${data.title}` })
     revalidatePath('/testing/acb')
