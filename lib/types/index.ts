@@ -143,6 +143,38 @@ export interface ReportDelivery {
 
 export type ContractScopePeriodStatus = 'draft' | 'committed' | 'locked' | 'archived'
 
+export type ContractVariationStatus =
+  | 'draft'
+  | 'quoted'
+  | 'approved'
+  | 'rejected'
+  | 'billed'
+  | 'cancelled'
+
+export interface ContractVariation {
+  id: string
+  tenant_id: string
+  customer_id: string
+  site_id: string | null
+  contract_scope_id: string | null
+  variation_number: string
+  title: string
+  description: string | null
+  financial_year: string | null
+  value_estimate: number | null
+  value_approved: number | null
+  status: ContractVariationStatus
+  customer_ref: string | null
+  source_check_id: string | null
+  approved_at: string | null
+  rejected_at: string | null
+  billed_at: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ContractScope {
   id: string
   tenant_id: string
