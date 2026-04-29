@@ -3,11 +3,12 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Card } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatDate } from '@/lib/utils/format'
-import { isAdmin as checkIsAdmin } from '@/lib/utils/roles'
+import { isAdmin as checkIsAdmin, canWrite } from '@/lib/utils/roles'
 import type { Customer, CustomerContact, Site, Role } from '@/lib/types'
 import { CustomerContacts } from './CustomerContacts'
 import { CustomerSitesTable } from './CustomerSitesTable'
 import { CustomerDangerZone } from './CustomerDangerZone'
+import { CustomerNotificationPrefs, type CustomerContactWithPrefs } from './CustomerNotificationPrefs'
 
 export default async function CustomerDetailPage({
   params,
@@ -17,18 +18,37 @@ export default async function CustomerDetailPage({
   const { id } = await params
   const supabase = await createClient()
 
-  // Get current user role
+  // Get current user role + tenant
   const { data: { user } } = await supabase.auth.getUser()
   let userIsAdmin = false
+  let userCanWrite = false
+  let tenantId: string | null = null
   if (user) {
     const { data: membership } = await supabase
       .from('tenant_members')
-      .select('role')
+      .select('role, tenant_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .limit(1)
       .maybeSingle()
-    userIsAdmin = checkIsAdmin((membership?.role as Role) ?? null)
+    const role = (membership?.role as Role) ?? null
+    userIsAdmin = checkIsAdmin(role)
+    userCanWrite = canWrite(role)
+    tenantId = (membership?.tenant_id as string | undefined) ?? null
+  }
+
+  // Read tenant.commercial_features_enabled to gate the customer email
+  // preferences block.
+  let commercialEnabled = false
+  if (tenantId) {
+    const { data: ts } = await supabase
+      .from('tenant_settings')
+      .select('commercial_features_enabled')
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+    commercialEnabled = Boolean(
+      (ts as { commercial_features_enabled?: boolean } | null)?.commercial_features_enabled,
+    )
   }
 
   // Fetch customer
@@ -81,6 +101,35 @@ export default async function CustomerDetailPage({
   const sitesCount = sitesRes.count ?? 0
   const assetsCount = assetsRes.count ?? 0
   const contacts = (contactsRes.data ?? []) as CustomerContact[]
+
+  // Resolve customer notification preferences per contact (commercial tier).
+  // Single read for all contacts then map locally.
+  const contactIds = contacts.map(c => c.id)
+  const { data: prefsRows } = contactIds.length > 0
+    ? await supabase
+        .from('customer_notification_preferences')
+        .select('customer_contact_id, receive_monthly_summary, receive_upcoming_visit, receive_critical_defect, receive_variation_approved, receive_report_delivery, monthly_summary_day, consent_given_at')
+        .in('customer_contact_id', contactIds)
+    : { data: [] }
+  type PrefRow = {
+    customer_contact_id: string
+    receive_monthly_summary: boolean
+    receive_upcoming_visit: boolean
+    receive_critical_defect: boolean
+    receive_variation_approved: boolean
+    receive_report_delivery: boolean
+    monthly_summary_day: number
+    consent_given_at: string | null
+  }
+  const prefsByContact = new Map<string, PrefRow>()
+  for (const r of (prefsRows ?? []) as PrefRow[]) prefsByContact.set(r.customer_contact_id, r)
+
+  const contactsWithPrefs: CustomerContactWithPrefs[] = contacts.map(c => ({
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    prefs: prefsByContact.get(c.id) ?? null,
+  }))
 
   return (
     <div className="space-y-6">
@@ -141,6 +190,14 @@ export default async function CustomerDetailPage({
 
       {/* Customer Contacts */}
       <CustomerContacts customerId={id} contacts={contacts} isAdmin={userIsAdmin} />
+
+      {/* Customer Email Preferences (commercial tier — Phase C of bridge plan) */}
+      <CustomerNotificationPrefs
+        customerId={id}
+        contacts={contactsWithPrefs}
+        commercialEnabled={commercialEnabled}
+        canWrite={userCanWrite}
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
