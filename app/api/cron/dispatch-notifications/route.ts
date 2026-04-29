@@ -35,6 +35,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runSupervisorDigests } from '@/lib/calendar/supervisor-digest'
+import { sendCustomerMonthlySummaryEmail } from '@/lib/email/send-customer-monthly-summary'
+import { sendCustomerUpcomingVisitEmail } from '@/lib/email/send-customer-upcoming-visit'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -386,45 +388,249 @@ export async function POST(req: NextRequest) {
     summary['preDueRemindersError'] = (err as Error).message
   }
 
-  // ── 3. Customer monthly summary (Phase C — placeholder) ──────────────
-  // Skeleton for now — fires only when the customer-facing email helper
-  // (lib/email/send-customer-monthly-summary.ts) is implemented in the
-  // next iteration. This block scans + records eligible contacts so we
-  // can verify the dispatch math before wiring the email send.
+  // ── 3. Customer monthly summary (Phase C — gated on commercial tier) ─
+  // Iterates customer_notification_preferences whose monthly_summary_day
+  // matches today (in Sydney tz, since per-customer tz isn't stored).
+  // Per contact: pulls the period KPIs (visits done/upcoming, defects,
+  // variations) + per-site breakdown, sends the email, counts result.
   try {
-    const tzMelbourne = nowInTz('Australia/Sydney')
-    const todayDom = tzMelbourne.dayOfMonth
-    const { data: prefs } = await supabase
+    const sydney = nowInTz('Australia/Sydney')
+    const todayDom = sydney.dayOfMonth
+    const { data: prefRows } = await supabase
       .from('customer_notification_preferences')
-      .select('id, tenant_id, customer_contact_id, monthly_summary_day, receive_monthly_summary')
+      .select('id, tenant_id, customer_contact_id, monthly_summary_day')
       .eq('receive_monthly_summary', true)
       .eq('monthly_summary_day', todayDom)
+
+    type PrefRow2 = { id: string; tenant_id: string; customer_contact_id: string }
+    const prefList = (prefRows ?? []) as PrefRow2[]
     const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number }>
-    sec.customerMonthly.eligible = (prefs ?? []).length
-    // Email send wired in Phase C builder — for now we just count.
+    sec.customerMonthly.eligible = prefList.length
+
+    // Period: from 1st of last month to today.
+    const periodEnd = new Date()
+    const periodStart = new Date(periodEnd.getFullYear(), periodEnd.getMonth() - 1, 1)
+    const periodStartIso = periodStart.toISOString()
+    const periodEndIso = periodEnd.toISOString()
+
+    for (const pref of prefList) {
+      try {
+        // Tenant must be on commercial tier — gate every send.
+        const { data: ts } = await supabase
+          .from('tenant_settings')
+          .select('commercial_features_enabled, primary_colour, product_name, report_company_name')
+          .eq('tenant_id', pref.tenant_id)
+          .maybeSingle()
+        if (!ts?.commercial_features_enabled) continue
+
+        // Resolve contact + customer.
+        type ContactWithCustomer = {
+          id: string; name: string | null; email: string | null
+          customer_id: string
+          customers: { name: string } | { name: string }[] | null
+        }
+        const { data: contactRaw } = await supabase
+          .from('customer_contacts')
+          .select('id, name, email, customer_id, customers(name)')
+          .eq('id', pref.customer_contact_id)
+          .maybeSingle()
+        const contact = contactRaw as ContactWithCustomer | null
+        if (!contact?.email) continue
+        const customerName = (Array.isArray(contact.customers) ? contact.customers[0]?.name : contact.customers?.name) ?? '—'
+
+        // Gather KPIs for the period.
+        const [visitsDone, visitsUpcoming, defectsOpen, defectsRaised, varsApproved, perSiteRows] = await Promise.all([
+          supabase.from('maintenance_checks')
+            .select('id', { count: 'exact', head: true })
+            .eq('tenant_id', pref.tenant_id)
+            .eq('status', 'complete')
+            .gte('completed_at', periodStartIso)
+            .lte('completed_at', periodEndIso)
+            .eq('is_active', true),
+          supabase.from('maintenance_checks')
+            .select('id', { count: 'exact', head: true })
+            .eq('tenant_id', pref.tenant_id)
+            .in('status', ['scheduled', 'in_progress'])
+            .eq('is_active', true),
+          supabase.from('defects')
+            .select('id', { count: 'exact', head: true })
+            .eq('tenant_id', pref.tenant_id)
+            .in('status', ['open', 'in_progress']),
+          supabase.from('defects')
+            .select('id', { count: 'exact', head: true })
+            .eq('tenant_id', pref.tenant_id)
+            .gte('created_at', periodStartIso)
+            .lte('created_at', periodEndIso),
+          supabase.from('contract_variations')
+            .select('id', { count: 'exact', head: true })
+            .eq('tenant_id', pref.tenant_id)
+            .eq('customer_id', contact.customer_id)
+            .eq('status', 'approved')
+            .gte('approved_at', periodStartIso)
+            .lte('approved_at', periodEndIso),
+          supabase.from('sites')
+            .select('id, name')
+            .eq('customer_id', contact.customer_id)
+            .eq('is_active', true)
+            .order('name')
+            .limit(20),
+        ])
+
+        // Per-site visits + open defects (best-effort, skip on individual failures).
+        type SiteRow = { id: string; name: string }
+        const sites = (perSiteRows.data ?? []) as SiteRow[]
+        const perSite = await Promise.all(sites.map(async s => {
+          const [visitsRes, nextRes, defRes] = await Promise.all([
+            supabase.from('maintenance_checks').select('id', { count: 'exact', head: true })
+              .eq('site_id', s.id).eq('status', 'complete')
+              .gte('completed_at', periodStartIso).lte('completed_at', periodEndIso)
+              .eq('is_active', true),
+            supabase.from('maintenance_checks').select('due_date')
+              .eq('site_id', s.id).in('status', ['scheduled', 'in_progress'])
+              .eq('is_active', true).order('due_date', { ascending: true }).limit(1).maybeSingle(),
+            supabase.from('defects').select('id', { count: 'exact', head: true })
+              .eq('site_id', s.id).in('status', ['open', 'in_progress']),
+          ])
+          return {
+            siteName: s.name,
+            visitsThisPeriod: visitsRes.count ?? 0,
+            nextVisitDate: (nextRes.data as { due_date?: string } | null)?.due_date ?? null,
+            openDefects: defRes.count ?? 0,
+          }
+        }))
+
+        const result = await sendCustomerMonthlySummaryEmail({
+          to: contact.email,
+          contactName: contact.name,
+          customerName,
+          tenantName: ts.report_company_name ?? ts.product_name ?? 'EQ Solves',
+          portalUrl: appUrl + '/portal',
+          periodStart: periodStartIso,
+          periodEnd: periodEndIso,
+          visitsCompleted: visitsDone.count ?? 0,
+          visitsScheduled: visitsUpcoming.count ?? 0,
+          defectsOpenAtPeriodEnd: defectsOpen.count ?? 0,
+          defectsRaisedThisPeriod: defectsRaised.count ?? 0,
+          variationsApprovedThisPeriod: varsApproved.count ?? 0,
+          perSite,
+          primaryColour: ts.primary_colour ?? undefined,
+        })
+        if ('id' in result) sec.customerMonthly.sent++
+      } catch (err) {
+        sec.customerMonthly.errors++
+        console.error(`[cron] customer monthly summary failed for contact ${pref.customer_contact_id}:`, err)
+      }
+    }
   } catch (err) {
     const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number }>
     sec.customerMonthly.errors++
     summary['customerMonthlyError'] = (err as Error).message
   }
 
-  // ── 4. Customer upcoming-visit notice (Phase C — placeholder) ────────
-  // Same skeleton — count eligible (visits 7 days out for tenants on the
-  // commercial tier, customer prefs say receive_upcoming_visit), wire
-  // the email send next.
+  // ── 4. Customer upcoming-visit notice (Phase C) ──────────────────────
+  // Fires for checks due in 7 days, for customers with at least one
+  // contact who has receive_upcoming_visit=true. Idempotent: log row in
+  // notifications keyed (entity_id, type='customer_visit_upcoming') so a
+  // second tick doesn't double-send.
   try {
     const target = new Date()
     target.setDate(target.getDate() + 7)
     const dateStr = target.toISOString().slice(0, 10)
     const { data: upcoming } = await supabase
       .from('maintenance_checks')
-      .select('id, tenant_id')
+      .select('id, tenant_id, custom_name, due_date, site_id, assigned_to, sites(name, customer_id), job_plans(name), profiles!maintenance_checks_assigned_to_fkey(full_name)')
       .eq('is_active', true)
       .eq('status', 'scheduled')
       .eq('due_date', dateStr)
+
+    type UpRow = {
+      id: string; tenant_id: string; custom_name: string | null
+      due_date: string; site_id: string | null
+      assigned_to: string | null
+      sites: { name: string; customer_id: string } | { name: string; customer_id: string }[] | null
+      job_plans: { name: string } | { name: string }[] | null
+      profiles: { full_name: string } | { full_name: string }[] | null
+    }
+    const upRows = (upcoming ?? []) as UpRow[]
     const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number }>
-    sec.customerUpcoming.eligible = (upcoming ?? []).length
-    // Per-tenant + per-customer-contact filtering wired next.
+    sec.customerUpcoming.eligible = upRows.length
+
+    for (const ch of upRows) {
+      try {
+        const { data: ts } = await supabase
+          .from('tenant_settings')
+          .select('commercial_features_enabled, primary_colour, product_name, report_company_name')
+          .eq('tenant_id', ch.tenant_id)
+          .maybeSingle()
+        if (!ts?.commercial_features_enabled) continue
+
+        const site = Array.isArray(ch.sites) ? ch.sites[0] : ch.sites
+        if (!site?.customer_id) continue
+        const siteName = site.name
+        const jpName = Array.isArray(ch.job_plans) ? ch.job_plans[0]?.name : ch.job_plans?.name
+        const tech = Array.isArray(ch.profiles) ? ch.profiles[0]?.full_name : ch.profiles?.full_name
+
+        // Find eligible contacts.
+        const { data: contacts } = await supabase
+          .from('customer_contacts')
+          .select('id, name, email, customer_notification_preferences!inner(receive_upcoming_visit)')
+          .eq('customer_id', site.customer_id)
+          .eq('customer_notification_preferences.receive_upcoming_visit', true)
+
+        type ContactRow = { id: string; name: string | null; email: string | null }
+        const contactList = (contacts ?? []) as ContactRow[]
+
+        for (const contact of contactList) {
+          if (!contact.email) continue
+          // Idempotency check via notifications table — entity_id keyed
+          // so we don't re-send if the cron retries.
+          const { data: existing } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('tenant_id', ch.tenant_id)
+            .eq('type', 'customer_visit_upcoming')
+            .eq('entity_id', ch.id)
+            .like('body', `%${contact.email}%`)
+            .limit(1)
+            .maybeSingle()
+          if (existing) continue
+
+          await sendCustomerUpcomingVisitEmail({
+            to: contact.email,
+            contactName: contact.name,
+            customerName: '',  // not used in email body besides masthead — site/scope is the focus
+            tenantName: ts.report_company_name ?? ts.product_name ?? 'EQ Solves',
+            siteName,
+            visitDescription: ch.custom_name ?? jpName ?? 'Scheduled maintenance',
+            visitDate: ch.due_date,
+            scheduledTimeWindow: null,
+            technicianName: tech ?? null,
+            portalUrl: appUrl + '/portal',
+            primaryColour: ts.primary_colour ?? undefined,
+          })
+
+          // Audit row — uses the notifications table with a synthetic
+          // user_id (null path doesn't work; use the assigned tech if any
+          // as a placeholder, just to record we sent). If no assigned_to,
+          // skip the audit row — the Resend log is sufficient for now.
+          if (ch.assigned_to) {
+            await supabase.from('notifications').insert({
+              tenant_id: ch.tenant_id,
+              user_id: ch.assigned_to,
+              type: 'customer_visit_upcoming',
+              title: `Customer email sent: ${siteName}`,
+              body: `Sent to ${contact.email} (${contact.name ?? 'unnamed'})`,
+              entity_type: 'maintenance_check',
+              entity_id: ch.id,
+            })
+          }
+          sec.customerUpcoming.sent++
+        }
+      } catch (err) {
+        sec.customerUpcoming.errors++
+        console.error(`[cron] customer upcoming-visit failed for check ${ch.id}:`, err)
+      }
+    }
   } catch (err) {
     const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number }>
     sec.customerUpcoming.errors++

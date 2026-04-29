@@ -97,3 +97,80 @@ export async function deleteCustomerContactAction(contactId: string, customerId:
     return { success: false, error: (e as Error).message }
   }
 }
+
+/**
+ * Upsert customer notification preferences for a contact.
+ * Idempotent — creates the row if missing, updates on conflict.
+ * Records consent_given_at if any opt-in flag is being set true and the
+ * row didn't have a consent timestamp yet.
+ */
+export async function upsertCustomerNotificationPrefsAction(
+  customerId: string,
+  contactId: string,
+  prefs: {
+    receive_monthly_summary: boolean
+    receive_upcoming_visit: boolean
+    receive_critical_defect: boolean
+    receive_variation_approved: boolean
+    receive_report_delivery: boolean
+    monthly_summary_day?: number
+  },
+) {
+  try {
+    const { supabase, tenantId, role, user } = await requireUser()
+    if (!isAdmin(role) && role !== 'supervisor') {
+      return { success: false, error: 'Admin or supervisor role required.' }
+    }
+
+    const day = prefs.monthly_summary_day ?? 1
+    if (day < 1 || day > 28) {
+      return { success: false, error: 'Monthly summary day must be 1-28.' }
+    }
+
+    const anyOptIn =
+      prefs.receive_monthly_summary ||
+      prefs.receive_upcoming_visit ||
+      prefs.receive_critical_defect ||
+      prefs.receive_variation_approved ||
+      prefs.receive_report_delivery
+
+    // Check existing — preserve consent_given_at if already set.
+    const { data: existing } = await supabase
+      .from('customer_notification_preferences')
+      .select('id, consent_given_at')
+      .eq('customer_contact_id', contactId)
+      .maybeSingle()
+
+    const consentSet = anyOptIn && !existing?.consent_given_at
+      ? { consent_given_at: new Date().toISOString(), consent_given_by_user_id: user.id }
+      : {}
+
+    const { error } = await supabase
+      .from('customer_notification_preferences')
+      .upsert({
+        tenant_id: tenantId,
+        customer_contact_id: contactId,
+        receive_monthly_summary: prefs.receive_monthly_summary,
+        receive_upcoming_visit: prefs.receive_upcoming_visit,
+        receive_critical_defect: prefs.receive_critical_defect,
+        receive_variation_approved: prefs.receive_variation_approved,
+        receive_report_delivery: prefs.receive_report_delivery,
+        monthly_summary_day: day,
+        ...consentSet,
+      }, { onConflict: 'customer_contact_id' })
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'customer_notification_preferences',
+      entityId: contactId,
+      summary: 'Updated customer notification prefs',
+      metadata: { ...prefs, monthly_summary_day: day },
+    })
+    revalidatePath(`/customers/${customerId}`)
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
