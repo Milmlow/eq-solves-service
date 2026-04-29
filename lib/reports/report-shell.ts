@@ -66,6 +66,7 @@ export type ReportType =
   | 'maintenance_check'
   | 'defect_register'
   | 'customer_scope_statement'
+  | 'customer_renewal_pack'
 
 const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   compliance: 'Compliance Report',
@@ -75,6 +76,7 @@ const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   maintenance_check: 'Maintenance Check Report',
   defect_register: 'Defect Register',
   customer_scope_statement: 'Customer Scope Statement',
+  customer_renewal_pack: 'Customer Renewal Pack',
 }
 
 export interface ShellSettings {
