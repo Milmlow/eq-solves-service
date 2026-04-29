@@ -9,6 +9,7 @@ import type { Role } from '@/lib/types'
 import { DashboardViewToggle } from './DashboardViewToggle'
 import { DashboardAnalytics } from './DashboardAnalytics'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { ServiceCreditWidget } from './ServiceCreditWidget'
 
 type View = 'mine' | 'all'
 
@@ -26,13 +27,14 @@ export default async function DashboardPage({
   let userRole: Role = 'read_only'
   let userId: string | null = null
 
+  let tenantId: string | null = null
   if (user) {
     userId = user.id
     const [{ data: profile }, { data: membership }] = await Promise.all([
       supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
       supabase
         .from('tenant_members')
-        .select('role')
+        .select('role, tenant_id')
         .eq('user_id', user.id)
         .eq('is_active', true)
         .limit(1)
@@ -40,6 +42,22 @@ export default async function DashboardPage({
     ])
     userName = profile?.full_name?.split(' ')[0] ?? 'there'
     userRole = (membership?.role as Role) ?? 'read_only'
+    tenantId = (membership?.tenant_id as string | undefined) ?? null
+  }
+
+  // Commercial-features flag — gates the service-credit widget. Single
+  // small read; lives outside the big Promise.all so the widget can be a
+  // server component without re-querying.
+  let commercialEnabled = false
+  if (tenantId) {
+    const { data: settings } = await supabase
+      .from('tenant_settings')
+      .select('commercial_features_enabled')
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+    commercialEnabled = Boolean(
+      (settings as { commercial_features_enabled?: boolean } | null)?.commercial_features_enabled,
+    )
   }
 
   // ── Determine effective view based on role + param ──
@@ -298,6 +316,14 @@ export default async function DashboardPage({
           </Link>
         </div>
       </Card>
+
+      {/* Service-credit risk — Phase 6 of the contract-scope bridge plan.
+          Only renders for tenants on the commercial tier; the widget is a
+          server component that fetches its own data so the dashboard
+          page.tsx stays focused on the always-on KPIs. */}
+      {commercialEnabled && tenantId && (
+        <ServiceCreditWidget tenantId={tenantId} />
+      )}
 
       {/* Defect Summary + Map — side by side on large screens */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
