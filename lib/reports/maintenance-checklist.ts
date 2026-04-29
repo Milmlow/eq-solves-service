@@ -106,8 +106,12 @@ export interface ChecklistTask {
 
 // ─────────── Constants ───────────
 
-const PAGE_WIDTH = 13338   // A4 landscape DXA (~11.7")
-const PAGE_HEIGHT = 11906  // A4 landscape DXA (~8.3")
+// True A4 landscape: 297mm × 210mm = 11.69" × 8.27" = 16838 × 11906 DXA.
+// Previous value (13338) gave a 9.26"-wide page that cramped the asset
+// register against the right edge — Royce's "page 2 needs proper landscape"
+// feedback 2026-04-29.
+const PAGE_WIDTH = 16838   // A4 landscape long edge DXA (~11.69")
+const PAGE_HEIGHT = 11906  // A4 landscape short edge DXA (~8.27")
 const MARGIN = 720         // ~0.5 inch (12.7mm)
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2
 
@@ -504,13 +508,16 @@ function buildAssetRegister(assets: ChecklistAsset[], brandHex: string): (Paragr
   }))
 
   // Register table: # | Asset ID | Name | Location | WO # | Complete | Notes
-  const col1 = 500   // #
-  const col2 = 1400  // ID
-  const col3 = 3200  // Name
-  const col4 = 2400  // Location
-  const col5 = 1600  // WO #
-  const col6 = 900   // Complete checkbox
-  const col7 = 3300  // Notes
+  // Sum to CONTENT_WIDTH (15398 DXA) so the table fills the true A4
+  // landscape page edge-to-edge. Notes column gets the largest share —
+  // techs hand-write in there and it was tight before.
+  const col1 = 500    // #
+  const col2 = 1500   // Asset ID
+  const col3 = 3800   // Name
+  const col4 = 2800   // Location
+  const col5 = 1700   // WO #
+  const col6 = 900    // Complete checkbox
+  const col7 = 4198   // Notes (15398 - sum of the others)
 
   children.push(new Table({
     width: { size: col1 + col2 + col3 + col4 + col5 + col6 + col7, type: WidthType.DXA },
