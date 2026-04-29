@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
 import { CheckCircle2, XCircle, Scale } from 'lucide-react'
+import { ScopeDownloadButton } from './ScopeDownloadButton'
 
 /**
  * Portal "Scope" page — customer-facing read-only view of the contracted
@@ -19,9 +20,27 @@ export default async function PortalScopePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user?.email) redirect('/portal/login')
 
-  const { data: customerIdRpc } = await supabase.rpc('get_portal_customer_id')
+  const [{ data: customerIdRpc }, { data: tenantIdRpc }] = await Promise.all([
+    supabase.rpc('get_portal_customer_id'),
+    supabase.rpc('get_portal_tenant_id'),
+  ])
   const customerId = customerIdRpc as string | null
+  const tenantId = tenantIdRpc as string | null
   if (!customerId) redirect('/portal/login')
+
+  // Gate the Download button on commercial tier — same as the rest of
+  // the scope-statement feature.
+  let commercialEnabled = false
+  if (tenantId) {
+    const { data: ts } = await supabase
+      .from('tenant_settings')
+      .select('commercial_features_enabled')
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+    commercialEnabled = Boolean(
+      (ts as { commercial_features_enabled?: boolean } | null)?.commercial_features_enabled,
+    )
+  }
 
   const { data: scopeRows } = await supabase
     .from('contract_scopes')
@@ -76,13 +95,16 @@ export default async function PortalScopePage() {
         const excluded = fyRows.filter(r => !r.is_included)
         return (
           <div key={fy} className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-base font-bold text-eq-deep">{fyLabel(fy)}</h2>
-              <p className="text-xs text-eq-grey">
-                <span className="text-green-700">{included.length} included</span>
-                <span className="mx-2">·</span>
-                <span className="text-red-600">{excluded.length} excluded</span>
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-eq-grey">
+                  <span className="text-green-700">{included.length} included</span>
+                  <span className="mx-2">·</span>
+                  <span className="text-red-600">{excluded.length} excluded</span>
+                </p>
+                {commercialEnabled && <ScopeDownloadButton fy={fy} />}
+              </div>
             </div>
             <Card>
               <div className="divide-y divide-gray-100">

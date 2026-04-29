@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Building2, Scale, AlertTriangle, CalendarDays, FileSignature, FileText } from 'lucide-react'
+import { LayoutDashboard, Building2, Scale, AlertTriangle, CalendarDays, FileSignature, FileText, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 interface PortalNavProps {
@@ -29,6 +29,7 @@ export function PortalNav({ showVariations }: PortalNavProps) {
   if (showVariations) {
     items.push({ label: 'Variations', href: '/portal/variations', icon: FileSignature })
   }
+  items.push({ label: 'Settings', href: '/portal/settings', icon: Settings })
 
   return (
     <nav className="bg-white border-b border-gray-200 -mx-6 px-6 mb-6 overflow-x-auto">

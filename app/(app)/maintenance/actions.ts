@@ -6,6 +6,7 @@ import { canWrite, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import { createNotification } from '@/lib/actions/notifications'
+import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { firstRow } from '@/lib/db/relation'
 import {
   CreateMaintenanceCheckSchema,
@@ -1297,37 +1298,15 @@ export async function raiseDefectAction(data: {
 
     if (error) return { success: false, error: error.message }
 
-    // Notify supervisors + admins of the tenant. Critical-severity also
-    // pings super_admins for escalation visibility. Per-user pref check
-    // happens via event_type_opt_outs at notification creation time
-    // (handled by the bell UI filter, not blocked at insert).
-    try {
-      const recipientRoles: string[] = data.severity === 'critical'
-        ? ['super_admin', 'admin', 'supervisor']
-        : ['admin', 'supervisor']
-      const { data: recipients } = await supabase
-        .from('tenant_members')
-        .select('user_id')
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true)
-        .in('role', recipientRoles)
-      const sevLabel = data.severity === 'critical'
-        ? 'CRITICAL'
-        : (data.severity ?? 'medium').toUpperCase()
-      for (const r of (recipients ?? []) as { user_id: string }[]) {
-        await createNotification({
-          tenantId,
-          userId: r.user_id,
-          type: 'defect_raised',
-          title: `[${sevLabel}] Defect raised: ${data.title.trim()}`,
-          body: data.description?.trim() || undefined,
-          entityType: 'defect',
-          entityId: insertedRows.id,
-        })
-      }
-    } catch {
-      // Notification failure must not block the defect creation. Quiet.
-    }
+    // Fan-out the defect_raised notifications. Helper handles role
+    // recipient policy + critical-escalation + RLS via service role.
+    await notifyDefectRaised({
+      tenantId,
+      defectId: insertedRows.id,
+      title: data.title.trim(),
+      description: data.description?.trim() ?? null,
+      severity: data.severity || 'medium',
+    })
 
     await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${data.title}"` })
     revalidateMaintenanceSurfaces()
