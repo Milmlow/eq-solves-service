@@ -369,7 +369,7 @@ export default function AcbTestingPage() {
               { label: 'Asset Collection' },
             ]}
           />
-          <h1 className="text-3xl font-bold text-eq-sky mt-2">ACB Asset Collection</h1>
+          <h2 className="text-3xl font-bold text-eq-sky mt-2">ACB Asset Collection</h2>
           <p className="text-eq-grey text-sm mt-1">Site-level breaker identification and settings</p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => setShowSiteCollection(false)}>
@@ -395,7 +395,7 @@ export default function AcbTestingPage() {
               { label: selectedAssetData?.name ?? 'Asset' },
             ]}
           />
-          <h1 className="text-3xl font-bold text-eq-sky mt-2">{selectedAssetData?.name}</h1>
+          <h2 className="text-3xl font-bold text-eq-sky mt-2">{selectedAssetData?.name}</h2>
           <p className="text-eq-grey text-sm mt-1">3-step testing workflow</p>
         </div>
         <Button
@@ -437,7 +437,7 @@ export default function AcbTestingPage() {
               { label: 'Create Check' },
             ]}
           />
-          <h1 className="text-3xl font-bold text-eq-sky mt-2">Create ACB Check</h1>
+          <h2 className="text-3xl font-bold text-eq-sky mt-2">Create ACB Check</h2>
           <p className="text-eq-grey text-sm mt-1">Group assets under a named maintenance check for {siteName}</p>
         </div>
 
@@ -605,7 +605,7 @@ export default function AcbTestingPage() {
     <div className="space-y-6">
       <div>
         <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'ACB Testing' }]} />
-        <h1 className="text-3xl font-bold text-eq-sky mt-2">ACB Testing Workflow</h1>
+        <h2 className="text-3xl font-bold text-eq-sky mt-2">ACB Testing Workflow</h2>
         <p className="text-eq-grey text-sm mt-1">Site-based circuit breaker testing — E1.25 (LVACB) assets</p>
       </div>
 

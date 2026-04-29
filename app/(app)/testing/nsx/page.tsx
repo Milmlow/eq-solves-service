@@ -329,7 +329,7 @@ export default function NsxTestingPage() {
               { label: selectedAssetData?.name ?? 'Asset' },
             ]}
           />
-          <h1 className="text-3xl font-bold text-eq-sky mt-2">{selectedAssetData?.name}</h1>
+          <h2 className="text-3xl font-bold text-eq-sky mt-2">{selectedAssetData?.name}</h2>
           <p className="text-eq-grey text-sm mt-1">3-step NSX testing workflow (framework)</p>
         </div>
         <Button
@@ -367,7 +367,7 @@ export default function NsxTestingPage() {
               { label: 'Create Check' },
             ]}
           />
-          <h1 className="text-3xl font-bold text-eq-sky mt-2">Create NSX Check</h1>
+          <h2 className="text-3xl font-bold text-eq-sky mt-2">Create NSX Check</h2>
           <p className="text-eq-grey text-sm mt-1">Group assets under a named maintenance check for {siteName}</p>
         </div>
 
