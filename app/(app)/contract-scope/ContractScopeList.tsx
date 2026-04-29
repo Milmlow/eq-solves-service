@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
 import { Card } from '@/components/ui/Card'
@@ -64,6 +64,18 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+
+  // The Add/Edit form lives between the summary strip and the customer-
+  // grouped list. With Jemena onboarding the page got long enough that
+  // clicking Edit on a row near the bottom would open the form off-screen
+  // above — looked like the click did nothing. Scroll the form into view
+  // whenever it opens.
+  const formRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (showForm && formRef.current) {
+      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [showForm])
 
   // CSV export helper
   function handleExport() {
@@ -415,7 +427,8 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
 
       {/* Add/Edit form */}
       {showForm && (
-        <Card>
+        <div ref={formRef} className="scroll-mt-24">
+          <Card>
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-eq-deep">{editing ? 'Edit Scope Item' : 'New Scope Item'}</h3>
@@ -485,7 +498,8 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
               <Button type="button" variant="secondary" size="sm" onClick={cancelForm}>Cancel</Button>
             </div>
           </form>
-        </Card>
+          </Card>
+        </div>
       )}
 
       <ImportCSVModal
