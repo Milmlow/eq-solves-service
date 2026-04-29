@@ -4,9 +4,9 @@ import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
 import { Card } from '@/components/ui/Card'
-import { createScopeItemAction, updateScopeItemAction, deleteScopeItemAction } from './actions'
-import type { ContractScope, Customer, Site } from '@/lib/types'
-import { Plus, Pencil, Trash2, X, CheckCircle2, XCircle, Filter, Upload, Download } from 'lucide-react'
+import { createScopeItemAction, updateScopeItemAction, deleteScopeItemAction, setContractScopePeriodStatusAction } from './actions'
+import type { ContractScope, ContractScopePeriodStatus, Customer, Site } from '@/lib/types'
+import { Plus, Pencil, Trash2, X, CheckCircle2, XCircle, Filter, Upload, Download, Lock, Unlock, Archive, FileText } from 'lucide-react'
 import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importScopeItemsAction } from './actions'
@@ -27,9 +27,35 @@ interface ContractScopeListProps {
   sites: Pick<Site, 'id' | 'name' | 'customer_id'>[]
   canWrite: boolean
   isAdmin: boolean
+  /**
+   * Tenant-level commercial-features flag (migration 0085). When true the
+   * lock/unlock/archive controls + locked-row enforcement are surfaced.
+   * When false the period_status badge is still visible (so the data is
+   * never hidden) but the action buttons stay off — matches what the
+   * BEFORE UPDATE/DELETE trigger on the DB does.
+   */
+  commercialEnabled: boolean
 }
 
-export function ContractScopeList({ items, customers, sites, canWrite: canWriteRole, isAdmin: isAdminRole }: ContractScopeListProps) {
+/**
+ * Map a ContractScope.period_status to a {label, classes} pair. We don't
+ * route through StatusBadge here because the lifecycle vocabulary is
+ * domain-specific (locked / archived) and worth a dedicated palette.
+ */
+function periodStatusTheme(status: ContractScopePeriodStatus) {
+  switch (status) {
+    case 'draft':
+      return { label: 'Draft', classes: 'bg-amber-50 text-amber-700 border-amber-200' }
+    case 'committed':
+      return { label: 'Committed', classes: 'bg-eq-ice text-eq-deep border-eq-ice' }
+    case 'locked':
+      return { label: 'Locked', classes: 'bg-gray-100 text-gray-700 border-gray-300' }
+    case 'archived':
+      return { label: 'Archived', classes: 'bg-gray-50 text-gray-500 border-gray-200' }
+  }
+}
+
+export function ContractScopeList({ items, customers, sites, canWrite: canWriteRole, isAdmin: isAdminRole, commercialEnabled }: ContractScopeListProps) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<ContractScope | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -186,6 +212,28 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
     if (!result.success) setError(result.error ?? 'Something went wrong.')
   }
 
+  /**
+   * Lock / unlock / archive flow. Asks the operator for an optional
+   * reason — captured into audit_logs.metadata so the history viewer can
+   * surface the rationale alongside the diff. Confirms before locking
+   * because the action is high-friction to reverse (super_admin only).
+   */
+  async function handleSetStatus(item: ContractScope, target: ContractScopePeriodStatus) {
+    const verb = target === 'locked' ? 'Lock' : target === 'archived' ? 'Archive' : target === 'committed' ? 'Unlock' : 'Move to draft'
+    const warning = target === 'locked'
+      ? 'Locking makes this row immutable for everyone except super_admin. The importer will refuse to wipe it. Continue?'
+      : target === 'archived'
+        ? 'Archive hides the row from active filters. Continue?'
+        : null
+    if (warning && !confirm(warning)) return
+    const reason = window.prompt(`${verb}: optional reason for the audit trail (leave blank to skip):`)
+    if (reason === null) return // cancelled
+    setLoading(true)
+    const result = await setContractScopePeriodStatusAction(item.id, target, reason.trim() || null)
+    setLoading(false)
+    if (!result.success) setError(result.error ?? 'Could not change status.')
+  }
+
   function startEdit(item: ContractScope) {
     setEditing(item)
     setFormCustomerId(item.customer_id)
@@ -276,6 +324,11 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
           <XCircle className="w-4 h-4" /> {excludedCount} excluded
         </span>
         <span className="text-eq-grey">({filtered.length} total items)</span>
+        {commercialEnabled && (
+          <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-eq-ice text-eq-deep border border-eq-ice/80 font-medium" title="Period locking, audit history, and the broader commercial-tier features are switched on for this tenant.">
+            Commercial features ON
+          </span>
+        )}
       </div>
 
       {/* Add/Edit form */}
@@ -372,39 +425,111 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
               <h3 className="font-semibold text-eq-deep text-sm">{customerName}</h3>
             </div>
             <div className="divide-y divide-gray-50">
-              {customerItems.map((item) => (
-                <div key={item.id} className="flex items-start gap-3 px-4 py-3">
-                  <div className="mt-0.5 shrink-0">
-                    {item.is_included ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-red-500" />
+              {customerItems.map((item) => {
+                const status = (item.period_status ?? 'committed') as ContractScopePeriodStatus
+                const theme = periodStatusTheme(status)
+                const isLocked = status === 'locked'
+                const isArchived = status === 'archived'
+                // Mutating affordances (edit / delete) are blocked at the DB
+                // by the lock-gate trigger when commercialEnabled is true.
+                // Mirror that in the UI to avoid doomed clicks.
+                const editDisabled = commercialEnabled && (isLocked || isArchived)
+                return (
+                  <div key={item.id} className="flex items-start gap-3 px-4 py-3">
+                    <div className="mt-0.5 shrink-0">
+                      {item.is_included ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-eq-ink text-sm">{item.scope_item}</span>
+                        {item.sites && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-eq-grey">{item.sites.name}</span>
+                        )}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-eq-ice text-eq-deep">{fyLabel(item.financial_year)}</span>
+                        {/* period_status badge — always visible so legacy
+                          data still surfaces "committed". Hidden only when
+                          not commercial AND status is the default
+                          'committed' (no extra noise on free tier). */}
+                        {(commercialEnabled || status !== 'committed') && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${theme.classes}`}>
+                            {theme.label}
+                          </span>
+                        )}
+                      </div>
+                      {item.notes && <p className="text-xs text-eq-grey mt-0.5">{item.notes}</p>}
+                    </div>
+                    {canWriteRole && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => startEdit(item)}
+                          disabled={editDisabled}
+                          className="p-1.5 text-eq-grey hover:text-eq-sky transition-colors disabled:opacity-30 disabled:hover:text-eq-grey disabled:cursor-not-allowed"
+                          title={editDisabled ? 'Locked — unlock first to edit' : 'Edit'}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        {/* Lock / unlock / archive controls — admin role +
+                          tenant on commercial tier. Super_admin can flip
+                          back from locked; admins can only forward-step
+                          (draft → committed → locked / archived). */}
+                        {isAdminRole && commercialEnabled && (
+                          <>
+                            {status === 'draft' && (
+                              <button
+                                onClick={() => handleSetStatus(item, 'committed')}
+                                className="p-1.5 text-eq-grey hover:text-eq-deep transition-colors"
+                                title="Mark Committed"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {status === 'committed' && (
+                              <button
+                                onClick={() => handleSetStatus(item, 'locked')}
+                                className="p-1.5 text-eq-grey hover:text-amber-600 transition-colors"
+                                title="Lock for year-end close"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {status === 'locked' && (
+                              <button
+                                onClick={() => handleSetStatus(item, 'committed')}
+                                className="p-1.5 text-eq-grey hover:text-eq-sky transition-colors"
+                                title="Unlock (super_admin only)"
+                              >
+                                <Unlock className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {!isArchived && status !== 'locked' && (
+                              <button
+                                onClick={() => handleSetStatus(item, 'archived')}
+                                className="p-1.5 text-eq-grey hover:text-amber-600 transition-colors"
+                                title="Archive"
+                              >
+                                <Archive className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </>
+                        )}
+                        {isAdminRole && !editDisabled && (
+                          <button
+                            onClick={() => handleDelete(item)}
+                            className="p-1.5 text-eq-grey hover:text-red-500 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-eq-ink text-sm">{item.scope_item}</span>
-                      {item.sites && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-eq-grey">{item.sites.name}</span>
-                      )}
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-eq-ice text-eq-deep">{fyLabel(item.financial_year)}</span>
-                    </div>
-                    {item.notes && <p className="text-xs text-eq-grey mt-0.5">{item.notes}</p>}
-                  </div>
-                  {canWriteRole && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => startEdit(item)} className="p-1.5 text-eq-grey hover:text-eq-sky transition-colors" title="Edit">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      {isAdminRole && (
-                        <button onClick={() => handleDelete(item)} className="p-1.5 text-eq-grey hover:text-red-500 transition-colors" title="Delete">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         ))
