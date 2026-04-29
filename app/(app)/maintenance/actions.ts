@@ -1278,7 +1278,7 @@ export async function raiseDefectAction(data: {
 
     if (!data.title?.trim()) return { success: false, error: 'Title is required.' }
 
-    const { error } = await supabase
+    const { data: insertedRows, error } = await supabase
       .from('defects')
       .insert({
         tenant_id: tenantId,
@@ -1292,8 +1292,42 @@ export async function raiseDefectAction(data: {
         status: 'open',
         raised_by: user.id,
       })
+      .select('id')
+      .single()
 
     if (error) return { success: false, error: error.message }
+
+    // Notify supervisors + admins of the tenant. Critical-severity also
+    // pings super_admins for escalation visibility. Per-user pref check
+    // happens via event_type_opt_outs at notification creation time
+    // (handled by the bell UI filter, not blocked at insert).
+    try {
+      const recipientRoles: string[] = data.severity === 'critical'
+        ? ['super_admin', 'admin', 'supervisor']
+        : ['admin', 'supervisor']
+      const { data: recipients } = await supabase
+        .from('tenant_members')
+        .select('user_id')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .in('role', recipientRoles)
+      const sevLabel = data.severity === 'critical'
+        ? 'CRITICAL'
+        : (data.severity ?? 'medium').toUpperCase()
+      for (const r of (recipients ?? []) as { user_id: string }[]) {
+        await createNotification({
+          tenantId,
+          userId: r.user_id,
+          type: 'defect_raised',
+          title: `[${sevLabel}] Defect raised: ${data.title.trim()}`,
+          body: data.description?.trim() || undefined,
+          entityType: 'defect',
+          entityId: insertedRows.id,
+        })
+      }
+    } catch {
+      // Notification failure must not block the defect creation. Quiet.
+    }
 
     await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${data.title}"` })
     revalidateMaintenanceSurfaces()
