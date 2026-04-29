@@ -36,7 +36,7 @@ export default async function RcdImportPage() {
             { label: 'Import' },
           ]}
         />
-        <h1 className="text-3xl font-bold text-eq-sky">Import RCD Tests</h1>
+        <h2 className="text-3xl font-bold text-eq-sky">Import RCD Tests</h2>
         <p className="text-sm text-eq-grey">
           You don&apos;t have permission to import RCD test data. Ask an admin to
           upload on your behalf, or request a writer role.
@@ -56,7 +56,7 @@ export default async function RcdImportPage() {
         ]}
       />
       <div>
-        <h1 className="text-3xl font-bold text-eq-sky">Import RCD Tests</h1>
+        <h2 className="text-3xl font-bold text-eq-sky">Import RCD Tests</h2>
         <p className="text-sm text-eq-grey mt-1">
           Upload a Jemena-format multi-tab RCD test workbook. Each sheet maps to
           one board, each row maps to one circuit. Site + board are resolved
