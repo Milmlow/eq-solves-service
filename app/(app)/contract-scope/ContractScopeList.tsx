@@ -346,21 +346,26 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
             <Download className="w-4 h-4 mr-1" /> Export
           </Button>
           {/* Phase 8 — customer-facing scope statement. Only available on
-              the commercial tier, and the operator must have narrowed to a
-              single customer + single FY first. The button stays visible
-              when the filter isn't narrow enough so the affordance is
-              always discoverable; clicking surfaces the prompt as an
-              error. */}
+              the commercial tier, and the operator must have narrowed to
+              a single customer + single FY first. We disable the button
+              when filters aren't narrow enough (rather than letting it
+              click-through to a buried error) so the constraint is
+              visible BEFORE the click — the title attribute spells out
+              what's missing. */}
           {commercialEnabled && canWriteRole && (
             <Button
               variant="secondary"
               size="sm"
               onClick={() => handleScopeStatement('docx')}
-              disabled={loading}
+              disabled={loading || !filterCustomer || !filterFY}
               title={
-                filterCustomer && filterFY
-                  ? 'Generate the customer-facing scope statement (DOCX)'
-                  : 'Pick a customer and a year first'
+                !filterCustomer && !filterFY
+                  ? 'Pick a customer and a year first'
+                  : !filterCustomer
+                    ? 'Pick a single customer first'
+                    : !filterFY
+                      ? 'Pick a financial year first'
+                      : 'Generate the customer-facing scope statement (DOCX)'
               }
             >
               <FileDown className="w-4 h-4 mr-1" /> Scope Statement
@@ -373,6 +378,24 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
           )}
         </div>
       </div>
+
+      {/* Top-level error banner. Renders any error set by the toolbar
+          actions (Scope Statement, Lock/Unlock, Export, etc.) so they
+          surface even when the Add/Edit form is closed. The form has its
+          own inline error inside the card for create/update flows. */}
+      {error && !showForm && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 flex items-start gap-2">
+          <p className="text-sm text-red-700 flex-1">{error}</p>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="text-red-400 hover:text-red-600 shrink-0"
+            aria-label="Dismiss error"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Summary strip */}
       <div className="flex items-center gap-4 text-sm">
