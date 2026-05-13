@@ -10,6 +10,7 @@ import {
   hardDeleteUserAction,
 } from './actions'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Profile {
   id: string
@@ -56,6 +57,7 @@ export function UsersTable({
 }) {
   const [pending, startTransition] = useTransition()
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const confirm = useConfirm()
 
   const isSuperAdmin = callerRole === 'super_admin'
 
@@ -85,8 +87,13 @@ export function UsersTable({
     })
   }
 
-  function archiveFromTenant(userId: string, label: string) {
-    if (!confirm(`Archive ${label} from this tenant? Their account stays intact and they can be re-attached. Use Show archived to find them again.`)) return
+  async function archiveFromTenant(userId: string, label: string) {
+    const ok = await confirm({
+      title: `Archive ${label}?`,
+      message: 'Archive them from this tenant. Their account stays intact and they can be re-attached. Use Show archived to find them again.',
+      confirmLabel: 'Archive',
+    })
+    if (!ok) return
     setNotice(null)
     const fd = new FormData()
     fd.set('user_id', userId)
@@ -96,8 +103,13 @@ export function UsersTable({
     })
   }
 
-  function resendInvite(userId: string, label: string) {
-    if (!confirm(`Resend invite email to ${label}?`)) return
+  async function resendInvite(userId: string, label: string) {
+    const ok = await confirm({
+      title: 'Resend invite?',
+      message: `Resend the invite email to ${label}?`,
+      confirmLabel: 'Resend',
+    })
+    if (!ok) return
     setNotice(null)
     const fd = new FormData()
     fd.set('user_id', userId)
@@ -108,8 +120,13 @@ export function UsersTable({
     })
   }
 
-  function repairUser(userId: string, label: string, role: string) {
-    if (!confirm(`Attach ${label} to this tenant as ${role}?`)) return
+  async function repairUser(userId: string, label: string, role: string) {
+    const ok = await confirm({
+      title: 'Attach user to tenant?',
+      message: `Attach ${label} to this tenant as ${role}?`,
+      confirmLabel: 'Attach',
+    })
+    if (!ok) return
     setNotice(null)
     const fd = new FormData()
     fd.set('user_id', userId)
@@ -121,10 +138,16 @@ export function UsersTable({
     })
   }
 
-  function hardDelete(userId: string, label: string) {
+  async function hardDelete(userId: string, label: string) {
     // Two confirmations because this is irreversible — the second prompt
     // forces the admin to type the user's email/name to proceed.
-    if (!confirm(`PERMANENTLY DELETE ${label}? This wipes their auth account and CANNOT be undone. Historical records keep their name as a string.`)) return
+    const ok = await confirm({
+      title: `Permanently delete ${label}?`,
+      message: 'This wipes their auth account and CANNOT be undone. Historical records keep their name as a string.',
+      confirmLabel: 'Continue',
+      destructive: true,
+    })
+    if (!ok) return
     const typed = prompt(`Type "${label}" exactly to confirm permanent deletion:`)
     if (typed?.trim() !== label) {
       show('err', 'Confirmation text did not match — deletion cancelled.')

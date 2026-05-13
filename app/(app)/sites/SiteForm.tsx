@@ -9,6 +9,7 @@ import { createSiteAction, updateSiteAction, toggleSiteActiveAction } from './ac
 import { geocodeSiteAddressAction } from './geocode-action'
 import { cascadeArchiveAction } from '@/app/(app)/admin/archive/actions'
 import type { Site, Customer } from '@/lib/types'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface SiteFormProps {
   open: boolean
@@ -34,6 +35,7 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
   const [longitude, setLongitude] = useState<string>(site?.longitude != null ? String(site.longitude) : '')
   const [geocoding, setGeocoding] = useState(false)
   const [geocodeMsg, setGeocodeMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const confirm = useConfirm()
 
   const isEdit = !!site
 
@@ -99,7 +101,12 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
     // Archiving cascades: site + assets all flip is_active=false so the
     // whole subtree lands in /admin/archive together. Reversible inside
     // the grace window via the Archive page.
-    if (!confirm(`Archive "${site.name}" and all its assets? Everything will move to /admin/archive and auto-delete after the grace period unless restored.`)) return
+    const ok = await confirm({
+      title: `Archive "${site.name}"?`,
+      message: 'All its assets will move to /admin/archive and auto-delete after the grace period unless restored.',
+      confirmLabel: 'Archive',
+    })
+    if (!ok) return
     setLoading(true)
     const fd = new FormData()
     fd.set('entity_type', 'site')

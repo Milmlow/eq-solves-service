@@ -28,6 +28,8 @@ import { parseCsv } from '@/lib/utils/csv'
 import { events as analyticsEvents } from '@/lib/analytics'
 import type { PmCalendarEntry, Site, PmCalendarCategory, AuFyQuarter } from '@/lib/types'
 import { formatSiteLabel } from '@/lib/utils/format'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 
 type SiteOption = Pick<Site, 'id' | 'name' | 'code' | 'address'> & {
   customers?: { id?: string | null; name?: string | null } | { id?: string | null; name?: string | null }[] | null
@@ -204,6 +206,8 @@ export function PmCalendarView({
   const [seedMsg, setSeedMsg] = useState<string | null>(null)
   const [clearOpen, setClearOpen] = useState(false)
   const [bucketOpen, setBucketOpen] = useState<'overdue' | 'this_week' | 'looking_ahead' | 'completed' | null>(null)
+  const confirm = useConfirm()
+  const toast = useToast()
 
   // Supervisor digest state
   const [digestBusy, setDigestBusy] = useState<'preview' | 'send' | null>(null)
@@ -235,17 +239,22 @@ export function PmCalendarView({
   // Archive a single row (soft-delete via is_active=false)
   async function handleArchiveRow(id: string, title: string, e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm(`Archive "${title}"? It will be hidden from the list (use the Show Archived toggle to restore).`)) return
+    const ok = await confirm({
+      title: `Archive "${title}"?`,
+      message: 'It will be hidden from the list (use the Show Archived toggle to restore).',
+      confirmLabel: 'Archive',
+    })
+    if (!ok) return
     const row = entries.find((entry) => entry.id === id)
     const result = await togglePmCalendarActiveAction(id, false, row?.updated_at, crypto.randomUUID())
     if (result.success) {
       analyticsEvents.archivedCheckToggled({ new_state: false })
       router.refresh()
     } else if ('stale' in result && result.stale) {
-      alert('This entry was changed by someone else. Refreshing to show their changes.')
+      toast.info('This entry was changed by someone else. Refreshing to show their changes.')
       router.refresh()
     } else {
-      alert(`Error: ${result.error}`)
+      toast.error(`Error: ${result.error}`)
     }
   }
 
@@ -277,13 +286,13 @@ export function PmCalendarView({
       const parsed = parseCsv(text)
       const result = await importPmCalendarCsvAction(parsed)
       if (result.success) {
-        alert(`Imported ${(result as { success: true; count: number }).count} entries.${(result as { success: true; skipped: number }).skipped ? ` Skipped ${(result as { success: true; skipped: number }).skipped} invalid rows.` : ''}`)
+        toast.success(`Imported ${(result as { success: true; count: number }).count} entries.${(result as { success: true; skipped: number }).skipped ? ` Skipped ${(result as { success: true; skipped: number }).skipped} invalid rows.` : ''}`)
         router.refresh()
       } else {
-        alert(`Import failed: ${result.error}`)
+        toast.error(`Import failed: ${result.error}`)
       }
     } catch (err) {
-      alert(`Import failed: ${(err as Error).message}`)
+      toast.error(`Import failed: ${(err as Error).message}`)
     } finally {
       setImporting(false)
       e.target.value = ''
@@ -316,7 +325,12 @@ export function PmCalendarView({
     const msg = count != null
       ? `Send the digest email now to ${count} supervisor(s) with entries? This will log to supervisor_digests and trigger Resend.`
       : 'Send the digest email now to every supervisor in this tenant? This will log to supervisor_digests and trigger Resend.'
-    if (!confirm(msg)) return
+    const ok = await confirm({
+      title: 'Send supervisor digest now?',
+      message: msg,
+      confirmLabel: 'Send digest',
+    })
+    if (!ok) return
 
     setDigestBusy('send')
     setDigestError(null)
@@ -346,7 +360,12 @@ export function PmCalendarView({
 
   // Seed data handler
   async function handleSeed() {
-    if (!confirm('This will seed ~100 PM calendar entries for the 2025-2026 FY. Continue?')) return
+    const ok = await confirm({
+      title: 'Seed PM calendar?',
+      message: 'This will seed ~100 PM calendar entries for the 2025-2026 FY.',
+      confirmLabel: 'Seed entries',
+    })
+    if (!ok) return
     setSeeding(true)
     setSeedMsg(null)
     const result = await seedPmCalendarAction()

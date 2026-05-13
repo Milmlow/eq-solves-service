@@ -9,6 +9,7 @@ import {
   previewCustomerContractDataWipeAction,
 } from './danger-actions'
 import { cascadeArchiveAction } from '@/app/(app)/admin/archive/actions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface CustomerDangerZoneProps {
   customerId: string
@@ -21,6 +22,7 @@ type Counts = { scopes: number; calendar: number; gaps: number }
 export function CustomerDangerZone({ customerId, customerName, isActive }: CustomerDangerZoneProps) {
   const [pending, startTransition] = useTransition()
   const [banner, setBanner] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
+  const confirm = useConfirm()
 
   // Wipe-contract-data state
   const currentYear = new Date().getFullYear().toString()
@@ -29,14 +31,16 @@ export function CustomerDangerZone({ customerId, customerName, isActive }: Custo
   const [confirmName, setConfirmName] = useState('')
   const [showWipeModal, setShowWipeModal] = useState(false)
 
-  // Archive confirm state (browser confirm is enough — same convention as SiteForm).
-  function handleArchive() {
+  // Archive confirm state — uses the brand ConfirmDialog (same surface as SiteForm).
+  async function handleArchive() {
     if (!isActive) return
-    if (!confirm(
-      `Archive "${customerName}" and all its sites + assets?\n\n` +
-      `Everything moves to /admin/archive and auto-deletes after the grace period unless restored. ` +
-      `Reversible.`
-    )) return
+    const ok = await confirm({
+      title: `Archive "${customerName}"?`,
+      message:
+        'Everything (sites + assets) moves to /admin/archive and auto-deletes after the grace period unless restored. Reversible.',
+      confirmLabel: 'Archive customer',
+    })
+    if (!ok) return
     setBanner(null)
     const fd = new FormData()
     fd.set('entity_type', 'customer')

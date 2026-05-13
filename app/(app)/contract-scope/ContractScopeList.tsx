@@ -11,6 +11,7 @@ import { Plus, Pencil, Trash2, X, CheckCircle2, XCircle, Filter, Upload, Downloa
 import { ImportCSVModal } from '@/components/ui/ImportCSVModal'
 import type { ImportCSVConfig } from '@/components/ui/ImportCSVModal'
 import { importScopeItemsAction } from './actions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 /**
  * Render a financial_year value. Hyphenated values are Aus FY (Jul-Jun);
@@ -64,6 +65,7 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const confirm = useConfirm()
 
   // The Add/Edit form lives between the summary strip and the customer-
   // grouped list. With Jemena onboarding the page got long enough that
@@ -220,7 +222,13 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
   }
 
   async function handleDelete(item: ContractScope) {
-    if (!confirm(`Delete this scope item?`)) return
+    const ok = await confirm({
+      title: 'Delete this scope item?',
+      message: 'This row will be permanently removed from the contract scope.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     setLoading(true)
     const result = await deleteScopeItemAction(item.id)
     setLoading(false)
@@ -236,11 +244,18 @@ export function ContractScopeList({ items, customers, sites, canWrite: canWriteR
   async function handleSetStatus(item: ContractScope, target: ContractScopePeriodStatus) {
     const verb = target === 'locked' ? 'Lock' : target === 'archived' ? 'Archive' : target === 'committed' ? 'Unlock' : 'Move to draft'
     const warning = target === 'locked'
-      ? 'Locking makes this row immutable for everyone except super_admin. The importer will refuse to wipe it. Continue?'
+      ? 'Locking makes this row immutable for everyone except super_admin. The importer will refuse to wipe it.'
       : target === 'archived'
-        ? 'Archive hides the row from active filters. Continue?'
+        ? 'Archive hides the row from active filters.'
         : null
-    if (warning && !confirm(warning)) return
+    if (warning) {
+      const ok = await confirm({
+        title: `${verb} scope item?`,
+        message: warning,
+        confirmLabel: verb,
+      })
+      if (!ok) return
+    }
     const reason = window.prompt(`${verb}: optional reason for the audit trail (leave blank to skip):`)
     if (reason === null) return // cancelled
     setLoading(true)

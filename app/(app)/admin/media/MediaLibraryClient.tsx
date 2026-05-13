@@ -7,6 +7,7 @@ import { Upload, Trash2, Image as ImageIcon, Search, X } from 'lucide-react'
 import { uploadMediaAction, deleteMediaAction, updateMediaAction } from './actions'
 import { events as analyticsEvents } from '@/lib/analytics'
 import type { MediaCategory } from '@/lib/types'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 type MediaSurface = 'light' | 'dark' | 'any'
 
@@ -47,6 +48,7 @@ function cats(item: Pick<MediaItem, 'category' | 'categories'>): string[] {
 }
 
 export function MediaLibraryClient({ media: initialMedia, customers, sites }: Props) {
+  const confirm = useConfirm()
   const [media, setMedia] = useState(initialMedia)
   const [showUpload, setShowUpload] = useState(false)
   const [filterCategory, setFilterCategory] = useState<string>('')
@@ -239,7 +241,13 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Remove this image from the media library?')) return
+    const ok = await confirm({
+      title: 'Remove from media library?',
+      message: 'The image will be deleted from the library. References in past records keep working.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    })
+    if (!ok) return
     setDeletingId(id)
     const result = await deleteMediaAction(id)
     setDeletingId(null)

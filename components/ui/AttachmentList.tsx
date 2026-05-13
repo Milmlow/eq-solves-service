@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { uploadAttachmentAction, deleteAttachmentAction, getAttachmentUrlAction } from '@/lib/actions/attachments'
 import type { Attachment, AttachmentType } from '@/lib/types'
 import { Paperclip, Upload, Trash2, Download, FileText, Image, FileSpreadsheet, Camera, BookOpen, Receipt } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface AttachmentListProps {
   entityType: string
@@ -73,6 +74,7 @@ export function AttachmentList({
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const confirm = useConfirm()
 
   const types: AttachmentType[] = allowedTypes ?? ['evidence', 'reference', 'paperwork']
   const initialType: AttachmentType = defaultType ?? (types.includes(inferDefaultType(entityType))
@@ -117,7 +119,13 @@ export function AttachmentList({
   }
 
   async function handleDelete(attachmentId: string) {
-    if (!confirm('Delete this attachment?')) return
+    const ok = await confirm({
+      title: 'Delete this attachment?',
+      message: 'The file will be removed from this record. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     const result = await deleteAttachmentAction(attachmentId)
     if (!result.success) setError(result.error ?? 'Delete failed.')
   }
