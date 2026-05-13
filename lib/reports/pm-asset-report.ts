@@ -417,13 +417,15 @@ function buildCoverPage(input: PmAssetReportInput): (Paragraph | Table)[] {
   const brand = getBrand(input)
   const children: (Paragraph | Table)[] = []
 
-  // Masthead with customer + tenant logos (Phase 1 branding update)
+  // Masthead with tenant logo + report type label only. Customer logo was
+  // dropped here on 2026-05-13 (battle test follow-up): it duplicated the
+  // customer name already in headline type on the cover, and PR #39 had
+  // already removed it from the cover lockup.
   const customerLogo = pickCustomerLogo(input, 'light')
   const tenantLogo = pickReportLogo(input, 'light')
-  if (customerLogo || tenantLogo || input.reportTypeLabel) {
+  if (tenantLogo || input.reportTypeLabel) {
     children.push(
       buildMasthead({
-        customerLogo: customerLogo ?? undefined,
         tenantLogo: tenantLogo ?? undefined,
         reportTypeLabel: input.reportTypeLabel || 'Per-Asset PM Report',
       }),
