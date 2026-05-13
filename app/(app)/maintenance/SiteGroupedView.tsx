@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Modal } from '@/components/ui/Modal'
 import { formatDate } from '@/lib/utils/format'
@@ -178,6 +179,7 @@ interface SiteGroup {
 }
 
 export function SiteGroupedView({ checks, itemsMap, sites, onCheckClick, isAdmin = false }: SiteGroupedViewProps) {
+  const router = useRouter()
   const siteInfoMap = useMemo(() => {
     const m = new Map<string, SiteInfo>()
     for (const s of sites) m.set(s.id, s)
@@ -376,6 +378,15 @@ export function SiteGroupedView({ checks, itemsMap, sites, onCheckClick, isAdmin
         onCheckClick={(check) => {
           setActiveCycle(null)
           onCheckClick(check)
+        }}
+        onArchived={() => {
+          // Close the modal and force the page's server data to refetch.
+          // Without router.refresh() the client never sees the
+          // revalidatePath() effect — the modal would redraw from a
+          // stale activeCycle reference and the deleted check would
+          // reappear, sending the user round in circles.
+          setActiveCycle(null)
+          router.refresh()
         }}
         isAdmin={isAdmin}
         siteLabel={(() => {
@@ -610,6 +621,7 @@ function CycleDetailModal({
   itemsMap,
   onClose,
   onCheckClick,
+  onArchived,
   isAdmin,
   siteLabel,
 }: {
@@ -617,6 +629,7 @@ function CycleDetailModal({
   itemsMap: Record<string, MaintenanceCheckItem[]>
   onClose: () => void
   onCheckClick: (check: CheckRow) => void
+  onArchived: () => void
   isAdmin: boolean
   siteLabel: string | null
 }) {
@@ -651,6 +664,7 @@ function CycleDetailModal({
               check={check}
               items={itemsMap[check.id] ?? []}
               onOpen={() => onCheckClick(check)}
+              onArchived={onArchived}
               isAdmin={isAdmin}
             />
           ))}
@@ -664,11 +678,13 @@ function CycleChildRow({
   check,
   items,
   onOpen,
+  onArchived,
   isAdmin,
 }: {
   check: CheckRow
   items: MaintenanceCheckItem[]
   onOpen: () => void
+  onArchived: () => void
   isAdmin: boolean
 }) {
   const [pending, startTransition] = useTransition()
@@ -677,7 +693,15 @@ function CycleChildRow({
     e.stopPropagation()
     if (!confirm('Delete this check? It will be removed from all views. You can restore it from Admin → Archive.')) return
     startTransition(async () => {
-      await archiveCheckAction(check.id, false)
+      const res = await archiveCheckAction(check.id, false)
+      if (!res?.success) {
+        // Surface the error so the user isn't left clicking a dead button.
+        // archiveCheckAction returns { success, error } — previously we
+        // discarded the result and the user saw zero feedback on failure.
+        alert(res?.error ?? 'Could not delete this check. Please try again.')
+        return
+      }
+      onArchived()
     })
   }
 
