@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   AAL_EXEMPT_PATHS,
+  PUBLIC_PATHS,
   isAalExempt,
   isPublicPath,
   isMfaPath,
@@ -37,6 +38,29 @@ describe('MFA routing — regression tests for the AAL1 loop bug', () => {
 
     it('includes /auth/reset-password', () => {
       expect(AAL_EXEMPT_PATHS).toContain('/auth/reset-password')
+    })
+  })
+
+  describe('PUBLIC_PATHS — customer portal entry points', () => {
+    // Without these, the customer portal magic-link flow is unreachable —
+    // /portal/login redirects to /auth/signin (the staff form), and
+    // /api/portal/magic-link POSTs get 307'd before reaching the handler.
+    // Battle-test 2026-05-13 finding (P1).
+
+    it('includes /portal/login so customers can reach the magic-link form', () => {
+      expect(PUBLIC_PATHS).toContain('/portal/login')
+      expect(isPublicPath('/portal/login')).toBe(true)
+    })
+
+    it('includes /api/portal/magic-link so the magic-link POST is not gated', () => {
+      expect(PUBLIC_PATHS).toContain('/api/portal/magic-link')
+      expect(isPublicPath('/api/portal/magic-link')).toBe(true)
+    })
+
+    it('does NOT treat other /portal/* routes as public — they require a session', () => {
+      expect(isPublicPath('/portal/sites')).toBe(false)
+      expect(isPublicPath('/portal/visits')).toBe(false)
+      expect(isPublicPath('/portal')).toBe(false)
     })
   })
 
