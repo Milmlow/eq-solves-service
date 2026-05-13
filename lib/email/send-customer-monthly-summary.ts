@@ -16,14 +16,24 @@
  */
 
 import { Resend } from 'resend'
+import { buildUnsubscribeUrl } from './unsubscribe-token'
 
 export interface MonthlySummaryEmailInput {
   to: string
   contactName: string | null
   customerName: string
   tenantName: string
+  /**
+   * Customer-contact id — minted into the unsubscribe link's signed
+   * token. Required (the unsubscribe link is mandatory under AU Spam
+   * Act 2003 s18). If omitted, the email send still works but skips
+   * the unsub link with a console warning — only do that in tests.
+   */
+  customerContactId?: string
   /** Used for the "View in portal" CTA. */
   portalUrl: string
+  /** Used to mint the unsubscribe URL — falls back to portalUrl's origin. */
+  appUrl?: string
   /** Period the summary covers. */
   periodStart: string  // ISO date
   periodEnd: string    // ISO date
@@ -62,6 +72,19 @@ export async function sendCustomerMonthlySummaryEmail(
   const subject = `Maintenance summary — ${input.customerName} — ${periodLabel}`
 
   const greeting = input.contactName ? `Hi ${input.contactName.split(' ')[0]},` : 'Hello,'
+
+  // Mint the unsubscribe URL (AU Spam Act 2003 s18). Falls back to a
+  // null link if the secret isn't configured — we still send the email
+  // (cron's already in motion) but log the gap so it's noticed.
+  let unsubscribeUrl: string | null = null
+  if (input.customerContactId) {
+    try {
+      const appUrl = input.appUrl || new URL(input.portalUrl).origin
+      unsubscribeUrl = buildUnsubscribeUrl(appUrl, input.customerContactId, 'monthly')
+    } catch (err) {
+      console.warn('[email] unsubscribe link skipped — UNSUBSCRIBE_SECRET missing or bad URL:', (err as Error).message)
+    }
+  }
 
   const siteRows = input.perSite.map(s => `
     <tr>
@@ -132,8 +155,12 @@ export async function sendCustomerMonthlySummaryEmail(
         <a href="${input.portalUrl}" style="display: inline-block; padding: 12px 28px; background: ${brand}; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600;">View in portal</a>
       </div>
       <p style="font-size: 12px; color: #6b7280; text-align: center; margin: 16px 0 0;">
-        You're receiving this because you're listed as a contact for ${escape(input.customerName)}. Reply to this email to update your preferences.
+        You're receiving this because you're listed as a contact for ${escape(input.customerName)}.
       </p>
+      ${unsubscribeUrl ? `
+      <p style="font-size: 12px; color: #9ca3af; text-align: center; margin: 8px 0 0;">
+        <a href="${unsubscribeUrl}" style="color: #6b7280; text-decoration: underline;">Unsubscribe from monthly summaries</a>
+      </p>` : ''}
     </div>
   </div>
 </body></html>

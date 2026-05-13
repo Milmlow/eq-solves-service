@@ -88,6 +88,20 @@ describe('MFA routing — regression tests for the AAL1 loop bug', () => {
     })
   })
 
+  describe('PUBLIC_PATHS — customer unsubscribe (AU Spam Act s18)', () => {
+    // Unsubscribe must be functional and not require auth. The signed
+    // token in ?token=... is the auth check.
+
+    it('includes /portal/unsubscribe', () => {
+      expect(PUBLIC_PATHS).toContain('/portal/unsubscribe')
+      expect(isPublicPath('/portal/unsubscribe')).toBe(true)
+    })
+
+    it('treats /portal/unsubscribe?token=foo as public (matcher is prefix-based)', () => {
+      expect(isPublicPath('/portal/unsubscribe?token=anything')).toBe(true)
+    })
+  })
+
   describe('isAalExempt', () => {
     it('treats /auth/signin as AAL-exempt (the regression case)', () => {
       expect(isAalExempt('/auth/signin')).toBe(true)
