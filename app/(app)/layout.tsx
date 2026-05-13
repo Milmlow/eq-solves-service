@@ -150,7 +150,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen bg-gray-50" style={tenantStyle}>
       <NavigationProgress />
-      <Sidebar isAdmin={isAdmin} settings={settings} />
+      <Sidebar
+        isAdmin={isAdmin}
+        settings={settings}
+        tenantTier={tenantTier}
+        tenantComplianceTier={tenantComplianceTier}
+        tenantChipName={tenantChipName}
+      />
       <div className="flex flex-1 min-w-0 flex-col">
         {isDemoSession && <DemoBanner shareUrl={demoShareUrl} />}
         <main className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8">
