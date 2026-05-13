@@ -78,15 +78,27 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Admin-only routes.
+  // Admin-only routes — gated by the user's per-tenant role.
+  // Pre-2026-04-30 this read `profiles.role`, which diverged from how
+  // individual admin pages already gated themselves (they read
+  // `tenant_members.role` via `isAdmin()`). Net effect was a privilege
+  // model split (Issue #19 from the overnight battle-test): a user with
+  // `profiles.role = super_admin` could reach /admin URLs but get
+  // redirected at content-level by the per-page check. Aligned here so
+  // both layers agree on the same canonical role source.
+  // Profile-level deactivation is still checked by the block below for
+  // ALL protected routes — no need to duplicate it here.
   if (pathname.startsWith('/admin')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, is_active')
-      .eq('id', user.id)
-      .single()
+    const { data: membership } = await supabase
+      .from('tenant_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .in('role', ['super_admin', 'admin'])
+      .limit(1)
+      .maybeSingle()
 
-    if (!profile || !['super_admin', 'admin'].includes(profile.role) || !profile.is_active) {
+    if (!membership) {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
