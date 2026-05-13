@@ -100,6 +100,33 @@ the queue in the morning with minimal context-loading.
 - **P2** — broken feature on an edge path, or a clear UX papercut. Next sprint.
 - **P3** — cosmetic, polish, doc drift. Backlog.
 
+## Test credentials (service-role mint)
+
+The agent signs in as two seeded users on the demo tenant via Supabase's
+`auth.admin.generateLink()`. No passwords stored anywhere — the agent
+just needs the UUIDs.
+
+**Setup** (one-time per environment): `npx tsx scripts/bootstrap-battle-test-users.ts`
+provisions `battle-test-admin@eq.solutions` (super_admin on demo) and
+`battle-test-portal@eq.solutions` (customer contact, in `report_deliveries.delivered_to`).
+Prints the resulting UUIDs to paste into `.env.local` as
+`BATTLE_TEST_ADMIN_UUID` / `BATTLE_TEST_PORTAL_UUID`. See
+[battle-test-creds-bootstrap.md](../runbooks/battle-test-creds-bootstrap.md).
+
+**At run time** the agent does:
+
+```ts
+const { data } = await supabase.auth.admin.generateLink({
+  type: 'magiclink',
+  email: process.env.BATTLE_TEST_ADMIN_EMAIL!,
+})
+// visit data.properties.action_link via the browser MCP
+```
+
+The link establishes a Supabase session for that UUID. Demo tenant
+membership + role come from `tenant_members`; the agent doesn't need to
+think about that.
+
 ## Rules of engagement
 
 - Time-box: aim for ~3 hours of agent work. If the agent is still going
