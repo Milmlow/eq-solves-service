@@ -275,7 +275,7 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
           <span className="text-xs text-eq-grey">{filtered.length} of {rows.length}</span>
           {canWrite && (
             <Button variant="secondary" size="sm" onClick={() => setImportOpen(true)}>
-              <Upload className="w-4 h-4 mr-1" /> Import CSV
+              <Upload className="w-4 h-4 mr-1" /> Import
             </Button>
           )}
           <CsvExportButton

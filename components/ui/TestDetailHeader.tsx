@@ -45,7 +45,7 @@ export function TestDetailHeader({
       />
       <div className="flex items-center justify-between mt-2">
         <div className="min-w-0 flex-1">
-          <h1 className="text-3xl font-bold text-eq-sky truncate">{title}</h1>
+          <h2 className="text-3xl font-bold text-eq-sky truncate">{title}</h2>
           {subtitle && (
             <p className="text-sm text-eq-grey mt-1">{subtitle}</p>
           )}

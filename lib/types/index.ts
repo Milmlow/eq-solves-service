@@ -6,13 +6,31 @@ export type ProfileRole = Role | 'user'
 
 export type Frequency = 'weekly' | 'monthly' | 'quarterly' | 'biannual' | 'annual' | 'ad_hoc'
 
+// Tier framework (Phase A — visibility only, no enforcement yet).
+// `tier` is the scale dimension; `compliance_tier` is the procurement-bar
+// dimension. Independent because Jemena's small-contract / enterprise-grade
+// compliance pattern proved they don't co-vary. See migration 0092.
+export type TenantTier = 'starter' | 'team' | 'enterprise'
+export type TenantComplianceTier = 'standard' | 'enhanced' | 'enterprise'
+
 export interface Tenant {
   id: string
   name: string
   slug: string
   is_active: boolean
+  tier: TenantTier
+  compliance_tier: TenantComplianceTier
   created_at: string
   updated_at: string
+}
+
+// Shape returned by the public.tenant_tier_view (used by the Plan chip).
+export interface TenantTierView {
+  tenant_id: string
+  tenant_name: string
+  tier: TenantTier
+  compliance_tier: TenantComplianceTier
+  is_active: boolean
 }
 
 export interface TenantSettings {
