@@ -319,8 +319,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const buffer = await generateMaintenanceChecklist(checklistInput)
-    const checkName = check.custom_name ?? 'Checklist'
-    const filename = `${checkName}-checklist-${format}.docx`
+    const siteName = (check.sites as { name: string } | null)?.name ?? 'Unknown Site'
+    const formatLabel = format === 'simple' ? 'summary' : format
+    const filename = `Run-Sheet - ${siteName} - ${formatLabel} - ${new Date().toISOString().split('T')[0]}.docx`
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
