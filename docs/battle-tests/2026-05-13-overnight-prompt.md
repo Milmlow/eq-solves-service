@@ -7,12 +7,17 @@
 3. Confirm the agent created `claude/battle-test-2026-05-13` branch off main.
 4. Step away. Agent commits + opens a PR overnight.
 
-> **Fill in before launching:** the agent needs credentials for at least
-> one super_admin and one customer-portal user. Either paste them into the
-> prompt, or leave the agent a `.env.local` with `BATTLE_TEST_ADMIN_EMAIL`
-> + `BATTLE_TEST_ADMIN_PASSWORD` + `BATTLE_TEST_PORTAL_EMAIL` +
-> `BATTLE_TEST_PORTAL_PASSWORD` and reference those vars in the prompt.
-> Do **not** commit credentials.
+> **Before launching:** PR #93 wired the agent to sign in via service-role
+> mint — no passwords stored anywhere. Confirm `.env.local` has
+> `BATTLE_TEST_ADMIN_EMAIL`, `BATTLE_TEST_ADMIN_UUID`,
+> `BATTLE_TEST_PORTAL_EMAIL`, `BATTLE_TEST_PORTAL_UUID`, and a valid
+> `SUPABASE_SERVICE_ROLE_KEY`. If the UUIDs aren't set, run
+> `npx tsx scripts/bootstrap-battle-test-users.ts` per
+> `docs/battle-tests/README.md` — it provisions the two users and prints
+> the UUIDs to paste back into `.env.local`. The agent signs in by minting
+> a magic link at run time (see snippet below). Do **not** commit
+> credentials and do **not** add `_PASSWORD` env vars — passwords are
+> intentionally out of scope.
 
 ---
 
@@ -35,8 +40,25 @@ surface. Aim for ~3 hours total. Stop at 4 hours regardless of progress.
 2. Start the dev server (`npm run dev`) and confirm it boots without
    errors. If it doesn't, your first finding is whatever's broken about
    boot — write it up, do NOT try to fix it, stop.
-3. Sign in as the super_admin test user (credentials provided in
-   `.env.local` as `BATTLE_TEST_ADMIN_EMAIL` / `BATTLE_TEST_ADMIN_PASSWORD`).
+3. Sign in as the super_admin test user via service-role magic-link mint
+   (no password). Use this snippet — same as `docs/battle-tests/README.md`
+   lines 116–124:
+
+   ```ts
+   import { createClient } from '@supabase/supabase-js'
+   const supabase = createClient(
+     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+     process.env.SUPABASE_SERVICE_ROLE_KEY!,
+     { auth: { autoRefreshToken: false, persistSession: false } },
+   )
+   const { data, error } = await supabase.auth.admin.generateLink({
+     type: 'magiclink',
+     email: process.env.BATTLE_TEST_ADMIN_EMAIL!,
+   })
+   // visit data.properties.action_link via the browser MCP
+   ```
+
+   The link establishes a Supabase session for `BATTLE_TEST_ADMIN_UUID`.
    You're operating against the demo tenant
    `a0000000-0000-0000-0000-000000000001`. SKS data
    (`ccca00fc-cbc8-442e-9489-0f1f216ddca8`) is read-only for you — use it
@@ -59,8 +81,9 @@ question (per README format).
 Surfaces: `/portal/login`, `/portal/sites`, `/portal/visits`,
 `/portal/scope`, `/portal/defects`, `/portal/variations`.
 
-- Sign in as the portal user (`.env.local`:
-  `BATTLE_TEST_PORTAL_EMAIL` / `BATTLE_TEST_PORTAL_PASSWORD`).
+- Sign in as the portal user via the same `generateLink()` flow used in
+  setup step 3, but pass `BATTLE_TEST_PORTAL_EMAIL` instead. The link
+  establishes a session for `BATTLE_TEST_PORTAL_UUID`. No password.
 - Walk each portal route. Confirm RLS holds — the portal user should
   see only their assigned customer's data, never another customer's.
 - `/portal/sites` specifically: confirm it redirects to `/portal/login`
@@ -234,6 +257,9 @@ of the 10 surfaces, the brief should say so and prioritise the missing
   `/admin/billing` it should bounce out, not investigate.
 - Surface 1 (portal) and surface 4 (auth gate) carry the highest risk.
   If something has to be cut for time, cut surfaces 8–10 first.
-- The credentials gap is real — you need to seed the demo tenant with a
-  portal user before launching. Check `supabase/seeds/` for the existing
-  demo seed pattern.
+- Credentials are minted at run time via `supabase.auth.admin.generateLink()`
+  (PR #93 closed the password-storage gap). The one-time bootstrap is
+  `npx tsx scripts/bootstrap-battle-test-users.ts` — it provisions both
+  test users on the demo tenant and prints the UUIDs to paste into
+  `.env.local`. See `docs/runbooks/battle-test-creds-bootstrap.md` for
+  the full procedure.
