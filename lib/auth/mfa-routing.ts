@@ -33,6 +33,13 @@ export const PUBLIC_PATHS = [
   // customer hits the staff form instead.
   '/portal/login',
   '/api/portal/magic-link',
+  // Cron / scheduled endpoints. Called server-to-server by pg_cron (via
+  // pg_net) or Netlify Scheduled Functions — no user session. Each
+  // handler enforces `Authorization: Bearer ${CRON_SECRET}` internally;
+  // the proxy must NOT redirect or pg_net follows the 307 to /auth/signin
+  // and returns the rendered signin HTML to the dispatcher.
+  '/api/cron/dispatch-notifications',
+  '/api/cron/supervisor-digest',
 ] as const
 
 export const MFA_PATHS = [

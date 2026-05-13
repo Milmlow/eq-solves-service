@@ -64,6 +64,30 @@ describe('MFA routing — regression tests for the AAL1 loop bug', () => {
     })
   })
 
+  describe('PUBLIC_PATHS — cron / scheduled endpoints', () => {
+    // pg_cron calls these server-to-server with no Supabase session.
+    // If they're not public the proxy 307s to /auth/signin and pg_net
+    // follows the redirect — the dispatcher then receives the signin
+    // page HTML instead of running. Each handler still enforces its own
+    // `Authorization: Bearer ${CRON_SECRET}` check, so proxy-public is
+    // safe. 2026-05-13 bootstrap discovery.
+
+    it('includes /api/cron/dispatch-notifications', () => {
+      expect(PUBLIC_PATHS).toContain('/api/cron/dispatch-notifications')
+      expect(isPublicPath('/api/cron/dispatch-notifications')).toBe(true)
+    })
+
+    it('includes /api/cron/supervisor-digest', () => {
+      expect(PUBLIC_PATHS).toContain('/api/cron/supervisor-digest')
+      expect(isPublicPath('/api/cron/supervisor-digest')).toBe(true)
+    })
+
+    it('does NOT treat unrelated /api/* routes as public', () => {
+      expect(isPublicPath('/api/notifications')).toBe(false)
+      expect(isPublicPath('/api/maintenance-checklist')).toBe(false)
+    })
+  })
+
   describe('isAalExempt', () => {
     it('treats /auth/signin as AAL-exempt (the regression case)', () => {
       expect(isAalExempt('/auth/signin')).toBe(true)
