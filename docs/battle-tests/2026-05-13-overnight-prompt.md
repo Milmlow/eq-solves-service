@@ -202,10 +202,12 @@ Surface: `/maintenance` → New Check → pick site + Jemena RCD Testing.
    - One commit per tiny fix landed inline (conventional commit prefix)
    - One final commit: `docs(battle-test): brief + queued questions 2026-05-13`
 4. Push the branch.
-5. Open a PR against `main`. Title:
+5. Open a **DRAFT** PR against `main` (`gh pr create --draft`). Title:
    `Battle test 2026-05-13 — N findings, M tiny fixes, K questions`.
    Body: the brief content verbatim + a "## Queued questions" section
-   linking to the questions file.
+   linking to the questions file. Draft means Royce can mark it
+   Ready for Review after a quick morning scan — don't open as a
+   regular PR.
 
 ## What to ignore
 
