@@ -1,6 +1,7 @@
 'use client'
 
 import { useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatDate } from '@/lib/utils/format'
 import { Eye, Trash2 } from 'lucide-react'
@@ -54,13 +55,25 @@ function getColumnBg(column: 'scheduled' | 'in_progress' | 'overdue' | 'complete
 }
 
 export function KanbanBoard({ checks, itemsMap, onCheckClick, isAdmin = false }: KanbanBoardProps) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
 
   function handleDelete(e: React.MouseEvent, checkId: string) {
     e.stopPropagation()
     if (!confirm('Delete this check? It will be removed from all views. You can restore it from Admin → Archive.')) return
     startTransition(async () => {
-      await archiveCheckAction(checkId, false)
+      const res = await archiveCheckAction(checkId, false)
+      if (!res?.success) {
+        // archiveCheckAction returns { success, error }. Previously we
+        // discarded the result and the card stayed put with no feedback
+        // on failure — admin-only check or DB error went unnoticed.
+        alert(res?.error ?? 'Could not delete this check. Please try again.')
+        return
+      }
+      // router.refresh() pulls the freshly-revalidated server data
+      // through to this client view; without it the deleted card would
+      // remain visible until the next navigation.
+      router.refresh()
     })
   }
   // Group checks by status
