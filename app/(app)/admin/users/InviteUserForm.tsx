@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
 import { inviteUserAction } from './actions'
 
 export function InviteUserForm() {
+  const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<string>()
   const [ok, setOk] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -17,12 +18,16 @@ export function InviteUserForm() {
     startTransition(async () => {
       const res = await inviteUserAction(formData)
       if ('error' in res && res.error) setError(res.error)
-      else if ('ok' in res && res.ok) { setOk(true); setOkEmail(res.email) }
+      else if ('ok' in res && res.ok) {
+        setOk(true)
+        setOkEmail(res.email)
+        formRef.current?.reset()
+      }
     })
   }
 
   return (
-    <form action={onSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+    <form ref={formRef} action={onSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
       <FormInput label="Email" name="email" type="email" required disabled={pending} />
       <FormInput label="Full name" name="full_name" disabled={pending} />
       <div className="flex flex-col gap-1">
