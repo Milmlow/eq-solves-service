@@ -25,6 +25,14 @@ export const PUBLIC_PATHS = [
   '/auth/forgot-password',
   '/auth/reset-password',
   '/auth/callback',
+  // Customer portal magic-link entry point. The portal is reached by
+  // customers who never sign up for a staff account; their only auth
+  // surface is /portal/login (form) → /api/portal/magic-link (POST) →
+  // /auth/callback (after they click the email). The first two MUST be
+  // public, otherwise the proxy redirects to /auth/signin and the
+  // customer hits the staff form instead.
+  '/portal/login',
+  '/api/portal/magic-link',
 ] as const
 
 export const MFA_PATHS = [
