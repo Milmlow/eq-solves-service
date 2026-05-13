@@ -11,7 +11,6 @@ import { EqFooter } from '@/components/ui/EqFooter'
 import { DemoBanner } from '@/components/ui/DemoBanner'
 import { AnalyticsIdentify } from '@/components/ui/AnalyticsIdentify'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
-import { TenantTierChip } from '@/components/ui/TenantTierChip'
 import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
@@ -165,13 +164,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <EqFooter />
       </div>
       <HelpWidget />
-      {tenantTier && tenantComplianceTier && (
-        <TenantTierChip
-          tier={tenantTier}
-          complianceTier={tenantComplianceTier}
-          tenantName={tenantChipName}
-        />
-      )}
+      {/* TenantTierChip moved into the Sidebar footer (and mobile top bar) —
+          the fixed top-right placement collided with page-level headers like
+          the dashboard view toggle. Sidebar passes tier props through. */}
       {showOnboarding && (
         <OnboardingWizard userName={userName} companyName={tenantName} />
       )}

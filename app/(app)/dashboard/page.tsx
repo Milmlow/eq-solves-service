@@ -197,7 +197,6 @@ export default async function DashboardPage({
     }
   })
 
-  const viewLabel = effectiveView === 'mine' ? 'Assigned to Me' : 'All Active Work'
   const myTestsTotal = myAcbTests.length + myNsxTests.length
 
   return (
@@ -205,24 +204,27 @@ export default async function DashboardPage({
       {/* Analytics: dashboard_viewed (fires once per mount, client-side) */}
       <DashboardAnalytics siteCount={sitesRes.count ?? 0} openChecksCount={totalActive} />
 
-      {/* Welcome header + view toggle */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-eq-ink">Good {getGreeting()}, {userName}</h1>
-          <p className="text-sm text-eq-grey mt-1">
-            {effectiveView === 'mine'
-              ? totalActive > 0
-                ? `You have ${totalActive} active ${totalActive === 1 ? 'check' : 'checks'} assigned to you.`
-                : 'You have no active checks assigned.'
-              : totalActive > 0
-                ? `${totalActive} active maintenance ${totalActive === 1 ? 'check' : 'checks'} across all sites.`
-                : 'All maintenance checks are up to date.'
-            }
-          </p>
-        </div>
-        {canToggle && (
-          <DashboardViewToggle currentView={effectiveView} />
-        )}
+      {/* Welcome header — view toggle (if available) lives inline in the subtitle,
+          not as a separate top-right pill. Keeps the dashboard header clean now
+          that the global plan chip has moved into the sidebar footer. */}
+      <div>
+        <h1 className="text-2xl font-bold text-eq-ink">Good {getGreeting()}, {userName}</h1>
+        <p className="text-sm text-eq-grey mt-1">
+          {effectiveView === 'mine'
+            ? totalActive > 0
+              ? `You have ${totalActive} active ${totalActive === 1 ? 'check' : 'checks'} assigned to you.`
+              : 'You have no active checks assigned.'
+            : totalActive > 0
+              ? `${totalActive} active maintenance ${totalActive === 1 ? 'check' : 'checks'} across all sites.`
+              : 'All maintenance checks are up to date.'
+          }
+          {canToggle && (
+            <>
+              {' · '}
+              <DashboardViewToggle currentView={effectiveView} />
+            </>
+          )}
+        </p>
       </div>
 
       {/* Overdue alert banner */}
