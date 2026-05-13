@@ -169,14 +169,21 @@ export async function GET(request: NextRequest) {
     supabase
       .from('acb_tests')
       .select(
-        'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, performance_level, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
+        // Audit fix #101 (2026-05-13): the 3-step workflow writes breaker
+        // identification to brand/breaker_type/current_in/trip_unit_model
+        // (asset-collection columns), while AcbBulkDetails writes the legacy
+        // cb_make/cb_model/cb_rating/trip_unit. Pull BOTH and let buildAcbDetail
+        // pick `new ?? legacy` so the customer PDF renders regardless of which
+        // entry path created the row.
+        'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, brand, breaker_type, current_in, trip_unit_model, performance_level, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
       )
       .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
       .from('nsx_tests')
       .select(
-        'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
+        // See ACB comment above — same dual-column read for NSX.
+        'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, brand, breaker_type, current_in, trip_unit_model, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
       )
       .eq('check_id', checkId)
       .eq('is_active', true),
@@ -219,30 +226,57 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Audit fix #101 (2026-05-13): prefer NEW workflow columns, fall back to
+  // LEGACY columns. The 3-step ACB/NSX workflow writes to
+  //   brand / breaker_type / current_in / trip_unit_model
+  // while AcbBulkDetails writes the legacy
+  //   cb_make / cb_model / cb_rating / trip_unit
+  // Before this fix, breakers entered via the canonical workflow rendered as
+  // "—" on the customer PDF because the report only read the legacy columns.
+  // cb_serial / cb_poles / performance_level / fixed_withdrawable have no
+  // distinct "new" column — the workflow and bulk-edit both write to those
+  // same field names — so they stay as a single read.
+  type BreakerCols = {
+    cb_make: string | null
+    cb_model: string | null
+    cb_serial: string | null
+    cb_rating: string | null
+    cb_poles: string | null
+    trip_unit: string | null
+    brand: string | null
+    breaker_type: string | null
+    current_in: string | null
+    trip_unit_model: string | null
+    performance_level?: string | null
+    fixed_withdrawable: string | null
+    id: string
+  }
   function buildAcbDetail(t: typeof acbLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
+    const r = t as unknown as BreakerCols
     return {
-      cbMake: (t as { cb_make: string | null }).cb_make,
-      cbModel: (t as { cb_model: string | null }).cb_model,
-      cbSerial: (t as { cb_serial: string | null }).cb_serial,
-      cbRating: (t as { cb_rating: string | null }).cb_rating,
-      poles: (t as { cb_poles: string | null }).cb_poles,
-      tripUnit: (t as { trip_unit: string | null }).trip_unit,
-      performanceLevel: (t as { performance_level: string | null }).performance_level,
-      fixedWithdrawable: (t as { fixed_withdrawable: string | null }).fixed_withdrawable,
-      readings: acbReadingsByTest.get((t as { id: string }).id) ?? [],
+      cbMake: r.brand ?? r.cb_make,
+      cbModel: r.breaker_type ?? r.cb_model,
+      cbSerial: r.cb_serial,
+      cbRating: r.current_in ?? r.cb_rating,
+      poles: r.cb_poles,
+      tripUnit: r.trip_unit_model ?? r.trip_unit,
+      performanceLevel: r.performance_level ?? null,
+      fixedWithdrawable: r.fixed_withdrawable,
+      readings: acbReadingsByTest.get(r.id) ?? [],
     }
   }
   function buildNsxDetail(t: typeof nsxLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
+    const r = t as unknown as BreakerCols
     return {
-      cbMake: (t as { cb_make: string | null }).cb_make,
-      cbModel: (t as { cb_model: string | null }).cb_model,
-      cbSerial: (t as { cb_serial: string | null }).cb_serial,
-      cbRating: (t as { cb_rating: string | null }).cb_rating,
-      poles: (t as { cb_poles: string | null }).cb_poles,
-      tripUnit: (t as { trip_unit: string | null }).trip_unit,
+      cbMake: r.brand ?? r.cb_make,
+      cbModel: r.breaker_type ?? r.cb_model,
+      cbSerial: r.cb_serial,
+      cbRating: r.current_in ?? r.cb_rating,
+      poles: r.cb_poles,
+      tripUnit: r.trip_unit_model ?? r.trip_unit,
       performanceLevel: null,                              // NSX has no PerformanceLevel
-      fixedWithdrawable: (t as { fixed_withdrawable: string | null }).fixed_withdrawable,
-      readings: nsxReadingsByTest.get((t as { id: string }).id) ?? [],
+      fixedWithdrawable: r.fixed_withdrawable,
+      readings: nsxReadingsByTest.get(r.id) ?? [],
     }
   }
 
@@ -260,9 +294,13 @@ export async function GET(request: NextRequest) {
 
   const acbSummaries: AcbTestSummary[] = (acbLinkedRes.data ?? []).map((t) => {
     const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
+    // Audit fix #101: read `new ?? legacy` for the summary line too.
+    const r = t as unknown as { brand: string | null; cb_make: string | null; breaker_type: string | null; cb_model: string | null }
+    const make = r.brand ?? r.cb_make
+    const model = r.breaker_type ?? r.cb_model
     return {
       assetName: asset?.name ?? '—',
-      cbMakeModel: [t.cb_make, t.cb_model].filter(Boolean).join(' ') || '—',
+      cbMakeModel: [make, model].filter(Boolean).join(' ') || '—',
       testType: t.test_type ?? '—',
       testDate: t.test_date,
       stepsDone: stepCount(t),
@@ -274,9 +312,13 @@ export async function GET(request: NextRequest) {
 
   const nsxSummaries: NsxTestSummary[] = (nsxLinkedRes.data ?? []).map((t) => {
     const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
+    // Audit fix #101: read `new ?? legacy` for the summary line too.
+    const r = t as unknown as { brand: string | null; cb_make: string | null; breaker_type: string | null; cb_model: string | null }
+    const make = r.brand ?? r.cb_make
+    const model = r.breaker_type ?? r.cb_model
     return {
       assetName: asset?.name ?? '—',
-      cbMakeModel: [t.cb_make, t.cb_model].filter(Boolean).join(' ') || '—',
+      cbMakeModel: [make, model].filter(Boolean).join(' ') || '—',
       testType: t.test_type ?? '—',
       testDate: t.test_date,
       stepsDone: stepCount(t),
