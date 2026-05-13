@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import {
@@ -141,8 +142,10 @@ function statusToBadge(status: CheckStatus) {
 }
 
 export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmin, canWrite: canWriteRole, isAssigned }: CheckDetailPageProps) {
+  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [forceCompletePending, startForceCompleteTransition] = useTransition()
   const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('maximo_id')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -307,10 +310,20 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     if (!result.success) setError(result.error ?? 'Failed to delete.')
   }
 
-  async function handleForceComplete(checkAssetId: string) {
+  function handleForceComplete(checkAssetId: string) {
+    if (forceCompletePending) return
     setError(null)
-    const result = await forceCompleteCheckAssetAction(check.id, checkAssetId)
-    if (!result.success) setError(result.error ?? 'Failed to force complete.')
+    startForceCompleteTransition(async () => {
+      const result = await forceCompleteCheckAssetAction(check.id, checkAssetId)
+      if (!result.success) {
+        setError(result.error ?? 'Failed to force complete.')
+        return
+      }
+      // revalidatePath() server-side won't push new data through to this
+      // client view on its own — without router.refresh the AssetRow stays
+      // visually un-ticked until the next navigation.
+      router.refresh()
+    })
   }
 
   async function handleCompleteAll() {
@@ -340,11 +353,16 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     const item = items.find(i => i.id === itemId)
     if (!item) return
 
-    // If the check is still in_progress, use old behavior for compatibility
+    // Both branches read the action result. The in_progress branch used to
+    // discard it — silent failures would leave the optimistic TaskRow dot
+    // pressed while the DB hadn't actually written. Audit 2026-05-13.
     if (check.status === 'in_progress') {
       const formData = new FormData()
       formData.set('result', result ?? '')
-      await updateCheckItemAction(check.id, itemId, formData)
+      const resultValue = await updateCheckItemAction(check.id, itemId, formData)
+      if (!resultValue?.success) {
+        setError(resultValue?.error ?? 'Failed to update task result.')
+      }
     } else {
       // For completed assets (after force-complete), allow result changes
       const resultValue = await updateCheckItemResultAction(check.id, itemId, result)
@@ -363,7 +381,10 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
       const formData = new FormData()
       formData.set('result', item.result ?? '')
       formData.set('notes', notes)
-      await updateCheckItemAction(check.id, itemId, formData)
+      const resultValue = await updateCheckItemAction(check.id, itemId, formData)
+      if (!resultValue?.success) {
+        setError(resultValue?.error ?? 'Failed to update task comments.')
+      }
     } else {
       // For completed assets, use new action
       const resultValue = await updateCheckItemResultAction(check.id, itemId, item.result ?? null, notes)
@@ -374,11 +395,17 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   }
 
   const handleAssetNote = useCallback(async (checkAssetId: string, notes: string) => {
-    await updateCheckAssetAction(check.id, checkAssetId, { notes })
+    const result = await updateCheckAssetAction(check.id, checkAssetId, { notes })
+    if (!result?.success) {
+      setError(result?.error ?? 'Failed to save asset note.')
+    }
   }, [check.id])
 
   const handleAssetWO = useCallback(async (checkAssetId: string, wo: string) => {
-    await updateCheckAssetAction(check.id, checkAssetId, { work_order_number: wo })
+    const result = await updateCheckAssetAction(check.id, checkAssetId, { work_order_number: wo })
+    if (!result?.success) {
+      setError(result?.error ?? 'Failed to save WO number.')
+    }
   }, [check.id])
 
   // Paste WO numbers from Excel
@@ -394,12 +421,19 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     setLoading(true)
     const result = await bulkUpdateWorkOrdersAction(check.id, updates)
     setLoading(false)
-    if (result.success) {
-      setShowPasteModal(false)
-      setPasteText('')
-    } else {
+    if (!result.success) {
       setError(result.error ?? 'Failed to paste WO numbers.')
+      return
     }
+    // Server reports per-row outcomes. If anything failed, keep the modal
+    // open and surface the count so the tech knows the paste was partial.
+    const failedCount = result.failed?.length ?? 0
+    if (failedCount > 0) {
+      setError(`Applied ${result.updated} of ${updates.length} WOs — ${failedCount} failed (likely permissions or invalid row). Modal stays open so you can retry.`)
+      return
+    }
+    setShowPasteModal(false)
+    setPasteText('')
   }
 
   const completedCount = items.filter(i => i.result !== null).length

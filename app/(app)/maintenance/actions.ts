@@ -1206,7 +1206,12 @@ export async function bulkUpdateWorkOrdersAction(
     const isAssigned = check.assigned_to === user.id
     if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
 
+    // Track per-row outcomes so the client can surface partial failures.
+    // Previously the loop swallowed every per-row error and returned an
+    // aggregate { success: true } — a paste of 50 WOs with 30 RLS rejects
+    // looked indistinguishable from a clean 50/50 success. Audit 2026-05-13.
     let updated = 0
+    const failed: string[] = []
     for (const { checkAssetId, workOrderNumber } of updates) {
       const { error } = await supabase
         .from('check_assets')
@@ -1214,11 +1219,12 @@ export async function bulkUpdateWorkOrdersAction(
         .eq('id', checkAssetId)
         .eq('check_id', checkId)
 
-      if (!error) updated++
+      if (error) failed.push(checkAssetId)
+      else updated++
     }
 
     revalidateMaintenanceSurfaces()
-    return { success: true, updated }
+    return { success: true, updated, failed }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }
