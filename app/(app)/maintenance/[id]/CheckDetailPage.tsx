@@ -160,8 +160,8 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     const res = await fetch(`/api/pm-asset-report?check_id=${check.id}&complexity=${complexity}`)
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Download failed' }))
-      alert(err.error ?? 'Report generation failed')
-      throw new Error(err.error)
+      setError(err.error ?? 'Report generation failed')
+      return
     }
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
