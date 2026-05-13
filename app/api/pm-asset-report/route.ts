@@ -168,21 +168,20 @@ export async function GET(request: NextRequest) {
   const [acbLinkedRes, nsxLinkedRes, rcdLinkedRes] = await Promise.all([
     supabase
       .from('acb_tests')
+      // Sprint 1 schema unification (Refs #101): pull BOTH legacy and new
+      // breaker-identification columns so the report renders regardless of
+      // which entry path created the row. Migration 0094 backfills new
+      // from legacy where missing; writes are dual-write so future rows
+      // populate both. Read prefers NEW with LEGACY fallback below.
       .select(
-        // Audit fix #101 (2026-05-13): the 3-step workflow writes breaker
-        // identification to brand/breaker_type/current_in/trip_unit_model
-        // (asset-collection columns), while AcbBulkDetails writes the legacy
-        // cb_make/cb_model/cb_rating/trip_unit. Pull BOTH and let buildAcbDetail
-        // pick `new ?? legacy` so the customer PDF renders regardless of which
-        // entry path created the row.
         'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, brand, breaker_type, current_in, trip_unit_model, performance_level, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
       )
       .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
       .from('nsx_tests')
+      // Refs #101: same dual-column read as ACB above.
       .select(
-        // See ACB comment above — same dual-column read for NSX.
         'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, brand, breaker_type, current_in, trip_unit_model, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
       )
       .eq('check_id', checkId)
@@ -226,16 +225,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Audit fix #101 (2026-05-13): prefer NEW workflow columns, fall back to
-  // LEGACY columns. The 3-step ACB/NSX workflow writes to
+  // Sprint 1 schema unification (Refs #101): prefer NEW workflow columns,
+  // fall back to LEGACY. The 3-step workflow writes
   //   brand / breaker_type / current_in / trip_unit_model
-  // while AcbBulkDetails writes the legacy
+  // and the legacy bulk-edit form writes
   //   cb_make / cb_model / cb_rating / trip_unit
-  // Before this fix, breakers entered via the canonical workflow rendered as
-  // "—" on the customer PDF because the report only read the legacy columns.
-  // cb_serial / cb_poles / performance_level / fixed_withdrawable have no
-  // distinct "new" column — the workflow and bulk-edit both write to those
-  // same field names — so they stay as a single read.
+  // cb_serial / cb_poles / performance_level / fixed_withdrawable are
+  // shared between both surfaces — single read.
   type BreakerCols = {
     cb_make: string | null
     cb_model: string | null
@@ -294,7 +290,7 @@ export async function GET(request: NextRequest) {
 
   const acbSummaries: AcbTestSummary[] = (acbLinkedRes.data ?? []).map((t) => {
     const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
-    // Audit fix #101: read `new ?? legacy` for the summary line too.
+    // Refs #101: read `new ?? legacy` for the summary line too.
     const r = t as unknown as { brand: string | null; cb_make: string | null; breaker_type: string | null; cb_model: string | null }
     const make = r.brand ?? r.cb_make
     const model = r.breaker_type ?? r.cb_model
@@ -312,7 +308,7 @@ export async function GET(request: NextRequest) {
 
   const nsxSummaries: NsxTestSummary[] = (nsxLinkedRes.data ?? []).map((t) => {
     const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
-    // Audit fix #101: read `new ?? legacy` for the summary line too.
+    // Refs #101: read `new ?? legacy` for the summary line too.
     const r = t as unknown as { brand: string | null; cb_make: string | null; breaker_type: string | null; cb_model: string | null }
     const make = r.brand ?? r.cb_make
     const model = r.breaker_type ?? r.cb_model

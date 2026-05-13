@@ -117,6 +117,20 @@ export async function GET(request: NextRequest) {
 
   const tests: NsxReportTest[] = testsRaw.map((t) => {
     const asset = t.assets as { name: string; asset_type: string; serial_number: string | null; maximo_id: string | null; location: string | null } | null
+    // Sprint 1 schema unification (Refs #101): prefer NEW columns
+    // (brand / breaker_type / current_in / trip_unit_model) populated by
+    // the 3-step workflow, fall back to LEGACY (cb_make / cb_model /
+    // cb_rating / trip_unit) from the bulk-edit form.
+    const tRow = t as {
+      brand?: string | null
+      breaker_type?: string | null
+      current_in?: string | null
+      trip_unit_model?: string | null
+      cb_make?: string | null
+      cb_model?: string | null
+      cb_rating?: string | null
+      trip_unit?: string | null
+    }
     return {
       assetName: asset?.name ?? 'Unknown Asset',
       assetType: asset?.asset_type ?? '',
@@ -125,16 +139,12 @@ export async function GET(request: NextRequest) {
       testDate: t.test_date as string,
       testedBy: t.tested_by ? (testerMap[t.tested_by as string] ?? null) : null,
       testType: t.test_type as string,
-      // Audit fix #101 (2026-05-13): 3-step workflow writes to
-      // brand/breaker_type/current_in/trip_unit_model; legacy bulk writes to
-      // cb_make/cb_model/cb_rating/trip_unit. Prefer new, fall back to legacy.
-      // Select uses `*` so both columns are already fetched.
-      cbMake: (t.brand as string | null) ?? (t.cb_make as string | null),
-      cbModel: (t.breaker_type as string | null) ?? (t.cb_model as string | null),
+      cbMake: tRow.brand ?? (t.cb_make as string | null),
+      cbModel: tRow.breaker_type ?? (t.cb_model as string | null),
       cbSerial: t.cb_serial as string | null,
-      cbRating: (t.current_in as string | null) ?? (t.cb_rating as string | null),
+      cbRating: tRow.current_in ?? (t.cb_rating as string | null),
       cbPoles: t.cb_poles as string | null,
-      tripUnit: (t.trip_unit_model as string | null) ?? (t.trip_unit as string | null),
+      tripUnit: tRow.trip_unit_model ?? (t.trip_unit as string | null),
       overallResult: t.overall_result as string,
       notes: t.notes as string | null,
       readings: readingsMap[t.id as string] ?? [],

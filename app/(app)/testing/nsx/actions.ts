@@ -7,6 +7,7 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateNsxTestSchema, UpdateNsxTestSchema, CreateNsxReadingSchema } from '@/lib/validations/nsx-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
+import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
 
 export async function createNsxTestAction(formData: FormData) {
   try {
@@ -32,9 +33,14 @@ export async function createNsxTestAction(formData: FormData) {
     const parsed = CreateNsxTestSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    // Sprint 1 schema unification (Refs #101): mirror legacy <-> new
+    // breaker-identification columns so reads from either column set
+    // surface the same value.
+    const dualWrite = mirrorBreakerColumns(parsed.data)
+
     const { error } = await supabase
       .from('nsx_tests')
-      .insert({ ...parsed.data, tenant_id: tenantId })
+      .insert({ ...dualWrite, tenant_id: tenantId })
 
     if (error) return { success: false, error: error.message }
 
@@ -70,9 +76,12 @@ export async function updateNsxTestAction(id: string, formData: FormData) {
     const parsed = UpdateNsxTestSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    // Sprint 1 schema unification (Refs #101): see createNsxTestAction.
+    const dualWrite = mirrorBreakerColumns(parsed.data)
+
     const { error } = await supabase
       .from('nsx_tests')
-      .update(parsed.data)
+      .update(dualWrite)
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
@@ -176,9 +185,16 @@ export async function updateNsxDetailsAction(
     const { supabase, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
+    // Sprint 1 schema unification (Refs #101): mirror legacy <-> new
+    // breaker-identification columns. NsxWorkflow Step 1 writes the NEW
+    // set (brand/breaker_type/current_in/trip_unit_model); legacy bulk
+    // forms write the LEGACY set. Mirror so the customer report renders
+    // the same value via either read path.
+    const dualWrite = mirrorBreakerColumns(data as Record<string, unknown>)
+
     const { error } = await supabase
       .from('nsx_tests')
-      .update(data)
+      .update(dualWrite)
       .eq('id', testId)
 
     if (error) return { success: false, error: error.message }
