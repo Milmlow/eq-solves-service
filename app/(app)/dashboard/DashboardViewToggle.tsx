@@ -6,7 +6,10 @@ import { useCallback } from 'react'
 type View = 'mine' | 'all'
 
 /**
- * Dashboard scope toggle.
+ * Dashboard scope toggle — renders as a quiet inline text link inside the
+ * page subtitle. Previously a prominent pill button in the top-right of
+ * the dashboard header; demoted on 2026-05-13 so the welcome row stops
+ * fighting the global plan chip for top-right real estate.
  *
  * Two states:
  *   - 'all'  → "All Active Work" — every open check / WO / defect across the tenant.
@@ -27,18 +30,15 @@ export function DashboardViewToggle({ currentView }: { currentView: View }) {
     router.push(`/dashboard?${params.toString()}`)
   }, [currentView, router, searchParams])
 
-  const label = currentView === 'mine' ? 'Assigned to Me' : 'All Active Work'
-  const dotClass = currentView === 'mine' ? 'bg-eq-sky' : 'bg-green-500'
+  const nextLabel = currentView === 'mine' ? 'show all active work' : 'show only mine'
 
   return (
     <button
+      type="button"
       onClick={toggle}
-      className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-sm font-medium text-eq-ink shrink-0"
-      title={`Currently showing ${label}. Click to switch.`}
+      className="text-eq-sky hover:text-eq-deep transition-colors underline-offset-2 hover:underline"
     >
-      <span className={`w-2 h-2 rounded-full ${dotClass}`} />
-      {label}
-      <span className="text-xs text-eq-grey ml-1">Switch →</span>
+      {nextLabel} →
     </button>
   )
 }

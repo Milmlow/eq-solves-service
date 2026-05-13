@@ -131,7 +131,10 @@ export function Sidebar({
 
   const sidebarContent = (
     <>
-      <div className="flex items-center justify-between px-4 h-16 border-b border-white/10">
+      <div className={cn(
+        'flex items-center h-16 border-b border-white/10',
+        collapsed ? 'justify-center px-2' : 'justify-between px-4'
+      )}>
         {!collapsed && (
           logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -140,22 +143,26 @@ export function Sidebar({
             <span className="font-bold text-sm tracking-wide text-eq-sky">{productName}</span>
           )
         )}
-        <div className="flex items-center gap-2 ml-auto">
-          <NotificationBell />
+        <div className={cn('flex items-center gap-2', !collapsed && 'ml-auto')}>
+          {/* Bell hidden when collapsed so the expand chevron has room to render in the 64px-wide rail. */}
+          {!collapsed && <NotificationBell />}
           {/* Desktop collapse toggle */}
           <button
             onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             className="hidden lg:block p-1 rounded hover:bg-white/10 transition-colors"
           >
             <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} />
           </button>
           {/* Mobile close */}
-          <button
-            onClick={() => setMobileOpen(false)}
-            className="lg:hidden p-1 rounded hover:bg-white/10 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {!collapsed && (
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="lg:hidden p-1 rounded hover:bg-white/10 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
@@ -309,7 +316,20 @@ export function Sidebar({
           <img src={whiteLogo} alt="" aria-hidden="true" className="w-40 h-40 object-contain pointer-events-none" />
         </div>
       )}
-      <div className="border-t border-white/10 p-2">
+      {/* Plan chip lives in the sidebar footer (moved out of the fixed
+          top-right corner so it doesn't fight the dashboard header). Hidden
+          when collapsed — would clip badly in the 64px rail. */}
+      {!collapsed && tenantTier && tenantComplianceTier && (
+        <div className="px-2 pt-2">
+          <TenantTierChip
+            variant="sidebar"
+            tier={tenantTier}
+            complianceTier={tenantComplianceTier}
+            tenantName={tenantChipName}
+          />
+        </div>
+      )}
+      <div className="border-t border-white/10 p-2 mt-2">
         <form action="/auth/signout" method="post">
           <button
             type="submit"

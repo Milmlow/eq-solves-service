@@ -81,8 +81,10 @@ export interface TenantTierChipProps {
    * Visual variant.
    *   `desktop` — fixed top-right corner. Shows tier + compliance pill.
    *   `mobile`  — inline element (smaller). Used inside the mobile top bar.
+   *   `sidebar` — inline element styled for the dark eq-ink sidebar footer.
+   *               Hidden when the sidebar is collapsed (parent decides).
    */
-  variant?: 'desktop' | 'mobile'
+  variant?: 'desktop' | 'mobile' | 'sidebar'
 }
 
 export function TenantTierChip({
@@ -114,6 +116,39 @@ export function TenantTierChip({
   const tierMeta = TIER_DESCRIPTIONS[tier]
   const complianceLabel = COMPLIANCE_LABELS[complianceTier]
   const tierLabel = `${tierMeta.label} ${complianceLabel}`
+
+  // Sidebar variant — inline on the dark eq-ink sidebar footer. Shows
+  // both tier + compliance label so the user gets the full picture
+  // (the sidebar footer is the only place this chip lives on desktop now).
+  if (variant === 'sidebar') {
+    return (
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-label={`Plan: ${tierLabel}. Click to see what's included.`}
+          aria-expanded={open}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-md bg-white/5 hover:bg-white/10 transition-colors text-white text-xs font-semibold"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-eq-sky flex-shrink-0" aria-hidden="true" />
+          <span className="truncate">
+            {tierMeta.label}
+            <span className="text-white/40 font-normal mx-1">·</span>
+            <span className="text-white/80">{complianceLabel}</span>
+          </span>
+          <ChevronDown className={cn('w-3.5 h-3.5 text-white/40 ml-auto transition-transform flex-shrink-0', open && 'rotate-180')} aria-hidden="true" />
+        </button>
+        {open && (
+          <DropdownPanel
+            tierMeta={tierMeta}
+            complianceLabel={complianceLabel}
+            tenantName={tenantName}
+            className="absolute left-0 right-0 bottom-full mb-1 z-50"
+          />
+        )}
+      </div>
+    )
+  }
 
   // Mobile variant — smaller, no tooltip, inline.
   if (variant === 'mobile') {
