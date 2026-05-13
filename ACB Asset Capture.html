@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<!-- saved from url=(0067)file:///C:/Users/EQ/Downloads/ACB_capture_prestart_brief%20(2).html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACB Asset Capture — Pre-start Brief</title>
+<style>
+  :root {
+    --eq-deep:     #2986B4;
+    --eq-deep-bg:  #EAF4FA;
+    --eq-deep-hov: #216E95;
+    --eq-border:   #E5E7EB;
+    --eq-bg:       #FFFFFF;
+    --eq-surface:  #FAFAFA;
+    --eq-text:     #111111;
+    --eq-muted:    #666666;
+    --eq-ok:       #16A34A;
+    --eq-warn:     #D97706;
+    --eq-bad:      #DC2626;
+    --warn-bg:     #FFFBEB;
+    --warn-border: #FCD34D;
+    --warn-text:   #78350F;
+    --ok-bg:       #DCFCE7;
+    --ok-text:     #14532D;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--eq-surface);
+    color: var(--eq-text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 80px; }
+
+  header.top {
+    border-bottom: 2px solid var(--eq-deep);
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+  }
+  .kicker {
+    color: var(--eq-deep); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  h1 { margin: 4px 0 4px; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  header.top .sub { color: var(--eq-muted); font-size: 13px; }
+
+  .sites {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    margin-top: 10px;
+  }
+  .sites-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--eq-muted);
+    margin-right: 4px;
+  }
+  .site-pill {
+    display: inline-flex; align-items: center;
+    padding: 2px 9px; border-radius: 999px;
+    background: var(--eq-deep-bg); color: var(--eq-deep);
+    font-family: ui-monospace, SF Mono, Menlo, monospace;
+    font-size: 11px; font-weight: 700;
+    border: 1px solid #C8DEEC;
+  }
+
+  .controls {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    margin-bottom: 18px;
+    padding: 10px 12px;
+    background: var(--eq-bg);
+    border: 1px solid var(--eq-border);
+    border-radius: 8px;
+  }
+  .legend-mini {
+    display: flex; gap: 12px; align-items: center;
+    margin-right: auto;
+    font-size: 12px; color: var(--eq-muted);
+  }
+  .legend-mini-item { display:inline-flex; align-items:center; gap:5px; }
+  .legend-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    display: inline-block;
+  }
+  .legend-dot.dot-discuss { background: var(--eq-warn); }
+  .legend-dot.dot-obvious { background: var(--eq-ok); }
+  .legend-dot.dot-normal  { background: var(--eq-deep); }
+  .status-msg {
+    color: var(--eq-muted); font-size: 12px;
+    display: none;
+  }
+  .btn {
+    appearance: none; border: 1px solid var(--eq-border);
+    background: var(--eq-bg); color: var(--eq-text);
+    padding: 6px 11px; border-radius: 6px;
+    cursor: pointer; font-family: inherit; font-size: 12px;
+    font-weight: 600; display: inline-flex; align-items: center; gap: 5px;
+    transition: background 0.1s, border-color 0.1s, color 0.1s;
+  }
+  .btn:hover { background: var(--eq-deep-bg); border-color: var(--eq-deep); color: var(--eq-deep); }
+  .btn.primary { background: var(--eq-deep); color: #fff; border-color: var(--eq-deep); }
+  .btn.primary:hover { background: var(--eq-deep-hov); color: #fff; }
+  .btn.danger:hover { background: #FEF2F2; border-color: var(--eq-bad); color: var(--eq-bad); }
+  .btn.toggle.active { background: var(--eq-deep); color: #fff; border-color: var(--eq-deep); }
+
+  /* --- Sections --- */
+  .group { margin-bottom: 24px; }
+  .group-head h2 {
+    font-size: 15px; margin: 0 0 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .group-count {
+    background: var(--eq-border); color: var(--eq-muted);
+    padding: 1px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+  }
+  .group-head p { margin: 0 0 12px; color: var(--eq-muted); font-size: 12px; }
+
+  /* --- Tile grid --- */
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+    grid-auto-flow: dense;
+  }
+  .tile-wrap {
+    display: contents;
+  }
+
+  /* Tile */
+  .tile {
+    appearance: none;
+    border: 1px solid var(--eq-border);
+    background: var(--eq-bg);
+    border-radius: 7px;
+    padding: 8px 10px;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    transition: transform 0.08s, box-shadow 0.1s, border-color 0.1s;
+    position: relative;
+    border-left-width: 3px;
+  }
+  .tile:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border-color: var(--eq-deep);
+  }
+  .tile:focus-visible { outline: 2px solid var(--eq-deep); outline-offset: 2px; }
+  .tile.status-discuss { border-left-color: var(--eq-warn); }
+  .tile.status-obvious { border-left-color: var(--eq-ok); }
+  .tile.status-normal  { border-left-color: var(--eq-deep); }
+
+  .tile[aria-expanded="true"] {
+    background: var(--eq-deep-bg);
+    border-color: var(--eq-deep);
+    box-shadow: 0 0 0 1px var(--eq-deep);
+  }
+
+  .tile-col {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 28px; height: 20px; padding: 0 6px;
+    background: var(--eq-deep-bg); color: var(--eq-deep);
+    border-radius: 3px;
+    font-family: ui-monospace, SF Mono, Menlo, monospace;
+    font-size: 10px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .tile-label {
+    font-size: 12.5px; font-weight: 600;
+    line-height: 1.25;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tile-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-discuss { background: var(--eq-warn); }
+  .dot-obvious { background: var(--eq-ok); }
+  .dot-normal  { background: transparent; }
+
+  /* Expansion — sits below the tile in the grid, spans full row */
+  .expansion {
+    grid-column: 1 / -1;
+    background: var(--eq-bg);
+    border: 1px solid var(--eq-deep);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 0;
+    box-shadow: 0 4px 12px rgba(41, 134, 180, 0.08);
+    animation: expand 0.18s ease-out;
+  }
+  @keyframes expand {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .exp-head {
+    display: flex; align-items: center; gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--eq-border);
+    margin-bottom: 10px;
+  }
+  .exp-title { flex: 1; font-size: 15px; font-weight: 700; }
+  .exp-close {
+    appearance: none; border: none; background: transparent;
+    color: var(--eq-muted); font-size: 22px; line-height: 1;
+    width: 28px; height: 28px;
+    border-radius: 50%; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .exp-close:hover { background: var(--eq-surface); color: var(--eq-text); }
+
+  .exp-row { margin-bottom: 10px; }
+  .exp-row:last-child { margin-bottom: 0; }
+  .exp-label {
+    color: var(--eq-muted); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    font-weight: 700; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .exp-val { font-size: 13.5px; }
+
+  .pills { display: flex; flex-wrap: wrap; gap: 4px; }
+  .pill {
+    display: inline-block; padding: 2px 7px;
+    background: var(--eq-deep-bg); color: var(--eq-deep);
+    border-radius: 4px;
+    font-family: ui-monospace, SF Mono, Menlo, monospace;
+    font-size: 11px; font-weight: 600;
+  }
+  code {
+    background: #F3F4F6; padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, SF Mono, Menlo, monospace;
+    font-size: 0.9em;
+  }
+  .example {
+    background: #F0FDF4; color: #14532D;
+    border: 1px solid #BBF7D0; font-weight: 600;
+  }
+
+  .site-notes-row {
+    padding: 10px 12px;
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 6px;
+    margin-bottom: 10px;
+  }
+  .site-notes-row .exp-label { color: var(--warn-text); }
+  .site-note-content { font-size: 13px; color: var(--warn-text); line-height: 1.5; }
+
+  .team-notes-row {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--eq-border);
+  }
+  .team-hint {
+    text-transform: none; letter-spacing: 0;
+    font-size: 10px; color: var(--eq-muted); font-weight: 500;
+  }
+  .notes-field {
+    width: 100%;
+    border: 1px solid var(--eq-border);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-family: inherit; font-size: 13px; line-height: 1.5;
+    resize: vertical;
+    background: var(--eq-bg);
+    color: var(--eq-text);
+    transition: border-color 0.1s, background 0.1s;
+  }
+  .notes-field:focus {
+    outline: none; border-color: var(--eq-deep);
+    background: var(--eq-deep-bg);
+  }
+  .notes-field.has-content { background: var(--eq-deep-bg); border-color: var(--eq-deep); }
+  .saved-indicator {
+    font-size: 10px; font-weight: 600; color: var(--eq-ok);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .saved-indicator.show { opacity: 1; }
+
+  /* Hide obvious tiles by default */
+  body:not(.show-obvious) .tile-wrap[data-id] .tile.status-obvious { display: none; }
+  body:not(.show-obvious) .tile-wrap:has(.tile.status-obvious) .expansion { display: none; }
+  body:not(.show-obvious) section.group.all-obvious { display: none; }
+  .group-count-vis { display: none; }
+  body:not(.show-obvious) .group-count-vis { display: inline; }
+  body:not(.show-obvious) .group-count-all { display: none; }
+
+  footer {
+    margin-top: 28px;
+    padding-top: 14px;
+    border-top: 1px solid var(--eq-border);
+    color: var(--eq-muted); font-size: 12px;
+  }
+  footer p { margin: 0 0 6px; }
+
+  @media (max-width: 600px) {
+    body { font-size: 13.5px; }
+    .wrap { padding: 16px 12px 60px; }
+    .tile-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+    .tile { padding: 7px 9px; min-height: 38px; }
+    .tile-label { font-size: 12px; }
+    .controls { padding: 8px 10px; }
+    .legend-mini { flex-basis: 100%; }
+  }
+</style>
+</head>
+<body class="show-obvious">
+<div class="wrap">
+  <header class="top">
+    <div class="kicker">ACB Asset Capture · Pre-start brief</div>
+    <h1>The 21 columns that matter</h1>
+    <div class="sub">Tap any tile for details. Orange dot = needs team discussion. Green dot = obvious (hidden by default).</div>
+    <div class="sites">
+      <span class="sites-label">Applies to</span>
+      <span class="site-pill">SY5</span>
+      <span class="site-pill">SY6</span>
+      <span class="site-pill">SY7</span>
+      <span class="site-pill">SY9</span>
+      <span class="site-pill">CA1</span>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="legend-mini">
+      <span class="legend-mini-item"><span class="legend-dot dot-discuss"></span>Discuss <strong>5</strong></span>
+      <span class="legend-mini-item"><span class="legend-dot dot-normal"></span>Normal</span>
+      <span class="legend-mini-item"><span class="legend-dot dot-obvious"></span>Obvious <strong>15</strong></span>
+    </div>
+    <span class="status-msg" id="status-msg"></span>
+    <button class="btn toggle active" id="toggle-obvious" title="Show / hide obvious cards">Hide obvious</button>
+    <input type="file" id="import-input" accept="application/json" style="display:none">
+    <button class="btn" id="import-btn">Import</button>
+    <button class="btn" id="email-btn" title="Email your notes to Simon">Email Simon</button>
+    <button class="btn primary" id="export-btn">Export notes</button>
+  </div>
+
+  
+    <section class="group">
+      <header class="group-head">
+        <h2>From the nameplate <span class="group-count group-count-all">6</span><span class="group-count group-count-vis">1 of 6</span></h2>
+        <p>All from the metal/sticker nameplate. Photograph it before you start.</p>
+      </header>
+      <div class="tile-grid">
+        <div class="tile-wrap status-obvious" data-id="serial_no"><button class="tile status-obvious" data-id="serial_no" aria-expanded="false" aria-controls="exp-serial_no" type="button">
+            <span class="tile-col">T</span>
+            <span class="tile-label">Serial No</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-serial_no" data-for="serial_no" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">T</span>
+              <span class="exp-title">Serial No</span>
+              <button class="exp-close" data-close="serial_no" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">The serial number printed on the breaker's nameplate.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Read it off the metal/sticker nameplate on the front of the breaker.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">A2141210003</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="serial_no"></span>
+              </div>
+              <textarea class="notes-field" data-id="serial_no" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="amp_frame"><button class="tile status-obvious" data-id="amp_frame" aria-expanded="false" aria-controls="exp-amp_frame" type="button">
+            <span class="tile-col">AH</span>
+            <span class="tile-label">Amp Frame</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-amp_frame" data-for="amp_frame" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">AH</span>
+              <span class="exp-title">Amp Frame</span>
+              <button class="exp-close" data-close="amp_frame" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">The breaker's amp rating (frame size). Just the number.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Written on the breaker. Also: the number after 'NW' × 100 — e.g. <b>NW16 = 1600A</b>.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">1600</code></div>
+            </div>
+            <div class="exp-row site-notes-row">
+          <div class="exp-label">Site note</div>
+          <div class="site-note-content">Quick check (Schneider Masterpact only — others read off the nameplate): NW08 = 800A, NW10 = 1000A, NW12 = 1250A, NW16 = 1600A, NW20 = 2000A, NW25 = 2500A, NW32 = 3200A, NW40 = 4000A.</div>
+        </div>
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="amp_frame"></span>
+              </div>
+              <textarea class="notes-field" data-id="amp_frame" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="ka_rating"><button class="tile status-obvious" data-id="ka_rating" aria-expanded="false" aria-controls="exp-ka_rating" type="button">
+            <span class="tile-col">BM</span>
+            <span class="tile-label">kA Rating</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-ka_rating" data-for="ka_rating" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">BM</span>
+              <span class="exp-title">kA Rating</span>
+              <button class="exp-close" data-close="ka_rating" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Fault current breaking capacity, in kA.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Written on the breaker. Look for <code>Icu = ...</code> on the nameplate.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">65</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="ka_rating"></span>
+              </div>
+              <textarea class="notes-field" data-id="ka_rating" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="voltage_rating"><button class="tile status-obvious" data-id="voltage_rating" aria-expanded="false" aria-controls="exp-voltage_rating" type="button">
+            <span class="tile-col">DG</span>
+            <span class="tile-label">Voltage Rating</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-voltage_rating" data-for="voltage_rating" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">DG</span>
+              <span class="exp-title">Voltage Rating</span>
+              <button class="exp-close" data-close="voltage_rating" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Maximum operating voltage, in volts.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Written on the breaker. Look for <code>Ue = ...</code> on the nameplate.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">690</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="voltage_rating"></span>
+              </div>
+              <textarea class="notes-field" data-id="voltage_rating" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-discuss" data-id="sensor_in"><button class="tile status-discuss" data-id="sensor_in" aria-expanded="false" aria-controls="exp-sensor_in" type="button">
+            <span class="tile-col">CP</span>
+            <span class="tile-label">Sensor In</span>
+            <span class="tile-dot dot-discuss" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-sensor_in" data-for="sensor_in" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">CP</span>
+              <span class="exp-title">Sensor In</span>
+              <button class="exp-close" data-close="sensor_in" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Current sensor rating plug (amps). Electronic trip units only.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Shown on the trip unit itself as <code>In = ...</code>.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">1600</code></div>
+            </div>
+            <div class="exp-row site-notes-row">
+          <div class="exp-label">Site note</div>
+          <div class="site-note-content">For discussion — confirm with the team how Equinix wants this captured (sometimes matches Amp Frame, sometimes lower).</div>
+        </div>
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="sensor_in"></span>
+              </div>
+              <textarea class="notes-field" data-id="sensor_in" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="trip_model"><button class="tile status-obvious" data-id="trip_model" aria-expanded="false" aria-controls="exp-trip_model" type="button">
+            <span class="tile-col">CY</span>
+            <span class="tile-label">Trip Model</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-trip_model" data-for="trip_model" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">CY</span>
+              <span class="exp-title">Trip Model</span>
+              <button class="exp-close" data-close="trip_model" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Model name of the trip unit (control module on the front of the breaker).</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Written on the trip unit. Take a photo.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">Micrologic 6.0 P</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="trip_model"></span>
+              </div>
+              <textarea class="notes-field" data-id="trip_model" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div>
+      </div>
+    </section>
+    
+    <section class="group">
+      <header class="group-head">
+        <h2>Asset linkage <span class="group-count">1</span></h2>
+        <p>Links this breaker to its parent switchboard.</p>
+      </header>
+      <div class="tile-grid">
+        <div class="tile-wrap status-normal" data-id="asset_uid"><button class="tile status-normal" data-id="asset_uid" aria-expanded="false" aria-controls="exp-asset_uid" type="button">
+            <span class="tile-col">AJ</span>
+            <span class="tile-label">Asset UID</span>
+            <span class="tile-dot dot-normal" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-asset_uid" data-for="asset_uid" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">AJ</span>
+              <span class="exp-title">Asset UID</span>
+              <button class="exp-close" data-close="asset_uid" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Maximo UID of the switchboard this breaker is mounted in.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Look at the board the breaker is installed in — read its asset UID off the board's asset tag/sticker.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">255203</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="asset_uid"></span>
+              </div>
+              <textarea class="notes-field" data-id="asset_uid" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div>
+      </div>
+    </section>
+    
+    <section class="group">
+      <header class="group-head">
+        <h2>Breaker type <span class="group-count group-count-all">5</span><span class="group-count group-count-vis">3 of 5</span></h2>
+        <p>What kind of breaker it is and how it's wired in. Mostly dropdowns.</p>
+      </header>
+      <div class="tile-grid">
+        <div class="tile-wrap status-obvious" data-id="breaker_construction"><button class="tile status-obvious" data-id="breaker_construction" aria-expanded="false" aria-controls="exp-breaker_construction" type="button">
+            <span class="tile-col">AO</span>
+            <span class="tile-label">Construction</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-breaker_construction" data-for="breaker_construction" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">AO</span>
+              <span class="exp-title">Construction</span>
+              <button class="exp-close" data-close="breaker_construction" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">What kind of breaker it is.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Pick the matching option from the dropdown.</div>
+            </div>
+            <div class="exp-row"><div class="exp-label">Options</div><div class="pills"><span class="pill">ACB - AIR CIRCUIT BREAKER</span><span class="pill">ICB - INSULATED CASE</span><span class="pill">MCB - METAL CLAD</span><span class="pill">MCCB - MOLDED CASE</span></div></div>
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">ACB - AIR CIRCUIT BREAKER</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="breaker_construction"></span>
+              </div>
+              <textarea class="notes-field" data-id="breaker_construction" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="breaker_mount"><button class="tile status-obvious" data-id="breaker_mount" aria-expanded="false" aria-controls="exp-breaker_mount" type="button">
+            <span class="tile-col">AP</span>
+            <span class="tile-label">Mount</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-breaker_mount" data-for="breaker_mount" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">AP</span>
+              <span class="exp-title">Mount</span>
+              <button class="exp-close" data-close="breaker_mount" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">How the breaker attaches to the busbar.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">DRAWOUT breakers sit in a cradle and can be wound out. FIXED breakers are bolted in place.</div>
+            </div>
+            <div class="exp-row"><div class="exp-label">Options</div><div class="pills"><span class="pill">FIXED</span><span class="pill">DRAWOUT</span><span class="pill">PLUG-IN</span></div></div>
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">DRAWOUT</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="breaker_mount"></span>
+              </div>
+              <textarea class="notes-field" data-id="breaker_mount" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-discuss" data-id="breaker_type"><button class="tile status-discuss" data-id="breaker_type" aria-expanded="false" aria-controls="exp-breaker_type" type="button">
+            <span class="tile-col">AQ</span>
+            <span class="tile-label">Type (role)</span>
+            <span class="tile-dot dot-discuss" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-breaker_type" data-for="breaker_type" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">AQ</span>
+              <span class="exp-title">Type (role)</span>
+              <button class="exp-close" data-close="breaker_type" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">The role this breaker plays in the switchboard.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Pick from the dropdown.</div>
+            </div>
+            <div class="exp-row"><div class="exp-label">Options</div><div class="pills"><span class="pill">INPUT</span><span class="pill">OUTPUT</span><span class="pill">BUS TIE</span><span class="pill">SWITCH</span><span class="pill">FUSE</span></div></div>
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">INPUT</code></div>
+            </div>
+            <div class="exp-row site-notes-row">
+          <div class="exp-label">Site note</div>
+          <div class="site-note-content">For discussion — align with the team on how to apply these labels (main incomer always INPUT? tie breakers in dual-source?).</div>
+        </div>
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="breaker_type"></span>
+              </div>
+              <textarea class="notes-field" data-id="breaker_type" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-discuss" data-id="operator_type"><button class="tile status-discuss" data-id="operator_type" aria-expanded="false" aria-controls="exp-operator_type" type="button">
+            <span class="tile-col">CC</span>
+            <span class="tile-label">Operator Type</span>
+            <span class="tile-dot dot-discuss" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-operator_type" data-for="operator_type" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">CC</span>
+              <span class="exp-title">Operator Type</span>
+              <button class="exp-close" data-close="operator_type" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">How the breaker is opened and closed.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Pick from the dropdown.</div>
+            </div>
+            <div class="exp-row"><div class="exp-label">Options</div><div class="pills"><span class="pill">ELEC</span><span class="pill">MECH</span></div></div>
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">ELEC</code></div>
+            </div>
+            <div class="exp-row site-notes-row">
+          <div class="exp-label">Site note</div>
+          <div class="site-note-content">For discussion — confirm this is what Equinix means. Working assumption: motor-operated remote = ELEC, manual spring handle = MECH.</div>
+        </div>
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="operator_type"></span>
+              </div>
+              <textarea class="notes-field" data-id="operator_type" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-discuss" data-id="trip_type"><button class="tile status-discuss" data-id="trip_type" aria-expanded="false" aria-controls="exp-trip_type" type="button">
+            <span class="tile-col">CZ</span>
+            <span class="tile-label">Trip Type</span>
+            <span class="tile-dot dot-discuss" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-trip_type" data-for="trip_type" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">CZ</span>
+              <span class="exp-title">Trip Type</span>
+              <button class="exp-close" data-close="trip_type" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">The protection functions the trip unit provides. Letters printed on the trip unit.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Read the letters shown on the trip unit — e.g. <code>L</code>, <code>LS</code>, <code>LSI</code>, <code>LSIG</code>.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">LSIG</code></div>
+            </div>
+            <div class="exp-row site-notes-row">
+          <div class="exp-label">Site note</div>
+          <div class="site-note-content">For discussion — agree on the format with the team (full word vs letter codes, ground fault inclusion).</div>
+        </div>
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="trip_type"></span>
+              </div>
+              <textarea class="notes-field" data-id="trip_type" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div>
+      </div>
+    </section>
+    
+    <section class="group all-obvious">
+      <header class="group-head">
+        <h2>Trip settings <span class="group-count group-count-all">8</span><span class="group-count group-count-vis">0 of 8</span></h2>
+        <p>Read directly off the trip unit — straightforward when you can access it. <strong>If a tag is blocking access — leave blank, capture tag-holder details, flag with the team. Don't break the tag.</strong></p>
+      </header>
+      <div class="tile-grid">
+        <div class="tile-wrap status-obvious" data-id="lt_pickup"><button class="tile status-obvious" data-id="lt_pickup" aria-expanded="false" aria-controls="exp-lt_pickup" type="button">
+            <span class="tile-col">BT</span>
+            <span class="tile-label">LT Pick Up (Ir)</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-lt_pickup" data-for="lt_pickup" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">BT</span>
+              <span class="exp-title">LT Pick Up (Ir)</span>
+              <button class="exp-close" data-close="lt_pickup" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Continuous current trip threshold, as a ratio of the sensor rating (In).</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Trip unit display — shown as <code>Ir</code> or <code>I1</code>. Write the number (0.9 = 90%).</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">0.9</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="lt_pickup"></span>
+              </div>
+              <textarea class="notes-field" data-id="lt_pickup" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="lt_delay"><button class="tile status-obvious" data-id="lt_delay" aria-expanded="false" aria-controls="exp-lt_delay" type="button">
+            <span class="tile-col">BS</span>
+            <span class="tile-label">LT Delay (tr)</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-lt_delay" data-for="lt_delay" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">BS</span>
+              <span class="exp-title">LT Delay (tr)</span>
+              <button class="exp-close" data-close="lt_delay" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Time delay on the long-time trip, in seconds.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Trip unit display — shown as <code>tr</code> or <code>T1</code>.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">16</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="lt_delay"></span>
+              </div>
+              <textarea class="notes-field" data-id="lt_delay" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="st_pickup"><button class="tile status-obvious" data-id="st_pickup" aria-expanded="false" aria-controls="exp-st_pickup" type="button">
+            <span class="tile-col">CT</span>
+            <span class="tile-label">ST Pick Up (Isd)</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-st_pickup" data-for="st_pickup" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">CT</span>
+              <span class="exp-title">ST Pick Up (Isd)</span>
+              <button class="exp-close" data-close="st_pickup" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Short-time trip threshold, as a multiple of Ir.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Trip unit display — shown as <code>Isd</code> or <code>I2</code>.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">6</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="st_pickup"></span>
+              </div>
+              <textarea class="notes-field" data-id="st_pickup" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="st_delay"><button class="tile status-obvious" data-id="st_delay" aria-expanded="false" aria-controls="exp-st_delay" type="button">
+            <span class="tile-col">CS</span>
+            <span class="tile-label">ST Delay (tsd)</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-st_delay" data-for="st_delay" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">CS</span>
+              <span class="exp-title">ST Delay (tsd)</span>
+              <button class="exp-close" data-close="st_delay" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Time delay on the short-time trip, in seconds.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Trip unit display — shown as <code>tsd</code> or <code>T2</code>.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">0.2</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="st_delay"></span>
+              </div>
+              <textarea class="notes-field" data-id="st_delay" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="inst"><button class="tile status-obvious" data-id="inst" aria-expanded="false" aria-controls="exp-inst" type="button">
+            <span class="tile-col">BJ</span>
+            <span class="tile-label">Instantaneous (Ii)</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-inst" data-for="inst" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">BJ</span>
+              <span class="exp-title">Instantaneous (Ii)</span>
+              <button class="exp-close" data-close="inst" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Instantaneous trip threshold, as a multiple of In.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Trip unit display — shown as <code>Ii</code> or <code>I3</code>.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">8</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="inst"></span>
+              </div>
+              <textarea class="notes-field" data-id="inst" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="gf_pickup"><button class="tile status-obvious" data-id="gf_pickup" aria-expanded="false" aria-controls="exp-gf_pickup" type="button">
+            <span class="tile-col">BG</span>
+            <span class="tile-label">GF Pick Up (Ig)</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-gf_pickup" data-for="gf_pickup" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">BG</span>
+              <span class="exp-title">GF Pick Up (Ig)</span>
+              <button class="exp-close" data-close="gf_pickup" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Earth fault trip threshold. Only on trip units with ground fault protection.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Trip unit — shown as <code>Ig</code> or <code>I4</code>. Leave blank if no GF protection.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">0.4</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="gf_pickup"></span>
+              </div>
+              <textarea class="notes-field" data-id="gf_pickup" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="gf_delay"><button class="tile status-obvious" data-id="gf_delay" aria-expanded="false" aria-controls="exp-gf_delay" type="button">
+            <span class="tile-col">BF</span>
+            <span class="tile-label">GF Delay (tg)</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-gf_delay" data-for="gf_delay" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">BF</span>
+              <span class="exp-title">GF Delay (tg)</span>
+              <button class="exp-close" data-close="gf_delay" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Earth fault trip time delay, in seconds.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Trip unit — shown as <code>tg</code>. Leave blank if no GF protection.</div>
+            </div>
+            
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">0.4</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="gf_delay"></span>
+              </div>
+              <textarea class="notes-field" data-id="gf_delay" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div><div class="tile-wrap status-obvious" data-id="gf_i2t"><button class="tile status-obvious" data-id="gf_i2t" aria-expanded="false" aria-controls="exp-gf_i2t" type="button">
+            <span class="tile-col">BE</span>
+            <span class="tile-label">GF I²t</span>
+            <span class="tile-dot dot-obvious" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-gf_i2t" data-for="gf_i2t" hidden="">
+            <div class="exp-head">
+              <span class="tile-col">BE</span>
+              <span class="exp-title">GF I²t</span>
+              <button class="exp-close" data-close="gf_i2t" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Whether the ground fault curve has an I²t shape.</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Check the trip unit settings. Leave blank if no GF protection.</div>
+            </div>
+            <div class="exp-row"><div class="exp-label">Options</div><div class="pills"><span class="pill">On</span><span class="pill">Off</span><span class="pill">In</span><span class="pill">Out</span></div></div>
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">On</code></div>
+            </div>
+            
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="gf_i2t"></span>
+              </div>
+              <textarea class="notes-field" data-id="gf_i2t" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div>
+      </div>
+    </section>
+    
+    <section class="group">
+      <header class="group-head">
+        <h2>Status flag <span class="group-count">1</span></h2>
+        <p>A yes/no check.</p>
+      </header>
+      <div class="tile-grid">
+        <div class="tile-wrap status-discuss" data-id="verified_coord"><button class="tile status-discuss" data-id="verified_coord" aria-expanded="true" aria-controls="exp-verified_coord" type="button">
+            <span class="tile-col">DD</span>
+            <span class="tile-label">Verified vs Coord Study</span>
+            <span class="tile-dot dot-discuss" aria-hidden="true"></span>
+          </button><div class="expansion" id="exp-verified_coord" data-for="verified_coord">
+            <div class="exp-head">
+              <span class="tile-col">DD</span>
+              <span class="exp-title">Verified vs Coord Study</span>
+              <button class="exp-close" data-close="verified_coord" aria-label="Close" type="button">×</button>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">What it is</div>
+              <div class="exp-val">Have the trip settings been verified against the site's coordination study?</div>
+            </div>
+            <div class="exp-row">
+              <div class="exp-label">Where to find it</div>
+              <div class="exp-val">Always <b>Y</b>. Then nominate <strong>which</strong> coordination study version was used — sites have multiple versions and getting this wrong has caused confusion in the past.</div>
+            </div>
+            <div class="exp-row"><div class="exp-label">Options</div><div class="pills"><span class="pill">Y</span><span class="pill">N</span></div></div>
+            <div class="exp-row">
+              <div class="exp-label">Example</div>
+              <div class="exp-val"><code class="example">Y</code></div>
+            </div>
+            <div class="exp-row site-notes-row">
+          <div class="exp-label">Site note</div>
+          <div class="site-note-content">Always Y. Then record which coordination study version was the reference (file name + revision/date).<br><br><strong>Before starting any site, we need the latest coordination study versions for all of SY5, SY6, SY7, SY9 and CA1.</strong><br><br>Each site has multiple versions floating around — nominate the exact one used to avoid the confusion this has caused in the past.</div>
+        </div>
+            <div class="exp-row team-notes-row">
+              <div class="exp-label">
+                Team notes <span class="team-hint">— yours, autosaves</span>
+                <span class="saved-indicator" data-for="verified_coord"></span>
+              </div>
+              <textarea class="notes-field" data-id="verified_coord" rows="2" placeholder="Add anything else here…"></textarea>
+            </div>
+          </div></div>
+      </div>
+    </section>
+    
+
+  <footer>
+    <p><strong>Workflow:</strong> read each tile, discuss the orange ones as a team, type into the notes box, click <strong>Export notes</strong> to share back with Royce.</p>
+    <p>Yellow boxes are guidance from Royce. Notes you type go to this browser's storage — export before switching devices.</p>
+  </footer>
+</div>
+
+<script>
+  const STORAGE_KEY = 'acb_capture_notes_v1';
+  const SHOW_OBVIOUS_KEY = 'acb_capture_show_obvious_v1';
+  const FIELDS = [{"id": "serial_no", "col": "T", "label": "Serial No"}, {"id": "amp_frame", "col": "AH", "label": "Amp Frame"}, {"id": "ka_rating", "col": "BM", "label": "kA Rating"}, {"id": "voltage_rating", "col": "DG", "label": "Voltage Rating"}, {"id": "sensor_in", "col": "CP", "label": "Sensor In"}, {"id": "trip_model", "col": "CY", "label": "Trip Model"}, {"id": "asset_uid", "col": "AJ", "label": "Asset UID"}, {"id": "breaker_construction", "col": "AO", "label": "Construction"}, {"id": "breaker_mount", "col": "AP", "label": "Mount"}, {"id": "breaker_type", "col": "AQ", "label": "Type (role)"}, {"id": "operator_type", "col": "CC", "label": "Operator Type"}, {"id": "trip_type", "col": "CZ", "label": "Trip Type"}, {"id": "lt_pickup", "col": "BT", "label": "LT Pick Up (Ir)"}, {"id": "lt_delay", "col": "BS", "label": "LT Delay (tr)"}, {"id": "st_pickup", "col": "CT", "label": "ST Pick Up (Isd)"}, {"id": "st_delay", "col": "CS", "label": "ST Delay (tsd)"}, {"id": "inst", "col": "BJ", "label": "Instantaneous (Ii)"}, {"id": "gf_pickup", "col": "BG", "label": "GF Pick Up (Ig)"}, {"id": "gf_delay", "col": "BF", "label": "GF Delay (tg)"}, {"id": "gf_i2t", "col": "BE", "label": "GF I\u00b2t"}, {"id": "verified_coord", "col": "DD", "label": "Verified vs Coord Study"}];
+  const EMAIL_TO = 'simon.bramall@sks.com.au';
+
+  function loadNotes() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+    catch { return {}; }
+  }
+  function saveNotes(notes) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+  }
+
+  // Restore notes
+  const notes = loadNotes();
+  document.querySelectorAll('.notes-field').forEach(ta => {
+    const id = ta.dataset.id;
+    if (notes[id]) {
+      ta.value = notes[id];
+      ta.classList.add('has-content');
+    }
+  });
+
+  // Auto-save
+  const saveTimers = {};
+  document.querySelectorAll('.notes-field').forEach(ta => {
+    ta.addEventListener('input', () => {
+      const id = ta.dataset.id;
+      const indicator = document.querySelector(`.saved-indicator[data-for="${id}"]`);
+      clearTimeout(saveTimers[id]);
+      saveTimers[id] = setTimeout(() => {
+        const current = loadNotes();
+        if (ta.value.trim()) {
+          current[id] = ta.value;
+          ta.classList.add('has-content');
+        } else {
+          delete current[id];
+          ta.classList.remove('has-content');
+        }
+        saveNotes(current);
+        if (indicator) {
+          indicator.textContent = '✓ saved';
+          indicator.classList.add('show');
+          setTimeout(() => indicator.classList.remove('show'), 1200);
+        }
+      }, 350);
+    });
+  });
+
+  // Tile expand/collapse
+  document.querySelectorAll('.tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      const id = tile.dataset.id;
+      const exp = document.getElementById('exp-' + id);
+      const open = tile.getAttribute('aria-expanded') === 'true';
+      tile.setAttribute('aria-expanded', !open);
+      if (exp) exp.hidden = open;
+    });
+  });
+
+  // Close button inside expansion
+  document.querySelectorAll('.exp-close').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.close;
+      const tile = document.querySelector(`.tile[data-id="${id}"]`);
+      const exp = document.getElementById('exp-' + id);
+      if (tile) tile.setAttribute('aria-expanded', 'false');
+      if (exp) exp.hidden = true;
+      tile && tile.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
+
+  // Toggle obvious — default ON unless user has explicitly turned it off
+  const toggleBtn = document.getElementById('toggle-obvious');
+  function applyObviousState() {
+    const stored = localStorage.getItem(SHOW_OBVIOUS_KEY);
+    const show = stored === null ? true : stored === 'true';
+    document.body.classList.toggle('show-obvious', show);
+    toggleBtn.textContent = show ? 'Hide obvious' : 'Show obvious';
+    toggleBtn.classList.toggle('active', show);
+  }
+  toggleBtn.addEventListener('click', () => {
+    const stored = localStorage.getItem(SHOW_OBVIOUS_KEY);
+    const current = stored === null ? true : stored === 'true';
+    localStorage.setItem(SHOW_OBVIOUS_KEY, (!current).toString());
+    applyObviousState();
+  });
+  applyObviousState();
+
+  // Export
+  document.getElementById('export-btn').addEventListener('click', () => {
+    const data = {
+      schema: 'acb_capture_notes_v1',
+      exported_at: new Date().toISOString(),
+      notes: loadNotes(),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `acb_capture_team_notes_${stamp}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus('Exported.');
+  });
+
+  // Email
+  document.getElementById('email-btn').addEventListener('click', () => {
+    const notes = loadNotes();
+    const ids = Object.keys(notes);
+    if (ids.length === 0) {
+      setStatus('No notes to email — type some first.', true);
+      return;
+    }
+    const stamp = new Date().toISOString().slice(0,10);
+    const subject = `ACB capture — team notes (${stamp})`;
+
+    // Build a readable plaintext body, ordered by FIELDS so it matches the page layout.
+    const lines = [
+      'Notes from the ACB asset capture pre-start brief.',
+      `Captured: ${stamp}`,
+      '',
+      '--- Notes ---',
+      ''
+    ];
+    let count = 0;
+    FIELDS.forEach(f => {
+      const note = notes[f.id];
+      if (note && note.trim()) {
+        lines.push(`[${f.col}] ${f.label}`);
+        lines.push(note.trim());
+        lines.push('');
+        count++;
+      }
+    });
+    lines.push(`(${count} note${count === 1 ? '' : 's'} total)`);
+
+    const body = lines.join('\n');
+    const mailto = `mailto:${EMAIL_TO}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    // mailto has length limits — warn if approaching them
+    if (mailto.length > 1900) {
+      setStatus('Notes are long — email may get truncated. Consider Export instead.', true);
+    } else {
+      setStatus(`Opening email to Simon (${count} note${count === 1 ? '' : 's'})…`);
+    }
+    window.location.href = mailto;
+  });
+
+  // Import
+  document.getElementById('import-btn').addEventListener('click', () => {
+    document.getElementById('import-input').click();
+  });
+  document.getElementById('import-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const imported = data.notes || data;
+        if (typeof imported !== 'object') throw new Error('Invalid format');
+        const merged = {...loadNotes(), ...imported};
+        saveNotes(merged);
+        document.querySelectorAll('.notes-field').forEach(ta => {
+          const id = ta.dataset.id;
+          ta.value = merged[id] || '';
+          ta.classList.toggle('has-content', !!merged[id]);
+        });
+        setStatus(`Imported ${Object.keys(imported).length} notes.`);
+      } catch (err) {
+        setStatus('Import failed — ' + err.message, true);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  function setStatus(msg, isError) {
+    const el = document.getElementById('status-msg');
+    el.textContent = msg;
+    el.style.display = 'inline';
+    el.style.color = isError ? 'var(--eq-bad)' : 'var(--eq-ok)';
+    setTimeout(() => { el.style.display = 'none'; }, 2500);
+  }
+</script>
+
+
+</body></html>
