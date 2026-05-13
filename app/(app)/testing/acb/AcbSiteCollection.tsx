@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { updateAcbDetailsAction } from '@/app/(app)/acb-testing/actions'
+import { updateAcbDetailsAction } from '@/app/(app)/testing/acb/actions'
 import { ChevronDown, ChevronUp, Save } from 'lucide-react'
 import type { AcbTest, Asset } from '@/lib/types'
 

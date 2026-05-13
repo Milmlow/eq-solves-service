@@ -8,7 +8,7 @@ import {
   saveAcbVisualCheckAction,
   saveAcbElectricalReadingAction,
   raiseTestDefectAction,
-} from '@/app/(app)/acb-testing/actions'
+} from '@/app/(app)/testing/acb/actions'
 import { CheckCircle2, AlertCircle, Zap, Save, ClipboardList, Eye } from 'lucide-react'
 import type { AcbTest, AcbTestReading } from '@/lib/types'
 
