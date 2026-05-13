@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { updateDefectAction } from '@/app/(app)/maintenance/actions'
 import { formatDate } from '@/lib/utils/format'
 
@@ -44,6 +45,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
 }
 
 export function DefectRow({ defect, team, canWrite, currentUserId }: DefectRowProps) {
+  const router = useRouter()
   const [expanded, setExpanded] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [localStatus, setLocalStatus] = useState(defect.status)
@@ -77,7 +79,10 @@ export function DefectRow({ defect, team, canWrite, currentUserId }: DefectRowPr
         resolution_notes: localNotes || undefined,
       })
       if (!result.success) setError(result.error ?? 'Failed to update defect.')
-      else setExpanded(false)
+      else {
+        setExpanded(false)
+        router.refresh()
+      }
     })
   }
 
