@@ -8,6 +8,7 @@
  */
 
 import { Resend } from 'resend'
+import { buildUnsubscribeUrl } from './unsubscribe-token'
 
 export interface UpcomingVisitEmailInput {
   to: string
@@ -21,6 +22,10 @@ export interface UpcomingVisitEmailInput {
   scheduledTimeWindow: string | null  // free-text e.g. '8am - 4pm'
   technicianName: string | null
   portalUrl: string
+  /** customer_contact_id — minted into the unsubscribe link. */
+  customerContactId?: string
+  /** Used to mint the unsubscribe URL — falls back to portalUrl's origin. */
+  appUrl?: string
   primaryColour?: string
 }
 
@@ -41,6 +46,17 @@ export async function sendCustomerUpcomingVisitEmail(
   const visitDateLabel = new Date(input.visitDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   const subject = `Maintenance visit on ${visitDateLabel} — ${input.siteName}`
   const greeting = input.contactName ? `Hi ${input.contactName.split(' ')[0]},` : 'Hello,'
+
+  // AU Spam Act 2003 s18 — functional unsubscribe link.
+  let unsubscribeUrl: string | null = null
+  if (input.customerContactId) {
+    try {
+      const appUrl = input.appUrl || new URL(input.portalUrl).origin
+      unsubscribeUrl = buildUnsubscribeUrl(appUrl, input.customerContactId, 'upcoming')
+    } catch (err) {
+      console.warn('[email] unsubscribe link skipped — UNSUBSCRIBE_SECRET missing or bad URL:', (err as Error).message)
+    }
+  }
 
   const html = `
 <!DOCTYPE html><html><head><meta charset="utf-8"></head>
@@ -89,6 +105,10 @@ export async function sendCustomerUpcomingVisitEmail(
       <div style="text-align: center; margin: 24px 0 8px;">
         <a href="${input.portalUrl}" style="display: inline-block; padding: 12px 28px; background: ${brand}; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600;">View in portal</a>
       </div>
+      ${unsubscribeUrl ? `
+      <p style="font-size: 12px; color: #9ca3af; text-align: center; margin: 24px 0 0;">
+        <a href="${unsubscribeUrl}" style="color: #6b7280; text-decoration: underline;">Unsubscribe from upcoming-visit notifications</a>
+      </p>` : ''}
     </div>
   </div>
 </body></html>

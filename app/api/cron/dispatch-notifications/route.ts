@@ -504,6 +504,8 @@ export async function POST(req: NextRequest) {
           contactName: contact.name,
           customerName,
           tenantName: ts.report_company_name ?? ts.product_name ?? 'EQ Solves',
+          customerContactId: contact.id,
+          appUrl,
           portalUrl: appUrl + '/portal',
           periodStart: periodStartIso,
           periodEnd: periodEndIso,
@@ -605,6 +607,8 @@ export async function POST(req: NextRequest) {
             visitDate: ch.due_date,
             scheduledTimeWindow: null,
             technicianName: tech ?? null,
+            customerContactId: contact.id,
+            appUrl,
             portalUrl: appUrl + '/portal',
             primaryColour: ts.primary_colour ?? undefined,
           })
