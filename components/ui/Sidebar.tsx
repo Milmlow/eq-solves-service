@@ -8,7 +8,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { NotificationBell } from '@/components/ui/NotificationBell'
-import type { TenantSettings } from '@/lib/types'
+import { TenantTierChip } from '@/components/ui/TenantTierChip'
+import type { TenantSettings, TenantTier, TenantComplianceTier } from '@/lib/types'
 
 /**
  * Sidebar navigation grouped into sections for visual structure.
@@ -87,9 +88,18 @@ function buildNavSections(commercialEnabled: boolean): NavSection[] {
 interface SidebarProps {
   isAdmin?: boolean
   settings?: TenantSettings
+  tenantTier?: TenantTier | null
+  tenantComplianceTier?: TenantComplianceTier | null
+  tenantChipName?: string | null
 }
 
-export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
+export function Sidebar({
+  isAdmin = false,
+  settings,
+  tenantTier = null,
+  tenantComplianceTier = null,
+  tenantChipName = null,
+}: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
@@ -329,7 +339,17 @@ export function Sidebar({ isAdmin = false, settings }: SidebarProps) {
         ) : (
           <span className="font-bold text-sm text-eq-sky">{productName}</span>
         )}
-        <NotificationBell />
+        <div className="flex items-center gap-2">
+          {tenantTier && tenantComplianceTier && (
+            <TenantTierChip
+              variant="mobile"
+              tier={tenantTier}
+              complianceTier={tenantComplianceTier}
+              tenantName={tenantChipName}
+            />
+          )}
+          <NotificationBell />
+        </div>
       </div>
 
       {/* Mobile overlay */}
