@@ -62,13 +62,12 @@ export default async function AuditLogPage({
   const totalPages = Math.ceil(total / PER_PAGE)
 
   // Resolve user names
-  const userIds = [...new Set((logsRaw ?? []).map((l) => l.user_id).filter(Boolean))]
+  const userIds = [...new Set((logsRaw ?? []).map((l) => l.user_id).filter((id): id is string => Boolean(id)))]
   const userMap: Record<string, string> = {}
   if (userIds.length > 0) {
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, full_name, email')
-      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .in('id', userIds)
     for (const p of profiles ?? []) {
       userMap[p.id] = p.full_name ?? p.email

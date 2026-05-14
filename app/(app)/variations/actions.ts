@@ -170,10 +170,13 @@ export async function updateVariationAction(id: string, formData: FormData) {
       return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
     }
 
+    // parsed.data has variation_number?: string | null | undefined; the
+    // generated Update type allows string | undefined but not null. The
+    // column is nullable in Postgres so null is correct at runtime —
+    // cast through unknown to bridge the generator quirk.
     const { error } = await supabase
       .from('contract_variations')
-      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-      .update(parsed.data)
+      .update(parsed.data as unknown as { variation_number?: string })
       .eq('id', id)
     if (error) return { success: false, error: error.message }
 

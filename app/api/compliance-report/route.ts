@@ -127,8 +127,9 @@ export async function GET(request: NextRequest) {
   if (toDate) mCheckQuery = mCheckQuery.lte('due_date', toDate)
   const { data: checks } = await mCheckQuery
 
-  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-  const maintenance = computeMaintenanceCompliance(checks)
+  // checks.status is string at DB level; computeMaintenanceCompliance narrows
+  // to CheckStatus. Runtime tolerates unknown statuses; cast to bridge types.
+  const maintenance = computeMaintenanceCompliance(checks as Parameters<typeof computeMaintenanceCompliance>[0])
 
   // ── Test records ──
   let tRecordQuery = supabase.from('test_records').select('id, result, test_date, site_id').eq('is_active', true).limit(10000)
@@ -184,8 +185,12 @@ export async function GET(request: NextRequest) {
   const { data: defects } = await defectQuery
 
   // ── Compliance by site ──
-  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-  const complianceBySite = computeComplianceBySite(checks, siteMap, 10).map((r) => ({
+  // Same cast rationale as computeMaintenanceCompliance above.
+  const complianceBySite = computeComplianceBySite(
+    checks as Parameters<typeof computeComplianceBySite>[0],
+    siteMap,
+    10,
+  ).map((r) => ({
     site: r.siteName,
     total: r.total,
     complete: r.complete,
@@ -236,9 +241,10 @@ export async function GET(request: NextRequest) {
     complexity,
     maintenance,
     testing: { total: tTotal, pass: tPass, fail: tFail, defect: tDefect, pending: tPending, passRate: tPassRate },
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-    acb: countProgress(acbTests),
-    nsx: countProgress(nsxTests),
+    // DB step_status columns are nullable; countProgress treats null as
+    // "not started" at runtime. Cast to bridge.
+    acb: countProgress(acbTests as Parameters<typeof countProgress>[0]),
+    nsx: countProgress(nsxTests as Parameters<typeof countProgress>[0]),
     defects: {
       total: defects?.length ?? 0,
       open: defects?.filter((d) => d.status === 'open').length ?? 0,

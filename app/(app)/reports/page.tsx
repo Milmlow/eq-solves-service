@@ -44,8 +44,10 @@ export default async function ReportsPage({
 
   const { data: checks } = await mCheckQuery
 
-  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-  const maintenance = computeMaintenanceCompliance(checks)
+  // DB returns status as string; computeMaintenanceCompliance narrows
+  // to CheckStatus. The function tolerates any string at runtime
+  // (unknown statuses fall through to the default bucket). Cast to bridge.
+  const maintenance = computeMaintenanceCompliance(checks as Parameters<typeof computeMaintenanceCompliance>[0])
   const mTotal = maintenance.total
   const mComplete = maintenance.complete
   const mOverdue = maintenance.overdue
@@ -148,9 +150,10 @@ export default async function ReportsPage({
     return out
   }
 
-  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-  const acbProgress = countWorkflowProgress(acbTests)
-  const nsxProgress = countWorkflowProgress(nsxTests)
+  // DB step_status columns are nullable; countWorkflowProgress treats null
+  // the same as "not started" at runtime. Cast to bridge the type signature.
+  const acbProgress = countWorkflowProgress(acbTests as Parameters<typeof countWorkflowProgress>[0])
+  const nsxProgress = countWorkflowProgress(nsxTests as Parameters<typeof countWorkflowProgress>[0])
 
   // ────────── Defects register summary ──────────
   let defectQuery = supabase
@@ -176,8 +179,11 @@ export default async function ReportsPage({
   const defectsLow = defects?.filter((d) => d.severity === 'low').length ?? 0
 
   // ────────── Compliance by site (top 10 by maintenance volume) ──────────
-  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-  const complianceBySite = computeComplianceBySite(checks, siteMap, 10).map((r) => ({
+  const complianceBySite = computeComplianceBySite(
+    checks as Parameters<typeof computeComplianceBySite>[0],
+    siteMap,
+    10,
+  ).map((r) => ({
     site: r.siteName,
     total: r.total,
     complete: r.complete,

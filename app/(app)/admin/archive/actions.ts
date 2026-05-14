@@ -35,12 +35,19 @@ export async function restoreEntityAction(formData: FormData) {
 
   const table = TABLE_BY_ENTITY[parsed.data.entity_type]
 
-  const { error } = await supabase
+  // Dynamic-table dispatch. With Database<> wired through, supabase.from(unionOfAllTables)
+  // resolves the row type to the intersection of all 53 tables = never, which breaks
+  // .update / .eq / .select. The runtime is correct (table is one of the 6 entity tables
+  // declared in TABLE_BY_ENTITY); the typechecker just can't pick one. Cast to escape.
+  // Proper fix is per-entity dispatch (switch over entity_type) — deferred until the
+  // archive surface justifies the additional code.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dyn = supabase as any
+
+  const { error } = await dyn
     .from(table)
     .update({ is_active: true })
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('id', parsed.data.entity_id)
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('tenant_id', tenantId)
 
   if (error) return { error: error.message }
@@ -88,21 +95,21 @@ export async function hardDeleteEntityAction(formData: FormData) {
     ? 'id, name:custom_name, is_active, tenant_id'
     : 'id, name, is_active, tenant_id'
 
+  // See restoreEntityAction above for why this cast is necessary.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dyn = supabase as any
+
   // Confirm row exists, still archived, tenant-scoped, name matches
-  const { data: row, error: fetchErr } = await supabase
+  const { data: row, error: fetchErr } = await dyn
     .from(table)
     .select(selectCols)
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('id', parsed.data.entity_id)
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   if (fetchErr) return { error: fetchErr.message }
   if (!row) return { error: 'Row not found.' }
-  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   if (row.is_active) return { error: 'Row is not archived. Archive it first.' }
-  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   if ((row.name ?? '').trim() !== parsed.data.confirm_name.trim()) {
     return { error: 'Confirmation name did not match.' }
   }
@@ -113,12 +120,10 @@ export async function hardDeleteEntityAction(formData: FormData) {
     return { error: `Cannot delete: ${depCount} dependent row${depCount === 1 ? '' : 's'} still exist. Remove them first.` }
   }
 
-  const { error: delErr } = await supabase
+  const { error: delErr } = await dyn
     .from(table)
     .delete()
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('id', parsed.data.entity_id)
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('tenant_id', tenantId)
 
   if (delErr) return { error: delErr.message }
@@ -127,7 +132,6 @@ export async function hardDeleteEntityAction(formData: FormData) {
     action: 'delete',
     entityType: parsed.data.entity_type,
     entityId: parsed.data.entity_id,
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     summary: `Hard-deleted ${parsed.data.entity_type}: ${row.name}`,
   })
 

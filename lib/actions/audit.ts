@@ -21,7 +21,10 @@ export async function logAuditEvent(opts: {
 }) {
   try {
     const { supabase, tenantId, user } = await requireUser()
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
+    // metadata is typed as Record<string, unknown> on the opts API for caller
+    // convenience but the audit_logs.metadata column is jsonb — Supabase types
+    // it as `Json` which is a recursive union. Cast through unknown to bridge;
+    // every caller passes a serialisable object, the cast just satisfies TS.
     await supabase.from('audit_logs').insert({
       tenant_id: tenantId,
       user_id: user.id,
@@ -29,7 +32,7 @@ export async function logAuditEvent(opts: {
       entity_type: opts.entityType,
       entity_id: opts.entityId ?? null,
       summary: opts.summary ?? null,
-      metadata: opts.metadata ?? {},
+      metadata: (opts.metadata ?? {}) as never,
       mutation_id: opts.mutationId ?? null,
     })
   } catch {

@@ -61,11 +61,16 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
   const graceDays = settings?.archive_grace_period_days ?? 30
 
   // ----- fetch inactive rows from all six tables in parallel -----
+  // Dynamic-table dispatch via TABLE_BY_ENTITY — the typed client can't pick
+  // a single row shape from the 53-table union (intersection = never), so
+  // the chain is cast through `any`. See admin/archive/actions.ts for the
+  // same pattern and the rationale.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dyn = supabase as any
   const queries = ARCHIVE_ENTITY_TYPES.map(async (entityType) => {
-    const { data } = await supabase
+    const { data } = await dyn
       .from(TABLE_BY_ENTITY[entityType])
       .select(SELECT_COLS)
-      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .eq('is_active', false)
       .order('deleted_at', { ascending: false, nullsFirst: false })
       .range(0, 999)
@@ -82,7 +87,6 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
 
   for (const { entityType, rows } of results) {
     for (const row of rows) {
-      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       const r = row as {
         id: string
         name: string | null
