@@ -4537,6 +4537,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_dashboard_counts: {
+        Args: { p_tenant_id: string; p_user_id?: string }
+        Returns: Json
+      }
       get_distinct_asset_types: {
         Args: never
         Returns: {
