@@ -1,4 +1,6 @@
+import { unstable_cache } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { TenantSettings } from '@/lib/types'
 
 const DEFAULTS: TenantSettings = {
@@ -42,8 +44,62 @@ const DEFAULTS: TenantSettings = {
 }
 
 /**
- * Fetches the tenant settings for the current authenticated user.
- * Falls back to EQ defaults if no tenant membership or settings exist.
+ * Cache-friendly tag for a tenant's settings row. Settings update actions
+ * MUST call `revalidateTag(tenantSettingsTag(tenantId))` after a successful
+ * write so the next read picks up the new values. Centralised here so a
+ * typo doesn't silently break invalidation.
+ */
+export function tenantSettingsTag(tenantId: string): string {
+  return `tenant-settings:${tenantId}`
+}
+
+/**
+ * Internal: read a tenant_settings row by tenant_id using the service-role
+ * admin client (bypasses RLS). Used by the cached wrapper below.
+ *
+ * Security model: the auth/membership check happens in `getTenantSettings()`
+ * BEFORE this is called, so by the time we hit the cache the caller has
+ * already proved they belong to `tenantId`. The admin client is necessary
+ * because `unstable_cache` does not allow access to `cookies()` / `headers()`
+ * inside the cache scope (per next/dist/docs/.../unstable_cache.md), and the
+ * cookie-bound server client cannot work without that context.
+ */
+async function _fetchTenantSettingsRow(tenantId: string): Promise<TenantSettings | null> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('tenant_settings')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .maybeSingle()
+  return (data as TenantSettings | null) ?? null
+}
+
+/**
+ * Read tenant settings for a known tenant ID, memoised across requests via
+ * `unstable_cache`. The cache is keyed on `tenantId` and tagged
+ * `tenant-settings:<tenantId>` so the admin settings + report-settings
+ * update actions can invalidate selectively via `revalidateTag`.
+ *
+ * `revalidate: 3600` is a belt-and-braces fallback — if a write somewhere
+ * forgets to call `revalidateTag`, the cache TTLs after an hour. Settings
+ * change weekly at most, so a hot dashboard / report / cron tick can serve
+ * dozens of requests from the cache without a Supabase round-trip.
+ */
+export async function getCachedTenantSettings(tenantId: string): Promise<TenantSettings | null> {
+  const cached = unstable_cache(
+    () => _fetchTenantSettingsRow(tenantId),
+    ['tenant_settings', tenantId],
+    { tags: [tenantSettingsTag(tenantId)], revalidate: 3600 },
+  )
+  return cached()
+}
+
+/**
+ * Fetches the tenant settings for the current authenticated user. Falls back
+ * to EQ defaults if no tenant membership or no settings row exists.
+ *
+ * The auth + membership lookup is per-request (uncached, depends on cookies).
+ * The tenant_settings row itself is read through the cached helper above.
  */
 export async function getTenantSettings(): Promise<{
   settings: TenantSettings
@@ -64,15 +120,9 @@ export async function getTenantSettings(): Promise<{
 
   if (!membership) return { settings: DEFAULTS, tenantId: null }
 
-  // Get tenant settings
-  const { data: settings } = await supabase
-    .from('tenant_settings')
-    .select('*')
-    .eq('tenant_id', membership.tenant_id)
-    .maybeSingle()
-
+  const settings = await getCachedTenantSettings(membership.tenant_id)
   return {
-    settings: settings ? (settings as TenantSettings) : { ...DEFAULTS, tenant_id: membership.tenant_id },
+    settings: settings ?? { ...DEFAULTS, tenant_id: membership.tenant_id },
     tenantId: membership.tenant_id,
   }
 }

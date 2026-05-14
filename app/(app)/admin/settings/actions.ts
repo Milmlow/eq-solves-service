@@ -1,9 +1,10 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { tenantSettingsTag } from '@/lib/tenant/getTenantSettings'
 import { z } from 'zod'
 
 const UpdateTenantSettingsSchema = z.object({
@@ -60,6 +61,14 @@ export async function updateTenantSettingsAction(formData: FormData) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'update', entityType: 'tenant_settings', summary: 'Updated tenant settings' })
+    // Bust the unstable_cache-backed tenant_settings read in
+    // lib/tenant/getTenantSettings so the next dashboard / report / cron
+    // tick picks up the new values immediately. updateTag is the Next 16
+    // server-action-scoped form of revalidateTag — it enables read-your-
+    // own-writes semantics, which matches "user clicks Save → next page
+    // load sees the new colour." revalidatePath stays as a belt-and-
+    // braces fallback for any route doing a direct Supabase read.
+    updateTag(tenantSettingsTag(tenantId))
     revalidatePath('/', 'layout')
     return { success: true }
   } catch (e: unknown) {

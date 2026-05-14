@@ -1,9 +1,10 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { tenantSettingsTag } from '@/lib/tenant/getTenantSettings'
 
 /**
  * Report settings update payload.
@@ -68,6 +69,11 @@ export async function updateReportSettingsAction(data: ReportSettingsUpdate) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'update', entityType: 'tenant_settings', summary: 'Updated report settings' })
+    // Bust the unstable_cache-backed tenant_settings read so the next report
+    // render picks up the new template settings. updateTag is the Next 16
+    // server-action-scoped form of revalidateTag (read-your-own-writes
+    // semantics). revalidatePath stays as a belt-and-braces fallback.
+    updateTag(tenantSettingsTag(tenantId))
     revalidatePath('/', 'layout')
     return { success: true }
   } catch (e: unknown) {
