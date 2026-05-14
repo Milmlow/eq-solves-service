@@ -6,6 +6,23 @@ Night-before email to the assigned technician with full visit context: site, acc
 
 ---
 
+## Status 2026-05-14
+
+**Phase 0 SHIPPED** — migration 0096 applied to production (added `scheduled_start_at` column + backfilled `assigned_to = created_by` on scheduled-but-unassigned rows; backfill was a no-op against current data since all 9 such rows had `created_by IS NULL`). Server-action enforcement live in `createCheckAction`, `updateCheckAction`, `batchCreateChecksAction` — `status='scheduled'` requires non-null `assigned_to`. PR #118.
+
+**Phase 1 scope locked** (Royce, 2026-05-14):
+- ✅ **v1 INCLUDES all three enrichment blocks**: `prior_visit_summary`, `last_visit_report` attachment, `weather`. (Source doc marked the latter two as Phase 2/3; Royce confirmed they ship in v1.) Adds ~2 days to Phase 1 sprint vs original estimate.
+- ✅ **Backfill default**: `assigned_to = created_by` — DONE in migration 0096.
+- ✅ **Visit-start-time UI**: inline editable field on `/maintenance/[id]` header.
+- ✅ **Send brief button**: on `/maintenance/[id]` only (admin/supervisor visible).
+- ⏳ **Reschedule threshold** (1hr movement): not yet locked. Defer to Phase 2 implementation time.
+
+**Phase 1 effort revised**: 4-5 days of focused work (was 2-3 in original estimate — bigger because of enrichment blocks). Phase 2 effort drops because cron is now the only Phase 2 deliverable.
+
+**Still parked**: Phase 3 items (SMS, multi-tech, customer email, "running late") unchanged.
+
+---
+
 ## Locked-in decisions (Royce, 2026-05-13)
 
 | # | Question | Choice | Notes |
@@ -36,22 +53,23 @@ The captured decisions, when read together, imply three phases (not one). Build 
 
 **Without Phase 0, the brief feature is unshippable** — there's nothing to send to. Separate PR, separate review, must land first.
 
-### Phase 1 — Brief feature, manual trigger
-1. **Brief composer** (`lib/notifications/pre-visit-brief.ts`) — pure function that takes a check_id and returns `{ subject, htmlBody, plainBody, icsContent, runsheetDocx }`.
-2. **Email template** — server-rendered. Blocks: visit_details, map_link, site_contact, access_notes, scope_summary, asset_count, tech_notes, coordinators, deep_link.
-3. **ICS generator** — single VEVENT, RFC 5545. Tech as ATTENDEE, tenant as ORGANIZER. DURATION=4h default. VALARM 60min + 15min before.
-4. **Run-sheet DOCX attachment** — call existing `/api/maintenance-checklist?format=standard` server-side, attach to email.
-5. **"Send brief" button** — on `/maintenance/[id]` (admin/supervisor visible only). Calls a server action that runs the composer + dispatches via existing notifications pipeline.
-6. **Bell notification** — same trigger fires an in-app notification with deep link.
-7. **Opt-out** — add `pre_visit_tech_brief` as an event type in `notification_preferences.event_type_opt_outs`. Default ON. Surface in `/settings/notifications`.
-8. **Audit log** — every send writes to `audit_logs` with mutation_id so re-clicks are idempotent.
+### Phase 1 — Brief feature, manual trigger (REVISED 2026-05-14: enrichment blocks pulled in)
+1. **Brief composer** (`lib/notifications/pre-visit-brief.ts`) — pure function that takes a check_id and returns `{ subject, htmlBody, plainBody, icsContent, runsheetDocx, lastVisitReportDocx? }`.
+2. **`scheduled_start_at` inline editor** — on `/maintenance/[id]` header, inline-edit pattern matching the WO and notes cells.
+3. **Email template** — server-rendered. Blocks: visit_details, map_link, site_contact, access_notes, scope_summary, asset_count, tech_notes, coordinators, deep_link, **prior_visit_summary**, **weather**.
+4. **`prior_visit_summary` block** — query last completed check at same site, surface defects raised + tests failed.
+5. **`weather` block** — BoM API (Australia) for the site lat/lon. Cache result for the day to avoid rate limits.
+6. **ICS generator** — single VEVENT, RFC 5545. Tech as ATTENDEE, tenant as ORGANIZER. DURATION=4h default. VALARM 60min + 15min before.
+7. **Run-sheet DOCX attachment** — call existing `/api/maintenance-checklist?format=standard` server-side, attach to email.
+8. **`last_visit_report` attachment** — call `/api/pm-asset-report` for last completed check at same site, attach.
+9. **"Send brief" button** — on `/maintenance/[id]` only (admin/supervisor visible). Calls a server action that runs the composer + dispatches via existing notifications pipeline.
+10. **Bell notification** — same trigger fires an in-app notification with deep link.
+11. **Opt-out** — add `pre_visit_tech_brief` as an event type in `notification_preferences.event_type_opt_outs`. Default ON. Surface in `/settings/notifications`.
+12. **Audit log** — every send writes to `audit_logs` with mutation_id so re-clicks are idempotent.
 
-### Phase 2 — Cron + enrichment blocks
+### Phase 2 — Cron automation (smaller now)
 1. **Cron at 17:00 day-before** — fires `pre_visit_tech_brief` for every scheduled check where `scheduled_start_at = tomorrow_in_tenant_tz` AND `pre_visit_brief_sent_at IS NULL`.
-2. **`prior_visit_summary` block** — query last completed check at same site, surface defects raised + tests failed.
-3. **`last_visit_report` attachment** — call `/api/pm-asset-report` for last completed check at same site.
-4. **`weather` block** — outdoor switchyard relevance. Phase 3-ish; cheap to add via Bureau of Meteorology API.
-5. **Reschedule handling** — when `scheduled_start_at` changes by >1hr, reset `pre_visit_brief_sent_at` so cron re-fires. ICS CANCEL on cancellation.
+2. **Reschedule handling** — when `scheduled_start_at` changes by >1hr, reset `pre_visit_brief_sent_at` so cron re-fires. ICS CANCEL on cancellation.
 
 ### Phase 3 — Phase 2 deferrals from the source doc
 - SMS channel (own build, ~$0.06/SMS AU via Twilio)
