@@ -19,6 +19,18 @@ import {
 } from '../actions'
 import { formatDate } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
+
+/**
+ * Thresholds for the check-page progressive-disclosure pattern.
+ * Below the threshold the section stays expanded on first render (small
+ * enough to scan at a glance). At or above, it starts collapsed and the
+ * tech taps to expand. Picked from Royce's 2026-05-14 review — the asset
+ * table threshold matters most because Jemena boards routinely carry 40+
+ * assets per check.
+ */
+const ASSET_TABLE_COLLAPSE_THRESHOLD = 10
+const ATTACHMENTS_COLLAPSE_THRESHOLD = 5
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
 import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Send } from 'lucide-react'
 import Link from 'next/link'
@@ -525,16 +537,30 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 
       {/* Attachments — moved above the asset table 2026-04-28 (issue 2 in
           Royce's review). Eye lands on summary + linked tests + supporting
-          docs first; the long breaker table sits at the bottom. */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <AttachmentList
-          entityType="maintenance_check"
-          entityId={check.id}
-          attachments={attachments}
-          canWrite={canWriteRole || isAssigned}
-          isAdmin={isAdmin}
-        />
-      </div>
+          docs first; the long breaker table sits at the bottom.
+          Progressive-disclosure wrap added 2026-05-14: collapsed by
+          default when there are more than ATTACHMENTS_COLLAPSE_THRESHOLD
+          attachments (sign-off photo dumps from busy visits). When empty
+          or small, stays open so the upload affordance is visible. */}
+      <CollapsibleSection
+        title="Attachments"
+        summary={
+          attachments.length === 0
+            ? 'no files yet'
+            : `${attachments.length} file${attachments.length === 1 ? '' : 's'}`
+        }
+        defaultOpen={attachments.length <= ATTACHMENTS_COLLAPSE_THRESHOLD}
+      >
+        <div className="p-4">
+          <AttachmentList
+            entityType="maintenance_check"
+            entityId={check.id}
+            attachments={attachments}
+            canWrite={canWriteRole || isAssigned}
+            isAdmin={isAdmin}
+          />
+        </div>
+      </CollapsibleSection>
 
       {/* Asset Table — full width */}
       {checkAssets.length > 0 && (
@@ -553,12 +579,12 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             </div>
           )}
 
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 flex-wrap">
-              <span className="text-sm font-bold text-eq-ink shrink-0">
-                Maintenance Check Assets ({checkAssets.length})
-              </span>
-              <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+          <CollapsibleSection
+            title="Assets"
+            summary={`${completedAssets}/${checkAssets.length} completed`}
+            defaultOpen={checkAssets.length <= ASSET_TABLE_COLLAPSE_THRESHOLD}
+            actions={
+              <>
                 {/* Free-text filter (Royce 2026-04-28 — scanning a 100-row
                     table by eye is painful). Empty = all assets. */}
                 <input
@@ -568,17 +594,19 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                   placeholder="Filter by name, Maximo ID, or location…"
                   className="h-8 px-2 text-sm border border-gray-200 rounded focus:outline-none focus:border-eq-deep focus:ring-1 focus:ring-eq-sky/30 w-56 max-w-[40%]"
                 />
-                <span className="text-sm text-eq-grey shrink-0">
-                  {filterText ? `${displayedAssets.length}/${checkAssets.length}` : `${completedAssets}/${checkAssets.length} completed`}
-                </span>
+                {filterText && (
+                  <span className="text-sm text-eq-grey shrink-0">
+                    {displayedAssets.length}/{checkAssets.length}
+                  </span>
+                )}
                 {canAct && (
                   <Button size="sm" variant="secondary" onClick={() => setShowPasteModal(true)}>
                     <ClipboardPaste className="w-4 h-4 mr-1" /> Paste WO #s
                   </Button>
                 )}
-              </div>
-            </div>
-
+              </>
+            }
+          >
           {/* Full-width table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -642,7 +670,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
               </tbody>
             </table>
           </div>
-        </div>
+          </CollapsibleSection>
         </>
       )}
 
