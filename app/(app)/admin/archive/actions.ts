@@ -38,7 +38,9 @@ export async function restoreEntityAction(formData: FormData) {
   const { error } = await supabase
     .from(table)
     .update({ is_active: true })
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('id', parsed.data.entity_id)
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('tenant_id', tenantId)
 
   if (error) return { error: error.message }
@@ -90,13 +92,17 @@ export async function hardDeleteEntityAction(formData: FormData) {
   const { data: row, error: fetchErr } = await supabase
     .from(table)
     .select(selectCols)
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('id', parsed.data.entity_id)
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('tenant_id', tenantId)
     .maybeSingle()
 
   if (fetchErr) return { error: fetchErr.message }
   if (!row) return { error: 'Row not found.' }
+  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   if (row.is_active) return { error: 'Row is not archived. Archive it first.' }
+  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   if ((row.name ?? '').trim() !== parsed.data.confirm_name.trim()) {
     return { error: 'Confirmation name did not match.' }
   }
@@ -110,7 +116,9 @@ export async function hardDeleteEntityAction(formData: FormData) {
   const { error: delErr } = await supabase
     .from(table)
     .delete()
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('id', parsed.data.entity_id)
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     .eq('tenant_id', tenantId)
 
   if (delErr) return { error: delErr.message }
@@ -119,6 +127,7 @@ export async function hardDeleteEntityAction(formData: FormData) {
     action: 'delete',
     entityType: parsed.data.entity_type,
     entityId: parsed.data.entity_id,
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     summary: `Hard-deleted ${parsed.data.entity_type}: ${row.name}`,
   })
 

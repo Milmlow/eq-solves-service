@@ -115,6 +115,7 @@ export default async function MaintenancePage({
     const { data: assigneeProfiles } = await supabase
       .from('profiles')
       .select('id, full_name, email')
+      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .in('id', assigneeIds)
     for (const p of assigneeProfiles ?? []) {
       assigneeMap[p.id] = p.full_name ?? p.email

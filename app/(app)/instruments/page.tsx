@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { InstrumentList } from './InstrumentList'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
@@ -71,6 +71,7 @@ export default async function InstrumentsPage({
   const assigneeIds = [...new Set((instrumentsRaw ?? []).map((i) => i.assigned_to).filter(Boolean))]
   const assigneeMap: Record<string, string> = {}
   if (assigneeIds.length > 0) {
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', assigneeIds)
     for (const p of profiles ?? []) {
       assigneeMap[p.id] = p.full_name ?? p.email

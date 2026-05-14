@@ -21,6 +21,7 @@ export async function logAuditEvent(opts: {
 }) {
   try {
     const { supabase, tenantId, user } = await requireUser()
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     await supabase.from('audit_logs').insert({
       tenant_id: tenantId,
       user_id: user.id,

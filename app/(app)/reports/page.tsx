@@ -44,6 +44,7 @@ export default async function ReportsPage({
 
   const { data: checks } = await mCheckQuery
 
+  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   const maintenance = computeMaintenanceCompliance(checks)
   const mTotal = maintenance.total
   const mComplete = maintenance.complete
@@ -147,6 +148,7 @@ export default async function ReportsPage({
     return out
   }
 
+  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   const acbProgress = countWorkflowProgress(acbTests)
   const nsxProgress = countWorkflowProgress(nsxTests)
 
@@ -174,6 +176,7 @@ export default async function ReportsPage({
   const defectsLow = defects?.filter((d) => d.severity === 'low').length ?? 0
 
   // ────────── Compliance by site (top 10 by maintenance volume) ──────────
+  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   const complianceBySite = computeComplianceBySite(checks, siteMap, 10).map((r) => ({
     site: r.siteName,
     total: r.total,

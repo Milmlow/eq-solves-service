@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { AuditLogList } from './AuditLogList'
 import { isAdmin } from '@/lib/utils/roles'
@@ -68,6 +68,7 @@ export default async function AuditLogPage({
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, full_name, email')
+      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .in('id', userIds)
     for (const p of profiles ?? []) {
       userMap[p.id] = p.full_name ?? p.email

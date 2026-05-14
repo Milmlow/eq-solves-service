@@ -110,10 +110,15 @@ export default async function AssetsPage({
   // the cap because the response is one value, not a row set.
   const { data: allAssetsJson } = await supabase.rpc('get_assets_for_grouping', {
     p_show_archived: showArchived,
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     p_search: search || null,
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     p_site_id: siteId || null,
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     p_asset_type: assetType || null,
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     p_job_plan_id: jobPlanId || null,
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     p_customer_id: customerId || null,
   })
   const allAssets = (allAssetsJson ?? []) as unknown[]

@@ -1,4 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/supabase/database.types'
+
+type PublicTable = keyof Database['public']['Tables']
 
 // ------------------------------------------------------------
 // Entity types supported by the unified archive.
@@ -33,7 +36,7 @@ export const ARCHIVE_LABELS: Record<ArchiveEntityType, { singular: string; plura
  * actual Postgres table name. Keeps the table-name strings out of
  * every call site.
  */
-export const TABLE_BY_ENTITY: Record<ArchiveEntityType, string> = {
+export const TABLE_BY_ENTITY: Record<ArchiveEntityType, PublicTable> = {
   customer:          'customers',
   site:              'sites',
   asset:             'assets',
