@@ -27,6 +27,15 @@ import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import type { AcbTestDetail, BreakerTestReading } from '@/lib/reports/pm-asset-report'
 
+// DOCX generation is CPU-bound and runs through ~12 sequential Supabase
+// queries before the docx-tree synthesis starts. At Jemena-scale (multi-site
+// reports with 50+ linked tests) the round-trip approaches 20s. Set the
+// hint to 60s so Netlify doesn't cut us off at the default. Actual cap is
+// determined by the Netlify plan (Pro = 26s synchronous, background = 15m).
+// Long-term fix is to move to a background-function pattern (PR follow-up).
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function GET(request: NextRequest) {
   const checkId = request.nextUrl.searchParams.get('check_id')
   if (!checkId) {
