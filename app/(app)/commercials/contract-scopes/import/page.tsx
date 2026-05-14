@@ -39,8 +39,8 @@ export default async function ContractScopesImportPage() {
         <Breadcrumb
           items={[
             { label: 'Home', href: '/dashboard' },
-            { label: 'Contract Scope', href: '/contract-scope' },
-            { label: 'Import' },
+            { label: 'Commercials', href: '/commercials' },
+            { label: 'Import Commercial Sheet' },
           ]}
         />
         <h1 className="text-3xl font-bold text-eq-sky mt-2">Import Commercial Sheet</h1>
@@ -57,8 +57,8 @@ export default async function ContractScopesImportPage() {
         <Breadcrumb
           items={[
             { label: 'Home', href: '/dashboard' },
-            { label: 'Contract Scope', href: '/contract-scope' },
-            { label: 'Import' },
+            { label: 'Commercials', href: '/commercials' },
+            { label: 'Import Commercial Sheet' },
           ]}
         />
         <h1 className="text-3xl font-bold text-eq-sky mt-2">Import Commercial Sheet</h1>

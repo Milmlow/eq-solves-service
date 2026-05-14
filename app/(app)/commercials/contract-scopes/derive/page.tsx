@@ -38,8 +38,8 @@ export default async function DeriveContractScopePage() {
         <Breadcrumb
           items={[
             { label: 'Home', href: '/dashboard' },
-            { label: 'Contract Scope', href: '/contract-scope' },
-            { label: 'Build from work' },
+            { label: 'Commercials', href: '/commercials' },
+            { label: 'Build Scope from Work' },
           ]}
         />
         <h1 className="text-3xl font-bold text-eq-sky mt-2">Build Contract Scope from Delivered Work</h1>
@@ -56,8 +56,8 @@ export default async function DeriveContractScopePage() {
         <Breadcrumb
           items={[
             { label: 'Home', href: '/dashboard' },
-            { label: 'Contract Scope', href: '/contract-scope' },
-            { label: 'Build from work' },
+            { label: 'Commercials', href: '/commercials' },
+            { label: 'Build Scope from Work' },
           ]}
         />
         <h1 className="text-3xl font-bold text-eq-sky mt-2">Build Contract Scope from Delivered Work</h1>

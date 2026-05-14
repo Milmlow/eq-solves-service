@@ -31,7 +31,7 @@ export default async function MediaLibraryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin/users' }, { label: 'Media Library' }]} />
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin' }, { label: 'Media Library' }]} />
         <h1 className="text-2xl font-bold text-eq-ink mt-2">Media Library</h1>
         <p className="text-sm text-eq-grey mt-1">
           Upload and manage images in one place. Reference them anywhere via dropdown — no duplicates.

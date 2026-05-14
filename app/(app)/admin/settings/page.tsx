@@ -10,7 +10,7 @@ export default async function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin/users' }, { label: 'Tenant Settings' }]} />
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin' }, { label: 'Tenant Settings' }]} />
         <h1 className="text-2xl font-bold text-eq-ink mt-2">Tenant Settings</h1>
         <p className="text-sm text-eq-grey mt-1">
           Configure branding, colours, and platform settings for your organisation.
