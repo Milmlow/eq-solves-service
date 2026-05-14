@@ -134,10 +134,15 @@ export async function GET(request: NextRequest) {
   const reportLogos = await resolveReportLogos(tenantSettings, tenantRow)
   const sitePhoto = check.site_id ? await fetchSitePhoto(supabase, check.site_id, tenantId) : undefined
 
-  // Resolve user names (assigned_to, completed_by, etc.)
+  // Resolve user names (assigned_to + per-item completed_by).
+  //
+  // NOTE: maintenance_checks has NO completed_by column — only assigned_to,
+  // created_by, and completed_at. The historical code read check.completed_by
+  // (which silently returned undefined), so supervisorName and reviewerName
+  // on the customer report cover have always rendered '—' and null. We've
+  // dropped the dead reads here; rendering decisions handled below.
   const userIds = new Set<string>()
   if (check.assigned_to) userIds.add(check.assigned_to)
-  if (check.completed_by) userIds.add(check.completed_by)
   for (const item of allItems) {
     if (item.completed_by) userIds.add(item.completed_by)
   }
@@ -445,7 +450,10 @@ export async function GET(request: NextRequest) {
     siteCode: jobPlanCode || siteName,
     siteAddress: site?.address ?? '—',
     customerName,
-    supervisorName: check.completed_by ? (userMap[check.completed_by] ?? '—') : '—',
+    // supervisorName previously read from check.completed_by (never existed —
+    // always rendered '—'). Preserved that visible behaviour pending a real
+    // sign-off column / lookup via audit_log.
+    supervisorName: '—',
     contactEmail: '—',
     contactPhone: '—',
 
@@ -456,7 +464,9 @@ export async function GET(request: NextRequest) {
     outstandingWorkOrders: outstandingWOs,
 
     technicianName: check.assigned_to ? (userMap[check.assigned_to] ?? 'Unassigned') : 'Unassigned',
-    reviewerName: check.completed_by ? (userMap[check.completed_by] ?? null) : null,
+    // reviewerName previously read from the non-existent completed_by column
+    // (always null). Preserved that behaviour pending a real reviewer field.
+    reviewerName: null,
 
     tenantProductName: productName,
     primaryColour,

@@ -1163,6 +1163,7 @@ export async function batchCreateChecksAction(formData: FormData) {
       // Insert the check
       const { data: check } = await supabase
         .from('maintenance_checks')
+        // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
         .insert({
           tenant_id: tenantId,
           job_plan_id: jobPlanId,

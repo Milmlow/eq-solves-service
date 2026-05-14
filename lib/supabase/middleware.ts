@@ -7,6 +7,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { publicEnv } from '@/lib/env'
+import type { Database } from './database.types'
 
 /**
  * Refreshes the Supabase session on every request and returns the response
@@ -17,7 +18,7 @@ import { publicEnv } from '@/lib/env'
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request })
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     publicEnv.NEXT_PUBLIC_SUPABASE_URL,
     publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {

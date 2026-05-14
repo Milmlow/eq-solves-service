@@ -39,6 +39,7 @@ export default async function MediaLibraryPage() {
       </div>
 
       <MediaLibraryClient
+        // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
         media={media ?? []}
         customers={customers ?? []}
         sites={sites ?? []}

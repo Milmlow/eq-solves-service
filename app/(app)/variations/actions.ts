@@ -172,6 +172,7 @@ export async function updateVariationAction(id: string, formData: FormData) {
 
     const { error } = await supabase
       .from('contract_variations')
+      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .update(parsed.data)
       .eq('id', id)
     if (error) return { success: false, error: error.message }

@@ -120,6 +120,7 @@ export async function GET(request: NextRequest) {
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, full_name, email')
+      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .in('id', testerIds)
     for (const p of profiles ?? []) {
       testerMap[p.id] = p.full_name ?? p.email

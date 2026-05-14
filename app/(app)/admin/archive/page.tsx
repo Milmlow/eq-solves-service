@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
@@ -65,6 +65,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
     const { data } = await supabase
       .from(TABLE_BY_ENTITY[entityType])
       .select(SELECT_COLS)
+      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .eq('is_active', false)
       .order('deleted_at', { ascending: false, nullsFirst: false })
       .range(0, 999)
@@ -81,6 +82,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
 
   for (const { entityType, rows } of results) {
     for (const row of rows) {
+      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       const r = row as {
         id: string
         name: string | null
@@ -149,7 +151,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
             href="/admin/archive/settings"
             className="text-xs font-semibold text-eq-deep hover:text-eq-sky transition-colors whitespace-nowrap pt-1"
           >
-            Grace period: {graceDays} days · Change →
+            Grace period: {graceDays} days Â· Change â†’
           </Link>
         </div>
       </div>

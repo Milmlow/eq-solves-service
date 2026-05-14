@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { AnalyticsCharts } from './AnalyticsCharts'
@@ -6,7 +6,7 @@ import { AnalyticsCharts } from './AnalyticsCharts'
 export default async function AnalyticsPage() {
   const supabase = await createClient()
 
-  // ── Fetch raw data in parallel ──
+  // â”€â”€ Fetch raw data in parallel â”€â”€
   const [
     { count: assetCount },
     { data: checks },
@@ -25,7 +25,7 @@ export default async function AnalyticsPage() {
     supabase.from('sites').select('id, name').eq('is_active', true).limit(10000),
   ])
 
-  // ── Monthly test volume (last 12 months) ──
+  // â”€â”€ Monthly test volume (last 12 months) â”€â”€
   const now = new Date()
   const months: string[] = []
   for (let i = 11; i >= 0; i--) {
@@ -50,7 +50,7 @@ export default async function AnalyticsPage() {
     (nsxTests ?? []).filter((t) => t.test_date?.startsWith(m)).length
   )
 
-  // ── Compliance trend (last 12 months) ──
+  // â”€â”€ Compliance trend (last 12 months) â”€â”€
   const complianceByMonth = months.map((m) => {
     const monthChecks = (checks ?? []).filter((c) => c.due_date?.startsWith(m))
     const total = monthChecks.length
@@ -58,7 +58,7 @@ export default async function AnalyticsPage() {
     return total > 0 ? Math.round((complete / total) * 100) : null
   })
 
-  // ── Summary KPIs ──
+  // â”€â”€ Summary KPIs â”€â”€
   const totalAssets = assetCount ?? 0
   const totalSites = sites?.length ?? 0
   const totalTests = (testRecords?.length ?? 0) + (acbTests?.length ?? 0) + (nsxTests?.length ?? 0)
@@ -76,7 +76,7 @@ export default async function AnalyticsPage() {
   const overdueChecks = (checks ?? []).filter((c) => c.status === 'overdue').length
   const overallCompliance = activeChecks > 0 ? Math.round((completedChecks / activeChecks) * 100) : 0
 
-  // ── Instrument calibration summary ──
+  // â”€â”€ Instrument calibration summary â”€â”€
   const today = now.toISOString().slice(0, 10)
   const instrumentsActive = (instruments ?? []).filter((i) => i.status === 'Active').length
   const instrumentsOverdue = (instruments ?? []).filter(
@@ -84,7 +84,7 @@ export default async function AnalyticsPage() {
   ).length
   const instrumentsOutForCal = (instruments ?? []).filter((i) => i.status === 'Out for Cal').length
 
-  // ── Pass rates by test type ──
+  // â”€â”€ Pass rates by test type â”€â”€
   const generalPass = (testRecords ?? []).filter((t) => t.result === 'pass').length
   const generalTotal = testRecords?.length ?? 0
   const acbPass = (acbTests ?? []).filter((t) => t.overall_result === 'Pass').length
@@ -92,7 +92,7 @@ export default async function AnalyticsPage() {
   const nsxPass = (nsxTests ?? []).filter((t) => t.overall_result === 'Pass').length
   const nsxTotal = nsxTests?.length ?? 0
 
-  // ── Maintenance health metrics ──
+  // â”€â”€ Maintenance health metrics â”€â”€
   const thisMonth = new Date().toISOString().slice(0, 7)
   const lastMonth = new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().slice(0, 7)
 
@@ -110,6 +110,7 @@ export default async function AnalyticsPage() {
     ? Math.round(
         completedWithDates.reduce((sum, c) => {
           const created = new Date(c.created_at).getTime()
+          // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
           const completed = new Date(c.completed_at).getTime()
           return sum + (completed - created) / (1000 * 60 * 60 * 24)
         }, 0) / completedWithDates.length
@@ -154,13 +155,13 @@ export default async function AnalyticsPage() {
           <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-3">Total Tests</p>
           <p className="text-4xl font-bold text-amber-900">{totalTests.toLocaleString()}</p>
         </div>
-        <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 cursor-help" title={`Tests with result 'pass' or 'Pass' ÷ total tests. ${passCount} passed out of ${totalTests}. Source: test_records.result + acb_tests.overall_result + nsx_tests.overall_result.`}>
+        <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 cursor-help" title={`Tests with result 'pass' or 'Pass' Ã· total tests. ${passCount} passed out of ${totalTests}. Source: test_records.result + acb_tests.overall_result + nsx_tests.overall_result.`}>
           <p className="text-xs font-bold text-violet-700 uppercase tracking-wide mb-3">Pass Rate</p>
           <p className={`text-4xl font-bold ${overallPassRate >= 80 ? 'text-green-600' : overallPassRate >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
             {overallPassRate}<span className="text-2xl">%</span>
           </p>
         </div>
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 cursor-help" title={`Completed checks ÷ all checks. ${completedChecks} completed out of ${activeChecks}. Source: maintenance_checks table (status = 'complete').`}>
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 cursor-help" title={`Completed checks Ã· all checks. ${completedChecks} completed out of ${activeChecks}. Source: maintenance_checks table (status = 'complete').`}>
           <p className="text-xs font-bold text-rose-700 uppercase tracking-wide mb-3">Compliance</p>
           <p className={`text-4xl font-bold ${overallCompliance >= 80 ? 'text-green-600' : overallCompliance >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
             {overallCompliance}<span className="text-2xl">%</span>
@@ -252,7 +253,7 @@ export default async function AnalyticsPage() {
             </div>
             {instrumentsOverdue > 0 && (
               <a href="/instruments" className="text-xs text-eq-sky hover:text-eq-deep transition-colors">
-                View overdue instruments →
+                View overdue instruments â†’
               </a>
             )}
           </div>

@@ -553,6 +553,7 @@ export async function POST(req: NextRequest) {
       job_plans: { name: string } | { name: string }[] | null
       profiles: { full_name: string } | { full_name: string }[] | null
     }
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     const upRows = (upcoming ?? []) as UpRow[]
     const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number }>
     sec.customerUpcoming.eligible = upRows.length

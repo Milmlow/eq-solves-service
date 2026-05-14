@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+﻿import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TestRecordList } from './TestRecordList'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
@@ -105,6 +105,7 @@ export default async function TestingPage({
     const { data: testerProfiles } = await supabase
       .from('profiles')
       .select('id, full_name, email')
+      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .in('id', testerIds)
     for (const p of testerProfiles ?? []) {
       testerMap[p.id] = p.full_name ?? p.email

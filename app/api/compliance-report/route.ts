@@ -58,9 +58,13 @@ export async function GET(request: NextRequest) {
   // Fetch tenant settings for branding. tenants.name is the canonical
   // company name; tenant_settings overrides allow custom report-only
   // branding (e.g. trading name for invoicing different from legal name).
+  // tenants.primary_colour does NOT exist (colour lives on tenant_settings).
+  // The previous `, primary_colour` select silently returned the row without
+  // the column rather than erroring, and the tenant?.primary_colour fallback
+  // below was always undefined. Select only `name` here.
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('name, primary_colour')
+    .select('name')
     .eq('id', tenantId)
     .maybeSingle()
 
@@ -73,7 +77,7 @@ export async function GET(request: NextRequest) {
   const reportCompanyName = tenantSettings?.report_company_name ?? tenant?.name ?? 'EQ Solves'
   const reportCompanyAbn = tenantSettings?.report_company_abn ?? null
   const productName = tenantSettings?.product_name ?? 'EQ Solves Service'
-  const reportPrimaryColour = (tenantSettings?.primary_colour ?? tenant?.primary_colour ?? '3DA8D8').replace('#', '')
+  const reportPrimaryColour = (tenantSettings?.primary_colour ?? '3DA8D8').replace('#', '')
   const reportDeepColour = tenantSettings?.deep_colour ?? null
   const reportIceColour = tenantSettings?.ice_colour ?? null
   const reportInkColour = tenantSettings?.ink_colour ?? null
@@ -119,6 +123,7 @@ export async function GET(request: NextRequest) {
   if (toDate) mCheckQuery = mCheckQuery.lte('due_date', toDate)
   const { data: checks } = await mCheckQuery
 
+  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   const maintenance = computeMaintenanceCompliance(checks)
 
   // ── Test records ──
@@ -175,6 +180,7 @@ export async function GET(request: NextRequest) {
   const { data: defects } = await defectQuery
 
   // ── Compliance by site ──
+  // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
   const complianceBySite = computeComplianceBySite(checks, siteMap, 10).map((r) => ({
     site: r.siteName,
     total: r.total,
@@ -226,6 +232,7 @@ export async function GET(request: NextRequest) {
     complexity,
     maintenance,
     testing: { total: tTotal, pass: tPass, fail: tFail, defect: tDefect, pending: tPending, passRate: tPassRate },
+    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     acb: countProgress(acbTests),
     nsx: countProgress(nsxTests),
     defects: {
