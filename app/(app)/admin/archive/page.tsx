@@ -155,7 +155,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
             href="/admin/archive/settings"
             className="text-xs font-semibold text-eq-deep hover:text-eq-sky transition-colors whitespace-nowrap pt-1"
           >
-            Grace period: {graceDays} days Â· Change â†’
+            Grace period: {graceDays} days · Change →
           </Link>
         </div>
       </div>

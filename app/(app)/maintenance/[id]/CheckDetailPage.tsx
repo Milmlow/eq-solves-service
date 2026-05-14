@@ -247,8 +247,16 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     if (!ok) return
     setError(null); setLoading(true)
     const result = await archiveCheckAction(check.id, false)
-    setLoading(false)
-    if (!result.success) setError(result.error ?? 'Failed to delete.')
+    if (!result.success) {
+      setLoading(false)
+      setError(result.error ?? 'Failed to delete.')
+      return
+    }
+    // Success: leave the now-archived check behind and return to the list.
+    // We intentionally don't clear `loading` first — the button stays
+    // disabled while the navigation transitions so a double-click can't
+    // re-fire archiveCheckAction. router.push handles unmount cleanup.
+    router.push('/maintenance')
   }
 
   function handleForceComplete(checkAssetId: string) {

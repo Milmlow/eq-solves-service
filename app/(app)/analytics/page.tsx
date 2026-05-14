@@ -6,7 +6,7 @@ import { AnalyticsCharts } from './AnalyticsCharts'
 export default async function AnalyticsPage() {
   const supabase = await createClient()
 
-  // â”€â”€ Fetch raw data in parallel â”€â”€
+  // ── Fetch raw data in parallel ──
   const [
     { count: assetCount },
     { data: checks },
@@ -25,7 +25,7 @@ export default async function AnalyticsPage() {
     supabase.from('sites').select('id, name').eq('is_active', true).limit(10000),
   ])
 
-  // â”€â”€ Monthly test volume (last 12 months) â”€â”€
+  // ── Monthly test volume (last 12 months) ──
   const now = new Date()
   const months: string[] = []
   for (let i = 11; i >= 0; i--) {
@@ -50,7 +50,7 @@ export default async function AnalyticsPage() {
     (nsxTests ?? []).filter((t) => t.test_date?.startsWith(m)).length
   )
 
-  // â”€â”€ Compliance trend (last 12 months) â”€â”€
+  // ── Compliance trend (last 12 months) ──
   const complianceByMonth = months.map((m) => {
     const monthChecks = (checks ?? []).filter((c) => c.due_date?.startsWith(m))
     const total = monthChecks.length
@@ -58,7 +58,7 @@ export default async function AnalyticsPage() {
     return total > 0 ? Math.round((complete / total) * 100) : null
   })
 
-  // â”€â”€ Summary KPIs â”€â”€
+  // ── Summary KPIs ──
   const totalAssets = assetCount ?? 0
   const totalSites = sites?.length ?? 0
   const totalTests = (testRecords?.length ?? 0) + (acbTests?.length ?? 0) + (nsxTests?.length ?? 0)
@@ -76,7 +76,7 @@ export default async function AnalyticsPage() {
   const overdueChecks = (checks ?? []).filter((c) => c.status === 'overdue').length
   const overallCompliance = activeChecks > 0 ? Math.round((completedChecks / activeChecks) * 100) : 0
 
-  // â”€â”€ Instrument calibration summary â”€â”€
+  // ── Instrument calibration summary ──
   const today = now.toISOString().slice(0, 10)
   const instrumentsActive = (instruments ?? []).filter((i) => i.status === 'Active').length
   const instrumentsOverdue = (instruments ?? []).filter(
@@ -84,7 +84,7 @@ export default async function AnalyticsPage() {
   ).length
   const instrumentsOutForCal = (instruments ?? []).filter((i) => i.status === 'Out for Cal').length
 
-  // â”€â”€ Pass rates by test type â”€â”€
+  // ── Pass rates by test type ──
   const generalPass = (testRecords ?? []).filter((t) => t.result === 'pass').length
   const generalTotal = testRecords?.length ?? 0
   const acbPass = (acbTests ?? []).filter((t) => t.overall_result === 'Pass').length
@@ -92,7 +92,7 @@ export default async function AnalyticsPage() {
   const nsxPass = (nsxTests ?? []).filter((t) => t.overall_result === 'Pass').length
   const nsxTotal = nsxTests?.length ?? 0
 
-  // â”€â”€ Maintenance health metrics â”€â”€
+  // ── Maintenance health metrics ──
   const thisMonth = new Date().toISOString().slice(0, 7)
   const lastMonth = new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().slice(0, 7)
 
@@ -255,7 +255,7 @@ export default async function AnalyticsPage() {
             </div>
             {instrumentsOverdue > 0 && (
               <a href="/instruments" className="text-xs text-eq-sky hover:text-eq-deep transition-colors">
-                View overdue instruments â†’
+                View overdue instruments →
               </a>
             )}
           </div>
