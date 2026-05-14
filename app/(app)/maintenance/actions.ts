@@ -299,6 +299,25 @@ export async function createCheckAction(formData: FormData) {
     const parsed = CreateMaintenanceCheckSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    // Phase 0 enforcement (pre-visit tech brief): every new check
+    // starts life as `status='scheduled'` (column default), so it must
+    // have a technician assigned at creation time. Without that, the
+    // Phase 1 brief email has nowhere to go and the row is invisible
+    // on the tech's "My checks" surface. Audit-log the rejection — UX
+    // events matter for shaking out flows that miss the assignee step.
+    if (!parsed.data.assigned_to) {
+      await logAuditEvent({
+        action: 'reject',
+        entityType: 'maintenance_check',
+        summary: 'Rejected create: scheduled check requires assigned_to',
+        metadata: { reason: 'scheduled_requires_assignee', site_id: parsed.data.site_id },
+      })
+      return {
+        success: false,
+        error: 'A technician must be assigned before scheduling this check. Use the Assign action first.',
+      }
+    }
+
     // Strip fields we don't want to persist on the maintenance_checks row.
     // `job_plan_ids` is a filter hint for asset selection below; it's not
     // a column on the DB table.
@@ -687,7 +706,7 @@ export async function updateCheckAction(id: string, formData: FormData) {
     // Check if user can update: write role OR assigned technician
     const { data: existing } = await supabase
       .from('maintenance_checks')
-      .select('assigned_to, job_plans(name)')
+      .select('assigned_to, status, job_plans(name)')
       .eq('id', id)
       .single()
 
@@ -705,6 +724,36 @@ export async function updateCheckAction(id: string, formData: FormData) {
 
     const parsed = UpdateMaintenanceCheckSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+
+    // Phase 0 enforcement (pre-visit tech brief): block transitions
+    // into `status='scheduled'` when no technician is assigned. Looks
+    // at the *resulting* assignment — the update payload wins over the
+    // existing value, mirroring how the SQL UPDATE would behave.
+    if (parsed.data.status === 'scheduled') {
+      // Determine the assigned_to that will be in effect after this
+      // update. If the form explicitly includes assigned_to (even as
+      // null), that value wins; otherwise we fall through to the
+      // existing row's value.
+      const resultingAssignee = 'assigned_to' in parsed.data
+        ? parsed.data.assigned_to
+        : existing.assigned_to
+      if (!resultingAssignee) {
+        await logAuditEvent({
+          action: 'reject',
+          entityType: 'maintenance_check',
+          entityId: id,
+          summary: 'Rejected status→scheduled: requires assigned_to',
+          metadata: {
+            reason: 'scheduled_requires_assignee',
+            previous_status: existing.status,
+          },
+        })
+        return {
+          success: false,
+          error: 'A technician must be assigned before scheduling this check. Use the Assign action first.',
+        }
+      }
+    }
 
     const { error } = await supabase
       .from('maintenance_checks')
@@ -1037,6 +1086,25 @@ export async function batchCreateChecksAction(formData: FormData) {
 
     if (!jobPlanId || !startDate || !endDate) {
       return { success: false, error: 'Job plan, start date, and end date are required.' }
+    }
+
+    // Phase 0 enforcement (pre-visit tech brief): batch-created
+    // checks all land as `status='scheduled'` (see insert below), so
+    // they need an assignee for the same reason single-creates do.
+    if (!assignedTo) {
+      await logAuditEvent({
+        action: 'reject',
+        entityType: 'maintenance_check',
+        summary: 'Rejected batch-create: scheduled checks require assigned_to',
+        metadata: {
+          reason: 'scheduled_requires_assignee',
+          job_plan_id: jobPlanId,
+        },
+      })
+      return {
+        success: false,
+        error: 'A technician must be assigned before scheduling these checks. Pick a technician in the form before continuing.',
+      }
     }
 
     // Fetch job plan
