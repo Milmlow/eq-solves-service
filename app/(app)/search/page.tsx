@@ -123,7 +123,7 @@ export default async function SearchPage({
       id: acb.id,
       title: assetName || 'ACB Test',
       subtitle: [make, model, acb.cb_serial].filter(Boolean).join(' · '),
-      href: '/acb-testing',
+      href: `/testing/acb/${acb.id}`,
     })
   }
 
@@ -137,7 +137,7 @@ export default async function SearchPage({
       id: nsx.id,
       title: assetName || 'NSX Test',
       subtitle: [make, model, nsx.cb_serial].filter(Boolean).join(' · '),
-      href: '/nsx-testing',
+      href: `/testing/nsx/${nsx.id}`,
     })
   }
 

@@ -45,7 +45,7 @@ export async function createNsxTestAction(formData: FormData) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'create', entityType: 'nsx_test', summary: 'Created NSX test record' })
-    revalidatePath('/nsx-testing')
+    revalidatePath('/testing/nsx')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -87,7 +87,7 @@ export async function updateNsxTestAction(id: string, formData: FormData) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'update', entityType: 'nsx_test', entityId: id, summary: 'Updated NSX test record' })
-    revalidatePath('/nsx-testing')
+    revalidatePath('/testing/nsx')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -107,7 +107,7 @@ export async function toggleNsxTestActiveAction(id: string, isActive: boolean) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'nsx_test', entityId: id, summary: isActive ? 'Reactivated NSX test' : 'Deactivated NSX test' })
-    revalidatePath('/nsx-testing')
+    revalidatePath('/testing/nsx')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -137,7 +137,7 @@ export async function createNsxReadingAction(nsxTestId: string, formData: FormDa
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'create', entityType: 'nsx_test_reading', summary: 'Added NSX test reading' })
-    revalidatePath('/nsx-testing')
+    revalidatePath('/testing/nsx')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -408,7 +408,7 @@ export async function deleteNsxReadingAction(readingId: string) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'delete', entityType: 'nsx_test_reading', entityId: readingId, summary: 'Deleted NSX test reading' })
-    revalidatePath('/nsx-testing')
+    revalidatePath('/testing/nsx')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

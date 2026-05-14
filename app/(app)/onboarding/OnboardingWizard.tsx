@@ -68,8 +68,8 @@ export function OnboardingWizard({ userName, companyName }: OnboardingWizardProp
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-eq-sky to-eq-deep px-6 py-5 text-white relative">
+        {/* Header — solid brand tone, no gradient (CLAUDE.md brand rule). */}
+        <div className="bg-eq-deep px-6 py-5 text-white relative">
           <button
             onClick={handleSkip}
             className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"

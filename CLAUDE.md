@@ -86,7 +86,7 @@ rcd_tests.check_id  → maintenance_checks(id)
 
 A read-only `testing_checks` view backed by `maintenance_checks WHERE kind IN ('acb','nsx','general')` exists during the transition (security_invoker = true so RLS still applies). Old archive helpers continue to read via the view; writes fail loudly. Drop in a follow-up once nothing reads it.
 
-**RLS — who can create checks:** super_admin / admin / supervisor / **technician** (loosened in migration 0080 so technicians can spin up a check on-site, matching the `canWrite()` helper).
+**RLS — who can create checks:** super_admin / admin / supervisor / **technician** (loosened in migration 0080 so technicians can spin up a check on-site). At the app layer this is gated by `canCreateCheck()` from `lib/utils/roles`, NOT `canWrite()` — `canWrite()` deliberately excludes technician so the broader CRUD surface (customers, sites, job plans, etc.) stays supervisor+. Only `createCheckAction` opens the door to technicians.
 
 **Mark Complete propagation:** the shared helper `propagateCheckCompletionIfReady(supabase, checkId)` in `lib/actions/check-completion.ts` flips the parent `maintenance_check` to `complete + completed_at = now()` only when **every** linked test (acb + nsx + rcd) is in its complete state. Wired into the ACB step-3 save, NSX step-3 save, and RCD header save. Idempotent — never clobbers an already-complete parent.
 

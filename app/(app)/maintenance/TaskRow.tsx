@@ -42,12 +42,13 @@ export function TaskRow({ item, checkStatus, canAct, onResult, onNotes }: TaskRo
     na: 'text-gray-400',
   }
 
-  // Shared button classes — touch-manipulation kills the iOS tap delay and
-  // active:scale gives an immediate tactile cue on tap.
-  const btnBase = 'p-1.5 rounded select-none touch-manipulation active:scale-90'
+  // Shared button classes — 44px minimum tap target for techs in gloves on
+  // tablets/phones. touch-manipulation kills the iOS tap delay and active:scale
+  // gives an immediate tactile cue on tap.
+  const btnBase = 'min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded select-none touch-manipulation active:scale-90'
 
   return (
-    <div className="grid grid-cols-[1fr_80px_1fr] gap-2 px-3 py-2 text-xs items-center">
+    <div className="grid grid-cols-[1fr_152px_1fr] gap-2 px-3 py-2 text-xs items-center">
       {/* Task description */}
       <span className="text-eq-ink">
         {item.description}
@@ -64,8 +65,9 @@ export function TaskRow({ item, checkStatus, canAct, onResult, onNotes }: TaskRo
               localResult === 'pass' ? 'bg-green-50 text-green-600' : 'text-gray-300 hover:text-green-500'
             }`}
             title="Pass"
+            aria-label="Pass"
           >
-            <CheckCircle className="w-4 h-4" />
+            <CheckCircle className="w-5 h-5" />
           </button>
           <button
             type="button"
@@ -74,8 +76,9 @@ export function TaskRow({ item, checkStatus, canAct, onResult, onNotes }: TaskRo
               localResult === 'fail' ? 'bg-red-50 text-red-600' : 'text-gray-300 hover:text-red-500'
             }`}
             title="Fail"
+            aria-label="Fail"
           >
-            <XCircle className="w-4 h-4" />
+            <XCircle className="w-5 h-5" />
           </button>
           <button
             type="button"
@@ -84,8 +87,9 @@ export function TaskRow({ item, checkStatus, canAct, onResult, onNotes }: TaskRo
               localResult === 'na' ? 'bg-gray-100 text-gray-600' : 'text-gray-300 hover:text-gray-500'
             }`}
             title="N/A"
+            aria-label="N/A"
           >
-            <MinusCircle className="w-4 h-4" />
+            <MinusCircle className="w-5 h-5" />
           </button>
         </div>
       ) : item.result ? (
