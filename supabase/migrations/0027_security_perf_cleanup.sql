@@ -78,7 +78,7 @@ DROP POLICY IF EXISTS "Admin can delete checks"                                O
 CREATE POLICY "Admin and supervisor can create checks" ON public.maintenance_checks
   FOR INSERT
   WITH CHECK (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -91,7 +91,7 @@ CREATE POLICY "Admin and supervisor can create checks" ON public.maintenance_che
 CREATE POLICY "Write roles and assigned technicians can update checks" ON public.maintenance_checks
   FOR UPDATE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND (
       EXISTS (
         SELECT 1 FROM public.tenant_members tm
@@ -107,7 +107,7 @@ CREATE POLICY "Write roles and assigned technicians can update checks" ON public
 CREATE POLICY "Admin can delete checks" ON public.maintenance_checks
   FOR DELETE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -127,7 +127,7 @@ DROP POLICY IF EXISTS "Admin can delete check items"                            
 CREATE POLICY "Admin and supervisor can create check items" ON public.maintenance_check_items
   FOR INSERT
   WITH CHECK (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -140,7 +140,7 @@ CREATE POLICY "Admin and supervisor can create check items" ON public.maintenanc
 CREATE POLICY "Write roles and assigned technicians can update check items" ON public.maintenance_check_items
   FOR UPDATE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND (
       EXISTS (
         SELECT 1 FROM public.tenant_members tm
@@ -160,7 +160,7 @@ CREATE POLICY "Write roles and assigned technicians can update check items" ON p
 CREATE POLICY "Admin can delete check items" ON public.maintenance_check_items
   FOR DELETE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -180,7 +180,7 @@ DROP POLICY IF EXISTS "Admin can delete test records"       ON public.test_recor
 CREATE POLICY "Write roles can create test records" ON public.test_records
   FOR INSERT
   WITH CHECK (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -193,7 +193,7 @@ CREATE POLICY "Write roles can create test records" ON public.test_records
 CREATE POLICY "Write roles can update test records" ON public.test_records
   FOR UPDATE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -206,7 +206,7 @@ CREATE POLICY "Write roles can update test records" ON public.test_records
 CREATE POLICY "Admin can delete test records" ON public.test_records
   FOR DELETE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -226,7 +226,7 @@ DROP POLICY IF EXISTS "Admin can delete readings"       ON public.test_record_re
 CREATE POLICY "Write roles can create readings" ON public.test_record_readings
   FOR INSERT
   WITH CHECK (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -239,7 +239,7 @@ CREATE POLICY "Write roles can create readings" ON public.test_record_readings
 CREATE POLICY "Write roles can update readings" ON public.test_record_readings
   FOR UPDATE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -252,7 +252,7 @@ CREATE POLICY "Write roles can update readings" ON public.test_record_readings
 CREATE POLICY "Admin can delete readings" ON public.test_record_readings
   FOR DELETE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
@@ -269,7 +269,7 @@ DROP POLICY IF EXISTS "Admin can delete check_assets" ON public.check_assets;
 CREATE POLICY "Admin can delete check_assets" ON public.check_assets
   FOR DELETE
   USING (
-    tenant_id = ANY ((select public.get_user_tenant_ids()))
+    tenant_id = ANY (public.get_user_tenant_ids())
     AND EXISTS (
       SELECT 1 FROM public.tenant_members tm
       WHERE tm.user_id = (select auth.uid())
