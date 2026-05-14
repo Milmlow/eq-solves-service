@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { Card } from '@/components/ui/Card'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils/format'
@@ -45,19 +46,13 @@ export default async function DashboardPage({
     tenantId = (membership?.tenant_id as string | undefined) ?? null
   }
 
-  // Commercial-features flag — gates the service-credit widget. Single
-  // small read; lives outside the big Promise.all so the widget can be a
-  // server component without re-querying.
+  // Commercial-features flag — gates the service-credit widget. Read via
+  // the cached helper so repeated dashboard renders inside the cache TTL
+  // skip the Supabase round-trip entirely.
   let commercialEnabled = false
   if (tenantId) {
-    const { data: settings } = await supabase
-      .from('tenant_settings')
-      .select('commercial_features_enabled')
-      .eq('tenant_id', tenantId)
-      .maybeSingle()
-    commercialEnabled = Boolean(
-      (settings as { commercial_features_enabled?: boolean } | null)?.commercial_features_enabled,
-    )
+    const settings = await getCachedTenantSettings(tenantId)
+    commercialEnabled = Boolean(settings?.commercial_features_enabled)
   }
 
   // ── Determine effective view based on role + param ──

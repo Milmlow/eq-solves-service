@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchLogoImage } from '@/lib/reports/report-branding'
+import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 
 export type AssetStatus = 'complete' | 'in_progress' | 'defect' | 'pending'
 
@@ -161,12 +162,8 @@ export async function loadPmCheckReportData(
 
   if (defErr) throw new Error(`Could not load defects: ${defErr.message}`)
 
-  // ── tenant settings + tenant ──
-  const { data: settings } = await supabase
-    .from('tenant_settings')
-    .select('product_name, primary_colour, report_company_name, report_company_abn, report_logo_url, report_header_text, report_footer_text')
-    .eq('tenant_id', tenantId)
-    .maybeSingle()
+  // ── tenant settings via cached helper + tenant ──
+  const settings = await getCachedTenantSettings(tenantId)
 
   const { data: tenantRow } = await supabase
     .from('tenants')

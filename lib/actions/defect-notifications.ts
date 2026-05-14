@@ -2,6 +2,7 @@
 
 import { createNotification } from '@/lib/actions/notifications'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { sendDefectAlertEmail } from '@/lib/email/send-defect-alert'
 
 /**
@@ -76,20 +77,16 @@ export async function notifyDefectRaised(opts: {
     let assetName: string | null = null
     let raisedByName: string | null = null
     if (isHighOrCritical) {
-      const [tsRes, defectRes] = await Promise.all([
-        supabase
-          .from('tenant_settings')
-          .select('report_company_name, product_name, primary_colour')
-          .eq('tenant_id', opts.tenantId)
-          .maybeSingle(),
+      // Tenant settings via cached helper; defect join in parallel.
+      const [ts, defectRes] = await Promise.all([
+        getCachedTenantSettings(opts.tenantId),
         supabase
           .from('defects')
           .select('raised_by, sites(name), assets(name)')
           .eq('id', opts.defectId)
           .maybeSingle(),
       ])
-      if (tsRes.data) {
-        const ts = tsRes.data as { report_company_name?: string | null; product_name?: string | null; primary_colour?: string | null }
+      if (ts) {
         tenantName = ts.report_company_name ?? ts.product_name ?? tenantName
         primaryColour = ts.primary_colour ?? undefined
       }

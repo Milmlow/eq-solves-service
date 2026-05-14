@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { generateAcbReport } from '@/lib/reports/acb-report'
 import type { AcbReportInput, AcbReportTest, AcbReportReading } from '@/lib/reports/acb-report'
 import {
@@ -62,12 +63,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Site not found' }, { status: 404 })
   }
 
-  // Fetch tenant settings for branding + report config
-  const { data: tenantSettings } = await supabase
-    .from('tenant_settings')
-    .select('product_name, primary_colour, deep_colour, ice_colour, ink_colour, report_complexity, report_company_name, report_company_abn, report_company_phone, report_company_address, report_header_text, report_footer_text, report_show_cover_page, report_show_contents, report_show_executive_summary, report_show_sign_off, report_sign_off_fields, logo_url, logo_url_on_dark, report_logo_url, report_logo_url_on_dark')
-    .eq('tenant_id', tenantId)
-    .maybeSingle()
+  // Fetch tenant settings for branding + report config via the cached helper
+  // so concurrent report generations for the same tenant share one row read.
+  const tenantSettings = await getCachedTenantSettings(tenantId)
 
   // Fetch tenant row for product-name fallback (logos live on tenant_settings)
   const { data: tenantRow } = await supabase

@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { generateComplianceReport } from '@/lib/reports/compliance-report'
 import type { ComplianceReportInput } from '@/lib/reports/compliance-report'
 import type { Role } from '@/lib/types'
@@ -75,11 +76,7 @@ export async function GET(request: NextRequest) {
     .eq('id', tenantId)
     .maybeSingle()
 
-  const { data: tenantSettings } = await supabase
-    .from('tenant_settings')
-    .select('product_name, report_company_name, report_company_abn, primary_colour, deep_colour, ice_colour, ink_colour')
-    .eq('tenant_id', tenantId)
-    .maybeSingle()
+  const tenantSettings = await getCachedTenantSettings(tenantId)
 
   const reportCompanyName = tenantSettings?.report_company_name ?? tenant?.name ?? 'EQ Solves'
   const reportCompanyAbn = tenantSettings?.report_company_abn ?? null

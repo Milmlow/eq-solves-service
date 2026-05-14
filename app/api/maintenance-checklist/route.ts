@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { generateMaintenanceChecklist } from '@/lib/reports/maintenance-checklist'
 import type { MaintenanceChecklistInput, ChecklistAsset } from '@/lib/reports/maintenance-checklist'
 import type { Role } from '@/lib/types'
@@ -115,15 +116,7 @@ export async function GET(request: NextRequest) {
   // strip on the field run-sheet; logos render in the strip when available.
   // Without this fetch the strip fell back to EQ Sky + showed text-only
   // company name instead of the SKS (or other tenant) logo.
-  const { data: tenantSettings } = await supabase
-    .from('tenant_settings')
-    .select(`
-      product_name, report_company_name, report_company_abn,
-      primary_colour, deep_colour, ice_colour, ink_colour,
-      report_logo_url, report_logo_url_on_dark, logo_url, logo_url_on_dark
-    `)
-    .eq('tenant_id', tenantId)
-    .maybeSingle()
+  const tenantSettings = await getCachedTenantSettings(tenantId)
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const companyName = tenantSettings?.report_company_name ?? productName
