@@ -1,8 +1,8 @@
 'use client'
 import { cn } from '@/lib/utils/cn'
 import {
-  LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  FileText, Search, BarChart3, Settings, ChevronLeft, LogOut, Scale, Menu, X, CalendarDays, AlertTriangle, Contact2, FileSignature, Briefcase, Shield
+  LayoutDashboard, ClipboardCheck, Search, Settings, ChevronLeft, LogOut,
+  Menu, X, CalendarDays, AlertTriangle, Shield, Database, Lightbulb
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -22,42 +22,41 @@ import type { TenantSettings } from '@/lib/types'
  * tracking-wider white/30) so the Admin block reads as just one more
  * section, not a special case.
  */
-type NavItem = { label: string; href: string; icon: typeof LayoutDashboard }
+type NavItem = {
+  label: string
+  href: string
+  icon: typeof LayoutDashboard
+  /**
+   * Extra path prefixes that should also mark this entry as active.
+   * Used by hub entries (Records, Insight, Admin) so the sidebar stays
+   * highlighted when the user navigates to an underlying page via
+   * direct URL or breadcrumb.
+   */
+  extraActivePaths?: string[]
+}
 type NavSection = { label?: string; items: NavItem[] }
 
 /**
- * Per-tenant module flags that toggle non-core sidebar items.
- * Migration 0097 added the columns; existing tenants are backfilled to
- * true so this is a no-op until an admin flips a flag off. New tenants
- * land minimal — admin opts in to each module from /admin/settings.
- *
- * `commercialEnabled` (commercial_features_enabled, from 0085) also
- * gates Variations + Commercials in the Insight section.
+ * Sidebar module flags. After the Records + Insight hub collapse,
+ * only Calendar + Defects remain as direct sidebar entries that
+ * gate on flags — Variations / Commercials / Analytics / Contract
+ * Scope are now hub-internal and gate inside the /insights hub
+ * itself. The hub sidebar entry always renders.
  */
 interface ModuleFlags {
-  commercialEnabled: boolean
   calendarEnabled: boolean
   defectsEnabled: boolean
-  analyticsEnabled: boolean
-  contractScopeEnabled: boolean
 }
 
-function buildNavSections(flags: ModuleFlags): NavSection[] {
-  const insightItems: NavItem[] = []
-  if (flags.contractScopeEnabled) {
-    insightItems.push({ label: 'Contract Scope', href: '/contract-scope', icon: Scale })
-  }
-  if (flags.commercialEnabled) {
-    insightItems.push({ label: 'Variations',  href: '/variations',  icon: FileSignature })
-    insightItems.push({ label: 'Commercials', href: '/commercials', icon: Briefcase })
-  }
-  insightItems.push({ label: 'Reports', href: '/reports', icon: FileText })
-  if (flags.analyticsEnabled) {
-    insightItems.push({ label: 'Analytics', href: '/analytics', icon: BarChart3 })
-  }
+// Underlying URLs that should keep the Records hub entry highlighted.
+const RECORDS_PATHS = ['/customers', '/sites', '/contacts', '/assets', '/job-plans']
 
+// Underlying URLs that should keep the Insight hub entry highlighted.
+const INSIGHT_PATHS = ['/reports', '/analytics', '/contract-scope', '/variations', '/commercials']
+
+function buildNavSections(flags: ModuleFlags): NavSection[] {
   // Operations section — Maintenance is always-on core; Calendar +
-  // Defects are togglable.
+  // Defects are togglable per tenant (migration 0097).
   const operationsItems: NavItem[] = [
     // Testing folded into Maintenance 2026-04-28 (Royce review Q4) —
     // ACB/NSX/RCD live in maintenance_checks via the `kind`
@@ -77,16 +76,7 @@ function buildNavSections(flags: ModuleFlags): NavSection[] {
     {
       items: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      ],
-    },
-    {
-      label: 'Data',
-      items: [
-        { label: 'Customers', href: '/customers', icon: Building2 },
-        { label: 'Sites',     href: '/sites',     icon: MapPin },
-        { label: 'Contacts',  href: '/contacts',  icon: Contact2 },
-        { label: 'Assets',    href: '/assets',    icon: Package },
-        { label: 'Job Plans', href: '/job-plans', icon: FileCheck },
+        { label: 'Records',   href: '/records',   icon: Database, extraActivePaths: RECORDS_PATHS },
       ],
     },
     {
@@ -94,11 +84,8 @@ function buildNavSections(flags: ModuleFlags): NavSection[] {
       items: operationsItems,
     },
     {
-      label: 'Insight',
-      items: insightItems,
-    },
-    {
       items: [
+        { label: 'Insight',  href: '/insights', icon: Lightbulb, extraActivePaths: INSIGHT_PATHS },
         { label: 'Search',   href: '/search',   icon: Search },
         { label: 'Settings', href: '/settings', icon: Settings },
       ],
@@ -120,16 +107,14 @@ export function Sidebar({
   const pathname = usePathname()
 
   const productName = settings?.product_name || 'EQ Solves'
-  // Module flags (migration 0097). When `settings` is absent (rare —
-  // pre-onboarding render) the sidebar falls back to "everything on" so
-  // we don't accidentally hide modules from a tenant whose settings row
-  // hasn't loaded.
+  // Sidebar module flags (migration 0097). After the Records + Insight
+  // hub collapse, only Calendar + Defects gate at the sidebar level —
+  // commercial / analytics / contract_scope toggles now drive what shows
+  // INSIDE the /insights hub itself, not the sidebar entry. Fallback to
+  // "everything on" when settings haven't loaded (rare, pre-onboarding).
   const navSections = buildNavSections({
-    commercialEnabled:    Boolean(settings?.commercial_features_enabled),
-    calendarEnabled:      settings?.calendar_enabled       ?? true,
-    defectsEnabled:       settings?.defects_enabled        ?? true,
-    analyticsEnabled:     settings?.analytics_enabled      ?? true,
-    contractScopeEnabled: settings?.contract_scope_enabled ?? true,
+    calendarEnabled: settings?.calendar_enabled ?? true,
+    defectsEnabled:  settings?.defects_enabled  ?? true,
   })
   // Sidebar background is eq-ink (dark) — prefer the dark-surface logo
   // when configured, fall back to the light-surface one. Without this,
@@ -197,8 +182,9 @@ export function Sidebar({
                 {section.label}
               </div>
             )}
-            {section.items.map(({ label, href, icon: Icon }) => {
-              const active = pathname === href || pathname.startsWith(href + '/')
+            {section.items.map(({ label, href, icon: Icon, extraActivePaths }) => {
+              const allPaths = [href, ...(extraActivePaths ?? [])]
+              const active = allPaths.some((p) => pathname === p || pathname.startsWith(p + '/'))
               return (
                 <Link
                   key={href}
