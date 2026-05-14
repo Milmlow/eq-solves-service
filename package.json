@@ -13,7 +13,8 @@
     "check": "tsc --noEmit && next build",
     "audit:rls": "tsx scripts/audit-rls.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
