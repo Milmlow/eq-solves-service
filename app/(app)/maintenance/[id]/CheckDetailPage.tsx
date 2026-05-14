@@ -27,6 +27,7 @@ import { SendReportModal } from './SendReportModal'
 import { ReportDownloadDialog } from '@/components/ui/ReportDownloadDialog'
 import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
 import { SplitButton } from '@/components/ui/SplitButton'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 /**
  * Replaces the old "Print — Simple" / "Print — Detailed" pair with a single
@@ -155,6 +156,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
   const [showSendReport, setShowSendReport] = useState(false)
   const [showReportDialog, setShowReportDialog] = useState(false)
+  const confirm = useConfirm()
 
   async function handleDownloadReport(complexity: ReportComplexity) {
     const res = await fetch(`/api/pm-asset-report?check_id=${check.id}&complexity=${complexity}`)
@@ -273,7 +275,12 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
    * (per Royce 26-Apr decision). Audit log captures who + when.
    */
   async function handleReopen() {
-    if (!confirm('Re-open this completed check? The change will be audit-logged. Any subsequent edits will appear as an amendment on the next-generated report.')) return
+    const ok = await confirm({
+      title: 'Re-open this completed check?',
+      message: 'The change will be audit-logged. Any subsequent edits will appear as an amendment on the next-generated report.',
+      confirmLabel: 'Re-open',
+    })
+    if (!ok) return
     setError(null); setLoading(true)
     const result = await reopenCheckAction(check.id)
     setLoading(false)
@@ -299,11 +306,13 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   }
 
   async function handleDelete() {
-    if (
-      !confirm(
-        `Delete "${check.custom_name ?? 'this check'}"? It will be removed from all views. You can restore it from Admin → Archive.`
-      )
-    ) return
+    const ok = await confirm({
+      title: `Delete "${check.custom_name ?? 'this check'}"?`,
+      message: 'It will be removed from all views. You can restore it from Admin → Archive.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     setError(null); setLoading(true)
     const result = await archiveCheckAction(check.id, false)
     setLoading(false)
@@ -327,7 +336,12 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   }
 
   async function handleCompleteAll() {
-    if (!confirm('Mark ALL assets and their tasks as complete? This cannot be undone.')) return
+    const ok = await confirm({
+      title: 'Complete all assets?',
+      message: 'Mark ALL assets and their tasks as complete. This cannot be undone.',
+      confirmLabel: 'Complete all',
+    })
+    if (!ok) return
     setError(null); setLoading(true)
     const result = await completeAllCheckAssetsAction(check.id)
     setLoading(false)
@@ -337,7 +351,12 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   async function handleBatchComplete() {
     const selectedIds = Array.from(selectedAssetIds)
     if (selectedIds.length === 0) return
-    if (!confirm(`Mark ${selectedIds.length} selected asset(s) and their tasks as complete? This cannot be undone.`)) return
+    const ok = await confirm({
+      title: 'Complete selected assets?',
+      message: `Mark ${selectedIds.length} selected asset(s) and their tasks as complete. This cannot be undone.`,
+      confirmLabel: 'Complete selected',
+    })
+    if (!ok) return
     setError(null); setLoading(true)
     const result = await batchForceCompleteAssetsAction(check.id, selectedIds)
     setLoading(false)

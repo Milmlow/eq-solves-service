@@ -7,6 +7,8 @@ import { formatDate } from '@/lib/utils/format'
 import { Eye, Trash2 } from 'lucide-react'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus } from '@/lib/types'
 import { archiveCheckAction } from './actions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 
 type CheckRow = MaintenanceCheck & {
   job_plans?: { name: string } | null
@@ -57,17 +59,27 @@ function getColumnBg(column: 'scheduled' | 'in_progress' | 'overdue' | 'complete
 export function KanbanBoard({ checks, itemsMap, onCheckClick, isAdmin = false }: KanbanBoardProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const confirm = useConfirm()
+  const toast = useToast()
 
-  function handleDelete(e: React.MouseEvent, checkId: string) {
+  async function handleDelete(e: React.MouseEvent, checkId: string) {
+    // Stop propagation synchronously — the click bubbles to the card click
+    // before any await runs.
     e.stopPropagation()
-    if (!confirm('Delete this check? It will be removed from all views. You can restore it from Admin → Archive.')) return
+    const ok = await confirm({
+      title: 'Delete this check?',
+      message: 'It will be removed from all views. You can restore it from Admin → Archive.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await archiveCheckAction(checkId, false)
       if (!res?.success) {
         // archiveCheckAction returns { success, error }. Previously we
         // discarded the result and the card stayed put with no feedback
         // on failure — admin-only check or DB error went unnoticed.
-        alert(res?.error ?? 'Could not delete this check. Please try again.')
+        toast.error(res?.error ?? 'Could not delete this check. Please try again.')
         return
       }
       // router.refresh() pulls the freshly-revalidated server data

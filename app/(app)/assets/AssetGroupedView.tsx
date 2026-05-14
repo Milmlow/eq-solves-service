@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils/cn'
 import { ChevronDown, ChevronRight, MapPin, Layers, FileText, Archive } from 'lucide-react'
 import type { Asset, JobPlan } from '@/lib/types'
 import { toggleAssetActiveAction } from './actions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface AssetWithSite extends Asset {
   sites: { name: string } | null
@@ -134,10 +135,16 @@ function JobPlanGroup({ node, onAssetClick, canWrite }: { node: GroupNode; onAss
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [errorId, setErrorId] = useState<string | null>(null)
+  const confirm = useConfirm()
 
-  function handleArchive(e: React.MouseEvent, asset: AssetWithSite) {
+  async function handleArchive(e: React.MouseEvent, asset: AssetWithSite) {
     e.stopPropagation()
-    if (!confirm(`Archive asset "${asset.name}"? It will move to /admin/archive and auto-delete after the grace period unless restored.`)) return
+    const ok = await confirm({
+      title: `Archive asset "${asset.name}"?`,
+      message: 'It will move to /admin/archive and auto-delete after the grace period unless restored.',
+      confirmLabel: 'Archive',
+    })
+    if (!ok) return
     setErrorId(null)
     startTransition(async () => {
       const res = await toggleAssetActiveAction(asset.id, false)

@@ -10,6 +10,7 @@ import { cascadeArchiveAction } from '@/app/(app)/admin/archive/actions'
 import type { Customer } from '@/lib/types'
 import Link from 'next/link'
 import { X, Upload, ImageIcon } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface CustomerFormProps {
   open: boolean
@@ -29,6 +30,7 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [logoMode, setLogoMode] = useState<'library' | 'upload'>(customer?.logo_url ? 'library' : 'library')
+  const confirm = useConfirm()
 
   const isEdit = !!customer
 
@@ -124,7 +126,12 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
     // Archiving cascades: customer + sites + assets all flip is_active=false
     // so the whole tree lands in /admin/archive together. Reversible inside
     // the grace window via the Archive page.
-    if (!confirm(`Archive "${customer.name}" and all its sites and assets? Everything will move to /admin/archive and auto-delete after the grace period unless restored.`)) return
+    const ok = await confirm({
+      title: `Archive "${customer.name}"?`,
+      message: 'All its sites and assets will move to /admin/archive and auto-delete after the grace period unless restored.',
+      confirmLabel: 'Archive',
+    })
+    if (!ok) return
     setLoading(true)
     const fd = new FormData()
     fd.set('entity_type', 'customer')

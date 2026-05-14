@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { createCustomerContactAction, updateCustomerContactAction, deleteCustomerContactAction } from './contact-actions'
 import type { CustomerContact } from '@/lib/types'
 import { Star, Pencil, Trash2, Plus, X } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface CustomerContactsProps {
   customerId: string
@@ -19,6 +20,7 @@ export function CustomerContacts({ customerId, contacts, isAdmin }: CustomerCont
   const [editing, setEditing] = useState<CustomerContact | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const confirm = useConfirm()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -40,7 +42,13 @@ export function CustomerContacts({ customerId, contacts, isAdmin }: CustomerCont
   }
 
   async function handleDelete(contact: CustomerContact) {
-    if (!confirm(`Remove contact "${contact.name}"?`)) return
+    const ok = await confirm({
+      title: `Remove contact "${contact.name}"?`,
+      message: 'This will detach the contact from this customer. You can re-add them later.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    })
+    if (!ok) return
     setLoading(true)
     const result = await deleteCustomerContactAction(contact.id, customerId)
     setLoading(false)

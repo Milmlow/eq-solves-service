@@ -6,6 +6,7 @@ import { formatDate } from '@/lib/utils/format'
 import { CheckCircle2, ChevronDown, ChevronRight, Archive } from 'lucide-react'
 import Link from 'next/link'
 import { archiveTestingCheckAction } from '../check-actions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 export type CheckRow = {
   id: string
@@ -80,6 +81,7 @@ export function CheckSummaryTable({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [showCreatedBanner, setShowCreatedBanner] = useState<boolean>(!!createdCheckId)
+  const confirm = useConfirm()
   const createdRowRef = useRef<HTMLTableRowElement | null>(null)
 
   // Scroll the newly-created row into view once it's mounted.
@@ -99,8 +101,13 @@ export function CheckSummaryTable({
     })
   }
 
-  function handleArchive(id: string, name: string) {
-    if (!confirm(`Archive testing check "${name}"? It'll move to /admin/archive and auto-delete after the grace period unless restored.`)) return
+  async function handleArchive(id: string, name: string) {
+    const ok = await confirm({
+      title: `Archive testing check "${name}"?`,
+      message: 'It will move to /admin/archive and auto-delete after the grace period unless restored.',
+      confirmLabel: 'Archive',
+    })
+    if (!ok) return
     setError(null)
     startTransition(async () => {
       const res = await archiveTestingCheckAction(id)

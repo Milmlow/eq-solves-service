@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
 import { Card } from '@/components/ui/Card'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import {
   createVariationAction,
   updateVariationAction,
@@ -82,6 +83,7 @@ export function VariationsList({
   const [editing, setEditing] = useState<ContractVariation | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const confirm = useConfirm()
 
   // Form state for dynamic site list keyed off the selected customer.
   const [formCustomerId, setFormCustomerId] = useState('')
@@ -156,7 +158,13 @@ export function VariationsList({
   }
 
   async function handleDelete(item: ContractVariation) {
-    if (!confirm(`Delete variation ${item.variation_number}?`)) return
+    const ok = await confirm({
+      title: `Delete variation ${item.variation_number}?`,
+      message: 'This will remove the variation from the register. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     setLoading(true)
     const result = await deleteVariationAction(item.id)
     setLoading(false)

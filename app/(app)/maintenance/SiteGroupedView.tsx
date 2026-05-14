@@ -19,6 +19,8 @@ import {
 } from 'lucide-react'
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckStatus, Site } from '@/lib/types'
 import { archiveCheckAction } from './actions'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 
 type CheckRow = MaintenanceCheck & {
   job_plans?: { name: string } | null
@@ -688,17 +690,25 @@ function CycleChildRow({
   isAdmin: boolean
 }) {
   const [pending, startTransition] = useTransition()
+  const confirm = useConfirm()
+  const toast = useToast()
 
-  function handleDelete(e: React.MouseEvent) {
+  async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm('Delete this check? It will be removed from all views. You can restore it from Admin → Archive.')) return
+    const ok = await confirm({
+      title: 'Delete this check?',
+      message: 'It will be removed from all views. You can restore it from Admin → Archive.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    })
+    if (!ok) return
     startTransition(async () => {
       const res = await archiveCheckAction(check.id, false)
       if (!res?.success) {
         // Surface the error so the user isn't left clicking a dead button.
         // archiveCheckAction returns { success, error } — previously we
         // discarded the result and the user saw zero feedback on failure.
-        alert(res?.error ?? 'Could not delete this check. Please try again.')
+        toast.error(res?.error ?? 'Could not delete this check. Please try again.')
         return
       }
       onArchived()

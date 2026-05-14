@@ -11,6 +11,7 @@ import { EqFooter } from '@/components/ui/EqFooter'
 import { DemoBanner } from '@/components/ui/DemoBanner'
 import { AnalyticsIdentify } from '@/components/ui/AnalyticsIdentify'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
+import { AppProviders } from '@/components/ui/AppProviders'
 import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
@@ -147,6 +148,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
+    <AppProviders>
     <div className="flex min-h-screen bg-gray-50" style={tenantStyle}>
       <NavigationProgress />
       <Sidebar
@@ -179,5 +181,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         />
       )}
     </div>
+    </AppProviders>
   )
 }

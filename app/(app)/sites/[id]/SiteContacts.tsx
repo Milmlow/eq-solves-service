@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { createSiteContactAction, updateSiteContactAction, deleteSiteContactAction } from './contact-actions'
 import type { SiteContact } from '@/lib/types'
 import { Star, Pencil, Trash2, Plus, X } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface SiteContactsProps {
   siteId: string
@@ -19,6 +20,7 @@ export function SiteContacts({ siteId, contacts, isAdmin }: SiteContactsProps) {
   const [editing, setEditing] = useState<SiteContact | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const confirm = useConfirm()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -40,7 +42,13 @@ export function SiteContacts({ siteId, contacts, isAdmin }: SiteContactsProps) {
   }
 
   async function handleDelete(contact: SiteContact) {
-    if (!confirm(`Remove contact "${contact.name}"?`)) return
+    const ok = await confirm({
+      title: `Remove contact "${contact.name}"?`,
+      message: 'This will detach the contact from this site. You can re-add them later.',
+      confirmLabel: 'Remove',
+      destructive: true,
+    })
+    if (!ok) return
     setLoading(true)
     const result = await deleteSiteContactAction(contact.id, siteId)
     setLoading(false)
