@@ -2,6 +2,16 @@ import Link from 'next/link'
 import { Shield, CircuitBoard, ShieldCheck, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
+
+/**
+ * Threshold above which the Linked Tests panel collapses by default.
+ * Below this, the list is small enough to scan on first paint so we
+ * leave it expanded. Above, the panel takes too much vertical space
+ * (Jemena May visit can carry 16+ RCD tests) so we hide behind a
+ * chevron and let the tech expand on demand.
+ */
+const LINKED_TESTS_COLLAPSE_THRESHOLD = 5
 
 /**
  * Phase 3 of the Testing simplification plan — surface linked test records
@@ -98,15 +108,20 @@ export async function LinkedTestsPanel({ checkId }: Props) {
   const total = acb.length + nsx.length + rcd.length
   if (total === 0) return null
 
-  return (
-    <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-gray-200 bg-eq-ice flex items-center justify-between">
-        <h2 className="text-sm font-bold text-eq-deep uppercase tracking-wide">
-          Test Records ({total})
-        </h2>
-        <span className="text-xs text-eq-grey">Click a row to open the test workflow</span>
-      </div>
+  // Summary line gives the rollup even when collapsed — keep it terse so
+  // the header doesn't wrap. Only show counts for kinds that are present.
+  const summaryParts: string[] = []
+  if (acb.length) summaryParts.push(`${acb.length} ACB`)
+  if (nsx.length) summaryParts.push(`${nsx.length} NSX`)
+  if (rcd.length) summaryParts.push(`${rcd.length} RCD`)
 
+  return (
+    <CollapsibleSection
+      title="Test Records"
+      summary={`${total} test${total === 1 ? '' : 's'} (${summaryParts.join(', ')})`}
+      defaultOpen={total <= LINKED_TESTS_COLLAPSE_THRESHOLD}
+      tone="subtle"
+    >
       {acb.length > 0 && (
         <TestSection
           icon={<Shield className="w-3.5 h-3.5" />}
@@ -178,7 +193,7 @@ export async function LinkedTestsPanel({ checkId }: Props) {
           })}
         </TestSection>
       )}
-    </div>
+    </CollapsibleSection>
   )
 }
 
