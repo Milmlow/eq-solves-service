@@ -1,5 +1,5 @@
 -- ============================================================
--- Migration 0095: Pre-visit tech brief — Phase 0 data layer.
+-- Migration 0096: Pre-visit tech brief — Phase 0 data layer.
 --
 -- Two changes, both idempotent:
 --
@@ -112,7 +112,7 @@ BEGIN
       NULL,
       'phase_0_backfill_assigned_to',
       jsonb_build_object(
-        'migration', '0095_pre_visit_phase_0_schema',
+        'migration', '0096_pre_visit_phase_0_schema',
         'row_ids', to_jsonb(grp.row_ids)
       )
       FROM (
