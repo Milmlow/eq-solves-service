@@ -49,6 +49,14 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
     settings.commercial_features_enabled ?? false,
   )
 
+  // Module toggles (migration 0097). Existing tenants land here with
+  // every flag true; new tenants default false. Filters which non-core
+  // entries appear in the sidebar.
+  const [calendarEnabled, setCalendarEnabled] = useState<boolean>(settings.calendar_enabled ?? true)
+  const [defectsEnabled, setDefectsEnabled] = useState<boolean>(settings.defects_enabled ?? true)
+  const [analyticsEnabled, setAnalyticsEnabled] = useState<boolean>(settings.analytics_enabled ?? true)
+  const [contractScopeEnabled, setContractScopeEnabled] = useState<boolean>(settings.contract_scope_enabled ?? true)
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
@@ -259,6 +267,71 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
           defaultValue={settings.support_email ?? ''}
           placeholder="support@company.com"
         />
+      </div>
+
+      {/* Module toggles — sidebar visibility for non-core modules */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h2 className="text-sm font-bold text-eq-ink mb-1">Modules</h2>
+        <p className="text-xs text-eq-grey mb-4">
+          Show or hide non-core sidebar entries for your team. The core platform
+          (Dashboard, Customers, Sites, Contacts, Assets, Job Plans, Maintenance,
+          Reports) is always on. URLs stay reachable when a module is off — only
+          the sidebar entry is hidden.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-gray-200 hover:bg-eq-ice/30 transition-colors">
+            <input
+              type="checkbox"
+              name="calendar_enabled"
+              checked={calendarEnabled}
+              onChange={(e) => setCalendarEnabled(e.target.checked)}
+              className="mt-0.5 w-4 h-4 cursor-pointer"
+            />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-eq-ink">Calendar</p>
+              <p className="text-xs text-eq-grey mt-1">PM calendar — list, monthly grid, and quarterly view of upcoming maintenance.</p>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-gray-200 hover:bg-eq-ice/30 transition-colors">
+            <input
+              type="checkbox"
+              name="defects_enabled"
+              checked={defectsEnabled}
+              onChange={(e) => setDefectsEnabled(e.target.checked)}
+              className="mt-0.5 w-4 h-4 cursor-pointer"
+            />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-eq-ink">Defects</p>
+              <p className="text-xs text-eq-grey mt-1">Defects register — track open / resolved defects raised on maintenance visits.</p>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-gray-200 hover:bg-eq-ice/30 transition-colors">
+            <input
+              type="checkbox"
+              name="analytics_enabled"
+              checked={analyticsEnabled}
+              onChange={(e) => setAnalyticsEnabled(e.target.checked)}
+              className="mt-0.5 w-4 h-4 cursor-pointer"
+            />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-eq-ink">Analytics</p>
+              <p className="text-xs text-eq-grey mt-1">Cross-cutting analytics dashboard — trends, throughput, completion rates.</p>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-gray-200 hover:bg-eq-ice/30 transition-colors">
+            <input
+              type="checkbox"
+              name="contract_scope_enabled"
+              checked={contractScopeEnabled}
+              onChange={(e) => setContractScopeEnabled(e.target.checked)}
+              className="mt-0.5 w-4 h-4 cursor-pointer"
+            />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-eq-ink">Contract Scope</p>
+              <p className="text-xs text-eq-grey mt-1">Per-customer scope register — included / excluded items by FY.</p>
+            </div>
+          </label>
+        </div>
       </div>
 
       {/* Commercial features toggle */}
