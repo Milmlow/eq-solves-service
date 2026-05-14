@@ -102,6 +102,23 @@ describe('MFA routing — regression tests for the AAL1 loop bug', () => {
     })
   })
 
+  describe('PUBLIC_PATHS — invite acceptance landing (2026-05-14)', () => {
+    // The invited user is unauthenticated when they click the link in
+    // their welcome email — they're about to set their password via
+    // the 8-digit OTP form. Without this entry the proxy bounces them
+    // to /auth/signin and they have to go through "Forgot password"
+    // instead of the proper welcome rail.
+
+    it('includes /auth/accept-invite so invitees can reach the OTP form', () => {
+      expect(PUBLIC_PATHS).toContain('/auth/accept-invite')
+      expect(isPublicPath('/auth/accept-invite')).toBe(true)
+    })
+
+    it('treats /auth/accept-invite?email=foo@bar.com as public (matcher is prefix-based)', () => {
+      expect(isPublicPath('/auth/accept-invite?email=foo%40bar.com')).toBe(true)
+    })
+  })
+
   describe('isAalExempt', () => {
     it('treats /auth/signin as AAL-exempt (the regression case)', () => {
       expect(isAalExempt('/auth/signin')).toBe(true)
