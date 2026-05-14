@@ -197,7 +197,10 @@ export async function GET(request: NextRequest) {
       const table = kind === 'acb' ? 'acb_tests' : 'nsx_tests'
       const { data: tests } = await supabase
         .from(table)
-        .select('id, asset_id, cb_make, cb_model, cb_serial, assets(name, maximo_id, location)')
+        // Audit fix #101 (2026-05-13): pull both new (brand/breaker_type) and
+        // legacy (cb_make/cb_model) so the Field Run-Sheet renders breaker
+        // identification regardless of which entry path created the row.
+        .select('id, asset_id, cb_make, cb_model, cb_serial, brand, breaker_type, assets(name, maximo_id, location)')
         .eq('check_id', checkId)
         .eq('is_active', true)
         .order('created_at')
@@ -205,8 +208,9 @@ export async function GET(request: NextRequest) {
       checklistAssets = (tests ?? []).map((t) => {
         const a = t.assets as { name: string; maximo_id: string | null; location: string | null } | { name: string; maximo_id: string | null; location: string | null }[] | null
         const asset = Array.isArray(a) ? a[0] ?? null : a
-        const make = (t.cb_make as string | null) ?? ''
-        const model = (t.cb_model as string | null) ?? ''
+        // Prefer new workflow columns, fall back to legacy bulk columns.
+        const make = ((t as { brand: string | null }).brand ?? (t.cb_make as string | null)) ?? ''
+        const model = ((t as { breaker_type: string | null }).breaker_type ?? (t.cb_model as string | null)) ?? ''
         const serial = (t.cb_serial as string | null) ?? ''
         const breakerLine =
           [make, model, serial].filter(Boolean).join(' / ') || '_______________________________________________'

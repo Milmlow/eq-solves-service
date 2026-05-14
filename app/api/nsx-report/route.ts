@@ -125,12 +125,16 @@ export async function GET(request: NextRequest) {
       testDate: t.test_date as string,
       testedBy: t.tested_by ? (testerMap[t.tested_by as string] ?? null) : null,
       testType: t.test_type as string,
-      cbMake: t.cb_make as string | null,
-      cbModel: t.cb_model as string | null,
+      // Audit fix #101 (2026-05-13): 3-step workflow writes to
+      // brand/breaker_type/current_in/trip_unit_model; legacy bulk writes to
+      // cb_make/cb_model/cb_rating/trip_unit. Prefer new, fall back to legacy.
+      // Select uses `*` so both columns are already fetched.
+      cbMake: (t.brand as string | null) ?? (t.cb_make as string | null),
+      cbModel: (t.breaker_type as string | null) ?? (t.cb_model as string | null),
       cbSerial: t.cb_serial as string | null,
-      cbRating: t.cb_rating as string | null,
+      cbRating: (t.current_in as string | null) ?? (t.cb_rating as string | null),
       cbPoles: t.cb_poles as string | null,
-      tripUnit: t.trip_unit as string | null,
+      tripUnit: (t.trip_unit_model as string | null) ?? (t.trip_unit as string | null),
       overallResult: t.overall_result as string,
       notes: t.notes as string | null,
       readings: readingsMap[t.id as string] ?? [],
