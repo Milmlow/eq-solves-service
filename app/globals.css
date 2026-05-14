@@ -1,5 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+
+/* Plus Jakarta Sans is loaded via next/font/google in app/layout.tsx,
+   exposed as the --font-jakarta CSS variable on <html>. We reference that
+   variable here so every consumer (Tailwind --font-sans token, body, ad
+   hoc font-family) resolves to the same self-hosted, preloaded font.
+   The off-origin @import that lived on this line was render-blocking. */
 
 :root {
   --eq-sky:  #3DA8D8;
@@ -15,7 +20,7 @@
   --color-eq-ice:  var(--eq-ice);
   --color-eq-ink:  var(--eq-ink);
   --color-eq-grey: var(--eq-grey);
-  --font-sans: 'Plus Jakarta Sans', Arial, sans-serif;
+  --font-sans: var(--font-jakarta), Arial, sans-serif;
 }
 
 * {
@@ -25,6 +30,6 @@
 body {
   color: var(--eq-ink);
   background: #ffffff;
-  font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+  font-family: var(--font-jakarta), Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }

@@ -14,6 +14,13 @@ import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import { computeMaintenanceCompliance, computeComplianceBySite } from '@/lib/analytics/site-health'
 
+// Pulls 7 separate .limit(10000) tables and synthesises a multi-section
+// DOCX. Detailed complexity at Jemena-scale crosses 15s. Set the runtime
+// hint so Netlify doesn't cut us off at the default. Actual cap is the
+// Netlify plan limit.
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function GET(request: NextRequest) {
   // Wrap the whole handler so any thrown error surfaces as a JSON
   // response with a useful message instead of an HTML 500 — which the

@@ -6,9 +6,20 @@
  */
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { RouteProgress } from "@/components/ui/RouteProgress";
 import { Providers } from "./providers";
 import "./globals.css";
+
+// Self-hosted, preloaded, no off-origin round-trip before paint. Replaces
+// the previous CSS @import which was render-blocking and shipped no
+// optimisation (subset, preload, swap, self-host).
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-jakarta",
+  display: "swap",
+});
 
 // Publisher is the brand (EQ). Author is the legal entity (CDC Solutions Pty Ltd).
 // This distinction is deliberate — it encodes the ASIC "registered business name"
@@ -30,7 +41,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`${jakarta.variable} h-full antialiased`}>
       <body className="min-h-full">
         <Providers>
           {/* RouteProgress reads useSearchParams() — must live inside a Suspense

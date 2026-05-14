@@ -17,6 +17,13 @@ import { canWrite } from '@/lib/utils/roles'
 import { fetchLogoImage } from '@/lib/reports/report-branding'
 import { TENANT_LOGO_LIGHT, TENANT_LOGO_ON_DARK, CUSTOMER_LOGO_LIGHT } from '@/lib/reports/sizing'
 
+// Field run-sheet DOCX is the lightest of the three report routes but still
+// runs through a check_assets fetch + items fan-out + logo decode +
+// docx-tree synthesis. Set the runtime hint so we don't get cut off at
+// the default. Actual cap is the Netlify plan limit.
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 /**
  * Map the public-facing format token (summary/standard/detailed) to the legacy
  * generator format (simple/detailed). 'standard' is a new middle ground —
