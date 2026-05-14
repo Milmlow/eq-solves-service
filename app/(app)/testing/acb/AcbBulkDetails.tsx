@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { updateAcbDetailsAction } from '@/app/(app)/acb-testing/actions'
+import { updateAcbDetailsAction } from '@/app/(app)/testing/acb/actions'
 import type { AcbTest, Asset } from '@/lib/types'
 
 interface AcbBulkDetailsProps {

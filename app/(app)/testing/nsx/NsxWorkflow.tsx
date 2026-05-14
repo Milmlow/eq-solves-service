@@ -36,7 +36,7 @@ import {
   saveNsxVisualCheckAction,
   saveNsxElectricalReadingAction,
   raiseNsxTestDefectAction,
-} from '@/app/(app)/nsx-testing/actions'
+} from '@/app/(app)/testing/nsx/actions'
 
 type StepKey = 'step1' | 'step2' | 'step3'
 type StepStatus = 'pending' | 'in_progress' | 'complete'
