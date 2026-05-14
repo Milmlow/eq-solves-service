@@ -7,6 +7,7 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateAcbTestSchema, UpdateAcbTestSchema, CreateAcbReadingSchema } from '@/lib/validations/acb-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
+import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
 
 export async function createAcbTestAction(formData: FormData) {
   try {
@@ -36,9 +37,14 @@ export async function createAcbTestAction(formData: FormData) {
     const parsed = CreateAcbTestSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    // Sprint 1 schema unification (Refs #101): mirror legacy <-> new
+    // breaker-identification columns so reads from either column set
+    // surface the same value.
+    const dualWrite = mirrorBreakerColumns(parsed.data)
+
     const { error } = await supabase
       .from('acb_tests')
-      .insert({ ...parsed.data, tenant_id: tenantId })
+      .insert({ ...dualWrite, tenant_id: tenantId })
 
     if (error) return { success: false, error: error.message }
 
@@ -78,9 +84,12 @@ export async function updateAcbTestAction(id: string, formData: FormData) {
     const parsed = UpdateAcbTestSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
+    // Sprint 1 schema unification (Refs #101): see createAcbTestAction.
+    const dualWrite = mirrorBreakerColumns(parsed.data)
+
     const { error } = await supabase
       .from('acb_tests')
-      .update(parsed.data)
+      .update(dualWrite)
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
@@ -215,9 +224,17 @@ export async function updateAcbDetailsAction(testId: string, data: {
       return { success: true }
     }
 
+    // Sprint 1 schema unification (Refs #101): mirror legacy <-> new
+    // breaker-identification columns. The 3-step workflow form writes
+    // new (brand/breaker_type/current_in/trip_unit_model); the bulk-edit
+    // form (AcbBulkDetails) writes legacy (cb_make/cb_model/cb_rating/
+    // trip_unit). Either side reaching this action gets its sibling
+    // populated so the report renders the same value via either read path.
+    const dualWrite = mirrorBreakerColumns(updateData)
+
     const { error } = await supabase
       .from('acb_tests')
-      .update(updateData)
+      .update(dualWrite)
       .eq('id', testId)
 
     if (error) return { success: false, error: error.message }

@@ -129,6 +129,10 @@ export async function GET(request: NextRequest) {
   // Build report input
   const tests: AcbReportTest[] = testsRaw.map((t) => {
     const asset = t.assets as { name: string; asset_type: string; serial_number: string | null; maximo_id: string | null; location: string | null; manufacturer: string | null; model: string | null } | null
+    // Sprint 1 schema unification (Refs #101): prefer NEW columns
+    // (brand / breaker_type) populated by the 3-step workflow, fall
+    // back to LEGACY (cb_make / cb_model) from the bulk-edit form.
+    const tRow = t as { brand?: string | null; breaker_type?: string | null; cb_make?: string | null; cb_model?: string | null }
     return {
       assetName: asset?.name ?? 'Unknown Asset',
       assetType: asset?.asset_type ?? '',
@@ -138,12 +142,8 @@ export async function GET(request: NextRequest) {
       testDate: t.test_date as string,
       testedBy: t.tested_by ? (testerMap[t.tested_by as string] ?? null) : null,
       testType: t.test_type as string,
-      // Audit fix #101 (2026-05-13): 3-step workflow writes to brand/breaker_type;
-      // AcbBulkDetails writes legacy cb_make/cb_model. Prefer new, fall back to
-      // legacy so customer PDF renders regardless of entry path. Select uses
-      // `*` so both columns are already fetched.
-      cbMake: (t.brand as string | null) ?? (t.cb_make as string | null),
-      cbModel: (t.breaker_type as string | null) ?? (t.cb_model as string | null),
+      cbMake: tRow.brand ?? (t.cb_make as string | null),
+      cbModel: tRow.breaker_type ?? (t.cb_model as string | null),
       cbSerial: t.cb_serial as string | null,
       overallResult: t.overall_result as string,
       notes: t.notes as string | null,

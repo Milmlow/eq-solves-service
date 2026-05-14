@@ -45,16 +45,24 @@ export default async function SearchPage({
       .or(`name.ilike.${pattern},code.ilike.${pattern},email.ilike.${pattern}`)
       .eq('is_active', true)
       .limit(10),
+    // Sprint 1 schema unification (Refs #101): query both legacy
+    // (cb_make / cb_model) and new (brand / breaker_type) columns so
+    // breakers entered via either form path are findable. cb_serial is
+    // shared between both surfaces — no new counterpart.
     supabase
       .from('acb_tests')
-      .select('id, cb_make, cb_model, cb_serial, assets(name)')
-      .or(`cb_make.ilike.${pattern},cb_model.ilike.${pattern},cb_serial.ilike.${pattern}`)
+      .select('id, cb_make, cb_model, cb_serial, brand, breaker_type, assets(name)')
+      .or(
+        `cb_make.ilike.${pattern},cb_model.ilike.${pattern},cb_serial.ilike.${pattern},brand.ilike.${pattern},breaker_type.ilike.${pattern}`,
+      )
       .eq('is_active', true)
       .limit(10),
     supabase
       .from('nsx_tests')
-      .select('id, cb_make, cb_model, cb_serial, assets(name)')
-      .or(`cb_make.ilike.${pattern},cb_model.ilike.${pattern},cb_serial.ilike.${pattern}`)
+      .select('id, cb_make, cb_model, cb_serial, brand, breaker_type, assets(name)')
+      .or(
+        `cb_make.ilike.${pattern},cb_model.ilike.${pattern},cb_serial.ilike.${pattern},brand.ilike.${pattern},breaker_type.ilike.${pattern}`,
+      )
       .eq('is_active', true)
       .limit(10),
     supabase
@@ -107,22 +115,28 @@ export default async function SearchPage({
 
   for (const acb of acbRes.data ?? []) {
     const assetName = ((acb.assets as unknown) as { name: string } | null)?.name ?? ''
+    // Refs #101: prefer new columns, fall back to legacy.
+    const make = (acb as { brand?: string | null }).brand ?? acb.cb_make
+    const model = (acb as { breaker_type?: string | null }).breaker_type ?? acb.cb_model
     results.push({
       type: 'ACB Test',
       id: acb.id,
       title: assetName || 'ACB Test',
-      subtitle: [acb.cb_make, acb.cb_model, acb.cb_serial].filter(Boolean).join(' · '),
+      subtitle: [make, model, acb.cb_serial].filter(Boolean).join(' · '),
       href: '/acb-testing',
     })
   }
 
   for (const nsx of nsxRes.data ?? []) {
     const assetName = ((nsx.assets as unknown) as { name: string } | null)?.name ?? ''
+    // Refs #101: prefer new columns, fall back to legacy.
+    const make = (nsx as { brand?: string | null }).brand ?? nsx.cb_make
+    const model = (nsx as { breaker_type?: string | null }).breaker_type ?? nsx.cb_model
     results.push({
       type: 'NSX Test',
       id: nsx.id,
       title: assetName || 'NSX Test',
-      subtitle: [nsx.cb_make, nsx.cb_model, nsx.cb_serial].filter(Boolean).join(' · '),
+      subtitle: [make, model, nsx.cb_serial].filter(Boolean).join(' · '),
       href: '/nsx-testing',
     })
   }
