@@ -436,65 +436,38 @@ export async function POST(req: NextRequest) {
         if (!contact?.email) continue
         const customerName = (Array.isArray(contact.customers) ? contact.customers[0]?.name : contact.customers?.name) ?? '—'
 
-        // Gather KPIs for the period.
-        const [visitsDone, visitsUpcoming, defectsOpen, defectsRaised, varsApproved, perSiteRows] = await Promise.all([
-          supabase.from('maintenance_checks')
-            .select('id', { count: 'exact', head: true })
-            .eq('tenant_id', pref.tenant_id)
-            .eq('status', 'complete')
-            .gte('completed_at', periodStartIso)
-            .lte('completed_at', periodEndIso)
-            .eq('is_active', true),
-          supabase.from('maintenance_checks')
-            .select('id', { count: 'exact', head: true })
-            .eq('tenant_id', pref.tenant_id)
-            .in('status', ['scheduled', 'in_progress'])
-            .eq('is_active', true),
-          supabase.from('defects')
-            .select('id', { count: 'exact', head: true })
-            .eq('tenant_id', pref.tenant_id)
-            .in('status', ['open', 'in_progress']),
-          supabase.from('defects')
-            .select('id', { count: 'exact', head: true })
-            .eq('tenant_id', pref.tenant_id)
-            .gte('created_at', periodStartIso)
-            .lte('created_at', periodEndIso),
-          supabase.from('contract_variations')
-            .select('id', { count: 'exact', head: true })
-            .eq('tenant_id', pref.tenant_id)
-            .eq('customer_id', contact.customer_id)
-            .eq('status', 'approved')
-            .gte('approved_at', periodStartIso)
-            .lte('approved_at', periodEndIso),
-          supabase.from('sites')
-            .select('id, name')
-            .eq('customer_id', contact.customer_id)
-            .eq('is_active', true)
-            .order('name')
-            .limit(20),
-        ])
+        // One RPC call replaces the 67-queries-per-recipient N+1 (6 tenant
+        // KPIs + sites lookup + 3 queries × 20 sites). See migration 0099
+        // for the SQL — returns all counts + per-site array as one JSON.
+        type PeriodSummary = {
+          visits_done: number
+          visits_upcoming: number
+          defects_open: number
+          defects_raised: number
+          vars_approved: number
+          per_site: Array<{
+            site_name: string
+            visits_this_period: number
+            next_visit_date: string | null
+            open_defects: number
+          }>
+        }
+        const { data: summaryRaw } = await supabase.rpc('get_customer_period_summary', {
+          p_tenant_id: pref.tenant_id,
+          p_customer_id: contact.customer_id,
+          p_period_start: periodStartIso,
+          p_period_end: periodEndIso,
+        })
+        const summaryData = (summaryRaw ?? {
+          visits_done: 0, visits_upcoming: 0, defects_open: 0,
+          defects_raised: 0, vars_approved: 0, per_site: [],
+        }) as PeriodSummary
 
-        // Per-site visits + open defects (best-effort, skip on individual failures).
-        type SiteRow = { id: string; name: string }
-        const sites = (perSiteRows.data ?? []) as SiteRow[]
-        const perSite = await Promise.all(sites.map(async s => {
-          const [visitsRes, nextRes, defRes] = await Promise.all([
-            supabase.from('maintenance_checks').select('id', { count: 'exact', head: true })
-              .eq('site_id', s.id).eq('status', 'complete')
-              .gte('completed_at', periodStartIso).lte('completed_at', periodEndIso)
-              .eq('is_active', true),
-            supabase.from('maintenance_checks').select('due_date')
-              .eq('site_id', s.id).in('status', ['scheduled', 'in_progress'])
-              .eq('is_active', true).order('due_date', { ascending: true }).limit(1).maybeSingle(),
-            supabase.from('defects').select('id', { count: 'exact', head: true })
-              .eq('site_id', s.id).in('status', ['open', 'in_progress']),
-          ])
-          return {
-            siteName: s.name,
-            visitsThisPeriod: visitsRes.count ?? 0,
-            nextVisitDate: (nextRes.data as { due_date?: string } | null)?.due_date ?? null,
-            openDefects: defRes.count ?? 0,
-          }
+        const perSite = summaryData.per_site.map(s => ({
+          siteName: s.site_name,
+          visitsThisPeriod: s.visits_this_period,
+          nextVisitDate: s.next_visit_date,
+          openDefects: s.open_defects,
         }))
 
         const result = await sendCustomerMonthlySummaryEmail({
@@ -507,11 +480,11 @@ export async function POST(req: NextRequest) {
           portalUrl: appUrl + '/portal',
           periodStart: periodStartIso,
           periodEnd: periodEndIso,
-          visitsCompleted: visitsDone.count ?? 0,
-          visitsScheduled: visitsUpcoming.count ?? 0,
-          defectsOpenAtPeriodEnd: defectsOpen.count ?? 0,
-          defectsRaisedThisPeriod: defectsRaised.count ?? 0,
-          variationsApprovedThisPeriod: varsApproved.count ?? 0,
+          visitsCompleted: summaryData.visits_done,
+          visitsScheduled: summaryData.visits_upcoming,
+          defectsOpenAtPeriodEnd: summaryData.defects_open,
+          defectsRaisedThisPeriod: summaryData.defects_raised,
+          variationsApprovedThisPeriod: summaryData.vars_approved,
           perSite,
           primaryColour: ts.primary_colour ?? undefined,
         })
