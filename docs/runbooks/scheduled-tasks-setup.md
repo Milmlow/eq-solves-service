@@ -1,15 +1,30 @@
 # Scheduled tasks — setup runbook
 
-Two recurring routines were scoped on 2026-05-14 and approved:
+One recurring routine remains to schedule:
 
-1. **Supabase advisors daily scan** — catches new security / perf findings within 24h
-2. **Weekly UX / data-integrity audit** — runs `docs/runbooks/weekly-audit.md`
+- **Weekly UX / data-integrity audit** — runs the validated prompt in `docs/runbooks/weekly-audit.md`
 
-This file holds the **exact prompts and cron expressions** to paste into `/schedule` in a normal interactive Claude Code session. Setup time: ~2 minutes total.
+This file holds the **exact prompt and cron expression** to paste into `/schedule` in a normal interactive Claude Code session. Setup time: ~2 minutes.
+
+> **2026-05-15 correction:** the originally scoped *daily Supabase advisor scan* was found to be fully redundant with the existing [.github/workflows/supabase-advisors.yml](../../.github/workflows/supabase-advisors.yml) GitHub Actions workflow (which runs daily at 08:15 UTC, fails CI on ERRORs, summarises WARNs). Don't schedule it.
+
+## What CI already covers — don't duplicate
+
+Before adding any new scheduled routine, check whether one of these is already doing the job:
+
+| Workflow | File | Cadence | What it does |
+|---|---|---|---|
+| **CI** | [.github/workflows/ci.yml](../../.github/workflows/ci.yml) | Every PR + push to main | `tsc --noEmit` + `npm audit --audit-level=high` |
+| **check** | [.github/workflows/check.yml](../../.github/workflows/check.yml) | Every PR + push to main | `tsc --noEmit` + `next build` + `vitest run` (172 unit tests) |
+| **Supabase Advisors** | [.github/workflows/supabase-advisors.yml](../../.github/workflows/supabase-advisors.yml) | PRs touching migrations + daily 08:15 UTC + manual dispatch | Pulls security + performance advisors; fails CI on ERROR-level findings |
+| **Data Quality** | [.github/workflows/data-quality.yml](../../.github/workflows/data-quality.yml) | PRs touching `audits/**` or migrations + daily 08:30 UTC + manual dispatch | Runs `audits/run.sql` against Supabase; fails CI on ERRORs with `fail_count > 0` |
+| **Backup** | [.github/workflows/backup.yml](../../.github/workflows/backup.yml) | (check the file) | Database backup orchestration |
+
+A new `/schedule` task is only justified when **none** of the above covers it.
 
 ## Why this runbook exists
 
-Three scheduler tools were tried in one session and all bounced:
+Three scheduler tools were tried on 2026-05-14 and all bounced:
 
 | Tool | Why it failed |
 |---|---|
@@ -21,53 +36,9 @@ The first two are the real persistent-schedule paths. Either one works in a norm
 
 ## Setup
 
-In a normal Claude Code session at the EQ Solves Service repo root, run `/schedule` and paste each task below. Approve the modal when it appears.
+In a normal Claude Code session at the EQ Solves Service repo root, run `/schedule` and paste the task below. Approve the modal when it appears.
 
-### Task 1: Supabase advisors daily scan
-
-- **Cron:** `13 7 * * *` (07:13 local time daily — off-peak minute to avoid the cron herd)
-- **Cost:** ~$0.05 per run × ~30 runs/month = ~$1.50/month
-- **Why daily:** new advisor findings should surface within 24h of a migration, not at audit time
-
-**Prompt:**
-
-```text
-Run the daily Supabase advisor scan for the EQ Solves Service production project.
-
-Project: urjhmkhbgaxrofurpbgc (EQ Solves Service prod database). Multi-tenant
-maintenance management platform — RLS is load-bearing.
-
-Steps
-
-1. Load the Supabase MCP tool via ToolSearch if it isn't already in scope:
-   select:mcp__6cc721e0-dd2d-40e4-a8a6-0aa3843e0ef8__get_advisors
-
-2. Call it with project_id "urjhmkhbgaxrofurpbgc" and type "security".
-
-3. Call it again with type "performance".
-
-4. Output a concise markdown report:
-
-   # Supabase Advisors — YYYY-MM-DD
-
-   ## Security: N ERROR · N WARN · N INFO
-   - {title}: {one-line description} → {remediation}
-   (only list ERRORs always; list WARNs only if ≤ 5; skip INFO)
-
-   ## Performance: N ERROR · N WARN · N INFO
-   (same shape)
-
-5. If both scans return zero ERROR and zero WARN, output a single line:
-   "All clear — 0 ERROR, 0 WARN as of {date}".
-
-Output budget: under 400 words. Be actionable, not exhaustive.
-
-Why: Royce ships via Netlify auto-deploy and may not log into the Supabase
-dashboard daily. New RLS gaps or missing indexes that appear after a migration
-should surface fast, not at audit time.
-```
-
-### Task 2: Weekly UX / data-integrity audit
+### Task: Weekly UX / data-integrity audit
 
 - **Cron:** `47 8 * * 1` (Monday 08:47 local time — early in the work week)
 - **Cost:** ~$3-5 per run × 4 runs/month = ~$12-20/month
@@ -115,17 +86,18 @@ signal doesn't decay.
 
 ## After setup
 
-Once both tasks are scheduled:
+Once the task is scheduled:
 
 - List active tasks: in `/schedule`, ask "list my scheduled tasks"
-- Update a task's prompt: edit `C:\Users\EQ\.claude\scheduled-tasks\<taskId>\SKILL.md`
+- Update the task's prompt: edit `C:\Users\EQ\.claude\scheduled-tasks\<taskId>\SKILL.md`
 - Disable temporarily: in `/schedule`, ask "disable task <name>"
 - Delete: in `/schedule`, ask "delete task <name>"
 
-Add a `## History` table at the bottom of this file when you find the signal is genuinely useful (or kill the schedule if it isn't).
+Add a `## History` row when you find the signal is genuinely useful (or kill the schedule if it isn't).
 
 ## History
 
 | Date | What happened |
 |---|---|
-| 2026-05-14 | Scoped + approved both routines. All 3 schedule tools blocked the same evening — runbook captures the exact setup for a future interactive session. |
+| 2026-05-14 | Scoped + approved two routines (daily advisor scan + weekly audit). All 3 schedule tools blocked the same evening — runbook captures the exact setup for a future interactive session. |
+| 2026-05-15 | Discovered the daily Supabase advisor scan was fully redundant with [.github/workflows/supabase-advisors.yml](../../.github/workflows/supabase-advisors.yml). Removed from this runbook. Weekly UX audit remains the only routine still worth scheduling. Added the "What CI already covers" table so future-me doesn't propose duplicates. |
