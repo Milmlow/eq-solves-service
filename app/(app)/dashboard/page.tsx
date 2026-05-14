@@ -67,23 +67,29 @@ export default async function DashboardPage({
   const filterByUser = effectiveView === 'mine' && userId
 
   // ── Fetch all data in parallel ──
-  // Entity stats are always tenant-wide (context, not tasks)
+  //
+  // 5 parallel calls now (was 16 before migration 0100):
+  //   1× get_dashboard_counts RPC — entity + check + defect counts in one trip
+  //   3× list queries (upcoming, recent, sites for map) — shapes differ from counts
+  //   0× user-filtered count queries — folded into the RPC's optional p_user_id
+  //
+  // The RPC enforces tenant isolation by parameter (the caller has already
+  // verified tenant_id via the membership lookup above). When filterByUser
+  // is on, the RPC applies assigned_to/raised_by filters at the SQL layer.
+  if (!tenantId) {
+    // No tenant context = no useful dashboard. Render with zeros.
+  }
+  // RPC signature expects string | undefined; use undefined (not null) when
+  // we want the tenant-wide path (no user filter).
+  const countsUserId = filterByUser && userId ? userId : undefined
   const [
-    customersRes, sitesRes, assetsRes, jobPlansRes,
-    scheduledRes, inProgressRes, overdueRes, completeRes,
+    countsRes,
     upcomingChecks, recentChecks,
     sitesForMap,
-    defectsOpen, defectsCritical, defectsHigh, defectsMedium, defectsLow,
   ] = await Promise.all([
-    supabase.from('customers').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('sites').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('assets').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('job_plans').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    // Maintenance counts — optionally filtered by assigned_to; exclude archived (is_active = false)
-    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('status', 'scheduled'), filterByUser, userId),
-    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('status', 'in_progress'), filterByUser, userId),
-    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('status', 'overdue'), filterByUser, userId),
-    buildCountQuery(supabase.from('maintenance_checks').select('*', { count: 'exact', head: true }).eq('is_active', true).eq('status', 'complete'), filterByUser, userId),
+    tenantId
+      ? supabase.rpc('get_dashboard_counts', { p_tenant_id: tenantId, p_user_id: countsUserId })
+      : Promise.resolve({ data: null }),
     // Upcoming checks
     buildListQuery(
       supabase.from('maintenance_checks')
@@ -108,13 +114,20 @@ export default async function DashboardPage({
     supabase.from('sites')
       .select('id, name, state, city, latitude, longitude, customer_id, customers(name)')
       .eq('is_active', true),
-    // Defect counts — optionally filtered by raised_by
-    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).in('status', ['open', 'in_progress']), filterByUser, userId),
-    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'critical').in('status', ['open', 'in_progress']), filterByUser, userId),
-    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'high').in('status', ['open', 'in_progress']), filterByUser, userId),
-    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'medium').in('status', ['open', 'in_progress']), filterByUser, userId),
-    buildDefectCountQuery(supabase.from('defects').select('*', { count: 'exact', head: true }).eq('severity', 'low').in('status', ['open', 'in_progress']), filterByUser, userId),
   ])
+
+  // Unpack the RPC payload. Empty fallback so the rest of the page can
+  // render even if the call failed or the user has no tenant.
+  type DashboardCounts = {
+    entities: { customers: number; sites: number; assets: number; job_plans: number }
+    checks:   { scheduled: number; in_progress: number; overdue: number; complete: number }
+    defects:  { total: number; critical: number; high: number; medium: number; low: number }
+  }
+  const counts = (countsRes.data ?? {
+    entities: { customers: 0, sites: 0, assets: 0, job_plans: 0 },
+    checks:   { scheduled: 0, in_progress: 0, overdue: 0, complete: 0 },
+    defects:  { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+  }) as DashboardCounts
 
   // ── My in-progress tests (ACB + NSX) — only when view=mine ──
   type TestRow = { id: string; test_date: string; overall_result: string; assets: { name: string } | { name: string }[] | null; sites: { name: string } | { name: string }[] | null }
@@ -145,26 +158,26 @@ export default async function DashboardPage({
   }
 
   const entityStats = [
-    { label: 'Sites', value: sitesRes.count ?? 0, href: '/sites', bgLight: 'bg-sky-50', textColour: 'text-sky-700' },
-    { label: 'Assets', value: assetsRes.count ?? 0, href: '/assets', bgLight: 'bg-blue-50', textColour: 'text-blue-700' },
-    { label: 'Job Plans', value: jobPlansRes.count ?? 0, href: '/job-plans', bgLight: 'bg-indigo-50', textColour: 'text-indigo-700' },
-    { label: 'Customers', value: customersRes.count ?? 0, href: '/customers', bgLight: 'bg-violet-50', textColour: 'text-violet-700' },
+    { label: 'Sites',     value: counts.entities.sites,     href: '/sites',     bgLight: 'bg-sky-50',    textColour: 'text-sky-700' },
+    { label: 'Assets',    value: counts.entities.assets,    href: '/assets',    bgLight: 'bg-blue-50',   textColour: 'text-blue-700' },
+    { label: 'Job Plans', value: counts.entities.job_plans, href: '/job-plans', bgLight: 'bg-indigo-50', textColour: 'text-indigo-700' },
+    { label: 'Customers', value: counts.entities.customers, href: '/customers', bgLight: 'bg-violet-50', textColour: 'text-violet-700' },
   ]
 
   const checkCounts = {
-    scheduled: scheduledRes.count ?? 0,
-    inProgress: inProgressRes.count ?? 0,
-    overdue: overdueRes.count ?? 0,
-    complete: completeRes.count ?? 0,
+    scheduled:  counts.checks.scheduled,
+    inProgress: counts.checks.in_progress,
+    overdue:    counts.checks.overdue,
+    complete:   counts.checks.complete,
   }
   const totalActive = checkCounts.scheduled + checkCounts.inProgress + checkCounts.overdue
 
   const defectCounts = {
-    total: defectsOpen.count ?? 0,
-    critical: defectsCritical.count ?? 0,
-    high: defectsHigh.count ?? 0,
-    medium: defectsMedium.count ?? 0,
-    low: defectsLow.count ?? 0,
+    total:    counts.defects.total,
+    critical: counts.defects.critical,
+    high:     counts.defects.high,
+    medium:   counts.defects.medium,
+    low:      counts.defects.low,
   }
 
   // ── Active asset counts per site (for map pins) ──
@@ -197,7 +210,7 @@ export default async function DashboardPage({
   return (
     <div className="space-y-6">
       {/* Analytics: dashboard_viewed (fires once per mount, client-side) */}
-      <DashboardAnalytics siteCount={sitesRes.count ?? 0} openChecksCount={totalActive} />
+      <DashboardAnalytics siteCount={counts.entities.sites} openChecksCount={totalActive} />
 
       {/* Welcome header — view toggle (if available) lives inline in the subtitle,
           not as a separate top-right pill. Keeps the dashboard header clean now
@@ -453,26 +466,12 @@ function getGreeting(): string {
 }
 
 /**
- * Conditionally add `assigned_to` filter for maintenance_checks queries.
- * Works with both count queries and list queries.
+ * Conditionally add `assigned_to` filter for the maintenance_checks LIST
+ * queries (upcoming + recent). The COUNT queries are now folded into the
+ * get_dashboard_counts RPC which applies the same filter at the SQL layer.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildCountQuery(query: any, filterByUser: string | false | null, userId: string | null) {
-  if (filterByUser && userId) return query.eq('assigned_to', userId)
-  return query
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildListQuery(query: any, filterByUser: string | false | null, userId: string | null) {
   if (filterByUser && userId) return query.eq('assigned_to', userId)
-  return query
-}
-
-/**
- * Conditionally add `raised_by` filter for defect queries.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildDefectCountQuery(query: any, filterByUser: string | false | null, userId: string | null) {
-  if (filterByUser && userId) return query.eq('raised_by', userId)
   return query
 }
