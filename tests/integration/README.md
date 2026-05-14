@@ -83,10 +83,24 @@ test's cleanup may have failed and the same ID could collide.
 
 ## CI
 
-Not wired into the GitHub Actions `check.yml` pipeline yet — the workflow
-runs `tsc --noEmit` + `npm audit` but skips `npm test` entirely (including
-the unit tests). PR 3c will add a `supabase start` step + `npm test` +
-`npm run test:integration` to gate merges.
+Wired into [.github/workflows/integration.yml](../../.github/workflows/integration.yml)
+as a required check on every PR and push to main. The workflow:
 
-Until then: run `npm run test:integration` locally before pushing
-RLS-touching changes.
+1. Installs the Supabase CLI via `supabase/setup-cli@v1`
+2. Runs `supabase start` (boots Postgres + GoTrue + PostgREST + Realtime
+   in Docker, applies every migration in `supabase/migrations/`)
+3. Remaps `supabase status -o env` output to the env-var names the harness
+   expects (`NEXT_PUBLIC_SUPABASE_URL` etc.)
+4. Runs `npm run test:integration`
+5. Stops the stack
+
+Cost is ~2-3 min per run (warm Docker cache). Unit-test workflow
+[`check.yml`](../../.github/workflows/check.yml) is unaffected — it still
+runs `tsc --noEmit` + `next build` + `npx vitest run` on the same triggers.
+
+When this check fails on a PR, fix the regression locally first:
+
+```bash
+supabase start                 # if not already running
+npm run test:integration       # reproduces the CI failure
+```
