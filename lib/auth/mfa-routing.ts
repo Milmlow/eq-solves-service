@@ -25,6 +25,14 @@ export const PUBLIC_PATHS = [
   '/auth/forgot-password',
   '/auth/reset-password',
   '/auth/callback',
+  // Invite acceptance landing page. The invited user is unauthenticated
+  // when they click the link in their welcome email — they're about to
+  // SET their password via the 8-digit OTP form here. Without this
+  // exemption the proxy bounces them to /auth/signin and the only way
+  // forward is "Forgot password" (which works because that path IS
+  // public, but it routes them through the reset-password screen
+  // instead of the welcome rail). Bug surfaced 2026-05-14 onboarding.
+  '/auth/accept-invite',
   // Customer portal magic-link entry point. The portal is reached by
   // customers who never sign up for a staff account; their only auth
   // surface is /portal/login (form) → /api/portal/magic-link (POST) →
