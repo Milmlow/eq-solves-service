@@ -109,9 +109,11 @@ export default async function AnalyticsPage() {
   const avgTimeToComplete = completedWithDates.length > 0
     ? Math.round(
         completedWithDates.reduce((sum, c) => {
-          const created = new Date(c.created_at).getTime()
-          // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-          const completed = new Date(c.completed_at).getTime()
+          // completed_at can be null in the DB; the upstream filter
+          // (completedWithDates) only keeps rows where both are set,
+          // so the ?? '' coerces the type without changing runtime.
+          const created = new Date(c.created_at ?? '').getTime()
+          const completed = new Date(c.completed_at ?? '').getTime()
           return sum + (completed - created) / (1000 * 60 * 60 * 24)
         }, 0) / completedWithDates.length
       )

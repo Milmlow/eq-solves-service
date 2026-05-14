@@ -1160,19 +1160,22 @@ export async function batchCreateChecksAction(formData: FormData) {
     for (const dueDate of checkDates) {
       const dueDateStr = dueDate.toISOString().split('T')[0]
 
-      // Insert the check
+      // Insert the check. The generated Insert shape narrows some FK
+      // columns to non-null strings even though the DB allows null; cast
+      // the values record through unknown so the explicit-null assigned_to
+      // path keeps working at runtime.
+      const insertValues: Record<string, unknown> = {
+        tenant_id: tenantId,
+        job_plan_id: jobPlanId,
+        site_id: jobPlan.site_id,
+        assigned_to: assignedTo,
+        status: 'scheduled',
+        due_date: dueDateStr,
+        notes: null,
+      }
       const { data: check } = await supabase
         .from('maintenance_checks')
-        // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-        .insert({
-          tenant_id: tenantId,
-          job_plan_id: jobPlanId,
-          site_id: jobPlan.site_id,
-          assigned_to: assignedTo,
-          status: 'scheduled',
-          due_date: dueDateStr,
-          notes: null,
-        })
+        .insert(insertValues as never)
         .select('id')
         .single()
 

@@ -551,8 +551,12 @@ export async function POST(req: NextRequest) {
       job_plans: { name: string } | { name: string }[] | null
       profiles: { full_name: string } | { full_name: string }[] | null
     }
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-    const upRows = (upcoming ?? []) as UpRow[]
+    // The profiles join can't be auto-resolved by PostgREST's relation
+    // inferencer here (no FK declared from maintenance_checks → profiles),
+    // so the row type comes back with profiles: SelectQueryError. Cast
+    // through unknown — the runtime data is correct (manual join via the
+    // assigned_to column → profiles.id).
+    const upRows = (upcoming ?? []) as unknown as UpRow[]
     const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number }>
     sec.customerUpcoming.eligible = upRows.length
 

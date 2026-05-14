@@ -68,10 +68,9 @@ export default async function InstrumentsPage({
   const totalPages = Math.ceil(total / PER_PAGE)
 
   // Resolve assigned_to names
-  const assigneeIds = [...new Set((instrumentsRaw ?? []).map((i) => i.assigned_to).filter(Boolean))]
+  const assigneeIds = [...new Set((instrumentsRaw ?? []).map((i) => i.assigned_to).filter((id): id is string => Boolean(id)))]
   const assigneeMap: Record<string, string> = {}
   if (assigneeIds.length > 0) {
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
     const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', assigneeIds)
     for (const p of profiles ?? []) {
       assigneeMap[p.id] = p.full_name ?? p.email

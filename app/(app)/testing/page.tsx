@@ -99,13 +99,12 @@ export default async function TestingPage({
   const totalPages = Math.ceil(total / PER_PAGE)
 
   // Resolve tested_by names
-  const testerIds = [...new Set((recordsRaw ?? []).map((r) => r.tested_by).filter(Boolean))]
+  const testerIds = [...new Set((recordsRaw ?? []).map((r) => r.tested_by).filter((id): id is string => Boolean(id)))]
   let testerMap: Record<string, string> = {}
   if (testerIds.length > 0) {
     const { data: testerProfiles } = await supabase
       .from('profiles')
       .select('id, full_name, email')
-      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .in('id', testerIds)
     for (const p of testerProfiles ?? []) {
       testerMap[p.id] = p.full_name ?? p.email

@@ -39,8 +39,10 @@ export default async function MediaLibraryPage() {
       </div>
 
       <MediaLibraryClient
-        // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-        media={media ?? []}
+        // media.surface comes back as string from the DB; MediaLibraryClient
+        // narrows to MediaSurface enum at the consumer level. Cast bridges
+        // the column-to-enum step at the route boundary.
+        media={(media ?? []) as Parameters<typeof MediaLibraryClient>[0]['media']}
         customers={customers ?? []}
         sites={sites ?? []}
       />

@@ -108,18 +108,17 @@ export default async function AssetsPage({
   // selecting raw rows — even with .range(0, 49999) — silently
   // truncates. Returning a single scalar jsonb from an RPC bypasses
   // the cap because the response is one value, not a row set.
+  // The generated RPC signature types the optional filters as `string`
+  // (non-nullable) but the Postgres function declares them as `text` with
+  // default null. Passing null at runtime is correct (server treats null as
+  // "no filter") — cast to satisfy the stricter generated type.
   const { data: allAssetsJson } = await supabase.rpc('get_assets_for_grouping', {
     p_show_archived: showArchived,
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-    p_search: search || null,
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-    p_site_id: siteId || null,
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-    p_asset_type: assetType || null,
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-    p_job_plan_id: jobPlanId || null,
-    // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-    p_customer_id: customerId || null,
+    p_search: (search || null) as unknown as string,
+    p_site_id: (siteId || null) as unknown as string,
+    p_asset_type: (assetType || null) as unknown as string,
+    p_job_plan_id: (jobPlanId || null) as unknown as string,
+    p_customer_id: (customerId || null) as unknown as string,
   })
   const allAssets = (allAssetsJson ?? []) as unknown[]
 

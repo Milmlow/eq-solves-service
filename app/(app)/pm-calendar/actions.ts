@@ -494,8 +494,10 @@ export async function importPmCalendarCsvAction(
 
     for (let i = 0; i < inserts.length; i += 50) {
       const batch = inserts.slice(i, i + 50)
-      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
-      const { error } = await supabase.from('pm_calendar').insert(batch)
+      // inserts is built as Record<string,unknown>[] from CSV row parsing;
+      // the generated Insert type is stricter. Cast to bridge — validation
+      // already happened above (required-columns check on every row).
+      const { error } = await supabase.from('pm_calendar').insert(batch as never)
       if (error) return { success: false, error: `Batch insert failed: ${error.message}` }
     }
 

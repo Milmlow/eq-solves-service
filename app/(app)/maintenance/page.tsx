@@ -109,13 +109,12 @@ export default async function MaintenancePage({
   const totalPages = Math.ceil(total / PER_PAGE)
 
   // Map item counts and resolve assignee names
-  const assigneeIds = [...new Set((checksRaw ?? []).map((c) => c.assigned_to).filter(Boolean))]
+  const assigneeIds = [...new Set((checksRaw ?? []).map((c) => c.assigned_to).filter((id): id is string => Boolean(id)))]
   let assigneeMap: Record<string, string> = {}
   if (assigneeIds.length > 0) {
     const { data: assigneeProfiles } = await supabase
       .from('profiles')
       .select('id, full_name, email')
-      // @ts-expect-error TODO(db-types) PR 2b: drift surfaced by generated Database types
       .in('id', assigneeIds)
     for (const p of assigneeProfiles ?? []) {
       assigneeMap[p.id] = p.full_name ?? p.email
