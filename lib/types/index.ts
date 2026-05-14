@@ -69,6 +69,13 @@ export interface TenantSettings {
   // (scope-context display, auto gap-close, out-of-scope block) is active.
   // See migration 0085.
   commercial_features_enabled: boolean
+  // Module toggles (migration 0097) — per-tenant switches for non-core
+  // sidebar entries. Existing tenants were backfilled to true; new tenants
+  // default false so admins opt in to additional modules.
+  calendar_enabled: boolean
+  defects_enabled: boolean
+  analytics_enabled: boolean
+  contract_scope_enabled: boolean
   updated_at: string
 }
 

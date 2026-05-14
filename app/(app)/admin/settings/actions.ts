@@ -16,6 +16,11 @@ const UpdateTenantSettingsSchema = z.object({
   logo_url_on_dark: z.string().max(500).nullable().optional(),
   support_email: z.string().email().nullable().optional(),
   commercial_features_enabled: z.boolean(),
+  // Module toggles — see migration 0097.
+  calendar_enabled: z.boolean(),
+  defects_enabled: z.boolean(),
+  analytics_enabled: z.boolean(),
+  contract_scope_enabled: z.boolean(),
 })
 
 // uploadLogoAction was removed — logos are now uploaded via Admin → Media
@@ -38,6 +43,10 @@ export async function updateTenantSettingsAction(formData: FormData) {
       support_email: formData.get('support_email') || null,
       // Checkbox sends 'on' when checked, nothing when unchecked.
       commercial_features_enabled: formData.get('commercial_features_enabled') === 'on',
+      calendar_enabled:            formData.get('calendar_enabled') === 'on',
+      defects_enabled:             formData.get('defects_enabled') === 'on',
+      analytics_enabled:           formData.get('analytics_enabled') === 'on',
+      contract_scope_enabled:      formData.get('contract_scope_enabled') === 'on',
     }
 
     const parsed = UpdateTenantSettingsSchema.safeParse(raw)

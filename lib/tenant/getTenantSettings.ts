@@ -31,6 +31,13 @@ const DEFAULTS: TenantSettings = {
   report_logo_url_on_dark: null,
   report_complexity: 'standard',
   commercial_features_enabled: false,
+  // Module toggles (migration 0097). Defaults here match the migration's
+  // post-flip column defaults — false. Real tenant rows are populated by
+  // the migration backfill (existing) or the column default (new).
+  calendar_enabled: false,
+  defects_enabled: false,
+  analytics_enabled: false,
+  contract_scope_enabled: false,
   updated_at: '',
 }
 
