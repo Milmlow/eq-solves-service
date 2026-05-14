@@ -37,7 +37,7 @@ export default async function RenewalPackPage() {
   if (!isAdmin(userRole)) {
     return (
       <div className="space-y-6">
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin/users' }, { label: 'Renewal Pack' }]} />
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Commercials', href: '/commercials' }, { label: 'Renewal Pack' }]} />
         <Card>
           <div className="p-4 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -64,7 +64,7 @@ export default async function RenewalPackPage() {
   if (!commercialEnabled) {
     return (
       <div className="space-y-6">
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin/users' }, { label: 'Renewal Pack' }]} />
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Commercials', href: '/commercials' }, { label: 'Renewal Pack' }]} />
         <h1 className="text-3xl font-bold text-eq-sky">Renewal Pack</h1>
         <Card>
           <div className="p-4 flex items-start gap-3">
@@ -102,7 +102,7 @@ export default async function RenewalPackPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin/users' }, { label: 'Renewal Pack' }]} />
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Commercials', href: '/commercials' }, { label: 'Renewal Pack' }]} />
         <h1 className="text-3xl font-bold text-eq-sky mt-2">Renewal Pack</h1>
         <p className="text-sm text-eq-grey mt-1">
           Year-end document combining the year in review, delivery summary, variations, and proposed scope for the next period.
