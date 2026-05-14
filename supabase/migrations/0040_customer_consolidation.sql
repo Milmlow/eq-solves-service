@@ -41,13 +41,21 @@ update public.customers
    and name = 'Metronode NSW';
 
 -- 2) Create Equinix Australia National (if not exists — idempotent by name + tenant)
+-- Each INSERT is guarded by `AND EXISTS (SELECT 1 FROM tenants WHERE id = ...)`
+-- so fresh replays (CI integration tests) where the SKS tenant doesn't exist
+-- silently skip the inserts rather than hit the FK violation. Prod has the
+-- tenant; the guard is a no-op there.
 insert into public.customers (tenant_id, name, code, is_active)
 select 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid, 'Equinix Australia National', 'EQX-NAT', true
  where not exists (
    select 1 from public.customers
     where tenant_id = 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid
       and name = 'Equinix Australia National'
- );
+ )
+   and exists (
+     select 1 from public.tenants
+      where id = 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid
+   );
 
 -- 3) Create Equinix Hyperscale
 insert into public.customers (tenant_id, name, code, is_active)
@@ -56,7 +64,11 @@ select 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid, 'Equinix Hyperscale', 'EQX-
    select 1 from public.customers
     where tenant_id = 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid
       and name = 'Equinix Hyperscale'
- );
+ )
+   and exists (
+     select 1 from public.tenants
+      where id = 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid
+   );
 
 -- 4) Create Ramsay Health
 insert into public.customers (tenant_id, name, code, is_active)
@@ -65,7 +77,11 @@ select 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid, 'Ramsay Health', 'RHC', tru
    select 1 from public.customers
     where tenant_id = 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid
       and name = 'Ramsay Health'
- );
+ )
+   and exists (
+     select 1 from public.tenants
+      where id = 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid
+   );
 
 -- 5) Reassignments
 
@@ -130,7 +146,8 @@ update public.customers
         and is_active = true
    );
 
--- Sanity checks
+-- Sanity checks. Guarded by tenant-exists so fresh replays skip cleanly —
+-- the counts are only meaningful when the SKS tenant has data to consolidate.
 do $$
 declare
   legacy_sites bigint;
@@ -141,6 +158,14 @@ declare
   expected_nat bigint;
   expected_ramsay bigint;
 begin
+  if not exists (
+    select 1 from public.tenants
+     where id = 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid
+  ) then
+    raise notice 'Migration 0040: SKS tenant absent (fresh DB) — skipping sanity checks';
+    return;
+  end if;
+
   -- 0 active sites should remain on the legacy Equinix Australia row
   select count(*) into legacy_sites
     from public.sites
