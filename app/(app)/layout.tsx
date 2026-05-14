@@ -16,7 +16,6 @@ import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { isDemoEmail } from '@/lib/utils/demo'
-import type { TenantTier, TenantComplianceTier } from '@/lib/types'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -26,11 +25,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let showOnboarding = false
   let userName: string | null = null
   let tenantName: string | null = null
-  // Tier framework (migration 0092) — passed to the Plan chip in the
-  // global header. Null when the user has no active membership.
-  let tenantTier: TenantTier | null = null
-  let tenantComplianceTier: TenantComplianceTier | null = null
-  let tenantChipName: string | null = null
   // Captured for AnalyticsIdentify — client-side PostHog + Clarity identify
   // runs after render with these values, so the server-known tenant + role
   // are what appear in events (no race with client-side auth fetch).
@@ -45,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // OnboardingWizard ("create your own project" screen).
     const { data: memberships } = await supabase
       .from('tenant_members')
-      .select('role, tenant_id, created_at, tenants!inner(name, setup_completed_at, tier, compliance_tier)')
+      .select('role, tenant_id, created_at, tenants!inner(name, setup_completed_at)')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .order('created_at', { ascending: true })
@@ -88,8 +82,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         tenants: {
           name: string
           setup_completed_at: string | null
-          tier: TenantTier
-          compliance_tier: TenantComplianceTier
         } | null
       }
       const rows = memberships as unknown as MembershipRow[]
@@ -99,11 +91,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       isAdmin = membership.role === 'super_admin' || membership.role === 'admin'
       analyticsTenantId = membership.tenant_id
       analyticsRole = membership.role
-
-      // Pass to the Plan chip in the header.
-      tenantTier = membership.tenants?.tier ?? null
-      tenantComplianceTier = membership.tenants?.compliance_tier ?? null
-      tenantChipName = membership.tenants?.name ?? null
 
       // Only show the onboarding wizard if EVERY tenant this user belongs to
       // is un-onboarded. A super_admin/admin attached to even one completed
@@ -154,9 +141,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar
         isAdmin={isAdmin}
         settings={settings}
-        tenantTier={tenantTier}
-        tenantComplianceTier={tenantComplianceTier}
-        tenantChipName={tenantChipName}
       />
       <div className="flex flex-1 min-w-0 flex-col">
         {isDemoSession && <DemoBanner shareUrl={demoShareUrl} />}
@@ -166,9 +150,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <EqFooter />
       </div>
       <HelpWidget />
-      {/* TenantTierChip moved into the Sidebar footer (and mobile top bar) —
-          the fixed top-right placement collided with page-level headers like
-          the dashboard view toggle. Sidebar passes tier props through. */}
       {showOnboarding && (
         <OnboardingWizard userName={userName} companyName={tenantName} />
       )}

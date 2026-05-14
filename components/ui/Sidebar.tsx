@@ -8,8 +8,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { NotificationBell } from '@/components/ui/NotificationBell'
-import { TenantTierChip } from '@/components/ui/TenantTierChip'
-import type { TenantSettings, TenantTier, TenantComplianceTier } from '@/lib/types'
+import type { TenantSettings } from '@/lib/types'
 
 /**
  * Sidebar navigation grouped into sections for visual structure.
@@ -88,17 +87,11 @@ function buildNavSections(commercialEnabled: boolean): NavSection[] {
 interface SidebarProps {
   isAdmin?: boolean
   settings?: TenantSettings
-  tenantTier?: TenantTier | null
-  tenantComplianceTier?: TenantComplianceTier | null
-  tenantChipName?: string | null
 }
 
 export function Sidebar({
   isAdmin = false,
   settings,
-  tenantTier = null,
-  tenantComplianceTier = null,
-  tenantChipName = null,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -316,19 +309,6 @@ export function Sidebar({
           <img src={whiteLogo} alt="" aria-hidden="true" className="w-40 h-40 object-contain pointer-events-none" />
         </div>
       )}
-      {/* Plan chip lives in the sidebar footer (moved out of the fixed
-          top-right corner so it doesn't fight the dashboard header). Hidden
-          when collapsed — would clip badly in the 64px rail. */}
-      {!collapsed && tenantTier && tenantComplianceTier && (
-        <div className="px-2 pt-2">
-          <TenantTierChip
-            variant="sidebar"
-            tier={tenantTier}
-            complianceTier={tenantComplianceTier}
-            tenantName={tenantChipName}
-          />
-        </div>
-      )}
       <div className="border-t border-white/10 p-2 mt-2">
         <form action="/auth/signout" method="post">
           <button
@@ -360,14 +340,6 @@ export function Sidebar({
           <span className="font-bold text-sm text-eq-sky">{productName}</span>
         )}
         <div className="flex items-center gap-2">
-          {tenantTier && tenantComplianceTier && (
-            <TenantTierChip
-              variant="mobile"
-              tier={tenantTier}
-              complianceTier={tenantComplianceTier}
-              tenantName={tenantChipName}
-            />
-          )}
           <NotificationBell />
         </div>
       </div>
