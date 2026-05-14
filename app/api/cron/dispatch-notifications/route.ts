@@ -34,6 +34,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { runSupervisorDigests } from '@/lib/calendar/supervisor-digest'
 import { sendCustomerMonthlySummaryEmail } from '@/lib/email/send-customer-monthly-summary'
 import { sendCustomerUpcomingVisitEmail } from '@/lib/email/send-customer-upcoming-visit'
@@ -415,12 +416,9 @@ export async function POST(req: NextRequest) {
 
     for (const pref of prefList) {
       try {
-        // Tenant must be on commercial tier — gate every send.
-        const { data: ts } = await supabase
-          .from('tenant_settings')
-          .select('commercial_features_enabled, primary_colour, product_name, report_company_name')
-          .eq('tenant_id', pref.tenant_id)
-          .maybeSingle()
+        // Tenant must be on commercial tier — gate every send. Cached read
+        // so cron firing across N recipients shares one row fetch per tenant.
+        const ts = await getCachedTenantSettings(pref.tenant_id)
         if (!ts?.commercial_features_enabled) continue
 
         // Resolve contact + customer.
@@ -560,11 +558,7 @@ export async function POST(req: NextRequest) {
 
     for (const ch of upRows) {
       try {
-        const { data: ts } = await supabase
-          .from('tenant_settings')
-          .select('commercial_features_enabled, primary_colour, product_name, report_company_name')
-          .eq('tenant_id', ch.tenant_id)
-          .maybeSingle()
+        const ts = await getCachedTenantSettings(ch.tenant_id)
         if (!ts?.commercial_features_enabled) continue
 
         const site = Array.isArray(ch.sites) ? ch.sites[0] : ch.sites

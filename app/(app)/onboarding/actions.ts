@@ -1,7 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, updateTag } from 'next/cache'
+import { tenantSettingsTag } from '@/lib/tenant/getTenantSettings'
 
 /**
  * Step 1: Update tenant company details
@@ -58,6 +59,9 @@ export async function updateCompanyDetailsAction(formData: FormData) {
       .eq('id', user.id)
   }
 
+  // Bust the unstable_cache-backed tenant_settings read so the next render
+  // picks up the new company details. updateTag is the server-action form.
+  updateTag(tenantSettingsTag(membership.tenant_id))
   revalidatePath('/', 'layout')
   return { success: true }
 }

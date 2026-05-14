@@ -12,6 +12,7 @@
 
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { generatePMCheckReport } from '@/lib/reports/pm-check-report'
 import type { PmCheckReportInput, PmCheckReportItem } from '@/lib/reports/pm-check-report'
 import { generateWorkOrderDetailsReport } from '@/lib/reports/work-order-details'
@@ -76,14 +77,10 @@ export async function generateAndStoreReport(
     throw new Error(`Failed to fetch check items: ${itemsError?.message ?? 'empty'}`)
   }
 
-  // ── Fetch tenant settings for branding ──
+  // ── Fetch tenant settings for branding via the cached helper ──
   // report_customer_logo dropped 26-Apr-2026 (audit item 8) — customer logo
   // is now always shown on the cover when present.
-  const { data: tenantSettings } = await supabase
-    .from('tenant_settings')
-    .select('product_name, primary_colour, deep_colour, ice_colour, ink_colour, report_company_name, report_logo_url')
-    .eq('tenant_id', tenantId)
-    .maybeSingle()
+  const tenantSettings = await getCachedTenantSettings(tenantId)
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
@@ -291,13 +288,9 @@ export async function generateAndStoreWorkOrderDetailsReport(
     console.warn(`Failed to fetch defects: ${defectError.message}`)
   }
 
-  // ── Fetch tenant settings for branding ──
+  // ── Fetch tenant settings for branding via the cached helper ──
   // report_customer_logo dropped 26-Apr-2026 (audit item 8).
-  const { data: tenantSettings } = await supabase
-    .from('tenant_settings')
-    .select('product_name, primary_colour, deep_colour, ice_colour, ink_colour, report_company_name, report_logo_url')
-    .eq('tenant_id', tenantId)
-    .maybeSingle()
+  const tenantSettings = await getCachedTenantSettings(tenantId)
 
   const productName = tenantSettings?.product_name ?? 'EQ Solves'
   const primaryColour = tenantSettings?.primary_colour ?? '#3DA8D8'
