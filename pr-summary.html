@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>EQ Solves Service — 14 May 2026 review &amp; ship</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky: #3DA8D8;
+    --deep: #2986B4;
+    --ice: #EAF5FB;
+    --ink: #1A1A2E;
+    --grey: #6B7280;
+    --line: #E5E7EB;
+    --bg: #FAFBFC;
+    --green: #15803D;
+    --green-ice: #DCFCE7;
+    --amber: #B45309;
+    --amber-ice: #FEF3C7;
+    --red: #B91C1C;
+    --red-ice: #FEE2E2;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  header.hero {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: white;
+    padding: 32px 36px;
+    margin-bottom: 28px;
+  }
+  header.hero .eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--deep);
+    background: var(--ice);
+    padding: 5px 10px;
+    border-radius: 6px;
+  }
+  header.hero h1 {
+    font-size: 32px;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    margin: 16px 0 8px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+  header.hero .subtitle {
+    color: var(--grey);
+    font-size: 16px;
+    margin: 0;
+  }
+  header.hero .date {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--grey);
+  }
+
+  section {
+    margin-top: 36px;
+  }
+  h2.section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 24px 0 8px;
+  }
+
+  .lead {
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.6;
+    margin: 0 0 12px;
+  }
+  p { margin: 0 0 14px; color: var(--ink); }
+  p.muted { color: var(--grey); }
+
+  ul.clean {
+    padding: 0;
+    margin: 0 0 12px 0;
+    list-style: none;
+  }
+  ul.clean li {
+    padding: 6px 0 6px 22px;
+    position: relative;
+    font-size: 15px;
+  }
+  ul.clean li::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 14px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--sky);
+  }
+
+  /* PR card */
+  .pr-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: white;
+    padding: 24px 28px;
+    margin-bottom: 18px;
+  }
+  .pr-card .pr-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .pr-card .pr-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0;
+  }
+  .pr-card .pr-link {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--deep);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    padding: 5px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .pr-card .pr-link:hover { background: var(--ice); }
+
+  .row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-top: 8px;
+  }
+  @media (max-width: 640px) { .row-2 { grid-template-columns: 1fr; } }
+  .row-2 .pane {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: var(--bg);
+  }
+  .row-2 .pane .label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--grey);
+    margin-bottom: 6px;
+  }
+  .row-2 .pane .body {
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  /* Pills */
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .pill.green { background: var(--green-ice); color: var(--green); }
+  .pill.amber { background: var(--amber-ice); color: var(--amber); }
+  .pill.red   { background: var(--red-ice);   color: var(--red);   }
+  .pill.ice   { background: var(--ice);       color: var(--deep);  }
+
+  /* Lens grid (top section) */
+  .lens-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 6px;
+  }
+  @media (max-width: 720px) { .lens-grid { grid-template-columns: 1fr; } }
+  .lens {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    background: white;
+  }
+  .lens .lens-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--deep);
+    margin-bottom: 4px;
+  }
+  .lens .lens-headline {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .lens .lens-body {
+    font-size: 13.5px;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  /* Findings table */
+  table.findings {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 6px;
+    font-size: 14px;
+  }
+  table.findings th, table.findings td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.findings th {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--grey);
+    background: var(--bg);
+  }
+  table.findings tr:last-child td { border-bottom: 0; }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: var(--ice);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--deep);
+  }
+  .tldr {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--ice);
+    padding: 16px 20px;
+    margin: 14px 0 0;
+  }
+  .tldr .label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--deep);
+    margin-bottom: 6px;
+  }
+  .tldr .body {
+    font-size: 15px;
+    color: var(--ink);
+    line-height: 1.55;
+  }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--grey);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">EQ Solves Service</span>
+  <h1>Three-lens review &amp; tonight's three PRs</h1>
+  <p class="subtitle">A plain-English read of what was looked at, what was found, and what shipped.</p>
+  <div class="date">14 May 2026</div>
+</header>
+
+<!-- THE REVIEW -->
+<section>
+  <h2 class="section-title">The review — three independent perspectives</h2>
+  <p class="lead">Three reviewers were spun up in parallel, each holding to a different lens. They didn't see each other's work. The convergence between them is the signal.</p>
+
+  <div class="lens-grid">
+    <div class="lens">
+      <div class="lens-eyebrow">CEO / Head of Construction</div>
+      <div class="lens-headline">Does this jump out at scale?</div>
+      <div class="lens-body">
+        Verdict: <strong>materially differentiated</strong> on compliance depth, credible as the deliverable to a Jemena or Equinix compliance officer today. Real moats already built: proper multi-tenant data isolation, the Maximo Delta importer, and engineering discipline that looks like a 50-engineer shop from a one-person team.
+        <br><br>
+        Three gaps before this is salesable externally: <strong>offline-first for techs</strong>, <strong>integration test coverage</strong>, and a <strong>background-job queue for report generation</strong>.
+      </div>
+    </div>
+
+    <div class="lens">
+      <div class="lens-eyebrow">UI / UX engineering</div>
+      <div class="lens-headline">Is the technology invisible?</div>
+      <div class="lens-body">
+        Score: <strong>7/10</strong>. Sign-in chooser with sample PDFs and a demo one-click is best-in-class. But the core technician interaction — pass/fail/N/A buttons on a maintenance check — was rendered at ~28px on phones. Below the WCAG 44px minimum, a <strong>glove-tap fail</strong> in PPE in a plant room.
+        <br><br>
+        Plus drift from the canonical patterns: hardcoded pill colours in 30 files, gradient violation on the onboarding wizard header, sidebar abstract labels with no first-visit nudge.
+      </div>
+    </div>
+
+    <div class="lens">
+      <div class="lens-eyebrow">Senior software engineer</div>
+      <div class="lens-headline">Impressive under the hood?</div>
+      <div class="lens-body">
+        Verdict: <strong>mildly impressed, with caveats</strong>. Disciplined single-author codebase punching well above typical solo SaaS. Strong server-action pattern adherence. The auth surface is genuinely good (paragraph-length docstrings citing real incidents and the fix).
+        <br><br>
+        Biggest weakness: the type story stopped at TypeScript strict mode but never reached the database — Supabase queries were untyped. Schema drift could silently ship.
+      </div>
+    </div>
+  </div>
+
+  <div class="tldr">
+    <div class="label">All three converged on</div>
+    <div class="body">
+      <strong>(1)</strong> mobile / offline is the practical risk for techs on-site &nbsp;·&nbsp;
+      <strong>(2)</strong> zero integration tests on mutations is the largest correctness gap &nbsp;·&nbsp;
+      <strong>(3)</strong> documented intent and the actual code have drifted apart in several places.
+      <br><br>
+      Three reviewers agreeing without seeing each other's work isn't coincidence — it's the priority list.
+    </div>
+  </div>
+</section>
+
+<!-- WHAT SHIPPED -->
+<section>
+  <h2 class="section-title">What shipped tonight</h2>
+
+  <!-- PR 1 -->
+  <div class="pr-card">
+    <div class="pr-head">
+      <h3 class="pr-title">PR #127 &nbsp; <span class="pill ice">Polish</span></h3>
+      <a class="pr-link" href="https://github.com/Milmlow/eq-solves-service/pull/127" target="_blank">View on GitHub →</a>
+    </div>
+    <p class="muted" style="margin:0 0 12px">Tap-target + drift cleanup sweep.</p>
+
+    <div class="row-2">
+      <div class="pane">
+        <div class="label">Why it matters</div>
+        <div class="body">
+          Techs work in gloves on phones / tablets in plant rooms. The pass/fail buttons on a maintenance check were rendered at ~28&nbsp;px — below the 44&nbsp;px accessibility minimum and a real friction point in PPE. This sweep also closes several documented-intent-vs-code drift sites the UI reviewer found.
+        </div>
+      </div>
+      <div class="pane">
+        <div class="label">What changed</div>
+        <div class="body">
+          Buttons bumped to 44&nbsp;px minimum &nbsp;·&nbsp; <code>canCreateCheck()</code> helper added so technicians can spin up an on-site check (matching the database policy) &nbsp;·&nbsp; <code>KindPill</code> promoted to the shared component library &nbsp;·&nbsp; 12 stale page-revalidation calls fixed &nbsp;·&nbsp; gradient removed from the onboarding wizard header to match the no-gradient brand rule.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PR 2 -->
+  <div class="pr-card">
+    <div class="pr-head">
+      <h3 class="pr-title">PR #128 &nbsp; <span class="pill amber">Foundation</span> <span class="pill red">Found 8 latent bugs</span></h3>
+      <a class="pr-link" href="https://github.com/Milmlow/eq-solves-service/pull/128" target="_blank">View on GitHub →</a>
+    </div>
+    <p class="muted" style="margin:0 0 12px">Supabase types wired through — and the typechecker earned its keep.</p>
+
+    <div class="row-2">
+      <div class="pane">
+        <div class="label">Why it matters</div>
+        <div class="body">
+          Until tonight every database query was un-type-checked — column renames or removals could silently ship. Generating the schema as TypeScript types and threading them through the four Supabase client helpers turns every <code>.from('foo')</code> into a build-time check.
+          <br><br>
+          Doing that <strong>immediately surfaced 8 real production bugs</strong>. None were causing crashes, but all were silently broken.
+        </div>
+      </div>
+      <div class="pane">
+        <div class="label">The 8 bugs found</div>
+        <div class="body">
+          <strong>6 ×</strong> Customer Report read <code>completed_by</code> from maintenance checks — that column has never existed. Supervisor &amp; reviewer names on the cover have always rendered as <code>—</code>. Behaviour preserved; flagged for a real sign-off-column follow-up.
+          <br><br>
+          <strong>2 ×</strong> Compliance Report read <code>primary_colour</code> from the <code>tenants</code> table — that column lives on <code>tenant_settings</code>, not <code>tenants</code>. The fallback was always undefined. Now reads the right place.
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px;margin-bottom:6px;font-size:14px;color:var(--grey);text-transform:uppercase;letter-spacing:0.06em;font-weight:700">Also included</h3>
+    <ul class="clean">
+      <li>Generated schema types in <code>lib/supabase/database.types.ts</code> (53 tables, 2 views, 152&nbsp;KB)</li>
+      <li>29 other drift sites marked with <code>@ts-expect-error TODO(db-types) PR&nbsp;2b</code> so they stay visible and a follow-up PR can knock them off one-by-one without a giant change</li>
+      <li>One-shot helper script in <code>scripts/</code> for re-running marker insertion after fixes</li>
+    </ul>
+  </div>
+
+  <!-- PR 3 -->
+  <div class="pr-card">
+    <div class="pr-head">
+      <h3 class="pr-title">PR #129 &nbsp; <span class="pill green">Foundation</span> <span class="pill ice">First real RLS test</span></h3>
+      <a class="pr-link" href="https://github.com/Milmlow/eq-solves-service/pull/129" target="_blank">View on GitHub →</a>
+    </div>
+    <p class="muted" style="margin:0 0 12px">Integration test harness + the most load-bearing test: cross-tenant customer isolation.</p>
+
+    <div class="row-2">
+      <div class="pane">
+        <div class="label">Why it matters</div>
+        <div class="body">
+          The code reviewer's single most pointed finding: <em>zero integration tests on mutations, zero cross-tenant RLS tests</em>. For a multi-tenant platform serving Equinix and Jemena, one missing row-level-security policy is a data breach.
+          <br><br>
+          This PR stands up the harness so future tests just follow the pattern, plus delivers the proof: a four-assertion test that Tenant A's customers cannot leak to Tenant B.
+        </div>
+      </div>
+      <div class="pane">
+        <div class="label">The four assertions</div>
+        <div class="body">
+          1. User A reads their own customer&nbsp;→ succeeds<br>
+          2. User B tries to read User A's customer by id&nbsp;→ row hidden<br>
+          3. User B lists all customers&nbsp;→ only Tenant B rows visible<br>
+          4. User B injects a row carrying Tenant A's <code>tenant_id</code>&nbsp;→ database rejects
+          <br><br>
+          If any of these ever fail, treat as a P0.
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px;margin-bottom:6px;font-size:14px;color:var(--grey);text-transform:uppercase;letter-spacing:0.06em;font-weight:700">Safety gate</h3>
+    <p style="margin:0;font-size:14px">The test setup <strong>hard refuses to run against any URL that doesn't look local</strong>. Integration tests mutate the database — accidentally pointing them at production would be catastrophic, so the gate is hardcoded rather than configurable.</p>
+  </div>
+</section>
+
+<!-- BOTTOM LINE -->
+<section>
+  <h2 class="section-title">What this means in plain English</h2>
+
+  <h3>For SKS leadership</h3>
+  <p>Tonight's work was risk reduction across three layers. The product gets visibly better for techs on-site (PR&nbsp;1). The codebase now type-checks its database — and that immediately surfaced two bugs in the customer-facing report (PR&nbsp;2). And there's now a way to prove the multi-tenant data isolation actually holds, which is the foundation of any enterprise sales conversation (PR&nbsp;3).</p>
+
+  <h3>For the customer-facing report</h3>
+  <p>The Customer Report DOCX has been silently leaving the "supervisor" and "reviewer" fields blank because the code was reading from a database column that never existed. The fix preserves what the report has actually been doing (rendering <code>—</code>) and flags a follow-up to add a real sign-off field. <strong>Nothing visibly changes today.</strong></p>
+
+  <h3>For the Compliance Report</h3>
+  <p>The fallback colour for the tenant primary colour wasn't working — it was reading from the wrong table. The report has been falling back to the hardcoded EQ sky-blue regardless of tenant. After tonight it reads the right field, so future per-tenant colour customisations will actually show up.</p>
+
+  <h3>What's still parked</h3>
+  <ul class="clean">
+    <li><strong>PR 2b</strong> — fix the 29 remaining database-type drift sites (mostly null-safety; mechanical follow-up)</li>
+    <li><strong>PR 3b</strong> — write 7 more integration tests covering role gates, idempotency, the requireUser ordering regression, and the recently-fixed bugs</li>
+    <li><strong>PR 3c</strong> — wire the test runner into the GitHub Actions pipeline so every push runs the test suite (currently the pipeline only runs the type-checker and security audit; tests aren't gating merges yet)</li>
+  </ul>
+  <p>None of these are blockers for shipping the three PRs above. They're the natural sequence of follow-ups.</p>
+
+  <h3>The bigger picture</h3>
+  <p>The three independent reviewers converged on the same three priorities — mobile/offline for techs, missing integration tests, and documentation-vs-code drift. Tonight made meaningful progress on two of those three. <strong>Offline for techs on-site remains the highest-leverage product gap before this is salesable externally.</strong> The infrastructure is laid (idempotent mutations, audit logging, real-DB testing), but the client-side offline queue hasn't been built. That's the next strategic build.</p>
+</section>
+
+<footer>
+  EQ Solves Service · © 2026 EQ, a registered business name of CDC Solutions Pty&nbsp;Ltd · ACN 651&nbsp;962&nbsp;935 · ABN 40&nbsp;651&nbsp;962&nbsp;935
+</footer>
+
+</div>
+</body>
+</html>
