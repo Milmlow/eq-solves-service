@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/actions/auth'
 import { canWrite } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import {
+  SaveRcdTestCompleteSchema,
   UpdateRcdCircuitsBatchSchema,
   UpdateRcdTestHeaderSchema,
 } from '@/lib/validations/rcd-test'
@@ -25,6 +26,14 @@ type ActionResult = ActionOk | ActionErr
  * Used by the onsite editor's "Save header" path. Status transitions to
  * 'complete' propagate to the linked maintenance_check (if any) so the
  * standard /maintenance dashboard reflects the work.
+ *
+ * NOTE (audit #103, 2026-05-14): The canonical "Save & mark complete"
+ * flow now uses `saveRcdTestCompleteAction` below, which wraps the
+ * circuits + header writes in a single Postgres transaction so a
+ * half-applied state (circuits saved, header still draft) is impossible.
+ * This action is kept in place for header-only updates and to avoid
+ * breaking any other callers. Deletion is a separate cleanup PR once
+ * we've confirmed no remaining call sites.
  */
 export async function updateRcdTestHeaderAction(
   testId: string,
@@ -91,6 +100,10 @@ export async function updateRcdTestHeaderAction(
  * Field-tech save path: tech enters a board's worth of values onsite and
  * hits Save. Single round-trip per save (one update per circuit because
  * Supabase JS client doesn't expose UPDATE ... FROM (VALUES ...)).
+ *
+ * NOTE (audit #103, 2026-05-14): The canonical "Save & mark complete"
+ * flow now uses `saveRcdTestCompleteAction` below — single transactional
+ * RPC. This action is retained for circuits-only draft saves.
  */
 export async function updateRcdCircuitsAction(
   testId: string,
@@ -144,6 +157,104 @@ export async function updateRcdCircuitsAction(
     })
 
     revalidatePath(`/testing/rcd/${testId}`)
+    return { success: true, updated }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Atomic header + circuits save (audit #103).
+ *
+ * Combines `updateRcdCircuitsAction` and `updateRcdTestHeaderAction`
+ * into a single transactional write via the Postgres function
+ * `public.rcd_test_save_complete` (migration 0095). Either the entire
+ * save commits or none of it does — fixes the partial-failure window
+ * where step 2 could fail after step 1 had already written, leaving
+ * the test in a half-applied state that broke AS/NZS 3760 audit
+ * evidence integrity.
+ *
+ * Used by the onsite editor's "Save & mark complete" and "Save draft"
+ * paths.
+ *
+ * Post-commit work (audit logging, propagation to the parent
+ * maintenance_check, path revalidation) runs in the JS layer after
+ * the RPC commits — it's read-mostly and benefits from staying out
+ * of the inner transaction.
+ */
+export async function saveRcdTestCompleteAction(
+  testId: string,
+  raw: unknown,
+): Promise<ActionResult & { updated?: number }> {
+  try {
+    const { supabase, role, user, tenantId } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const parsed = SaveRcdTestCompleteSchema.safeParse(raw)
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0].message }
+    }
+
+    // Defence in depth — the RPC also checks circuit ownership, but
+    // failing here gives a cleaner error message than the RPC's
+    // RAISE EXCEPTION text.
+    const ids = parsed.data.circuits.map((c) => c.id)
+    if (ids.length > 0) {
+      const { data: owned } = await supabase
+        .from('rcd_test_circuits')
+        .select('id')
+        .eq('rcd_test_id', testId)
+        .in('id', ids)
+      const ownedIds = new Set((owned ?? []).map((r) => r.id))
+      const stranger = parsed.data.circuits.find((c) => !ownedIds.has(c.id))
+      if (stranger) {
+        return { success: false, error: 'One or more circuits do not belong to this test.' }
+      }
+    }
+
+    const { data: rpcRaw, error: rpcErr } = await supabase.rpc('rcd_test_save_complete', {
+      p_test_id: testId,
+      p_header: parsed.data.header,
+      p_circuits: parsed.data.circuits,
+      p_mark_complete: parsed.data.markComplete,
+    })
+
+    if (rpcErr) {
+      return { success: false, error: rpcErr.message }
+    }
+
+    // The function returns a jsonb object: { check_id, prev_status,
+    // updated_count, going_to_complete }.
+    const rpc = (rpcRaw ?? {}) as {
+      check_id?: string | null
+      prev_status?: string | null
+      updated_count?: number
+      going_to_complete?: boolean
+    }
+    const checkId = rpc.check_id ?? null
+    const goingToComplete = rpc.going_to_complete === true
+    const updated = rpc.updated_count ?? parsed.data.circuits.length
+
+    // Best-effort propagation — never breaks the save (the helper
+    // swallows its own errors). Runs outside the transaction by design.
+    if (goingToComplete && checkId) {
+      await propagateCheckCompletionIfReady(supabase, checkId)
+      revalidatePath(`/maintenance/${checkId}`)
+      revalidatePath('/maintenance')
+    }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'rcd_test',
+      entityId: testId,
+      summary: parsed.data.markComplete
+        ? `Saved & marked complete (${updated} circuit value(s))`
+        : `Saved RCD test (${updated} circuit value(s))`,
+      metadata: { tenantId, userId: user.id },
+    })
+
+    revalidatePath(`/testing/rcd/${testId}`)
+    revalidatePath('/testing/rcd')
     return { success: true, updated }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

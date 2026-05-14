@@ -5,10 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { AlertTriangle, Pencil, X, Check } from 'lucide-react'
-import {
-  updateRcdCircuitsAction,
-  updateRcdTestHeaderAction,
-} from './actions'
+import { saveRcdTestCompleteAction } from './actions'
 
 export interface RcdTestEditorCircuit {
   id: string
@@ -137,8 +134,11 @@ export function RcdTestEditor({
     setError(null)
     setSuccess(null)
     startTransition(async () => {
-      // Save circuits first — if a value validation fails, header status
-      // shouldn't have moved. Only send fields that may have changed.
+      // Audit #103: header + circuits go through a single transactional
+      // action now. Previously these were two sequential server-action
+      // round-trips; if the header write failed after circuits had
+      // committed, the test was left half-applied (circuits saved,
+      // status still draft) — broke AS/NZS 3760 compliance integrity.
       const circuitPayload = circuits.map((c) => ({
         id: c.id,
         x1_no_trip_0_ms: emptyToNull(c.x1_no_trip_0_ms),
@@ -152,30 +152,28 @@ export function RcdTestEditor({
         is_critical_load: c.is_critical_load,
       }))
 
-      const cRes = await updateRcdCircuitsAction(test.id, { circuits: circuitPayload })
-      if (!cRes.success) {
-        setError(cRes.error)
-        return
-      }
-
       const headerPayload = {
         technician_name_snapshot: emptyToNull(header.technician_name_snapshot),
         technician_initials: emptyToNull(header.technician_initials),
         site_rep_name: emptyToNull(header.site_rep_name),
         equipment_used: emptyToNull(header.equipment_used),
         notes: emptyToNull(header.notes),
-        ...(markComplete ? { status: 'complete' as const } : {}),
       }
-      const hRes = await updateRcdTestHeaderAction(test.id, headerPayload)
-      if (!hRes.success) {
-        setError(hRes.error)
+
+      const res = await saveRcdTestCompleteAction(test.id, {
+        header: headerPayload,
+        circuits: circuitPayload,
+        markComplete,
+      })
+      if (!res.success) {
+        setError(res.error)
         return
       }
 
       setSuccess(
         markComplete
           ? 'Saved and marked complete. The linked maintenance check has been updated.'
-          : `Saved ${cRes.updated ?? circuits.length} circuit value(s).`,
+          : `Saved ${res.updated ?? circuits.length} circuit value(s).`,
       )
       setEditing(false)
       router.refresh()

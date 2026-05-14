@@ -32,6 +32,25 @@ export const UpdateRcdCircuitsBatchSchema = z.object({
   circuits: z.array(UpdateRcdCircuitSchema).min(1, 'At least one circuit required'),
 })
 
+/**
+ * Combined header + circuits payload for the atomic
+ * `saveRcdTestCompleteAction` (audit #103).
+ *
+ * Both halves are optional in the sense that you can save header-only
+ * or circuits-only — but at least one must carry content for the
+ * action to do useful work. `markComplete` is a separate flag so
+ * the client doesn't have to inject `status: 'complete'` into the
+ * header payload itself (cleaner intent at the call site, and the
+ * RPC honours it independently of header.status to avoid race-y
+ * "I forgot to set status" footguns).
+ */
+export const SaveRcdTestCompleteSchema = z.object({
+  header: UpdateRcdTestHeaderSchema,
+  circuits: z.array(UpdateRcdCircuitSchema),
+  markComplete: z.boolean(),
+})
+
 export type UpdateRcdTestHeaderInput = z.infer<typeof UpdateRcdTestHeaderSchema>
 export type UpdateRcdCircuitInput = z.infer<typeof UpdateRcdCircuitSchema>
 export type UpdateRcdCircuitsBatchInput = z.infer<typeof UpdateRcdCircuitsBatchSchema>
+export type SaveRcdTestCompleteInput = z.infer<typeof SaveRcdTestCompleteSchema>
