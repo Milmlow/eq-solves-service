@@ -26,22 +26,52 @@ type NavItem = { label: string; href: string; icon: typeof LayoutDashboard }
 type NavSection = { label?: string; items: NavItem[] }
 
 /**
- * Build the sidebar sections. The Insight section conditionally includes
- * Variations + Commercials when the tenant has commercial_features_enabled.
- * Free-tier tenants don't see either.
+ * Per-tenant module flags that toggle non-core sidebar items.
+ * Migration 0097 added the columns; existing tenants are backfilled to
+ * true so this is a no-op until an admin flips a flag off. New tenants
+ * land minimal — admin opts in to each module from /admin/settings.
+ *
+ * `commercialEnabled` (commercial_features_enabled, from 0085) also
+ * gates Variations + Commercials in the Insight section.
  */
-function buildNavSections(commercialEnabled: boolean): NavSection[] {
-  const insightItems: NavItem[] = [
-    { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
-  ]
-  if (commercialEnabled) {
+interface ModuleFlags {
+  commercialEnabled: boolean
+  calendarEnabled: boolean
+  defectsEnabled: boolean
+  analyticsEnabled: boolean
+  contractScopeEnabled: boolean
+}
+
+function buildNavSections(flags: ModuleFlags): NavSection[] {
+  const insightItems: NavItem[] = []
+  if (flags.contractScopeEnabled) {
+    insightItems.push({ label: 'Contract Scope', href: '/contract-scope', icon: Scale })
+  }
+  if (flags.commercialEnabled) {
     insightItems.push({ label: 'Variations',  href: '/variations',  icon: FileSignature })
     insightItems.push({ label: 'Commercials', href: '/commercials', icon: Briefcase })
   }
-  insightItems.push(
-    { label: 'Reports',   href: '/reports',   icon: FileText },
-    { label: 'Analytics', href: '/analytics', icon: BarChart3 },
-  )
+  insightItems.push({ label: 'Reports', href: '/reports', icon: FileText })
+  if (flags.analyticsEnabled) {
+    insightItems.push({ label: 'Analytics', href: '/analytics', icon: BarChart3 })
+  }
+
+  // Operations section — Maintenance is always-on core; Calendar +
+  // Defects are togglable.
+  const operationsItems: NavItem[] = [
+    // Testing folded into Maintenance 2026-04-28 (Royce review Q4) —
+    // ACB/NSX/RCD live in maintenance_checks via the `kind`
+    // discriminator (migration 0080). /testing/* routes still resolve
+    // for direct URLs and LinkedTestsPanel deep links, but no longer
+    // have a top-level sidebar entry.
+    { label: 'Maintenance', href: '/maintenance', icon: ClipboardCheck },
+  ]
+  if (flags.calendarEnabled) {
+    operationsItems.push({ label: 'Calendar', href: '/calendar', icon: CalendarDays })
+  }
+  if (flags.defectsEnabled) {
+    operationsItems.push({ label: 'Defects', href: '/defects', icon: AlertTriangle })
+  }
 
   return [
     {
@@ -61,16 +91,7 @@ function buildNavSections(commercialEnabled: boolean): NavSection[] {
     },
     {
       label: 'Operations',
-      items: [
-        // Testing folded into Maintenance 2026-04-28 (Royce review Q4) —
-        // ACB/NSX/RCD live in maintenance_checks via the `kind`
-        // discriminator (migration 0080). /testing/* routes still resolve
-        // for direct URLs and LinkedTestsPanel deep links, but no longer
-        // have a top-level sidebar entry.
-        { label: 'Maintenance', href: '/maintenance', icon: ClipboardCheck },
-        { label: 'Calendar',    href: '/calendar',    icon: CalendarDays },
-        { label: 'Defects',     href: '/defects',     icon: AlertTriangle },
-      ],
+      items: operationsItems,
     },
     {
       label: 'Insight',
@@ -99,8 +120,17 @@ export function Sidebar({
   const pathname = usePathname()
 
   const productName = settings?.product_name || 'EQ Solves'
-  const commercialEnabled = Boolean(settings?.commercial_features_enabled)
-  const navSections = buildNavSections(commercialEnabled)
+  // Module flags (migration 0097). When `settings` is absent (rare —
+  // pre-onboarding render) the sidebar falls back to "everything on" so
+  // we don't accidentally hide modules from a tenant whose settings row
+  // hasn't loaded.
+  const navSections = buildNavSections({
+    commercialEnabled:    Boolean(settings?.commercial_features_enabled),
+    calendarEnabled:      settings?.calendar_enabled       ?? true,
+    defectsEnabled:       settings?.defects_enabled        ?? true,
+    analyticsEnabled:     settings?.analytics_enabled      ?? true,
+    contractScopeEnabled: settings?.contract_scope_enabled ?? true,
+  })
   // Sidebar background is eq-ink (dark) — prefer the dark-surface logo
   // when configured, fall back to the light-surface one. Without this,
   // tenants with a dark logo (e.g. SKS coloured logo on the eq-ink bg)
