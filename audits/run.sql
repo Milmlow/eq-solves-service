@@ -218,6 +218,12 @@ with checks as (
               )
           ) x)
 
+  -- ==================================================
+  -- SCALING — table sizes that should trigger action
+  -- ==================================================
+  union all
+  select 'scaling.audit_logs.size', 'WARN', 'audit_logs > 500k rows — design partitioning + retention now',
+         (case when (select count(*) from public.audit_logs) > 500000 then 1 else 0 end)
 )
 select
   check_id,

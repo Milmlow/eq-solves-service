@@ -90,6 +90,16 @@ These are properties of the schema itself, not the data. A failure here means so
 
 ---
 
+## Scaling — table sizes that should trigger action
+
+Future-perf canaries. These don't measure data quality; they fire when the **shape of the data** crosses a threshold where the architecture should change. Action when a check here fails is "design + ship a migration to handle the new scale", not "fix a row."
+
+| Check | Level | Why |
+|---|---|---|
+| `scaling.audit_logs.size` | WARN | `audit_logs` is unbounded and unpartitioned. The 2026-05-15 perf review flagged this as a 5-year concern at 10x scale (~625k rows). 500k is the trigger point — 6-12 months of headroom to design + ship monthly partitioning + retention (drop partitions > 24 months) before query performance starts to degrade. When this fires, the partitioning conversation reopens with concrete numbers, not projections. |
+
+---
+
 ## Freshness / timeliness — DAMA timeliness dimension
 
 A valid record can still be stale. These checks surface records that haven't moved in a long time so nobody silently accumulates debt. All WARN-level — a stale record is a smell, not a block. Thresholds are deliberately generous to avoid nagging on edge cases and should be tightened as volume grows.
