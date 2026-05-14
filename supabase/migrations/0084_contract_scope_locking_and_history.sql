@@ -195,14 +195,14 @@ BEGIN
   IF TG_OP = 'UPDATE' THEN
     IF OLD.period_status = 'locked' THEN
       RAISE EXCEPTION
-        'contract_scopes row %% (jp_code=%%, year=%%) is locked. Unlock via super_admin first.',
+        'contract_scopes row % (jp_code=%, year=%) is locked. Unlock via super_admin first.',
         OLD.id, OLD.jp_code, OLD.financial_year
         USING ERRCODE = '42501';
     END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD.period_status = 'locked' THEN
       RAISE EXCEPTION
-        'contract_scopes row %% (jp_code=%%, year=%%) is locked and cannot be deleted. Unlock via super_admin first.',
+        'contract_scopes row % (jp_code=%, year=%) is locked and cannot be deleted. Unlock via super_admin first.',
         OLD.id, OLD.jp_code, OLD.financial_year
         USING ERRCODE = '42501';
     END IF;

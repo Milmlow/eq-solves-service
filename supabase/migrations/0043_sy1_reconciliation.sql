@@ -493,6 +493,17 @@ declare
   total_count int;
   orphan_demos int;
 begin
+  -- Skip cleanly on fresh DB (CI integration tests) where the SKS tenant
+  -- doesn't exist — the asset reconciliation was a one-shot historical
+  -- operation against real data. Prod has the tenant; the guard is a no-op.
+  if not exists (
+    select 1 from public.tenants
+     where id = 'ccca00fc-cbc8-442e-9489-0f1f216ddca8'::uuid
+  ) then
+    raise notice '0043 sanity: SKS tenant absent (fresh DB) — skipping reconciliation checks';
+    return;
+  end if;
+
   select count(*) into sy1_count
     from public.assets a
     join public.sites s on s.id = a.site_id
