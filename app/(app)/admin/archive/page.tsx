@@ -134,7 +134,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
       <div>
         <Breadcrumb items={[
           { label: 'Home', href: '/dashboard' },
-          { label: 'Admin', href: '/admin/users' },
+          { label: 'Admin', href: '/admin' },
           { label: 'Archive' },
         ]} />
         <div className="flex items-start justify-between mt-2 gap-4">

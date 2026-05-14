@@ -51,7 +51,7 @@ export default async function ArchiveSettingsPage() {
       <div>
         <Breadcrumb items={[
           { label: 'Home', href: '/dashboard' },
-          { label: 'Admin', href: '/admin/users' },
+          { label: 'Admin', href: '/admin' },
           { label: 'Archive', href: '/admin/archive' },
           { label: 'Grace period' },
         ]} />

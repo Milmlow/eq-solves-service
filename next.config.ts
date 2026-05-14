@@ -29,6 +29,15 @@ const nextConfig: NextConfig = {
       { source: '/acb-testing/:path*', destination: '/testing/acb/:path*', permanent: true },
       { source: '/nsx-testing', destination: '/testing/nsx', permanent: true },
       { source: '/nsx-testing/:path*', destination: '/testing/nsx/:path*', permanent: true },
+      // Commercial tools (renewal pack + contract-scope import/derive) moved
+      // out of the Admin block into a dedicated /commercials hub. 308 keeps
+      // bookmarks and any external deep links working.
+      { source: '/admin/renewal-pack', destination: '/commercials/renewal-pack', permanent: true },
+      { source: '/admin/renewal-pack/:path*', destination: '/commercials/renewal-pack/:path*', permanent: true },
+      { source: '/admin/contract-scopes/import', destination: '/commercials/contract-scopes/import', permanent: true },
+      { source: '/admin/contract-scopes/import/:path*', destination: '/commercials/contract-scopes/import/:path*', permanent: true },
+      { source: '/admin/contract-scopes/derive', destination: '/commercials/contract-scopes/derive', permanent: true },
+      { source: '/admin/contract-scopes/derive/:path*', destination: '/commercials/contract-scopes/derive/:path*', permanent: true },
     ]
   },
 };

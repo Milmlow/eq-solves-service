@@ -10,7 +10,7 @@ export default async function ReportSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin/users' }, { label: 'Report Settings' }]} />
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Admin', href: '/admin' }, { label: 'Report Settings' }]} />
         <h1 className="text-2xl font-bold text-eq-ink mt-2">Report Settings</h1>
         <p className="text-sm text-eq-grey mt-1">
           Customise the layout, sections, and company details that appear on generated PM reports.

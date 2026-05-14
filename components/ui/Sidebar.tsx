@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, Building2, MapPin, Package, FileCheck, ClipboardCheck,
-  FileText, Search, ScrollText, BarChart3, Settings, ChevronLeft, Users, LogOut, Scale, Menu, X, CalendarDays, Image, Archive, AlertTriangle, Contact2, FileSpreadsheet, Wand2, FileSignature
+  FileText, Search, BarChart3, Settings, ChevronLeft, LogOut, Scale, Menu, X, CalendarDays, AlertTriangle, Contact2, FileSignature, Briefcase, Shield
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -27,15 +27,16 @@ type NavSection = { label?: string; items: NavItem[] }
 
 /**
  * Build the sidebar sections. The Insight section conditionally includes
- * Variations when the tenant has commercial_features_enabled — Phase 4
- * of the contract-scope bridge plan. Free-tier tenants don't see it.
+ * Variations + Commercials when the tenant has commercial_features_enabled.
+ * Free-tier tenants don't see either.
  */
 function buildNavSections(commercialEnabled: boolean): NavSection[] {
   const insightItems: NavItem[] = [
     { label: 'Contract Scope', href: '/contract-scope', icon: Scale },
   ]
   if (commercialEnabled) {
-    insightItems.push({ label: 'Variations', href: '/variations', icon: FileSignature })
+    insightItems.push({ label: 'Variations',  href: '/variations',  icon: FileSignature })
+    insightItems.push({ label: 'Commercials', href: '/commercials', icon: Briefcase })
   }
   insightItems.push(
     { label: 'Reports',   href: '/reports',   icon: FileText },
@@ -192,112 +193,16 @@ export function Sidebar({
               Admin
             </div>
             <Link
-              href="/admin/users"
+              href="/admin"
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/admin/users')
+                pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/audit-log')
                   ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
-              <Users className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Users</span>}
-            </Link>
-            <Link
-              href="/audit-log"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/audit-log')
-                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <ScrollText className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Audit Log</span>}
-            </Link>
-            <Link
-              href="/admin/settings"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname === '/admin/settings'
-                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <Settings className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Tenant Settings</span>}
-            </Link>
-            <Link
-              href="/admin/media"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/admin/media')
-                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <Image className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Media Library</span>}
-            </Link>
-            <Link
-              href="/admin/reports"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/admin/reports')
-                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <FileText className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Report Settings</span>}
-            </Link>
-            <Link
-              href="/admin/archive"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/admin/archive')
-                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <Archive className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Archive</span>}
-            </Link>
-            <Link
-              href="/admin/renewal-pack"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/admin/renewal-pack')
-                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <FileText className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Renewal Pack</span>}
-            </Link>
-            <Link
-              href="/admin/contract-scopes/import"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/admin/contract-scopes/import')
-                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <FileSpreadsheet className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Import Commercial Sheet</span>}
-            </Link>
-            <Link
-              href="/admin/contract-scopes/derive"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
-                pathname.startsWith('/admin/contract-scopes/derive')
-                  ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <Wand2 className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>Build Scope from Work</span>}
+              <Shield className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Admin</span>}
             </Link>
           </>
         )}
