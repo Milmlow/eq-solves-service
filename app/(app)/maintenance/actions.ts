@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
-import { canWrite, isAdmin } from '@/lib/utils/roles'
+import { canWrite, canCreateCheck, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import { createNotification } from '@/lib/actions/notifications'
@@ -256,7 +256,7 @@ export async function previewCheckAssetsAction(
 export async function createCheckAction(formData: FormData) {
   try {
     const { supabase, tenantId, role, user } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canCreateCheck(role)) return { success: false, error: 'Insufficient permissions.' }
 
     // Parse manual_asset_ids from JSON if present
     const manualIdsRaw = formData.get('manual_asset_ids') as string | null

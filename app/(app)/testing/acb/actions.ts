@@ -49,7 +49,7 @@ export async function createAcbTestAction(formData: FormData) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'create', entityType: 'acb_test', summary: 'Created ACB test record' })
-    revalidatePath('/acb-testing')
+    revalidatePath('/testing/acb')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -95,7 +95,7 @@ export async function updateAcbTestAction(id: string, formData: FormData) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'update', entityType: 'acb_test', entityId: id, summary: 'Updated ACB test record' })
-    revalidatePath('/acb-testing')
+    revalidatePath('/testing/acb')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -115,7 +115,7 @@ export async function toggleAcbTestActiveAction(id: string, isActive: boolean) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'acb_test', entityId: id, summary: isActive ? 'Reactivated ACB test' : 'Deactivated ACB test' })
-    revalidatePath('/acb-testing')
+    revalidatePath('/testing/acb')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -145,7 +145,7 @@ export async function createAcbReadingAction(acbTestId: string, formData: FormDa
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'create', entityType: 'acb_test_reading', summary: 'Added ACB test reading' })
-    revalidatePath('/acb-testing')
+    revalidatePath('/testing/acb')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -165,7 +165,7 @@ export async function deleteAcbReadingAction(readingId: string) {
     if (error) return { success: false, error: error.message }
 
     await logAuditEvent({ action: 'delete', entityType: 'acb_test_reading', entityId: readingId, summary: 'Deleted ACB test reading' })
-    revalidatePath('/acb-testing')
+    revalidatePath('/testing/acb')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
@@ -241,7 +241,6 @@ export async function updateAcbDetailsAction(testId: string, data: {
 
     await logAuditEvent({ action: 'update', entityType: 'acb_test', entityId: testId, summary: 'Updated ACB circuit breaker details' })
     revalidatePath('/testing/acb')
-    revalidatePath('/acb-testing')
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

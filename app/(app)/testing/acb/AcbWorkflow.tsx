@@ -109,10 +109,10 @@ function TriStateButton({ value, onChange }: {
   value: 'pass' | 'fail' | 'na'
   onChange: (v: 'pass' | 'fail' | 'na') => void
 }) {
-  // Feedback tweaks addressing Simon's "takes a very long time to show as
-  // pressed" comment: kill the iOS ~300ms tap delay with touch-manipulation,
-  // remove the 150ms colour transition so the press swaps instantly, and add
-  // an active:scale tap so technicians see tactile feedback on gloves/tablet.
+  // 44px minimum tap target — techs work in gloves on tablets/phones in plant
+  // rooms. Combined with touch-manipulation (kills iOS ~300ms tap delay) and
+  // active:scale (immediate tactile feedback for Simon's "takes a long time
+  // to show as pressed" comment).
   return (
     <div className="flex gap-1">
       {(['pass', 'fail', 'na'] as const).map(opt => (
@@ -120,7 +120,7 @@ function TriStateButton({ value, onChange }: {
           key={opt}
           type="button"
           onClick={() => onChange(opt)}
-          className={`px-3 py-1.5 text-xs rounded font-medium select-none touch-manipulation active:scale-95 ${
+          className={`min-h-[44px] px-4 py-2 text-sm rounded font-medium select-none touch-manipulation active:scale-95 ${
             value === opt
               ? opt === 'pass'
                 ? 'bg-green-600 text-white'
