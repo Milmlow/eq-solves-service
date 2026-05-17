@@ -11,6 +11,7 @@ import { DashboardViewToggle } from './DashboardViewToggle'
 import { DashboardAnalytics } from './DashboardAnalytics'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ServiceCreditWidget } from './ServiceCreditWidget'
+import { SetupChecklist } from './SetupChecklist'
 
 type View = 'mine' | 'all'
 
@@ -84,11 +85,18 @@ export default async function DashboardPage({
   const countsUserId = filterByUser && userId ? userId : undefined
   const [
     countsRes,
+    tenantRes,
     upcomingChecks, recentChecks,
     sitesForMap,
   ] = await Promise.all([
     tenantId
       ? supabase.rpc('get_dashboard_counts', { p_tenant_id: tenantId, p_user_id: countsUserId })
+      : Promise.resolve({ data: null }),
+    // setup_completed_at — gates the Company Details step in the
+    // SetupChecklist swap below. Cheap single-row lookup, added to the
+    // existing parallel batch so it doesn't extend dashboard latency.
+    tenantId
+      ? supabase.from('tenants').select('setup_completed_at').eq('id', tenantId).maybeSingle()
       : Promise.resolve({ data: null }),
     // Upcoming checks
     buildListQuery(
@@ -128,6 +136,25 @@ export default async function DashboardPage({
     checks:   { scheduled: 0, in_progress: 0, overdue: 0, complete: 0 },
     defects:  { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
   }) as DashboardCounts
+
+  // ── Setup-state swap ──
+  // For admins of a tenant that hasn't completed a single maintenance check
+  // yet, replace the dashboard with the onboarding checklist. As soon as one
+  // check is marked complete, the regular dashboard takes over next render.
+  // Technicians and read_only users never see the checklist — they're not
+  // the audience for tenant setup.
+  const isSetupRole = userRole === 'super_admin' || userRole === 'admin'
+  const hasAnyCompletedCheck = counts.checks.complete > 0
+  if (isSetupRole && !hasAnyCompletedCheck) {
+    const tenantRow = (tenantRes.data ?? null) as { setup_completed_at: string | null } | null
+    return (
+      <SetupChecklist
+        counts={{ entities: counts.entities, checks: counts.checks }}
+        userName={userName}
+        companyConfigured={!!tenantRow?.setup_completed_at}
+      />
+    )
+  }
 
   // ── My in-progress tests (ACB + NSX) — only when view=mine ──
   type TestRow = { id: string; test_date: string; overall_result: string; assets: { name: string } | { name: string }[] | null; sites: { name: string } | { name: string }[] | null }
