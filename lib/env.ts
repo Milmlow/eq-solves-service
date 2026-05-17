@@ -23,6 +23,11 @@ const publicSchema = z.object({
   NEXT_PUBLIC_POSTHOG_HOST: z.string().url('NEXT_PUBLIC_POSTHOG_HOST must be a valid URL').optional(),
   NEXT_PUBLIC_CLARITY_ID: z.string().optional(),
   NEXT_PUBLIC_APP_ENV: z.enum(['beta', 'production', 'demo', 'development']).optional(),
+  // Sentry — optional so local dev without a DSN still boots. The SDK
+  // no-ops cleanly when missing. Public DSN is browser-safe (Sentry
+  // ingests events from any DSN; auth happens via SENTRY_AUTH_TOKEN
+  // server-side for source-map uploads only).
+  NEXT_PUBLIC_SENTRY_DSN: z.string().url('NEXT_PUBLIC_SENTRY_DSN must be a valid URL').optional(),
 })
 
 function validatePublicEnv() {
@@ -33,6 +38,7 @@ function validatePublicEnv() {
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
     NEXT_PUBLIC_CLARITY_ID: process.env.NEXT_PUBLIC_CLARITY_ID,
     NEXT_PUBLIC_APP_ENV: process.env.NEXT_PUBLIC_APP_ENV,
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   })
   if (!result.success) {
     const formatted = result.error.issues.map((i) => `  • ${i.path.join('.')}: ${i.message}`).join('\n')

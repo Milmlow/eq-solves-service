@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { withSentryConfig } from "@sentry/nextjs";
 
 // Pin the workspace root to the directory containing this config file.
 // Without this, Next.js warns about multiple lockfiles when this project is
@@ -42,4 +43,31 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap the config with Sentry's webpack plugin so source maps upload at
+// build time and stack traces in the Sentry dashboard match committed
+// source. SENTRY_AUTH_TOKEN must be set in Netlify env (procured from the
+// Sentry project's Settings → Auth Tokens page, scope: project:write).
+// When the token is absent (local dev, PR previews without secrets), the
+// plugin no-ops and the build still succeeds — source maps just aren't
+// uploaded for that build.
+export default withSentryConfig(nextConfig, {
+  // Sentry org + project slugs. Set via env so they aren't hardcoded
+  // anywhere that'd matter; defaults match the project Royce sets up.
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Only print upload progress in CI to keep local builds quiet.
+  silent: !process.env.CI,
+
+  // Upload a wider set of source maps (server + client + edge) for full
+  // stack-trace fidelity. Slight build-time cost; worth it.
+  widenClientFileUpload: true,
+
+  // Don't fail the build if source map upload fails (e.g. token missing
+  // on a feature branch). Errors are captured at runtime regardless;
+  // unsymbolicated stack traces are recoverable later.
+  errorHandler: (err: Error) => {
+    // eslint-disable-next-line no-console
+    console.warn('[sentry] source map upload skipped:', err.message);
+  },
+});
