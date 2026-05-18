@@ -69,6 +69,7 @@ describe('RLS — technician update gating on maintenance_checks', () => {
       .from('job_plans')
       .insert({
         tenant_id: tenant.tenantId,
+        site_id: site!.id,
         name: 'IT Plan TU',
         code: `IT-TU-${Date.now()}`,
         frequency: 'annual',

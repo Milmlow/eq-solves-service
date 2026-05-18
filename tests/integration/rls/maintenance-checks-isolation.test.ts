@@ -61,6 +61,7 @@ describe('RLS — maintenance_checks cross-tenant isolation', () => {
       .from('job_plans')
       .insert({
         tenant_id: tenantA.tenantId,
+        site_id: siteAId,
         name: 'IT Plan A',
         code: `IT-A-${Date.now()}`,
         frequency: 'annual',
