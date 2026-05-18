@@ -99,6 +99,22 @@ export default async function MaintenanceCheckPage({
           {check.frequency && <span> · {(check.frequency as string).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>}
           {check.due_date && <span> · Due {new Date(check.due_date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
         </p>
+        {/* Kind-aware tagline — tells the tech which workflow they're about
+            to work in so they can pre-empt the asset-table vs linked-tests
+            split (UX audit PR #149 §2.15 / §B.15). */}
+        {(() => {
+          const kind = (check as { kind?: string | null }).kind ?? 'maintenance'
+          const tagline =
+            kind === 'maintenance' ? 'PPM check — work through the asset table.' :
+            kind === 'acb'         ? 'ACB test — open each linked test below to run the 3-step workflow.' :
+            kind === 'nsx'         ? 'NSX test — open each linked test below to run the 3-step workflow.' :
+            kind === 'rcd'         ? 'RCD test — open each linked test below to record per-circuit timing.' :
+            kind === 'general'     ? 'General test — fill in the test record.' :
+            null
+          return tagline ? (
+            <p className="text-xs text-eq-deep mt-1 italic">{tagline}</p>
+          ) : null
+        })()}
       </div>
       {/* Contract scope context — shown above the detail body so site teams
           see what's in/out of scope before they pick assets to inspect.
@@ -123,6 +139,7 @@ export default async function MaintenanceCheckPage({
         isAdmin={isAdmin(userRole)}
         canWrite={canWrite(userRole)}
         isAssigned={check.assigned_to === user?.id}
+        isTechnician={userRole === 'technician'}
       />
     </div>
   )
