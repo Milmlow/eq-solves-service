@@ -14,6 +14,7 @@ import type { ComplianceReportInput } from '@/lib/reports/compliance-report'
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import { computeMaintenanceCompliance, computeComplianceBySite } from '@/lib/analytics/site-health'
+import { captureSlowReportRun } from '@/lib/observability/report-duration-canary'
 
 // Pulls 7 separate .limit(10000) tables and synthesises a multi-section
 // DOCX. Detailed complexity at Jemena-scale crosses 15s. Set the runtime
@@ -23,6 +24,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
+  const startedAt = Date.now()
   // Wrap the whole handler so any thrown error surfaces as a JSON
   // response with a useful message instead of an HTML 500 — which the
   // client sees as the opaque "Download failed" alert (fix for Item 3
@@ -262,6 +264,18 @@ export async function GET(request: NextRequest) {
   const buffer = await generateComplianceReport(input)
   const filename = `Compliance Report - ${filterDescription.replace(/[^a-zA-Z0-9 —-]/g, '').trim()}.docx`
 
+  captureSlowReportRun({
+    route: 'GET /api/compliance-report',
+    durationMs: Date.now() - startedAt,
+    status: 200,
+    scale: {
+      complexity,
+      customerScoped: customerId ? 1 : 0,
+      siteScoped: siteId ? 1 : 0,
+      months: input.months.length,
+    },
+  })
+
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -275,6 +289,12 @@ export async function GET(request: NextRequest) {
     // the fallback "Download failed" alert left us with nothing to fix.
     const message = err instanceof Error ? err.message : 'Unknown error generating compliance report'
     console.error('[compliance-report] generation failed:', err)
+    captureSlowReportRun({
+      route: 'GET /api/compliance-report',
+      durationMs: Date.now() - startedAt,
+      status: 500,
+      scale: { errored: 1 },
+    })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

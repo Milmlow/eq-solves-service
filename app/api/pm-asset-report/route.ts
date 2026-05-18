@@ -27,17 +27,21 @@ import {
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import type { AcbTestDetail, BreakerTestReading } from '@/lib/reports/pm-asset-report'
+import { captureSlowReportRun } from '@/lib/observability/report-duration-canary'
 
 // DOCX generation is CPU-bound and runs through ~12 sequential Supabase
 // queries before the docx-tree synthesis starts. At Jemena-scale (multi-site
 // reports with 50+ linked tests) the round-trip approaches 20s. Set the
 // hint to 60s so Netlify doesn't cut us off at the default. Actual cap is
 // determined by the Netlify plan (Pro = 26s synchronous, background = 15m).
-// Long-term fix is to move to a background-function pattern (PR follow-up).
+// Long-term fix is to move to a background-function pattern — design parked
+// in docs/architecture/report-delivery.md. The canary at the bottom of
+// this handler surfaces when that refactor becomes load-bearing.
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
+  const startedAt = Date.now()
   const checkId = request.nextUrl.searchParams.get('check_id')
   if (!checkId) {
     return NextResponse.json({ error: 'check_id is required' }, { status: 400 })
@@ -525,6 +529,20 @@ export async function GET(request: NextRequest) {
     const buffer = await generatePMAssetReport(reportInput)
     const filename = `PM Asset Report - ${siteName} - ${new Date().toISOString().split('T')[0]}.docx`
 
+    captureSlowReportRun({
+      route: 'GET /api/pm-asset-report',
+      checkId,
+      durationMs: Date.now() - startedAt,
+      status: 200,
+      scale: {
+        assets: checkAssets.length,
+        items: allItems.length,
+        acbTests: acbLinkedRes.data?.length ?? 0,
+        nsxTests: nsxLinkedRes.data?.length ?? 0,
+        rcdTests: rcdLinkedRes.data?.length ?? 0,
+      },
+    })
+
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
@@ -534,6 +552,13 @@ export async function GET(request: NextRequest) {
     })
   } catch (err) {
     console.error('PM Asset Report generation failed:', err)
+    captureSlowReportRun({
+      route: 'GET /api/pm-asset-report',
+      checkId,
+      durationMs: Date.now() - startedAt,
+      status: 500,
+      scale: { errored: 1 },
+    })
     return NextResponse.json({ error: 'Report generation failed' }, { status: 500 })
   }
 }

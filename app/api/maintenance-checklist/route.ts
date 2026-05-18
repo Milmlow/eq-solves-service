@@ -17,6 +17,7 @@ import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import { fetchLogoImage } from '@/lib/reports/report-branding'
 import { TENANT_LOGO_LIGHT, TENANT_LOGO_ON_DARK, CUSTOMER_LOGO_LIGHT } from '@/lib/reports/sizing'
+import { captureSlowReportRun } from '@/lib/observability/report-duration-canary'
 
 // Field run-sheet DOCX is the lightest of the three report routes but still
 // runs through a check_assets fetch + items fan-out + logo decode +
@@ -40,6 +41,7 @@ function normaliseFormat(raw: string | null): 'simple' | 'standard' | 'detailed'
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = Date.now()
   const checkId = request.nextUrl.searchParams.get('check_id')
   const format = normaliseFormat(request.nextUrl.searchParams.get('format'))
   if (!checkId) {
@@ -330,6 +332,17 @@ export async function GET(request: NextRequest) {
     const formatLabel = format === 'simple' ? 'summary' : format
     const filename = `Run-Sheet - ${siteName} - ${formatLabel} - ${new Date().toISOString().split('T')[0]}.docx`
 
+    captureSlowReportRun({
+      route: 'GET /api/maintenance-checklist',
+      checkId,
+      durationMs: Date.now() - startedAt,
+      status: 200,
+      scale: {
+        format,
+        assets: checklistInput.assets.length,
+      },
+    })
+
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
@@ -339,6 +352,13 @@ export async function GET(request: NextRequest) {
     })
   } catch (err) {
     console.error('Maintenance Checklist generation failed:', err)
+    captureSlowReportRun({
+      route: 'GET /api/maintenance-checklist',
+      checkId,
+      durationMs: Date.now() - startedAt,
+      status: 500,
+      scale: { format, errored: 1 },
+    })
     return NextResponse.json({ error: 'Checklist generation failed' }, { status: 500 })
   }
 }
