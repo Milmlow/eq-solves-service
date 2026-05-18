@@ -57,6 +57,7 @@ describe('RLS — only admin can DELETE a maintenance_check', () => {
       .from('job_plans')
       .insert({
         tenant_id: tenant.tenantId,
+        site_id: site!.id,
         name: 'IT Plan AOD',
         code: `IT-AOD-${Date.now()}`,
         frequency: 'annual',
