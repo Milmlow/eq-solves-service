@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { NotificationBell } from '@/components/ui/NotificationBell'
-import type { TenantSettings } from '@/lib/types'
+import type { Role, TenantSettings } from '@/lib/types'
 
 /**
  * Sidebar navigation grouped into sections for visual structure.
@@ -54,7 +54,15 @@ const RECORDS_PATHS = ['/customers', '/sites', '/contacts', '/assets', '/job-pla
 // Underlying URLs that should keep the Insight hub entry highlighted.
 const INSIGHT_PATHS = ['/reports', '/analytics', '/contract-scope', '/variations', '/commercials']
 
-function buildNavSections(flags: ModuleFlags): NavSection[] {
+function buildNavSections(flags: ModuleFlags, role: Role | null): NavSection[] {
+  // Role-aware nav (UX audit PR #149 §2.6 + §5.2 — locked 2026-05-18):
+  // technicians get a stripped sidebar — Records (the customers / sites /
+  // assets / job plans hub) and Insight (reports / analytics / contract
+  // scope) are admin/supervisor concerns and add cognitive noise for a
+  // tech whose entire day lives under Maintenance. Non-technician roles
+  // see the full sidebar.
+  const isTechnician = role === 'technician'
+
   // Operations section — Maintenance is always-on core; Calendar +
   // Defects are togglable per tenant (migration 0097).
   const operationsItems: NavItem[] = [
@@ -72,34 +80,42 @@ function buildNavSections(flags: ModuleFlags): NavSection[] {
     operationsItems.push({ label: 'Defects', href: '/defects', icon: AlertTriangle })
   }
 
+  const topItems: NavItem[] = [
+    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  ]
+  if (!isTechnician) {
+    topItems.push({ label: 'Records', href: '/records', icon: Database, extraActivePaths: RECORDS_PATHS })
+  }
+
+  const bottomItems: NavItem[] = []
+  if (!isTechnician) {
+    bottomItems.push({ label: 'Insight', href: '/insights', icon: Lightbulb, extraActivePaths: INSIGHT_PATHS })
+  }
+  bottomItems.push({ label: 'Search',   href: '/search',   icon: Search })
+  bottomItems.push({ label: 'Settings', href: '/settings', icon: Settings })
+
   return [
-    {
-      items: [
-        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { label: 'Records',   href: '/records',   icon: Database, extraActivePaths: RECORDS_PATHS },
-      ],
-    },
-    {
-      label: 'Operations',
-      items: operationsItems,
-    },
-    {
-      items: [
-        { label: 'Insight',  href: '/insights', icon: Lightbulb, extraActivePaths: INSIGHT_PATHS },
-        { label: 'Search',   href: '/search',   icon: Search },
-        { label: 'Settings', href: '/settings', icon: Settings },
-      ],
-    },
+    { items: topItems },
+    { label: 'Operations', items: operationsItems },
+    { items: bottomItems },
   ]
 }
 
 interface SidebarProps {
   isAdmin?: boolean
+  /**
+   * Per-tenant role of the current user — drives role-aware nav (PR A,
+   * UX audit §5.2): technicians don't see Records or Insight. `null`
+   * (unknown role) renders the full sidebar so we never accidentally
+   * over-hide for admins.
+   */
+  role?: Role | null
   settings?: TenantSettings
 }
 
 export function Sidebar({
   isAdmin = false,
+  role = null,
   settings,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
@@ -112,10 +128,13 @@ export function Sidebar({
   // commercial / analytics / contract_scope toggles now drive what shows
   // INSIDE the /insights hub itself, not the sidebar entry. Fallback to
   // "everything on" when settings haven't loaded (rare, pre-onboarding).
-  const navSections = buildNavSections({
-    calendarEnabled: settings?.calendar_enabled ?? true,
-    defectsEnabled:  settings?.defects_enabled  ?? true,
-  })
+  const navSections = buildNavSections(
+    {
+      calendarEnabled: settings?.calendar_enabled ?? true,
+      defectsEnabled:  settings?.defects_enabled  ?? true,
+    },
+    role,
+  )
   // Sidebar background is eq-ink (dark) — prefer the dark-surface logo
   // when configured, fall back to the light-surface one. Without this,
   // tenants with a dark logo (e.g. SKS coloured logo on the eq-ink bg)
