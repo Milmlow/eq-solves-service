@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
-import { canWrite, isAdmin } from '@/lib/utils/roles'
+import { canDoTestWork, isAdmin } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import {
@@ -20,7 +20,7 @@ import {
 export async function createTestRecordAction(formData: FormData, mutationId?: string) {
   return withIdempotency(mutationId, async () => {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
       asset_id: formData.get('asset_id'),
@@ -59,7 +59,7 @@ export async function createTestRecordAction(formData: FormData, mutationId?: st
 export async function updateTestRecordAction(id: string, formData: FormData) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw: Record<string, unknown> = {}
     for (const key of ['asset_id', 'site_id', 'test_type', 'test_date', 'tested_by', 'result', 'notes', 'next_test_due']) {
@@ -113,7 +113,7 @@ export async function toggleTestRecordActiveAction(id: string, isActive: boolean
 export async function createReadingAction(testRecordId: string, formData: FormData, mutationId?: string) {
   return withIdempotency(mutationId, async () => {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
       label: formData.get('label'),
@@ -147,7 +147,7 @@ export async function createReadingAction(testRecordId: string, formData: FormDa
 export async function deleteReadingAction(readingId: string) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const { error } = await supabase
       .from('test_record_readings')

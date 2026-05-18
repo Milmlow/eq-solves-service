@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
-import { canWrite } from '@/lib/utils/roles'
+import { canDoTestWork } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import {
   SaveRcdTestCompleteSchema,
@@ -41,7 +41,7 @@ export async function updateRcdTestHeaderAction(
 ): Promise<ActionResult> {
   try {
     const { supabase, role, user, tenantId } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const parsed = UpdateRcdTestHeaderSchema.safeParse(raw)
     if (!parsed.success) {
@@ -111,7 +111,7 @@ export async function updateRcdCircuitsAction(
 ): Promise<ActionResult & { updated?: number }> {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const parsed = UpdateRcdCircuitsBatchSchema.safeParse(raw)
     if (!parsed.success) {
@@ -188,7 +188,7 @@ export async function saveRcdTestCompleteAction(
 ): Promise<ActionResult & { updated?: number }> {
   try {
     const { supabase, role, user, tenantId } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const parsed = SaveRcdTestCompleteSchema.safeParse(raw)
     if (!parsed.success) {

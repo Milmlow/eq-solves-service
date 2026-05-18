@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
-import { isAdmin, canWrite } from '@/lib/utils/roles'
+import { isAdmin, canDoTestWork } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateNsxTestSchema, UpdateNsxTestSchema, CreateNsxReadingSchema } from '@/lib/validations/nsx-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
@@ -12,7 +12,7 @@ import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
 export async function createNsxTestAction(formData: FormData) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
       asset_id: formData.get('asset_id'),
@@ -55,7 +55,7 @@ export async function createNsxTestAction(formData: FormData) {
 export async function updateNsxTestAction(id: string, formData: FormData) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
       asset_id: formData.get('asset_id'),
@@ -117,7 +117,7 @@ export async function toggleNsxTestActiveAction(id: string, isActive: boolean) {
 export async function createNsxReadingAction(nsxTestId: string, formData: FormData) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
       label: formData.get('label'),
@@ -183,7 +183,7 @@ export async function updateNsxDetailsAction(
 ) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     // Sprint 1 schema unification (Refs #101): mirror legacy <-> new
     // breaker-identification columns. NsxWorkflow Step 1 writes the NEW
@@ -224,7 +224,7 @@ export async function saveNsxVisualCheckAction(testId: string, items: Array<{
 }>) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     // Delete existing visual check readings for this test
     await supabase
@@ -283,7 +283,7 @@ export async function saveNsxElectricalReadingAction(testId: string, readings: A
 }>) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     // Delete existing electrical readings for this test
     await supabase
@@ -357,7 +357,7 @@ export async function raiseNsxTestDefectAction(data: {
 }) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const { data: inserted, error } = await supabase
       .from('defects')
@@ -398,7 +398,7 @@ export async function raiseNsxTestDefectAction(data: {
 export async function deleteNsxReadingAction(readingId: string) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const { error } = await supabase
       .from('nsx_test_readings')
