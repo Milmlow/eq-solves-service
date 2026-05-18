@@ -34,13 +34,18 @@ export function anonClient(): SupabaseClient {
   )
 }
 
+export type TenantRole = 'super_admin' | 'admin' | 'supervisor' | 'technician' | 'read_only'
+
+export interface SeededUser {
+  id: string
+  email: string
+  password: string
+}
+
 export interface SeededTenant {
   tenantId: string
-  user: {
-    id: string
-    email: string
-    password: string
-  }
+  user: SeededUser
+  extraUserIds: string[]
 }
 
 /**
@@ -51,21 +56,31 @@ export interface SeededTenant {
  * with email_confirm=true so they can sign in immediately.
  */
 export async function seedTenantWithAdmin(suffix: string): Promise<SeededTenant> {
+  return seedTenantWithUser(suffix, 'admin')
+}
+
+/**
+ * Variant of seedTenantWithAdmin that lets the caller pick the role for the
+ * seed user. Useful for role-gating tests where the assertion is "role X
+ * cannot do Y" — those tests need a non-admin signed-in client.
+ */
+export async function seedTenantWithUser(
+  suffix: string,
+  role: TenantRole,
+): Promise<SeededTenant> {
   const admin = adminClient()
   const tenantId = randomUUID()
   const password = `Test${randomUUID().slice(0, 12)}!`
-  const email = `it-${suffix}-${Date.now()}@test.local`
+  const email = `it-${suffix}-${role}-${Date.now()}-${randomUUID().slice(0, 6)}@test.local`
 
-  // 1. Tenant row
   const { error: tErr } = await admin.from('tenants').insert({
     id: tenantId,
     name: `IT Tenant ${suffix}`,
-    slug: `it-${suffix}-${Date.now()}`,
+    slug: `it-${suffix}-${Date.now()}-${randomUUID().slice(0, 6)}`,
     is_active: true,
   })
   if (tErr) throw new Error(`seed tenant failed: ${tErr.message}`)
 
-  // 2. Auth user
   const { data: userData, error: uErr } = await admin.auth.admin.createUser({
     email,
     password,
@@ -73,11 +88,10 @@ export async function seedTenantWithAdmin(suffix: string): Promise<SeededTenant>
   })
   if (uErr || !userData.user) throw new Error(`seed user failed: ${uErr?.message ?? 'no user'}`)
 
-  // 3. Membership
   const { error: mErr } = await admin.from('tenant_members').insert({
     user_id: userData.user.id,
     tenant_id: tenantId,
-    role: 'admin',
+    role,
     is_active: true,
   })
   if (mErr) throw new Error(`seed membership failed: ${mErr.message}`)
@@ -85,7 +99,41 @@ export async function seedTenantWithAdmin(suffix: string): Promise<SeededTenant>
   return {
     tenantId,
     user: { id: userData.user.id, email, password },
+    extraUserIds: [],
   }
+}
+
+/**
+ * Adds an additional user to an already-seeded tenant with the given role.
+ * Returns the new user's credentials. The user id is also tracked on the
+ * seed so `cleanupTenant` deletes them too.
+ */
+export async function addUserToTenant(
+  seed: SeededTenant,
+  role: TenantRole,
+  label: string,
+): Promise<SeededUser> {
+  const admin = adminClient()
+  const password = `Test${randomUUID().slice(0, 12)}!`
+  const email = `it-${label}-${role}-${Date.now()}-${randomUUID().slice(0, 6)}@test.local`
+
+  const { data: userData, error: uErr } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  })
+  if (uErr || !userData.user) throw new Error(`add user failed: ${uErr?.message ?? 'no user'}`)
+
+  const { error: mErr } = await admin.from('tenant_members').insert({
+    user_id: userData.user.id,
+    tenant_id: seed.tenantId,
+    role,
+    is_active: true,
+  })
+  if (mErr) throw new Error(`add membership failed: ${mErr.message}`)
+
+  seed.extraUserIds.push(userData.user.id)
+  return { id: userData.user.id, email, password }
 }
 
 /**
@@ -110,6 +158,14 @@ export async function signedInClient(email: string, password: string): Promise<S
  */
 export async function cleanupTenant(seed: SeededTenant): Promise<void> {
   const admin = adminClient()
+  // Delete extra users first — they reference the tenant via tenant_members.
+  for (const extraId of seed.extraUserIds) {
+    try {
+      await admin.auth.admin.deleteUser(extraId)
+    } catch {
+      // best-effort
+    }
+  }
   try {
     await admin.auth.admin.deleteUser(seed.user.id)
   } catch {

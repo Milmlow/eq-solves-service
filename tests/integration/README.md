@@ -10,18 +10,47 @@ CI; these live in a separate suite because they need Docker + a database.
 | File | Type | What it asserts |
 |---|---|---|
 | [rls/customers-isolation.test.ts](rls/customers-isolation.test.ts) | RLS | User in Tenant A cannot read or write Tenant B's customers — by id, by list, or by injecting a foreign tenant_id on insert |
+| [rls/maintenance-checks-isolation.test.ts](rls/maintenance-checks-isolation.test.ts) | RLS | User in Tenant A cannot read, list, insert, or update Tenant B's maintenance_checks — covers all four mutation/read shapes |
+| [rls/technician-update-gating.test.ts](rls/technician-update-gating.test.ts) | RLS | Technician role can only UPDATE checks where `assigned_to = auth.uid()` — assigned tech wins, other tech bounces silently, admin wins as control |
+| [rls/admin-only-delete.test.ts](rls/admin-only-delete.test.ts) | RLS | Only super_admin / admin can DELETE a maintenance_check — supervisor's DELETE is hidden by USING and matches zero rows |
+| [rls/audit-logs-isolation.test.ts](rls/audit-logs-isolation.test.ts) | RLS | User in Tenant A cannot read or forge audit_logs in Tenant B — guards the immutable audit trail from leak and injection |
 
-## What's planned (PR 3b)
+## Pivot note — PR 3b scope adjusted
 
-From the test-harness scoping doc, in priority order:
+The original scoping doc listed 7 follow-up tests (B–H below), all of
+which assert behaviour inside **server actions** (e.g. `completeCheckAction`
+sets `completed_by`, `setRoleAction` is admin-only, `inviteUserAction` is
+idempotent). The current harness invokes Supabase via `supabase-js`, not
+Next.js server actions — so those tests can't be expressed here without
+extending the harness to boot a Next.js context, build FormData, and call
+the action function directly. That's a separate piece of work.
 
-- [ ] **B.** `completed_by` set to current user on `completeCheckAction`
+PR 3b instead ships four **RLS-policy** tests that exercise the same
+threat model from below — at the database boundary the server actions
+ultimately depend on. Concretely:
+
+- README's **F** (technician cannot complete someone else's check) is
+  covered at the RLS layer by `technician-update-gating.test.ts` — the
+  server action defends in depth, but the DB-level gate is the last
+  line. If the action's role check ever regresses, RLS catches it.
+- READ leak protection on the loadbearing tables (customers,
+  maintenance_checks, audit_logs) is now end-to-end-verified, where
+  previously only customers was.
+
+Still in the backlog (need harness work to invoke server actions):
+
+- [ ] **B.** `completed_by` set to current user on `updateCheckItemAction`
+      (the action that actually writes `completed_by`; not
+      `completeCheckAction`, which only flips status)
 - [ ] **C.** `requireUser()` returns deterministic tenant for multi-tenant user
 - [ ] **D.** Role-based gate on `setRoleAction` (admin-only)
 - [ ] **E.** `issueMaintenanceReportAction` idempotency via `mutationId`
-- [ ] **F.** Technician cannot complete someone else's check
 - [ ] **G.** `read_only` role rejected by `updateReportSettingsAction`
 - [ ] **H.** Re-sent `inviteUserAction` doesn't duplicate auth users
+
+The harness extension to support those tests can land as a separate PR
+when the marginal value of server-action coverage starts outweighing
+the build cost.
 
 ## Running locally
 
