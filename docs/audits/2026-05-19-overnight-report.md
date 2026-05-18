@@ -47,6 +47,7 @@ This doc tracks progress in real time and becomes the morning report.
 | 14:30 | Item 2 (browser walkthrough) — reassessed | **delivered as code-driven validation** | Browser preview blocker unresolved; pivoted to deep code-read of the audit findings + RLS-level verification. RCD bug in §2.1 verified to be **purely a client-side `canEdit` gate** — the RLS policies on `rcd_tests` + `rcd_test_circuits` (migration 0069) already include `'technician'` in the allowed roles for INSERT and UPDATE. So PR A's fix changes only UI, not security model. |
 | 14:35 | Item 3 (test scaffolding) — reassessed | **deferred** | Useful tests for PR A's behaviours need React Testing Library setup (not present in repo today). RLS layer already correctly permits the tech operations — no integration test needed there. Recommend RTL setup as its own follow-on PR before PR A; otherwise PR A ships without component-level regression coverage. |
 | 14:45 | **Item 5 — competitive feature audit** added to scope by Royce | running | Agent kicked off researching simPRO / ServiceTitan / Tradify / AroFlo / Fergus / Limble / UpKeep / MaintainX / IBM Maximo. Deliverable: `docs/audits/2026-05-19-competitive-features.md` covering feature-gap matrix, table stakes, and differentiation angles. |
+| 14:55 | Agent (competitive audit) returned | **done** | [PR #154](https://github.com/Milmlow/eq-solves-service/pull/154) — 5,481-word audit across 9 vendors. **Headline:** eq-service is structurally a CMMS sold to a trades business serving enterprise asset owners; closer to MaintainX than simPRO. Strategic call: deepen CMMS / compliance side, ignore trades-platform path. Top 3 gaps + Top 3 differentiators + Top 3 don't-chase items below. |
 
 ---
 
@@ -62,6 +63,30 @@ This doc tracks progress in real time and becomes the morning report.
 | [150](https://github.com/Milmlow/eq-solves-service/pull/150) | test: fix RLS integration test seeds — job_plans site_id | 3 test files, +3 lines | nil | Merge — clears 3 CI suites that were red |
 | [151](https://github.com/Milmlow/eq-solves-service/pull/151) | docs: EQ Shell integration proposal for EQ Service | doc-only | nil | Read & decide on Option A/B/C before any shell-side work starts |
 | [152](https://github.com/Milmlow/eq-solves-service/pull/152) | chore: npm audit fix — clear 4 advisories on main | lockfile-only | **medium — Next.js patch bump** | Merge after CI runs green — bumps Next 16.2.3 → 16.2.6, deserves a sanity check on the deploy preview before merge |
+| [154](https://github.com/Milmlow/eq-solves-service/pull/154) | docs: competitive feature audit — pre-launch landscape | 5,481 words, doc-only | nil | Strategic read; influences the post-launch roadmap. Decisions to take from this: positioning (CMMS not trades platform) + which gaps to close vs ignore |
+
+### Competitive audit — strategic findings (PR #154 distilled)
+
+**Positioning call to make:** eq-service is structurally a **CMMS** (asset-and-maintenance focused) sold to a **trades business** whose customers are **enterprise asset owners** (Equinix, Jemena). That makes the closest peer **MaintainX**, not simPRO. The implication is that the post-launch roadmap should deepen CMMS / compliance, not chase trades-platform features.
+
+**Top 3 gaps to close (in PR #154's priority order):**
+1. **Scheduling-dispatch board** — every competitor has a calendar+drag-and-drop view assigning techs to checks across days. eq-service has the data (checks have `assigned_to` + `due_date`) but no scheduler UI. Medium scope.
+2. **Installable PWA + offline queue** — UpKeep / MaintainX / Limble are mobile-first with offline. The audit's §B.13 "Network drop loses data" finding is the symptom; this is the structural fix. Large but high-leverage.
+3. **Per-item photo-required-on-fail** — competitors enforce photo evidence on failed inspection items. Eq-service has attachments at the check level but not per-item gating. Small scope; clear compliance win.
+
+**Top 3 differentiators to deepen (where eq-service already leads):**
+1. **Compliance-grade reporting** — RCD per-circuit timing tables, ACB protection-setting matrix, Customer Report bundle. None of the listed competitors generate AS/NZS-compliance-ready evidence at this depth.
+2. **Enterprise-import fluency** — Maximo Delta multi-file consolidation + Jemena multi-tab RCD xlsx. CMMS competitors expect manual entry; eq-service ingests the customer's actual systems-of-record.
+3. **Three-tier job-plan model** — global / customer-scoped / site-scoped. None of the listed competitors has a comparable scoping primitive; everyone else does either per-asset templates or per-site forms.
+
+**Top 3 "don't chase":**
+1. **Full CRM** (ServiceTitan-style — pipelines, lead routing) — wrong buyer.
+2. **In-app merchant payments** (Stripe/PayPal collection on invoices) — duplicates Xero/MYOB which most contractors already run.
+3. **Parts marketplace** — AU licensed-trade rules make it a regulatory minefield.
+
+**Cross-references the audit flags:**
+- The recommendations need a sanity check against the **Phase C tier framework** so we don't accidentally promise Enterprise-tier features at Starter pricing. (See the tier-framework memory entries.)
+- Several recommendations interact with the **EQ Shell integration** (PR #151) — e.g. a scheduling-dispatch board is more valuable when other modules (Field, Cards) feed into the same calendar.
 
 ### Outside-the-PRs findings
 
@@ -139,8 +164,9 @@ without the infra would produce dead files.
 3. **Decide on the schema-drift fix** (create the missing migration?)
 4. **Read PR #151 + decide on Option A/B/C** for the EQ Shell integration
 5. **Merge PR #152** after a deploy-preview sanity check
-6. **Authorize the RTL-setup PR** if you want PR A to have component-test coverage
-7. **Kick off PR A** (tech permission + dashboard + sidebar) — fully scoped in §4 of PR #149's doc
+6. **Read PR #154 + decide on positioning** — CMMS or trades platform? This decision shapes which PR A-J items get priority and which Phase C tier-framework items move
+7. **Authorize the RTL-setup PR** if you want PR A to have component-test coverage
+8. **Kick off PR A** (tech permission + dashboard + sidebar) — fully scoped in §4 of PR #149's doc
 
 ### What I did NOT touch overnight
 
