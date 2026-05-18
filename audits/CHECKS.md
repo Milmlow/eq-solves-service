@@ -97,6 +97,12 @@ Future-perf canaries. These don't measure data quality; they fire when the **sha
 | Check | Level | Why |
 |---|---|---|
 | `scaling.audit_logs.size` | WARN | `audit_logs` is unbounded and unpartitioned. The 2026-05-15 perf review flagged this as a 5-year concern at 10x scale (~625k rows). 500k is the trigger point — 6-12 months of headroom to design + ship monthly partitioning + retention (drop partitions > 24 months) before query performance starts to degrade. When this fires, the partitioning conversation reopens with concrete numbers, not projections. |
+| `scaling.maintenance_check_items.size` | WARN | The `.limit(10000)` pattern appears 23 times across the app (analytics, reports, compliance-report, maintenance pages). `maintenance_check_items` is the closest to the cap (5193 rows currently, accessed per-check so per-query volume is fine). At ~50k total rows the `.in('check_id', checkIds).limit(10000)` calls on /maintenance list start risking silent truncation. Refactor target: server-side aggregation via RPC (same pattern as `get_dashboard_counts`). |
+| `scaling.check_assets.size` | WARN | 619 rows currently. Same `.limit(10000)` consideration as above — fires before silent truncation. |
+| `scaling.maintenance_checks.size` | WARN | 33 active rows currently. /analytics and /reports pull all active checks for monthly aggregation; at 50k+ the `.limit(10000)` truncates. Refactor target: month-bucketed RPC instead of pulling rows. |
+| `scaling.acb_tests.size` | WARN | 149 rows currently. Same pattern as maintenance_checks above. |
+| `scaling.nsx_tests.size` | WARN | 94 rows currently. Same pattern. |
+| `scaling.test_records.size` | WARN | 13 rows currently. Same pattern. |
 
 ---
 

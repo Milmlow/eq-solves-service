@@ -224,6 +224,33 @@ with checks as (
   union all
   select 'scaling.audit_logs.size', 'WARN', 'audit_logs > 500k rows — design partitioning + retention now',
          (case when (select count(*) from public.audit_logs) > 500000 then 1 else 0 end)
+
+  -- .limit(10000) appears 23 times across 6 files (analytics, reports,
+  -- compliance-report, maintenance list/detail, maintenance-checklist).
+  -- At current scale (largest table 5193 rows) none are biting, so the
+  -- refactor was deferred per the same monitor-don't-speculatively-refactor
+  -- principle as audit_logs above. The threshold fires when ANY table
+  -- pulled via .limit(10000) exceeds 50k rows — well before the 10k
+  -- per-query cap matters, with ~6 months runway to swap in server-side
+  -- aggregation.
+  union all
+  select 'scaling.maintenance_check_items.size', 'WARN', 'maintenance_check_items > 50k rows — refactor /maintenance/[id] + /maintenance + /api/maintenance-checklist away from .limit(10000)',
+         (case when (select count(*) from public.maintenance_check_items) > 50000 then 1 else 0 end)
+  union all
+  select 'scaling.check_assets.size', 'WARN', 'check_assets > 50k rows — review queries using .limit(10000)',
+         (case when (select count(*) from public.check_assets) > 50000 then 1 else 0 end)
+  union all
+  select 'scaling.maintenance_checks.size', 'WARN', 'maintenance_checks > 50k rows — refactor /analytics + /reports away from .limit(10000)',
+         (case when (select count(*) from public.maintenance_checks where is_active) > 50000 then 1 else 0 end)
+  union all
+  select 'scaling.acb_tests.size', 'WARN', 'acb_tests > 50k rows — refactor /analytics + /reports away from .limit(10000)',
+         (case when (select count(*) from public.acb_tests where is_active) > 50000 then 1 else 0 end)
+  union all
+  select 'scaling.nsx_tests.size', 'WARN', 'nsx_tests > 50k rows — refactor /analytics + /reports away from .limit(10000)',
+         (case when (select count(*) from public.nsx_tests where is_active) > 50000 then 1 else 0 end)
+  union all
+  select 'scaling.test_records.size', 'WARN', 'test_records > 50k rows — refactor /analytics + /reports away from .limit(10000)',
+         (case when (select count(*) from public.test_records where is_active) > 50000 then 1 else 0 end)
 )
 select
   check_id,
