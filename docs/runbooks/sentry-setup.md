@@ -55,11 +55,19 @@ After the DSN is live:
 - **Replays** — `replaysSessionSampleRate: 0`. Session replay is heavy and privacy-fraught (records the user's screen); enable only with explicit user/customer consent
 - **Local dev errors** — `enabled: process.env.NODE_ENV === 'production'`. Sentry only fires on prod builds
 
-## Alert setup (do after first real error arrives)
+## Alert setup
 
-In Sentry → Alerts → Create Alert:
-- **High-frequency alert** — "When a new issue occurs and it has been seen by ≥ 5 unique users in 1 hour, send email to royce@eq.solutions"
-- **Regression alert** — "When a resolved issue reappears, send email"
+**Preferred:** the Sentry MCP (`https://mcp.sentry.dev/mcp/eq-solutions/eq-solves-service`) once added to Claude Code via `claude mcp add --transport http sentry <url>`. Ask Claude to "create the three standard alert rules" and the MCP handles it.
+
+**Fallback:** [scripts/create-sentry-alerts.ps1](../../scripts/create-sentry-alerts.ps1) — PowerShell that hits Sentry's REST API. Needs `SENTRY_AUTH_TOKEN` in env with scopes `alerts:write` + `member:read` + `project:read`.
+
+**Three rules to create (all email `dev@eq.solutions`):**
+
+1. **Issue affecting 5+ users in 1h** — condition `EventUniqueUserFrequencyCondition` with value=5, interval=1h. Catches real bugs hitting real users.
+2. **Report run approaching 60s cap** (PR #147 canary) — condition `EventFrequencyCondition` value=1 interval=1h, filtered by `TaggedEventFilter` (key=`canary`, match=`eq`, value=`report_duration`) + `LevelFilter` match=`gte` level=30 (warning+). Fires when the report-duration canary surfaces.
+3. **Resolved issue regressed** — condition `RegressionEventCondition`. Catches the "I thought I fixed that" case.
+
+All three: `actionMatch=all`, `filterMatch=all`, `frequency=60` (action interval in minutes), `environment=null`. Action: `NotifyEmailAction` with `targetType=Member` and the `targetIdentifier` resolved from `/organizations/eq-solutions/members/` by email.
 
 Default Sentry alerts are too noisy for a 2-tenant product. Tune as the user base grows.
 
