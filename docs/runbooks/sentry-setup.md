@@ -57,17 +57,25 @@ After the DSN is live:
 
 ## Alert setup
 
-**Preferred:** the Sentry MCP (`https://mcp.sentry.dev/mcp/eq-solutions/eq-solves-service`) once added to Claude Code via `claude mcp add --transport http sentry <url>`. Ask Claude to "create the three standard alert rules" and the MCP handles it.
+The Sentry MCP (`https://mcp.sentry.dev/mcp/eq-solutions/eq-solves-service`, wired at project scope) is the preferred tool for **investigating** Sentry data once events are flowing — search issues, fetch event details, look up teams/releases. It does **not** expose alert-rule creation tools (verified 2026-05-18 — the MCP surface is search/find/get only). For creating or editing alert rules, use the script below or the Sentry UI.
 
-**Fallback:** [scripts/create-sentry-alerts.ps1](../../scripts/create-sentry-alerts.ps1) — PowerShell that hits Sentry's REST API. Needs `SENTRY_AUTH_TOKEN` in env with scopes `alerts:write` + `member:read` + `project:read`.
+The Sentry org `eq-solutions` is on the **EU (Germany) region**, so all org-scoped REST API calls go to `https://de.sentry.io/api/0`, not `https://sentry.io/api/0`. The script defaults to the EU host; override via `$env:SENTRY_API_BASE` if the org ever migrates regions.
 
-**Three rules to create (all email `dev@eq.solutions`):**
+**Three rules currently live** on `eq-solves-service` (created 2026-05-18):
 
-1. **Issue affecting 5+ users in 1h** — condition `EventUniqueUserFrequencyCondition` with value=5, interval=1h. Catches real bugs hitting real users.
-2. **Report run approaching 60s cap** (PR #147 canary) — condition `EventFrequencyCondition` value=1 interval=1h, filtered by `TaggedEventFilter` (key=`canary`, match=`eq`, value=`report_duration`) + `LevelFilter` match=`gte` level=30 (warning+). Fires when the report-duration canary surfaces.
-3. **Resolved issue regressed** — condition `RegressionEventCondition`. Catches the "I thought I fixed that" case.
+| ID | Name | Condition |
+|---|---|---|
+| 599698 | Issue affecting 5+ users in 1h | `EventUniqueUserFrequencyCondition` value=5, interval=1h. Catches real bugs hitting real users. |
+| 599699 | Report run approaching 60s cap | `EventFrequencyCondition` value=1, interval=1h, filtered by `TaggedEventFilter` (key=`canary`, match=`eq`, value=`report_duration`) + `LevelFilter` match=`gte` level=30. Fires when the PR #147 report-duration canary surfaces. |
+| 599700 | Resolved issue regressed | `RegressionEventCondition`. Catches the "I thought I fixed that" case. |
 
-All three: `actionMatch=all`, `filterMatch=all`, `frequency=60` (action interval in minutes), `environment=null`. Action: `NotifyEmailAction` with `targetType=Member` and the `targetIdentifier` resolved from `/organizations/eq-solutions/members/` by email.
+All three: `actionMatch=all`, `filterMatch=all`, `frequency=60` (action interval in minutes), `environment=null`. Action: `NotifyEmailAction` with `targetType=Team` and `targetIdentifier` = the team assigned to the project.
+
+> **Why `Team`, not `Member`:** Sentry rejects `targetType=Member` for users whose project access comes from the org-owner role rather than team-based project membership ("This user is not part of the project."). Targeting the team avoids the quirk and is the more correct shape for an on-call alert anyway. The `eq-solutions` team currently contains only `dev@eq.solutions`, so the recipient list is unchanged in practice.
+
+To recreate, edit, or extend:
+
+[scripts/create-sentry-alerts.ps1](../../scripts/create-sentry-alerts.ps1) — needs `SENTRY_AUTH_TOKEN` in env with scopes `alerts:write` + `member:read` + `project:read`. Create the token at https://eq-solutions.sentry.io/settings/account/api/auth-tokens/ and **delete it as soon as the script finishes** — it's only needed for the one-shot run.
 
 Default Sentry alerts are too noisy for a 2-tenant product. Tune as the user base grows.
 
@@ -94,3 +102,4 @@ If you don't want `/api/sentry-test` events counting toward quota or cluttering 
 - `lib/env.ts` validates `NEXT_PUBLIC_SENTRY_DSN` as an optional URL
 - `/api/sentry-test` route for verification
 - Common noise filters: `PGRST116` (PostgREST not-found), `ResizeObserver loop`, `Failed to fetch`
+- Three standard alert rules live on the project (IDs 599698 / 599699 / 599700 — see Alert setup above)
