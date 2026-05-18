@@ -87,18 +87,31 @@ export default async function DashboardPage({
   const [
     countsRes,
     tenantRes,
+    jobPlanItemsRes,
     upcomingChecks, recentChecks,
     sitesForMap,
   ] = await Promise.all([
     tenantId
       ? supabase.rpc('get_dashboard_counts', { p_tenant_id: tenantId, p_user_id: countsUserId })
       : Promise.resolve({ data: null }),
-    // setup_completed_at — gates the Company Details step in the
-    // SetupChecklist swap below. Cheap single-row lookup, added to the
-    // existing parallel batch so it doesn't extend dashboard latency.
+    // Company-details state: read tenant_settings.report_company_name (the
+    // canonical company-name field used in customer reports). Was previously
+    // gated on `tenants.setup_completed_at`, which the skipOnboarding action
+    // stamps even when no real company data is entered — caused the checklist
+    // to falsely tick "Company details done" (UX audit PR #149 §2.2).
     tenantId
-      ? supabase.from('tenants').select('setup_completed_at').eq('id', tenantId).maybeSingle()
+      ? supabase.from('tenant_settings').select('report_company_name').eq('tenant_id', tenantId).maybeSingle()
       : Promise.resolve({ data: null }),
+    // Job-plan-with-items state: a plan with zero items spawns empty per-asset
+    // task lists when a check is created against it — silent failure surfaced
+    // by the audit (§A.3 / §2.3). The checklist now gates "Job plan done" on
+    // at least one active item existing, not just plan-count > 0.
+    tenantId
+      ? supabase
+          .from('job_plan_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+      : Promise.resolve({ count: 0 }),
     // Upcoming checks
     buildListQuery(
       supabase.from('maintenance_checks')
@@ -147,12 +160,15 @@ export default async function DashboardPage({
   const isSetupRole = userRole === 'super_admin' || userRole === 'admin'
   const hasAnyCompletedCheck = counts.checks.complete > 0
   if (isSetupRole && !hasAnyCompletedCheck) {
-    const tenantRow = (tenantRes.data ?? null) as { setup_completed_at: string | null } | null
+    const settingsRow = (tenantRes.data ?? null) as { report_company_name: string | null } | null
+    const hasJobPlanWithItems = (jobPlanItemsRes as { count?: number | null })?.count != null
+      && (jobPlanItemsRes as { count: number }).count > 0
     return (
       <SetupChecklist
         counts={{ entities: counts.entities, checks: counts.checks }}
         userName={userName}
-        companyConfigured={!!tenantRow?.setup_completed_at}
+        companyConfigured={Boolean(settingsRow?.report_company_name?.trim())}
+        hasJobPlanWithItems={hasJobPlanWithItems}
       />
     )
   }

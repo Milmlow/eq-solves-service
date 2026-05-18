@@ -36,15 +36,25 @@ export function SetupChecklist({
   counts,
   userName,
   companyConfigured,
+  hasJobPlanWithItems,
 }: {
   counts: Counts
   userName: string
   companyConfigured: boolean
+  /**
+   * True iff the tenant has at least one active job_plan_items row.
+   * Replaces the older `counts.entities.job_plans > 0` heuristic, which
+   * silently false-ticked when a plan was saved with zero tasks
+   * (UX audit PR #149 §A.3 / §2.3). The next step (Schedule check) now
+   * also gates on this, so we don't push the admin into creating an
+   * empty check.
+   */
+  hasJobPlanWithItems: boolean
 }) {
   const hasCustomer = counts.entities.customers > 0
   const hasSite     = counts.entities.sites > 0
   const hasAsset    = counts.entities.assets > 0
-  const hasJobPlan  = counts.entities.job_plans > 0
+  const hasJobPlan  = hasJobPlanWithItems
   const hasCheck    = counts.checks.scheduled + counts.checks.in_progress + counts.checks.overdue + counts.checks.complete > 0
   const hasComplete = counts.checks.complete > 0
 

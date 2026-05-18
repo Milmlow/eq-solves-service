@@ -45,8 +45,15 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
   const [loading, setLoading] = useState(false)
   const [itemError, setItemError] = useState<string | null>(null)
   const [showAddItem, setShowAddItem] = useState(false)
+  // Tracks a plan just created in this panel session — keeps the form
+  // open so the user can add tasks inline instead of save-then-reopen.
+  // UX audit §A.3 / §2.3 — addresses the "save empty plan, get empty
+  // task list on site" silent failure.
+  const [createdPlan, setCreatedPlan] = useState<{ id: string } | null>(null)
 
   const isEdit = !!jobPlan
+  const effectivePlanId = jobPlan?.id ?? createdPlan?.id ?? null
+  const showItemsSection = isEdit || createdPlan !== null
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -62,7 +69,18 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
     setLoading(false)
     if (result.success) {
       setSuccess(true)
-      if (!isEdit) setTimeout(() => onClose(), 500)
+      if (!isEdit) {
+        // Don't auto-close — switch to "just-created" mode so the user
+        // sees the Items section and can add tasks inline. If createPlanAction
+        // didn't return an id (legacy path), fall back to the old auto-close
+        // behaviour so we don't leave the form in a broken state.
+        const newId = (result as { data?: { id?: string } }).data?.id
+        if (newId) {
+          setCreatedPlan({ id: newId })
+        } else {
+          setTimeout(() => onClose(), 500)
+        }
+      }
     } else {
       setError(result.error ?? 'Something went wrong.')
     }
@@ -82,11 +100,11 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
 
   async function handleAddItem(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!jobPlan) return
+    if (!effectivePlanId) return
     setItemError(null)
 
     const formData = new FormData(e.currentTarget)
-    const result = await createJobPlanItemAction(jobPlan.id, formData)
+    const result = await createJobPlanItemAction(effectivePlanId, formData)
     if (result.success) {
       setShowAddItem(false)
       ;(e.target as HTMLFormElement).reset()
@@ -96,14 +114,14 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
   }
 
   async function handleDeleteItem(itemId: string) {
-    if (!jobPlan) return
-    await deleteJobPlanItemAction(jobPlan.id, itemId)
+    if (!effectivePlanId) return
+    await deleteJobPlanItemAction(effectivePlanId, itemId)
   }
 
   async function handleUpdateItem(itemId: string, formData: FormData) {
-    if (!jobPlan) return
+    if (!effectivePlanId) return
     setItemError(null)
-    const result = await updateJobPlanItemAction(jobPlan.id, itemId, formData)
+    const result = await updateJobPlanItemAction(effectivePlanId, itemId, formData)
     if (!result.success) {
       setItemError(result.error ?? 'Failed to update task.')
     }
@@ -185,9 +203,19 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
         )}
       </form>
 
-      {/* Job Plan Items / Tasks section - only on edit */}
-      {isEdit && (
+      {/* Job Plan Items / Tasks — visible in edit mode AND for a plan that
+          was just created in this panel session (createdPlan state). The
+          audit (PR #149 §A.3 / §2.3) flagged that hiding this in create-mode
+          caused admins to save empty plans and discover the failure on-site
+          when techs opened the corresponding check. */}
+      {showItemsSection && (
         <div className="mt-6 pt-4 border-t border-gray-200">
+          {createdPlan && !isEdit && (
+            <div className="mb-3 px-3 py-2 rounded-md bg-eq-ice border border-eq-sky/30 text-xs text-eq-deep">
+              Plan saved. Add at least one task below — a plan without tasks
+              creates empty per-asset checklists when used in a maintenance check.
+            </div>
+          )}
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm font-bold text-eq-ink">Job Plan Items</h3>
@@ -225,7 +253,7 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
                     <JobPlanItemRow
                       key={item.id}
                       item={item}
-                      jobPlanId={jobPlan!.id}
+                      jobPlanId={effectivePlanId!}
                       canWrite={canWriteRole}
                       onUpdate={handleUpdateItem}
                       onDelete={handleDeleteItem}
