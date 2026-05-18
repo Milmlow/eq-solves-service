@@ -32,6 +32,11 @@ $org = 'eq-solutions'
 $project = 'eq-solves-service'
 $alertEmail = 'dev@eq.solutions'
 
+# Org is on the EU (Germany) region. Org-scoped API calls must hit the regional
+# host, not the global sentry.io. Override via $env:SENTRY_API_BASE if the org
+# ever migrates regions.
+$apiBase = if ($env:SENTRY_API_BASE) { $env:SENTRY_API_BASE.TrimEnd('/') } else { 'https://de.sentry.io/api/0' }
+
 $headers = @{
     Authorization  = "Bearer $env:SENTRY_AUTH_TOKEN"
     'Content-Type' = 'application/json'
@@ -43,7 +48,7 @@ function Invoke-SentryApi {
         [string]$Path,
         $Body = $null
     )
-    $uri = "https://sentry.io/api/0$Path"
+    $uri = "$apiBase$Path"
     $params = @{
         Method  = $Method
         Uri     = $uri
@@ -67,24 +72,37 @@ function Invoke-SentryApi {
     }
 }
 
-# --- Step 1: resolve the Sentry member id for dev@eq.solutions ---------------
+# --- Step 1: resolve the Sentry team assigned to the project -----------------
+#
+# Originally this resolved an individual member id and used targetType=Member.
+# Sentry rejects that with "This user is not part of the project" if the member
+# has access via org-owner role rather than team-based project membership.
+# Targeting the team avoids that quirk and is the more correct shape anyway —
+# alerts go to whoever is on the on-call team, not a named human.
 
-Write-Host "Looking up Sentry member id for $alertEmail..." -ForegroundColor Cyan
-$members = Invoke-SentryApi -Method Get -Path "/organizations/$org/members/"
-$member = $members | Where-Object { $_.email -eq $alertEmail }
-if (-not $member) {
-    Write-Error "No Sentry member found with email $alertEmail in org $org. Invite them first at https://$org.sentry.io/settings/members/ and re-run."
+Write-Host "Looking up team assigned to project $project..." -ForegroundColor Cyan
+$proj = Invoke-SentryApi -Method Get -Path "/projects/$org/$project/"
+if (-not $proj.teams -or $proj.teams.Count -eq 0) {
+    Write-Error "Project $project has no teams assigned. Add a team at https://$org.sentry.io/settings/projects/$project/teams/ and re-run."
     exit 1
 }
-$memberId = [int]$member.id
-Write-Host "  member id = $memberId" -ForegroundColor Green
+$team = $proj.teams[0]
+$teamId = [int64]$team.id
+Write-Host "  team = $($team.slug) (id=$teamId)" -ForegroundColor Green
+
+# Sanity-check that $alertEmail exists in the org (kept as a smoke test that
+# the recipient address is reachable; not used as a target).
+$members = Invoke-SentryApi -Method Get -Path "/organizations/$org/members/"
+if (-not ($members | Where-Object { $_.email -eq $alertEmail })) {
+    Write-Warning "No Sentry org member found with email $alertEmail. Team-targeted emails will still go to whoever is on the team."
+}
 
 # --- Step 2: shared email action ---------------------------------------------
 
 $emailAction = @{
     id               = 'sentry.mail.actions.NotifyEmailAction'
-    targetType       = 'Member'
-    targetIdentifier = $memberId
+    targetType       = 'Team'
+    targetIdentifier = $teamId
 }
 
 # --- Step 3: rule payloads ---------------------------------------------------
