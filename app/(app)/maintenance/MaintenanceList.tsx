@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
@@ -51,6 +51,8 @@ interface MaintenanceListProps {
   totalPages: number
   isAdmin: boolean
   canWrite: boolean
+  /** Mine/All view (UX audit PR #149 §2.4). Drives the toggle's selected state. */
+  view: 'mine' | 'all'
 }
 
 function statusToBadge(status: CheckStatus) {
@@ -66,13 +68,25 @@ function statusToBadge(status: CheckStatus) {
 
 export function MaintenanceList({
   checks, itemsMap, jobPlans, sites, technicians, scopeItems,
-  page, totalPages, isAdmin, canWrite: canWriteRole,
+  page, totalPages, isAdmin, canWrite: canWriteRole, view: assignedView,
 }: MaintenanceListProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [createOpen, setCreateOpen] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
-  const [view, setView] = useState<'table' | 'sites'>('sites')
+  const [layoutView, setLayoutView] = useState<'table' | 'sites'>('sites')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Mine/All URL writer — preserves every other filter param, just flips
+  // `view`. Used by the segmented control in the toolbar.
+  const setAssignedView = (next: 'mine' | 'all') => {
+    const sp = new URLSearchParams(searchParams.toString())
+    sp.set('view', next)
+    // Reset pagination when switching scope — the page-1 link is right.
+    sp.delete('page')
+    router.push(`${pathname}?${sp.toString()}`)
+  }
 
   const columns: DataTableColumn<CheckRow>[] = [
     {
@@ -152,12 +166,38 @@ export function MaintenanceList({
           ]}
         />
         <div className="flex gap-2 ml-4 shrink-0">
-          {/* View Toggle — site-first only */}
+          {/* Mine / All toggle (UX audit PR #149 §2.4) */}
+          <div className="flex gap-1 bg-gray-100 rounded-md p-1 text-xs font-medium">
+            <button
+              onClick={() => setAssignedView('mine')}
+              className={`px-3 py-1.5 rounded transition-colors ${
+                assignedView === 'mine'
+                  ? 'bg-white text-eq-sky shadow-sm'
+                  : 'text-eq-grey hover:text-eq-deep'
+              }`}
+              title="Only checks assigned to me"
+            >
+              Mine
+            </button>
+            <button
+              onClick={() => setAssignedView('all')}
+              className={`px-3 py-1.5 rounded transition-colors ${
+                assignedView === 'all'
+                  ? 'bg-white text-eq-sky shadow-sm'
+                  : 'text-eq-grey hover:text-eq-deep'
+              }`}
+              title="Every check in the tenant"
+            >
+              All
+            </button>
+          </div>
+
+          {/* Layout toggle — site-first vs table */}
           <div className="flex gap-1 bg-gray-100 rounded-md p-1">
             <button
-              onClick={() => setView('sites')}
+              onClick={() => setLayoutView('sites')}
               className={`p-2 rounded transition-colors ${
-                view === 'sites'
+                layoutView === 'sites'
                   ? 'bg-white text-eq-sky shadow-sm'
                   : 'text-eq-grey hover:text-eq-deep'
               }`}
@@ -166,9 +206,9 @@ export function MaintenanceList({
               <MapPin className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setView('table')}
+              onClick={() => setLayoutView('table')}
               className={`p-2 rounded transition-colors ${
-                view === 'table'
+                layoutView === 'table'
                   ? 'bg-white text-eq-sky shadow-sm'
                   : 'text-eq-grey hover:text-eq-deep'
               }`}
@@ -198,7 +238,7 @@ export function MaintenanceList({
         </div>
       ) : (
         <>
-          {view === 'table' ? (
+          {layoutView === 'table' ? (
             <>
               <DataTable
                 columns={columns}

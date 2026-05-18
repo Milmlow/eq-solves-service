@@ -6,16 +6,19 @@ import type { Role, MaintenanceCheckItem } from '@/lib/types'
 
 const PER_PAGE = 25
 
+type ListView = 'mine' | 'all'
+
 export default async function MaintenancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; site_id?: string; status?: string; kind?: string; page?: string }>
+  searchParams: Promise<{ search?: string; site_id?: string; status?: string; kind?: string; view?: string; page?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const siteId = params.site_id ?? ''
   const status = params.status ?? ''
   const kind = params.kind ?? ''
+  const viewParam = params.view ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
 
   const supabase = await createClient()
@@ -33,6 +36,16 @@ export default async function MaintenancePage({
       .maybeSingle()
     userRole = (membership?.role as Role) ?? null
   }
+
+  // Mine / All view (UX audit PR #149 §2.4 — locked 2026-05-18).
+  // A brand-new tech landing on /maintenance shouldn't see the whole
+  // tenant. Default to 'mine' for technicians; everyone else defaults
+  // to 'all' but can flip via the toggle. URL param wins for explicit
+  // navigation (e.g. from a "View all overdue" link).
+  const defaultView: ListView = userRole === 'technician' ? 'mine' : 'all'
+  const effectiveView: ListView =
+    viewParam === 'mine' || viewParam === 'all' ? (viewParam as ListView) : defaultView
+  const filterByUser = effectiveView === 'mine' && Boolean(user)
 
   // Fetch sites for filter (include customer_id for scope lookup, customer
   // name to disambiguate duplicate site codes across customers)
@@ -98,6 +111,12 @@ export default async function MaintenancePage({
     // Server-side kind filter — wired to the new "Type" dropdown on the
     // maintenance list (2026-04-28 chrome polish).
     query = query.eq('kind', kind)
+  }
+  if (filterByUser && user) {
+    // Mine view — only checks assigned to the current user. Wired in
+    // PR A (2026-05-19) so a tech's /maintenance list lands on their
+    // own work, not the tenant-wide register.
+    query = query.eq('assigned_to', user.id)
   }
 
   const from = (page - 1) * PER_PAGE
@@ -185,6 +204,7 @@ export default async function MaintenancePage({
         totalPages={totalPages}
         isAdmin={isAdmin(userRole)}
         canWrite={canWrite(userRole)}
+        view={effectiveView}
       />
     </div>
   )
