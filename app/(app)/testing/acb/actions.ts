@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
-import { isAdmin, canWrite } from '@/lib/utils/roles'
+import { isAdmin, canDoTestWork } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateAcbTestSchema, UpdateAcbTestSchema, CreateAcbReadingSchema } from '@/lib/validations/acb-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
@@ -12,7 +12,7 @@ import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
 export async function createAcbTestAction(formData: FormData) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
       asset_id: formData.get('asset_id'),
@@ -59,7 +59,7 @@ export async function createAcbTestAction(formData: FormData) {
 export async function updateAcbTestAction(id: string, formData: FormData) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
       asset_id: formData.get('asset_id'),
@@ -125,7 +125,7 @@ export async function toggleAcbTestActiveAction(id: string, isActive: boolean) {
 export async function createAcbReadingAction(acbTestId: string, formData: FormData) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const raw = {
       label: formData.get('label'),
@@ -155,7 +155,7 @@ export async function createAcbReadingAction(acbTestId: string, formData: FormDa
 export async function deleteAcbReadingAction(readingId: string) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const { error } = await supabase
       .from('acb_test_readings')
@@ -212,7 +212,7 @@ export async function updateAcbDetailsAction(testId: string, data: {
 }) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const updateData: Record<string, unknown> = {}
     for (const key of Object.keys(data)) {
@@ -254,7 +254,7 @@ export async function saveAcbVisualCheckAction(testId: string, items: Array<{
 }>) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     // Delete existing visual check readings for this test
     await supabase
@@ -304,7 +304,7 @@ export async function saveAcbElectricalReadingAction(testId: string, readings: A
 }>) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     // Delete existing electrical readings for this test
     await supabase
@@ -370,7 +370,7 @@ export async function raiseTestDefectAction(data: {
 }) {
   try {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const { data: inserted, error } = await supabase
       .from('defects')

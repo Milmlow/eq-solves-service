@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
-import { canWrite } from '@/lib/utils/roles'
+import { canWrite, canCreateCheck, canDoTestWork } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import type { TestingCheckType } from '@/lib/types'
@@ -32,7 +32,11 @@ export async function createTestingCheckAction(input: {
 }, mutationId?: string) {
   return withIdempotency(mutationId, async () => {
     const { supabase, tenantId, user, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    // Tech-on-site creating a kind=acb/nsx/general check — mirrors the
+    // canCreateCheck gate used by maintenance/createCheckAction (migration
+    // 0080 includes technician in the RLS write list). Without this,
+    // techs reach the Create Check UI but the action rejects them.
+    if (!canCreateCheck(role)) return { success: false, error: 'Insufficient permissions.' }
 
     if (!input.site_id) return { success: false, error: 'Site is required.' }
     if (!input.asset_ids.length) return { success: false, error: 'Select at least one asset.' }
@@ -195,7 +199,11 @@ export async function archiveTestingCheckAction(checkId: string) {
 export async function updateTestingCheckStatusAction(checkId: string, status: string) {
   try {
     const { supabase, role } = await requireUser()
-    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    // Tech-on-site marking their test complete — mirrors propagateCheck-
+    // CompletionIfReady which already flips kind=acb/nsx parent checks
+    // when the per-test workflow finishes. Without this gate the UI's
+    // "Mark Complete" button on a kind=acb/nsx check would fail for techs.
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     const { error } = await supabase
       .from('maintenance_checks')

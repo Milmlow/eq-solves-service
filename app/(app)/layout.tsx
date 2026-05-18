@@ -16,6 +16,7 @@ import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { isDemoEmail } from '@/lib/utils/demo'
+import type { Role } from '@/lib/types'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -140,6 +141,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <NavigationProgress />
       <Sidebar
         isAdmin={isAdmin}
+        role={analyticsRole as Role | null}
         settings={settings}
       />
       <div className="flex flex-1 min-w-0 flex-col">

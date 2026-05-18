@@ -449,10 +449,18 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                   <CheckCheck className="w-4 h-4 mr-1" /> Complete All Assets
                 </Button>
               )}
-              <Button size="sm" onClick={handleComplete} loading={loading} disabled={requiredIncomplete > 0}
-                title={requiredIncomplete > 0 ? `${requiredIncomplete} required tasks incomplete` : ''}>
+              {/* Complete Check + inline disabled-reason. The previous
+                  pattern hid the reason in a `title=` tooltip which doesn't
+                  fire on touch (UX audit §2.10 / §B.9). Inline amber text
+                  works on every screen, every input modality. */}
+              <Button size="sm" onClick={handleComplete} loading={loading} disabled={requiredIncomplete > 0}>
                 Complete Check
               </Button>
+              {requiredIncomplete > 0 && (
+                <span className="self-center text-xs text-amber-700 font-medium">
+                  {requiredIncomplete} required {requiredIncomplete === 1 ? 'task' : 'tasks'} remaining
+                </span>
+              )}
             </>
           )}
           {check.status === 'complete' && (

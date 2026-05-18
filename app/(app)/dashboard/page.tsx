@@ -12,6 +12,7 @@ import { DashboardAnalytics } from './DashboardAnalytics'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { ServiceCreditWidget } from './ServiceCreditWidget'
 import { SetupChecklist } from './SetupChecklist'
+import { TechDashboard } from './TechDashboard'
 
 type View = 'mine' | 'all'
 
@@ -182,6 +183,32 @@ export default async function DashboardPage({
     ])
     myAcbTests = (acbRes.data ?? []) as unknown as TestRow[]
     myNsxTests = (nsxRes.data ?? []) as unknown as TestRow[]
+  }
+
+  // ── Tech-shaped dashboard ──
+  // Technicians get a focused, top-loaded layout (UX audit PR #149 §5.1 +
+  // §2.7 — locked 2026-05-18): My Upcoming Works first, Recently
+  // Completed second, optional In-Progress Tests, status bar at the
+  // bottom. Skips the tenant-wide entity KPIs, defect summary, and
+  // site map — those are admin/supervisor surfaces.
+  if (userRole === 'technician') {
+    return (
+      <TechDashboard
+        userName={userName}
+        greeting={getGreeting()}
+        upcomingChecks={(upcomingChecks.data ?? []) as unknown as Parameters<typeof TechDashboard>[0]['upcomingChecks']}
+        recentChecks={(recentChecks.data ?? []) as unknown as Parameters<typeof TechDashboard>[0]['recentChecks']}
+        myAcbTests={myAcbTests}
+        myNsxTests={myNsxTests}
+        siteCount={counts.entities.sites}
+        checkCounts={{
+          scheduled:  counts.checks.scheduled,
+          inProgress: counts.checks.in_progress,
+          overdue:    counts.checks.overdue,
+          complete:   counts.checks.complete,
+        }}
+      />
+    )
   }
 
   const entityStats = [

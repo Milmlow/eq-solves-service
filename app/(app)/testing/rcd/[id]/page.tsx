@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireUser } from '@/lib/actions/auth'
-import { canWrite } from '@/lib/utils/roles'
+import { canDoTestWork } from '@/lib/utils/roles'
 import { TestDetailHeader } from '@/components/ui/TestDetailHeader'
 import { RcdTestEditor, type RcdTestEditorCircuit } from './RcdTestEditor'
 
@@ -99,7 +99,7 @@ export default async function RcdTestDetailPage({
           check_id: test.check_id,
         }}
         initialCircuits={(circuits ?? []) as RcdTestEditorCircuit[]}
-        canEdit={canWrite(role)}
+        canEdit={canDoTestWork(role)}
         siteName={site?.name ?? null}
         assetName={asset?.name ?? null}
       />

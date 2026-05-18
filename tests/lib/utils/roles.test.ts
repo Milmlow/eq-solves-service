@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isAdmin, canWrite, isSuperAdmin } from '@/lib/utils/roles'
+import { isAdmin, canWrite, isSuperAdmin, canCreateCheck, canDoTestWork } from '@/lib/utils/roles'
 import type { Role } from '@/lib/types'
 
 describe('Role Utilities', () => {
@@ -52,6 +52,59 @@ describe('Role Utilities', () => {
 
     it('returns false for null role', () => {
       expect(canWrite(null)).toBe(false)
+    })
+  })
+
+  describe('canDoTestWork', () => {
+    // On-site test execution — saving ACB/NSX wizard steps, editing RCD
+    // circuit timings, marking a test complete. Loosened in PR A (2026-05-19)
+    // to include technician, mirroring the RLS layer (migrations 0069 + 0080
+    // + 0081). Without this gate, RLS would allow the write but the app
+    // layer blocks it — leaving the tech stuck on-site.
+    it('returns true for super_admin role', () => {
+      expect(canDoTestWork('super_admin')).toBe(true)
+    })
+
+    it('returns true for admin role', () => {
+      expect(canDoTestWork('admin')).toBe(true)
+    })
+
+    it('returns true for supervisor role', () => {
+      expect(canDoTestWork('supervisor')).toBe(true)
+    })
+
+    it('returns true for technician role (the whole point)', () => {
+      expect(canDoTestWork('technician')).toBe(true)
+    })
+
+    it('returns false for read_only role', () => {
+      expect(canDoTestWork('read_only')).toBe(false)
+    })
+
+    it('returns false for null role', () => {
+      expect(canDoTestWork(null)).toBe(false)
+    })
+  })
+
+  describe('canCreateCheck', () => {
+    // Parity check — canDoTestWork and canCreateCheck currently share the
+    // same role set, but they exist as separate predicates because they
+    // gate different surfaces. If they diverge, both should still let
+    // technicians through (that's the contract).
+    it('returns true for super_admin role', () => {
+      expect(canCreateCheck('super_admin')).toBe(true)
+    })
+
+    it('returns true for technician role', () => {
+      expect(canCreateCheck('technician')).toBe(true)
+    })
+
+    it('returns false for read_only role', () => {
+      expect(canCreateCheck('read_only')).toBe(false)
+    })
+
+    it('returns false for null role', () => {
+      expect(canCreateCheck(null)).toBe(false)
     })
   })
 
