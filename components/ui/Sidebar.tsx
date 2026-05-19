@@ -209,7 +209,12 @@ export function Sidebar({
                   key={href}
                   href={href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
+                    // 44px min-height for field-ergonomic tap targets on
+                    // mobile / iPad (UX audit PR #149 §2.6). touch-manipulation
+                    // kills iOS 300ms tap delay. Desktop visual stays clean —
+                    // 44px on a 56px-wide rail is still a tight, professional
+                    // nav.
+                    'flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-md transition-colors text-sm font-medium relative touch-manipulation',
                     active
                       ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                       : 'text-white/60 hover:text-white hover:bg-white/10'
@@ -230,7 +235,7 @@ export function Sidebar({
             <Link
               href="/admin"
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-sm font-medium relative',
+                'flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-md transition-colors text-sm font-medium relative touch-manipulation',
                 pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/audit-log')
                   ? 'bg-white/10 text-white before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-eq-sky before:rounded-full'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
@@ -253,7 +258,7 @@ export function Sidebar({
         <form action="/auth/signout" method="post">
           <button
             type="submit"
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium"
+            className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium touch-manipulation"
           >
             <LogOut className="w-4 h-4 flex-shrink-0" />
             {!collapsed && <span>Sign out</span>}

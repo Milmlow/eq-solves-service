@@ -214,7 +214,7 @@ export function SignInForm({
           <button
             type="submit"
             disabled={anyPending}
-            className="w-full py-2.5 px-4 text-sm font-semibold text-white bg-eq-sky rounded-lg hover:bg-eq-deep focus:outline-none focus:ring-2 focus:ring-eq-sky focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full min-h-[44px] py-2.5 px-4 text-sm font-semibold text-white bg-eq-sky rounded-lg hover:bg-eq-deep focus:outline-none focus:ring-2 focus:ring-eq-sky focus:ring-offset-2 transition-all touch-manipulation active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {pending ? (
               <span className="flex items-center justify-center gap-2">
@@ -319,7 +319,7 @@ export function SignInForm({
         type="button"
         onClick={onDemo}
         disabled={anyPending}
-        className="w-full py-2.5 px-4 text-sm font-semibold text-white bg-eq-sky rounded-lg hover:bg-eq-deep focus:outline-none focus:ring-2 focus:ring-eq-sky focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full min-h-[44px] py-2.5 px-4 text-sm font-semibold text-white bg-eq-sky rounded-lg hover:bg-eq-deep focus:outline-none focus:ring-2 focus:ring-eq-sky focus:ring-offset-2 transition-all touch-manipulation active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {demoPending ? (
           <span className="flex items-center justify-center gap-2">

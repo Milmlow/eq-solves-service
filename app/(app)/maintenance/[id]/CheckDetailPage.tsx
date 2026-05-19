@@ -808,7 +808,8 @@ function AssetRow({
           {canAct && !allDone && items.length > 0 && (
             <button
               onClick={e => { e.stopPropagation(); onForceComplete() }}
-              className="p-1.5 rounded text-green-600 hover:bg-green-50 transition-colors"
+              className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded text-green-600 hover:bg-green-50 transition-colors touch-manipulation active:scale-95"
+              aria-label="Force complete all tasks for this asset"
               title="Force complete all tasks"
             >
               <CheckCheck className="w-4 h-4" />
@@ -898,20 +899,24 @@ function TaskRow({
         {item.is_required && <span className="text-eq-sky font-medium ml-1">*</span>}
       </td>
 
-      {/* Result buttons */}
+      {/* Result buttons — 44px tap targets, mirrors the AcbWorkflow
+          TriStateButton (UX audit PR #149 §2.5 / §B.8). Icon visual size
+          stays 4×4 (16px) but the surrounding hit area is the field-
+          ergonomic 44×44 minimum. touch-manipulation kills the iOS 300ms
+          tap delay; active:scale-95 gives immediate tactile feedback. */}
       <td className="px-4 py-2">
         {isActive ? (
           <div className="flex items-center gap-1">
             <button onClick={() => onResult(item.id, item.result === 'pass' ? null : 'pass')}
-              className={`p-1.5 rounded transition-colors ${item.result === 'pass' ? 'bg-green-50 text-green-600' : 'text-gray-300 hover:text-green-500'}`} title="Pass">
+              className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded transition-colors touch-manipulation active:scale-95 ${item.result === 'pass' ? 'bg-green-50 text-green-600' : 'text-gray-300 hover:text-green-500 hover:bg-green-50/40'}`} aria-label="Pass">
               <CheckCircle className="w-4 h-4" />
             </button>
             <button onClick={() => onResult(item.id, item.result === 'fail' ? null : 'fail')}
-              className={`p-1.5 rounded transition-colors ${item.result === 'fail' ? 'bg-red-50 text-red-600' : 'text-gray-300 hover:text-red-500'}`} title="Fail">
+              className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded transition-colors touch-manipulation active:scale-95 ${item.result === 'fail' ? 'bg-red-50 text-red-600' : 'text-gray-300 hover:text-red-500 hover:bg-red-50/40'}`} aria-label="Fail">
               <XCircle className="w-4 h-4" />
             </button>
             <button onClick={() => onResult(item.id, item.result === 'na' ? null : 'na')}
-              className={`p-1.5 rounded transition-colors ${item.result === 'na' ? 'bg-gray-100 text-gray-600' : 'text-gray-300 hover:text-gray-500'}`} title="N/A">
+              className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded transition-colors touch-manipulation active:scale-95 ${item.result === 'na' ? 'bg-gray-100 text-gray-600' : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50'}`} aria-label="N/A">
               <MinusCircle className="w-4 h-4" />
             </button>
           </div>
