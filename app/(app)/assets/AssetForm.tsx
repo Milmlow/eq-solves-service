@@ -20,9 +20,17 @@ interface AssetFormProps {
   jobPlans?: Pick<JobPlan, 'id' | 'name' | 'code'>[]
   isAdmin: boolean
   canWrite: boolean
+  /**
+   * Pre-fill the Site dropdown when this form opens in create mode.
+   * Used when the form is reached from a site-scoped surface (e.g.
+   * `/assets?site_id=X` with the URL param threaded through, or a
+   * site detail page's "Add Asset" button). Ignored in edit mode
+   * (UX audit PR #149 §A.5).
+   */
+  prefillSiteId?: string | null
 }
 
-export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin, canWrite: canWriteRole }: AssetFormProps) {
+export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin, canWrite: canWriteRole, prefillSiteId }: AssetFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -160,7 +168,7 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
           <select
             name="site_id"
             required
-            defaultValue={asset?.site_id ?? ''}
+            defaultValue={asset?.site_id ?? prefillSiteId ?? ''}
             className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
             <option value="">Select site...</option>

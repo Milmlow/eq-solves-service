@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -33,10 +34,16 @@ interface SiteListProps {
 }
 
 export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteListProps) {
+  const searchParams = useSearchParams()
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<SiteWithCustomer | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Smart-defaults framework (UX audit PR #149 §A.5 / §2.8): when the
+  // list is filtered to a single customer via the URL, pre-fill that
+  // customer on the Add Site form. Selected is checked to avoid leaking
+  // the prefill into an edit-an-existing-site flow.
+  const prefillCustomerId = !selected ? (searchParams.get('customer_id') || null) : null
 
   const siteImportConfig: ImportCSVConfig<{
     name: string
@@ -220,6 +227,7 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
         site={selected}
         customers={customers}
         isAdmin={isAdmin}
+        prefillCustomerId={prefillCustomerId}
       />
 
       <ImportCSVModal

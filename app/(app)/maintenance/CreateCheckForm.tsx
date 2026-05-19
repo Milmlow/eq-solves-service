@@ -430,10 +430,25 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
         {/* Custom Name */}
         <FormInput label="Custom Name" name="custom_name" placeholder="Optional name for this check" />
 
-        {/* Dates */}
+        {/* Dates — sensible defaults so the admin doesn't have to type
+            today and today+30 from scratch on every check (UX audit
+            PR #149 §A.10 / §3.7 — date defaults beat empty-required).
+            ISO yyyy-MM-dd format is what <input type="date"> expects. */}
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="Start Date *" name="start_date" type="date" required />
-          <FormInput label="Due Date *" name="due_date" type="date" required />
+          <FormInput
+            label="Start Date *"
+            name="start_date"
+            type="date"
+            required
+            defaultValue={new Date().toISOString().slice(0, 10)}
+          />
+          <FormInput
+            label="Due Date *"
+            name="due_date"
+            type="date"
+            required
+            defaultValue={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+          />
         </div>
 
         {/* Owner / Assigned To */}

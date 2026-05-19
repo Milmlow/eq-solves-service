@@ -17,9 +17,17 @@ interface SiteFormProps {
   site?: Site | null
   customers: Pick<Customer, 'id' | 'name'>[]
   isAdmin: boolean
+  /**
+   * Pre-fill the Customer dropdown when this form opens in create mode.
+   * Used when the form is reached from a customer-scoped surface (e.g.
+   * a customer detail page's "Add Site" button, or `/sites?customer_id=X`
+   * with the URL param threaded through). Ignored in edit mode — an
+   * existing site's customer wins (UX audit PR #149 §A.5).
+   */
+  prefillCustomerId?: string | null
 }
 
-export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormProps) {
+export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCustomerId }: SiteFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -140,7 +148,7 @@ export function SiteForm({ open, onClose, site, customers, isAdmin }: SiteFormPr
           <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Customer</label>
           <select
             name="customer_id"
-            defaultValue={site?.customer_id ?? ''}
+            defaultValue={site?.customer_id ?? prefillCustomerId ?? ''}
             className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
             <option value="">— No customer —</option>
