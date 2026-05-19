@@ -5,11 +5,25 @@ import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
 import { inviteUserAction } from './actions'
 
+// Role-description microcopy (UX audit PR #149 §A.7 / §2.6 of decisions).
+// Surfaced below the role select so a new admin picking a role for the
+// first invite knows what each one actually does. Wording matches what
+// canWrite / canCreateCheck / canDoTestWork actually permit — not a
+// marketing description.
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  super_admin: 'Full system access including impersonation. Reserved for the platform team — most tenants don\'t need to assign this.',
+  admin: 'Full access within this tenant: invite users, edit billing, manage all records and checks. The first user on a tenant is usually an admin.',
+  supervisor: 'Schedules checks, edits records (customers / sites / assets / plans), reviews defects. Cannot manage users or billing.',
+  technician: 'Runs checks and tests on-site: marks items pass / fail, saves wizard steps, raises defects. Cannot manage records.',
+  read_only: 'View-only access. Useful for customer-side stakeholders who want to see status but never edit.',
+}
+
 export function InviteUserForm() {
   const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<string>()
   const [ok, setOk] = useState(false)
   const [pending, startTransition] = useTransition()
+  const [selectedRole, setSelectedRole] = useState<string>('technician')
 
   const [okEmail, setOkEmail] = useState<string>()
 
@@ -34,7 +48,8 @@ export function InviteUserForm() {
         <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Role</label>
         <select
           name="role"
-          defaultValue="technician"
+          value={selectedRole}
+          onChange={(e) => setSelectedRole(e.target.value)}
           disabled={pending}
           className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
         >
@@ -44,6 +59,10 @@ export function InviteUserForm() {
           <option value="technician">Technician</option>
           <option value="read_only">Read Only</option>
         </select>
+      </div>
+      <div className="md:col-span-4 -mt-1 text-xs text-eq-grey leading-relaxed">
+        <span className="font-semibold text-eq-deep">What this role can do:</span>{' '}
+        {ROLE_DESCRIPTIONS[selectedRole]}
       </div>
       <Button type="submit" loading={pending}>
         Send invite

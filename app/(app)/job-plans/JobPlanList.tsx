@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -46,9 +47,12 @@ interface JobPlanListProps {
 }
 
 export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalPages, isAdmin, canWrite: canWriteRole }: JobPlanListProps) {
+  const searchParams = useSearchParams()
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<JobPlanWithSite | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
+  // Auto-open the import modal when the URL carries ?import=1 (UX audit
+  // PR #149 §A.6 — SetupChecklist's "Import xlsx" secondary CTA links here).
+  const [importOpen, setImportOpen] = useState(() => searchParams.get('import') === '1')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Build site name→id lookup for CSV import

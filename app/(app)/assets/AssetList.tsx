@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -48,9 +49,14 @@ interface AssetListProps {
 }
 
 export function AssetList({ assets, allAssets, sites, customers, assetTypes, allJobPlans, page, totalPages, total, perPage, isAdmin, canWrite: canWriteRole }: AssetListProps) {
+  const searchParams = useSearchParams()
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
+  // Auto-open the import modal when the URL carries ?import=1 — used by
+  // the SetupChecklist secondary CTAs (UX audit PR #149 §A.6). Previously
+  // the param was dead — the user landed on the list with a query string
+  // and had to hunt for the Import button.
+  const [importOpen, setImportOpen] = useState(() => searchParams.get('import') === '1')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [viewMode, setViewMode] = useState<'table' | 'grouped'>('grouped')
 

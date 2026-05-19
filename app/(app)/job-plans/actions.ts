@@ -28,15 +28,21 @@ export async function createJobPlanAction(formData: FormData) {
     const parsed = CreateJobPlanSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
 
-    const { error } = await supabase
+    // Return the new id so the form can stay open in "just-created" mode
+    // and reveal the Items section (UX audit PR #149 §A.3 / §2.3). Without
+    // this the form auto-closes on create and admins routinely save plans
+    // with zero tasks, then discover empty per-asset task lists on site.
+    const { data: created, error } = await supabase
       .from('job_plans')
       .insert({ ...parsed.data, tenant_id: tenantId })
+      .select('id')
+      .single()
 
-    if (error) return { success: false, error: error.message }
+    if (error || !created) return { success: false, error: error?.message ?? 'Failed to create job plan.' }
 
-    await logAuditEvent({ action: 'create', entityType: 'job_plan', summary: `Created job plan "${parsed.data.name}"` })
+    await logAuditEvent({ action: 'create', entityType: 'job_plan', entityId: created.id, summary: `Created job plan "${parsed.data.name}"` })
     revalidatePath('/job-plans')
-    return { success: true }
+    return { success: true, data: { id: created.id as string } }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }
