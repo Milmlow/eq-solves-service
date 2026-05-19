@@ -28,7 +28,7 @@ interface GroupNode {
 
 export function AssetGroupedView({ assets, onAssetClick, canWrite = false }: AssetGroupedViewProps) {
   const tree = useMemo(() => {
-    // Group: Site > Location > Job Plan
+    // Group: Site > Location > Maintenance Plan
     const siteMap = new Map<string, AssetWithSite[]>()
     for (const asset of assets) {
       const siteName = asset.sites?.name ?? 'Unassigned'
@@ -48,10 +48,10 @@ export function AssetGroupedView({ assets, onAssetClick, canWrite = false }: Ass
 
       const locNodes: GroupNode[] = []
       for (const [locName, locAssets] of Array.from(locMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
-        // Group by job plan
+        // Group by maintenance plan
         const jpMap = new Map<string, AssetWithSite[]>()
         for (const asset of locAssets) {
-          const jp = asset.job_plans?.name ?? 'No Job Plan'
+          const jp = asset.job_plans?.name ?? 'No Maintenance Plan'
           if (!jpMap.has(jp)) jpMap.set(jp, [])
           jpMap.get(jp)!.push(asset)
         }

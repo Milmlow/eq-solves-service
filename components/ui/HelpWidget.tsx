@@ -22,7 +22,7 @@ const helpItems: HelpItem[] = [
   {
     id: 'add-asset',
     question: 'How do I add a new asset?',
-    answer: 'Go to Assets, click "Add Asset" in the top right. Fill in the details including site, location, job plan and asset type.',
+    answer: 'Go to Assets, click "Add Asset" in the top right. Fill in the details including site, location, maintenance plan and asset type.',
     action: { label: 'Go to Assets', href: '/assets' },
     tags: ['asset', 'create', 'new', 'add'],
     icon: Package,
@@ -38,7 +38,7 @@ const helpItems: HelpItem[] = [
   {
     id: 'filter-assets',
     question: 'How do I filter assets?',
-    answer: 'The asset table has filter dropdowns under each column header. Use text filters for Maximo ID and Name, or dropdown filters for Site, Location, Type, Job Plan and Status.',
+    answer: 'The asset table has filter dropdowns under each column header. Use text filters for Maximo ID and Name, or dropdown filters for Site, Location, Type, Maintenance Plan and Status.',
     action: { label: 'Go to Assets', href: '/assets' },
     tags: ['asset', 'filter', 'search', 'find'],
     icon: Package,
@@ -72,7 +72,7 @@ const helpItems: HelpItem[] = [
   {
     id: 'create-check',
     question: 'How do I create a maintenance check?',
-    answer: 'Go to Maintenance, click "Create Check". Select the site, job plan, and set a due date. Assets matching the job plan will be automatically added.',
+    answer: 'Go to Maintenance, click "Create Check". Select the site, maintenance plan, and set a due date. Assets matching the maintenance plan will be automatically added.',
     action: { label: 'Go to Maintenance', href: '/maintenance' },
     tags: ['maintenance', 'check', 'create', 'new', 'pm', 'schedule'],
     icon: ClipboardCheck,
@@ -91,13 +91,13 @@ const helpItems: HelpItem[] = [
     tags: ['report', 'download', 'word', 'docx', 'maintenance'],
     icon: Download,
   },
-  // Job Plans
+  // Maintenance Plans
   {
     id: 'create-job-plan',
-    question: 'How do I create a job plan?',
-    answer: 'Go to Job Plans, click "Add Job Plan". Define the name, code, and frequency. Then add check items — these are the individual inspection points for each asset.',
-    action: { label: 'Go to Job Plans', href: '/job-plans' },
-    tags: ['job plan', 'create', 'new', 'frequency', 'check items'],
+    question: 'How do I create a maintenance plan?',
+    answer: 'Go to Maintenance Plans, click "Add Maintenance Plan". Define the name, code, and frequency. Then add check items — these are the individual inspection points for each asset.',
+    action: { label: 'Go to Maintenance Plans', href: '/job-plans' },
+    tags: ['maintenance plan', 'create', 'new', 'frequency', 'check items'],
     icon: FileCheck,
   },
   // Testing

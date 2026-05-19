@@ -40,7 +40,7 @@ export async function GET(
     }
     return ok(data)
   } catch (error) {
-    return err(error instanceof Error ? error.message : 'Failed to fetch job plan')
+    return err(error instanceof Error ? error.message : 'Failed to fetch maintenance plan')
   }
 }
 
@@ -76,7 +76,7 @@ export async function PATCH(
     if (error instanceof Error && error.message.includes('validation')) {
       return err('Invalid input', 400)
     }
-    return err(error instanceof Error ? error.message : 'Failed to update job plan')
+    return err(error instanceof Error ? error.message : 'Failed to update maintenance plan')
   }
 }
 
@@ -104,6 +104,6 @@ export async function DELETE(
     }
     return ok({ id })
   } catch (error) {
-    return err(error instanceof Error ? error.message : 'Failed to delete job plan')
+    return err(error instanceof Error ? error.message : 'Failed to delete maintenance plan')
   }
 }

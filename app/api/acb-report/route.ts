@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
       assetType: asset?.asset_type ?? '',
       location: asset?.location ?? null,
       assetId: asset?.maximo_id ?? null,
-      jobPlan: null, // job plan linkage not in current schema
+      jobPlan: null, // maintenance plan linkage not in current schema
       testDate: t.test_date as string,
       testedBy: t.tested_by ? (testerMap[t.tested_by as string] ?? null) : null,
       testType: t.test_type as string,

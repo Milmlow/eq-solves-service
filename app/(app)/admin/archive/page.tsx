@@ -147,7 +147,7 @@ export default async function AdminArchivePage({ searchParams }: PageProps) {
           <div>
             <h1 className="text-2xl font-bold text-eq-ink">Archive</h1>
             <p className="text-sm text-eq-grey mt-1">
-              Soft-deleted customers, sites, assets, job plans, and checks.
+              Soft-deleted customers, sites, assets, maintenance plans, and checks.
               Restore anything inside the grace window, or delete permanently when you're confident.
             </p>
           </div>

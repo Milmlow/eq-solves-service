@@ -23,7 +23,7 @@ import { DashboardAnalytics } from './DashboardAnalytics'
  *      their own status mix)
  *
  * Deliberately hidden for techs:
- *   - Entity KPI tiles (Sites/Assets/Job Plans/Customers) — admin concerns
+ *   - Entity KPI tiles (Sites/Assets/Maintenance Plans/Customers) — admin concerns
  *   - Defect Summary card — supervisor concern
  *   - Site Map — supervisor concern, slow to render on phones
  *   - Service-credit widget — commercial-tier admin concern

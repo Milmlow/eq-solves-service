@@ -274,7 +274,7 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
         <h2 className="text-sm font-bold text-eq-ink mb-1">Modules</h2>
         <p className="text-xs text-eq-grey mb-4">
           Show or hide non-core sidebar entries for your team. The core platform
-          (Dashboard, Customers, Sites, Contacts, Assets, Job Plans, Maintenance,
+          (Dashboard, Customers, Sites, Contacts, Assets, Maintenance Plans, Maintenance,
           Reports) is always on. URLs stay reachable when a module is off — only
           the sidebar entry is hidden.
         </p>

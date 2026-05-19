@@ -297,7 +297,7 @@ export async function commitJemenaRcdImportAction(
       }
     }
 
-    // Load all RCD-marked job plans for the tenant once. Used below to
+    // Load all RCD-marked maintenance plans for the tenant once. Used below to
     // find-or-create a maintenance_check that owns each rcd_tests row, so
     // the imported work surfaces in the standard /maintenance dashboard.
     const { data: allRcdPlans } = await supabase

@@ -26,7 +26,7 @@ export const ARCHIVE_LABELS: Record<ArchiveEntityType, { singular: string; plura
   customer:          { singular: 'Customer',          plural: 'Customers' },
   site:              { singular: 'Site',              plural: 'Sites' },
   asset:             { singular: 'Asset',             plural: 'Assets' },
-  job_plan:          { singular: 'Job Plan',          plural: 'Job Plans' },
+  job_plan:          { singular: 'Maintenance Plan',          plural: 'Maintenance Plans' },
   maintenance_check: { singular: 'Maintenance Check', plural: 'Maintenance Checks' },
   testing_check:     { singular: 'Testing Check',     plural: 'Testing Checks' },
 }

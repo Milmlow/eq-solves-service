@@ -135,12 +135,12 @@ export function AssetRow({
         </span>
       </div>
 
-      {/* Expanded: job plan items table */}
+      {/* Expanded: maintenance plan items table */}
       {isExpanded && (
         <div className="bg-white border-t border-gray-100 px-3 py-3">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-bold text-eq-grey uppercase">
-              Job Plan Items — {jpName} ({items.length} tasks)
+              Maintenance Plan Items — {jpName} ({items.length} tasks)
             </h4>
             {canAct && !allDone && (
               <button

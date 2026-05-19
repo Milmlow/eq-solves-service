@@ -617,7 +617,7 @@ function CycleCard({
   )
 }
 
-// Detail modal — reveals the job plans / individual checks inside a cycle.
+// Detail modal — reveals the maintenance plans / individual checks inside a cycle.
 function CycleDetailModal({
   cycle,
   itemsMap,
@@ -642,7 +642,7 @@ function CycleDetailModal({
     .filter(Boolean)
     .join(' · ')
 
-  // Sort child checks by job plan name, then by due date for stable reveal
+  // Sort child checks by maintenance plan name, then by due date for stable reveal
   const sortedChecks = [...cycle.checks].sort((a, b) => {
     const jpA = a.job_plans?.name ?? a.custom_name ?? ''
     const jpB = b.job_plans?.name ?? b.custom_name ?? ''

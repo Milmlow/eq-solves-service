@@ -48,7 +48,7 @@ export default async function JobPlansPage({
     .eq('is_active', true)
     .order('name')
 
-  // Build job plans query with item count
+  // Build maintenance plans query with item count
   let query = supabase
     .from('job_plans')
     .select('*, sites(name), customers(name), job_plan_items(count)', { count: 'exact' })
@@ -90,7 +90,7 @@ export default async function JobPlansPage({
     }
   })
 
-  // Fetch all items for the visible job plans (for the edit panel)
+  // Fetch all items for the visible maintenance plans (for the edit panel)
   const jpIds = jobPlans.map((jp) => jp.id)
   let itemsMap: Record<string, JobPlanItem[]> = {}
   if (jpIds.length > 0) {
@@ -111,8 +111,8 @@ export default async function JobPlansPage({
   return (
     <div className="space-y-6">
       <div>
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Job Plans' }]} />
-        <h1 className="text-3xl font-bold text-eq-sky mt-2">Job Plans</h1>
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Maintenance Plans' }]} />
+        <h1 className="text-3xl font-bold text-eq-sky mt-2">Maintenance Plans</h1>
       </div>
       <JobPlanList
         jobPlans={jobPlans as never}

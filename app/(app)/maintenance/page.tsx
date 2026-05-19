@@ -55,7 +55,7 @@ export default async function MaintenancePage({
     .eq('is_active', true)
     .order('name')
 
-  // Fetch active job plans for create form
+  // Fetch active maintenance plans for create form
   const { data: jobPlans } = await supabase
     .from('job_plans')
     .select('id, name, code')
@@ -98,7 +98,7 @@ export default async function MaintenancePage({
     .order('due_date', { ascending: true })
 
   if (search) {
-    // Search by job plan name — need to filter after fetch or use a join. For now, fetch all.
+    // Search by maintenance plan name — need to filter after fetch or use a join. For now, fetch all.
     // We'll filter client-side for search since it's across a join.
   }
   if (siteId) {
@@ -177,7 +177,7 @@ export default async function MaintenancePage({
     }
   }
 
-  // Filter by search (across job plan name) — client-side fallback
+  // Filter by search (across maintenance plan name) — client-side fallback
   const filteredChecks = search
     ? checks.filter((c) => {
         const jpName = (c.job_plans as { name: string } | null)?.name ?? ''

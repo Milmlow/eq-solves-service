@@ -230,7 +230,7 @@ export default async function DashboardPage({
   const entityStats = [
     { label: 'Sites',     value: counts.entities.sites,     href: '/sites',     bgLight: 'bg-sky-50',    textColour: 'text-sky-700' },
     { label: 'Assets',    value: counts.entities.assets,    href: '/assets',    bgLight: 'bg-blue-50',   textColour: 'text-blue-700' },
-    { label: 'Job Plans', value: counts.entities.job_plans, href: '/job-plans', bgLight: 'bg-indigo-50', textColour: 'text-indigo-700' },
+    { label: 'Maintenance Plans', value: counts.entities.job_plans, href: '/job-plans', bgLight: 'bg-indigo-50', textColour: 'text-indigo-700' },
     { label: 'Customers', value: counts.entities.customers, href: '/customers', bgLight: 'bg-violet-50', textColour: 'text-violet-700' },
   ]
 

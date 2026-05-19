@@ -665,7 +665,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                     ['name', 'Name', ''],
                     ['location', 'Location', ''],
                     ['work_order', 'Work Order #', 'w-36'],
-                    ['job_plan', 'Job Plan', 'w-32'],
+                    ['job_plan', 'Maintenance Plan', 'w-32'],
                     ['completed', 'Done', 'w-24'],
                     ['notes', 'Notes', 'w-40'],
                   ] as [SortKey, string, string][]).map(([key, label, width]) => (

@@ -83,7 +83,7 @@ export default function AcbTestingPage() {
 
     setLoading(true)
 
-    // Find the E1.25 / LVACB job plan (global — site_id may be null)
+    // Find the E1.25 / LVACB maintenance plan (global — site_id may be null)
     const { data: jobPlans } = await supabase
       .from('job_plans')
       .select('id, name, code')
@@ -696,7 +696,7 @@ export default function AcbTestingPage() {
         <Card className="p-8 text-center">
           <p className="text-eq-grey">No E1.25 (LVACB) assets found for this site.</p>
           <p className="text-xs text-eq-grey mt-1">
-            Ensure assets are assigned to the E1.25 job plan.
+            Ensure assets are assigned to the E1.25 maintenance plan.
           </p>
         </Card>
       )}

@@ -293,7 +293,7 @@ export function DerivedScopeWizard() {
               <div className="px-4 py-6 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-900 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold">No assets linked to job plans for this customer.</p>
+                  <p className="font-semibold">No assets linked to maintenance plans for this customer.</p>
                   <p className="text-xs mt-1">
                     Make sure the customer has sites with assets, and that each asset has{' '}
                     <span className="font-mono">job_plan_id</span> set. Check via /assets.

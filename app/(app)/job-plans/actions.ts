@@ -38,9 +38,9 @@ export async function createJobPlanAction(formData: FormData) {
       .select('id')
       .single()
 
-    if (error || !created) return { success: false, error: error?.message ?? 'Failed to create job plan.' }
+    if (error || !created) return { success: false, error: error?.message ?? 'Failed to create maintenance plan.' }
 
-    await logAuditEvent({ action: 'create', entityType: 'job_plan', entityId: created.id, summary: `Created job plan "${parsed.data.name}"` })
+    await logAuditEvent({ action: 'create', entityType: 'job_plan', entityId: created.id, summary: `Created maintenance plan "${parsed.data.name}"` })
     revalidatePath('/job-plans')
     return { success: true, data: { id: created.id as string } }
   } catch (e: unknown) {
@@ -72,7 +72,7 @@ export async function updateJobPlanAction(id: string, formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
-    await logAuditEvent({ action: 'update', entityType: 'job_plan', entityId: id, summary: 'Updated job plan' })
+    await logAuditEvent({ action: 'update', entityType: 'job_plan', entityId: id, summary: 'Updated maintenance plan' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -121,7 +121,7 @@ export async function importJobPlansAction(
 
     if (error) return { success: false, error: error.message, imported: 0, rowErrors }
 
-    await logAuditEvent({ action: 'create', entityType: 'job_plan', summary: `Imported ${validRows.length} job plans from CSV` })
+    await logAuditEvent({ action: 'create', entityType: 'job_plan', summary: `Imported ${validRows.length} maintenance plans from CSV` })
     revalidatePath('/job-plans')
     return { success: true, imported: validRows.length, rowErrors }
   } catch (e: unknown) {
@@ -141,7 +141,7 @@ export async function toggleJobPlanActiveAction(id: string, isActive: boolean) {
 
     if (error) return { success: false, error: error.message }
 
-    await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'job_plan', entityId: id, summary: isActive ? 'Reactivated job plan' : 'Deactivated job plan' })
+    await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'job_plan', entityId: id, summary: isActive ? 'Reactivated maintenance plan' : 'Deactivated maintenance plan' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -149,7 +149,7 @@ export async function toggleJobPlanActiveAction(id: string, isActive: boolean) {
   }
 }
 
-// --- Job Plan Items ---
+// --- Maintenance Plan Items ---
 
 export async function createJobPlanItemAction(jobPlanId: string, formData: FormData) {
   try {
@@ -182,7 +182,7 @@ export async function createJobPlanItemAction(jobPlanId: string, formData: FormD
 
     if (error) return { success: false, error: error.message }
 
-    await logAuditEvent({ action: 'create', entityType: 'job_plan_item', summary: 'Added job plan item' })
+    await logAuditEvent({ action: 'create', entityType: 'job_plan_item', summary: 'Added maintenance plan item' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -224,7 +224,7 @@ export async function updateJobPlanItemAction(jobPlanId: string, itemId: string,
 
     if (error) return { success: false, error: error.message }
 
-    await logAuditEvent({ action: 'update', entityType: 'job_plan_item', entityId: itemId, summary: 'Updated job plan item' })
+    await logAuditEvent({ action: 'update', entityType: 'job_plan_item', entityId: itemId, summary: 'Updated maintenance plan item' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -245,7 +245,7 @@ export async function deleteJobPlanItemAction(jobPlanId: string, itemId: string)
 
     if (error) return { success: false, error: error.message }
 
-    await logAuditEvent({ action: 'delete', entityType: 'job_plan_item', entityId: itemId, summary: 'Deleted job plan item' })
+    await logAuditEvent({ action: 'delete', entityType: 'job_plan_item', entityId: itemId, summary: 'Deleted maintenance plan item' })
     revalidatePath('/job-plans')
     return { success: true }
   } catch (e: unknown) {
@@ -253,7 +253,7 @@ export async function deleteJobPlanItemAction(jobPlanId: string, itemId: string)
   }
 }
 
-// --- Import / Upsert Job Plan Items (CSV round-trip) ---
+// --- Import / Upsert Maintenance Plan Items (CSV round-trip) ---
 
 interface ImportJobPlanItemRow {
   /** If present and non-empty → update. If blank → create. */
@@ -276,7 +276,7 @@ interface ImportJobPlanItemRow {
 }
 
 /**
- * Bulk upsert job plan items from a CSV round-trip.
+ * Bulk upsert maintenance plan items from a CSV round-trip.
  *
  * Rows with a valid `item_id` → update the matching row.
  * Rows without `item_id` but with `plan_id` → create new.

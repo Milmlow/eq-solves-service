@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
   const tenantId = membership.tenant_id
 
-  // Fetch maintenance check with site + job plan
+  // Fetch maintenance check with site + maintenance plan
   const { data: check } = await supabase
     .from('maintenance_checks')
     .select('*, job_plans(name, code), sites(name)')
