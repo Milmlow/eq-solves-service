@@ -55,30 +55,92 @@ export default async function MaintenancePage({
     .eq('is_active', true)
     .order('name')
 
-  // Fetch active maintenance plans for create form
-  const { data: jobPlans } = await supabase
-    .from('job_plans')
-    .select('id, name, code')
+  // Fetch customers — Customer-above-Site dropdown on the New Check form
+  // (Royce 2026-05-19: pick customer first to narrow a long site list).
+  const { data: customers } = await supabase
+    .from('customers')
+    .select('id, name')
     .eq('is_active', true)
     .order('name')
 
-  // Fetch tenant members for assignment dropdown (all active members)
+  // Fetch active maintenance plans for create form. Includes site_id +
+  // customer_id so the form can scope-filter (global / customer-scoped /
+  // site-scoped). The deeper asset-level filter happens in the form
+  // (see `useMemo` on filtered plans).
+  const { data: jobPlans } = await supabase
+    .from('job_plans')
+    .select('id, name, code, site_id, customer_id')
+    .eq('is_active', true)
+    .order('name')
+
+  // Fetch assets-to-plan links so the New Check form can filter the
+  // Maintenance Plans list to plans actually used at the selected site
+  // (Royce 2026-05-19 — "only for active assets for that site"). We send
+  // a flat array of `{site_id, job_plan_id}` pairs; the form does the
+  // distinct() on the client.
+  const { data: siteAssetPlans } = await supabase
+    .from('assets')
+    .select('site_id, job_plan_id')
+    .eq('is_active', true)
+    .not('job_plan_id', 'is', null)
+
+  // Fetch tenant members WITH role so the dropdown can show role +
+  // sort by role hierarchy. The previous query stripped role at the
+  // tenant_members layer, then re-fetched profiles — that's the same
+  // data path, just losing the role context. Royce 2026-05-19: the
+  // assignee dropdown was hiding inactive members AND not surfacing
+  // role, which made it look "filtered".
   const { data: members } = await supabase
     .from('tenant_members')
-    .select('user_id')
-    .eq('is_active', true)
+    .select('user_id, role, is_active')
 
-  // Fetch profiles for those members
-  const memberIds = (members ?? []).map((m) => m.user_id)
-  let technicians: { id: string; email: string; full_name: string | null }[] = []
-  if (memberIds.length > 0) {
+  // Role hierarchy for the sort order in the assignee dropdown. Admins
+  // first (likely owner), then supervisors, then technicians. Inactive
+  // members get a separate bucket at the bottom with an "(inactive)"
+  // suffix so the user can see they exist but can't pick them.
+  const ROLE_ORDER: Record<string, number> = {
+    super_admin: 0,
+    admin: 1,
+    supervisor: 2,
+    technician: 3,
+    read_only: 4,
+  }
+
+  const activeMemberIds = (members ?? []).filter((m) => m.is_active).map((m) => m.user_id)
+  let technicians: {
+    id: string
+    email: string
+    full_name: string | null
+    role: string | null
+    is_active: boolean
+  }[] = []
+  if (activeMemberIds.length > 0) {
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, email, full_name')
-      .in('id', memberIds)
+      .in('id', activeMemberIds)
       .eq('is_active', true)
       .order('full_name')
-    technicians = (profiles ?? []) as typeof technicians
+    const memberRoleMap = new Map(
+      (members ?? []).map((m) => [m.user_id, { role: m.role as string, is_active: m.is_active as boolean }])
+    )
+    technicians = (profiles ?? [])
+      .map((p) => {
+        const info = memberRoleMap.get(p.id)
+        return {
+          id: p.id,
+          email: p.email,
+          full_name: p.full_name,
+          role: info?.role ?? null,
+          is_active: info?.is_active ?? false,
+        }
+      })
+      .sort((a, b) => {
+        const ar = ROLE_ORDER[a.role ?? 'read_only'] ?? 99
+        const br = ROLE_ORDER[b.role ?? 'read_only'] ?? 99
+        if (ar !== br) return ar - br
+        return (a.full_name ?? a.email).localeCompare(b.full_name ?? b.email)
+      })
   }
 
   // Fetch contract scope items for current FY (for scope indicator on check creation)
@@ -198,6 +260,8 @@ export default async function MaintenancePage({
         itemsMap={itemsMap}
         jobPlans={(jobPlans ?? []) as never}
         sites={sites ?? []}
+        customers={customers ?? []}
+        siteAssetPlans={(siteAssetPlans ?? []) as { site_id: string; job_plan_id: string }[]}
         technicians={technicians}
         scopeItems={(scopeItems ?? []) as never}
         page={page}
