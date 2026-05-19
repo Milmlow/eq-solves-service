@@ -653,7 +653,7 @@ export function CommercialSheetImporter() {
                   <th className="text-left px-2 py-2 font-bold">JP</th>
                   <th className="text-left px-2 py-2 font-bold">Scope</th>
                   <th className="text-right px-2 py-2 font-bold">Qty</th>
-                  <th className="text-right px-2 py-2 font-bold" title="Active assets at this site already linked to this job-plan code">Linked assets</th>
+                  <th className="text-right px-2 py-2 font-bold" title="Active assets at this site already linked to this maintenance-plan code">Linked assets</th>
                   <th className="text-left px-2 py-2 font-bold">Intervals</th>
                   <th className="text-left px-2 py-2 font-bold">Cycle costs</th>
                   <th className="text-right px-2 py-2 font-bold">{year}</th>
@@ -704,11 +704,11 @@ export function CommercialSheetImporter() {
                         }
                         title={
                           isMismatch
-                            ? `Parsed asset_qty = ${s.asset_qty}, but the asset register has ${dbCount} active assets linked to this job plan at this site.`
+                            ? `Parsed asset_qty = ${s.asset_qty}, but the asset register has ${dbCount} active assets linked to this maintenance plan at this site.`
                             : isMatch
                               ? 'Matches the xlsx asset count exactly.'
                               : dbCount === 0
-                                ? 'No assets at this site are linked to this job plan yet — nothing to compare against.'
+                                ? 'No assets at this site are linked to this maintenance plan yet — nothing to compare against.'
                                 : undefined
                         }
                       >
@@ -734,7 +734,7 @@ export function CommercialSheetImporter() {
           </div>
           <p className="mt-2 text-xs text-eq-grey">
             <span className="text-green-700 font-semibold">✓ green</span> = matches the xlsx · {' '}
-            <span className="text-eq-grey">grey 0</span> = no assets linked to this job plan yet · {' '}
+            <span className="text-eq-grey">grey 0</span> = no assets linked to this maintenance plan yet · {' '}
             <span className="text-amber-700 font-semibold">amber</span> = mismatch (asset register out of sync with the xlsx).
           </p>
         </Card>

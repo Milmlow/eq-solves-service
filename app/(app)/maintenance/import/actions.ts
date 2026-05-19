@@ -133,7 +133,7 @@ const ResolutionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('accept') }),
   z.object({
     action: z.literal('nominate'),
-    jobPlanId: z.string().uuid('Invalid job plan id'),
+    jobPlanId: z.string().uuid('Invalid maintenance plan id'),
   }),
   z.object({
     action: z.literal('create'),
@@ -212,7 +212,7 @@ export async function listAssetsForSiteAction(
 }
 
 /**
- * Lightweight list of active tenant job plans for the import-review combobox
+ * Lightweight list of active tenant maintenance plans for the import-review combobox
  * when the user picks "Nominate existing plan". Read-only and role-gated
  * consistent with the rest of the import flow.
  */
@@ -253,7 +253,7 @@ export async function listJobPlansForImportAction(): Promise<
 /**
  * Read-only preview of a Delta / Equinix Maximo work-order workbook.
  *
- * Parses the file, resolves sites / job plans / assets against the current
+ * Parses the file, resolves sites / maintenance plans / assets against the current
  * tenant, applies any known `job_plan_aliases`, and returns a structured
  * preview the UI can render into an import wizard. Writes nothing — the
  * commit happens in a separate action once the user confirms.
@@ -305,7 +305,7 @@ export async function previewDeltaImportAction(
       if (s.code) siteByCode.set(s.code, { id: s.id, name: s.name })
     }
 
-    // ── Resolve job plans (all active, tenant-scoped) ─────────────────
+    // ── Resolve maintenance plans (all active, tenant-scoped) ─────────────────
     // We pull every active job_plan with a non-null code for this tenant and
     // build lookup tables. Cheap, one round-trip, avoids N queries below.
     const { data: jpRows } = await supabase
@@ -792,7 +792,7 @@ export async function commitDeltaImportAction(
         if (planErr || !plan) {
           return {
             success: false,
-            error: `Nominated job plan not found or inactive (group ${g.siteCode}/${g.jobPlanCode}).`,
+            error: `Nominated maintenance plan not found or inactive (group ${g.siteCode}/${g.jobPlanCode}).`,
           }
         }
         targetJobPlanId = plan.id
@@ -827,7 +827,7 @@ export async function commitDeltaImportAction(
         if (createErr || !newPlan) {
           return {
             success: false,
-            error: createErr?.message ?? 'Failed to create job plan.',
+            error: createErr?.message ?? 'Failed to create maintenance plan.',
           }
         }
         const newCode: string = newPlan.code ?? resolution.code.trim()
@@ -950,7 +950,7 @@ export async function commitDeltaImportAction(
         if (alias) jp = { id: alias.id, name: alias.name }
       }
       if (!jp) {
-        blockers.push(`Group ${g.siteCode}/${g.jobPlanCode}: no matching job plan`)
+        blockers.push(`Group ${g.siteCode}/${g.jobPlanCode}: no matching maintenance plan`)
         continue
       }
 
@@ -1283,7 +1283,7 @@ export async function commitDeltaImportAction(
 // Takes N .xlsx files for the SAME site and writes a SINGLE
 // maintenance_check covering all their work orders. The check has
 // `job_plan_id = NULL` (it spans multiple plans); each asset still
-// gets check_items derived from its own underlying job plan.
+// gets check_items derived from its own underlying maintenance plan.
 //
 // Locked decisions (2026-04-27 with Royce):
 //   - frequency: most common across resolved groups; ties → earliest
@@ -1432,7 +1432,7 @@ export async function commitConsolidatedDeltaImportAction(
       if (s.code) siteByCode.set(s.code, { id: s.id, name: s.name })
     }
 
-    // ── Resolve job plans (active codes for tenant) ──────────────────
+    // ── Resolve maintenance plans (active codes for tenant) ──────────────────
     const { data: jpRows } = await supabase
       .from('job_plans')
       .select('id, code, name')
@@ -1511,7 +1511,7 @@ export async function commitConsolidatedDeltaImportAction(
           .eq('is_active', true)
           .maybeSingle()
         if (planErr || !plan) {
-          return { success: false, error: `Nominated job plan not found or inactive (group ${g.siteCode}/${g.jobPlanCode}).` }
+          return { success: false, error: `Nominated maintenance plan not found or inactive (group ${g.siteCode}/${g.jobPlanCode}).` }
         }
         targetJobPlanId = plan.id; targetCode = plan.code ?? g.jobPlanCode; targetName = plan.name
       } else if (resolution.action === 'create') {
@@ -1533,7 +1533,7 @@ export async function commitConsolidatedDeltaImportAction(
           .select('id, code, name')
           .single()
         if (createErr || !newPlan) {
-          return { success: false, error: createErr?.message ?? 'Failed to create job plan.' }
+          return { success: false, error: createErr?.message ?? 'Failed to create maintenance plan.' }
         }
         const newCode: string = newPlan.code ?? resolution.code.trim()
         targetJobPlanId = newPlan.id; targetCode = newCode; targetName = newPlan.name
@@ -1631,7 +1631,7 @@ export async function commitConsolidatedDeltaImportAction(
         const alias = aliasMap.get(g.jobPlanCode)
         if (alias) jp = { id: alias.id, name: alias.name }
       }
-      if (!jp) { blockers.push(`Group ${g.siteCode}/${g.jobPlanCode}: no matching job plan`); continue }
+      if (!jp) { blockers.push(`Group ${g.siteCode}/${g.jobPlanCode}: no matching maintenance plan`); continue }
 
       const assetTypeDefault = aliasMap.get(g.jobPlanCode)?.code ?? g.jobPlanCode ?? jp.name ?? 'Equipment'
       const assetIdByRow = new Map<number, string>()

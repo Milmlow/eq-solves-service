@@ -51,7 +51,7 @@ export async function createTestingCheckAction(input: {
       .eq('id', input.site_id)
       .maybeSingle()
 
-    // Get job plan code for check name
+    // Get maintenance plan code for check name
     let jpCode = ''
     if (input.job_plan_id) {
       const { data: jp } = await supabase

@@ -17,7 +17,7 @@ const schema = z.object({
 /**
  * Client-callable lookup of scope context. Used by CreateCheckForm to
  * surface the green / amber / red chip as the operator picks site +
- * job plan, before they hit Create.
+ * maintenance plan, before they hit Create.
  *
  * Read-only; canWrite gate so anonymous users can't probe the register.
  */

@@ -168,7 +168,7 @@ export function KanbanBoard({ checks, itemsMap, onCheckClick, isAdmin = false }:
                         </div>
                       )}
 
-                      {/* Job Plan Name */}
+                      {/* Maintenance Plan Name */}
                       <p className="font-semibold text-sm text-eq-ink mb-2 line-clamp-2 group-hover:text-eq-sky pr-12">
                         {check.job_plans?.name ?? '—'}
                       </p>

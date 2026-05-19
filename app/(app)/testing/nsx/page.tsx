@@ -83,7 +83,7 @@ export default function NsxTestingPage() {
 
     setLoading(true)
 
-    // Find NSX-style job plan — match on name containing 'NSX' or code 'LVNSX'
+    // Find NSX-style maintenance plan — match on name containing 'NSX' or code 'LVNSX'
     const { data: jobPlans } = await supabase
       .from('job_plans')
       .select('id, name, code')
@@ -565,7 +565,7 @@ export default function NsxTestingPage() {
       {selectedSite && !loading && noAssets && (
         <Card className="p-8 text-center">
           <p className="text-eq-grey">No NSX assets found for this site.</p>
-          <p className="text-xs text-eq-grey mt-1">Ensure assets are assigned to an NSX / MCCB job plan.</p>
+          <p className="text-xs text-eq-grey mt-1">Ensure assets are assigned to an NSX / MCCB maintenance plan.</p>
         </Card>
       )}
 

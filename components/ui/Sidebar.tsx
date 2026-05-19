@@ -57,7 +57,7 @@ const INSIGHT_PATHS = ['/reports', '/analytics', '/contract-scope', '/variations
 function buildNavSections(flags: ModuleFlags, role: Role | null): NavSection[] {
   // Role-aware nav (UX audit PR #149 §2.6 + §5.2 — locked 2026-05-18):
   // technicians get a stripped sidebar — Records (the customers / sites /
-  // assets / job plans hub) and Insight (reports / analytics / contract
+  // assets / maintenance plans hub) and Insight (reports / analytics / contract
   // scope) are admin/supervisor concerns and add cognitive noise for a
   // tech whose entire day lives under Maintenance. Non-technician roles
   // see the full sidebar.

@@ -128,7 +128,7 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
   }
 
   return (
-    <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Job Plan' : 'Add Job Plan'} wide={isEdit}>
+    <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Maintenance Plan' : 'Add Maintenance Plan'} wide={isEdit}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <FormInput label="Name" name="name" required defaultValue={jobPlan?.name ?? ''} placeholder="e.g. E1.12" />
@@ -181,7 +181,7 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
 
         <div className="flex items-center gap-3 pt-2">
           <Button type="submit" loading={loading}>
-            {isEdit ? 'Update Job Plan' : 'Create Job Plan'}
+            {isEdit ? 'Update Maintenance Plan' : 'Create Maintenance Plan'}
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
@@ -197,13 +197,13 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
               onClick={handleToggleActive}
               disabled={loading}
             >
-              {jobPlan!.is_active ? 'Deactivate Job Plan' : 'Reactivate Job Plan'}
+              {jobPlan!.is_active ? 'Deactivate Maintenance Plan' : 'Reactivate Maintenance Plan'}
             </Button>
           </div>
         )}
       </form>
 
-      {/* Job Plan Items / Tasks — visible in edit mode AND for a plan that
+      {/* Maintenance Plan Items / Tasks — visible in edit mode AND for a plan that
           was just created in this panel session (createdPlan state). The
           audit (PR #149 §A.3 / §2.3) flagged that hiding this in create-mode
           caused admins to save empty plans and discover the failure on-site
@@ -218,7 +218,7 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
           )}
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-sm font-bold text-eq-ink">Job Plan Items</h3>
+              <h3 className="text-sm font-bold text-eq-ink">Maintenance Plan Items</h3>
               <p className="text-xs text-eq-grey mt-0.5">{items.length} task{items.length !== 1 ? 's' : ''}</p>
             </div>
             {canWriteRole && (

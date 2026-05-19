@@ -64,7 +64,7 @@ export function SiteMaintenanceChecksTable({ checks }: SiteMaintenanceChecksTabl
       columns={[
         {
           key: 'job_plans',
-          header: 'Job Plan',
+          header: 'Maintenance Plan',
           render: (row) => (
             <a
               href={`/job-plans/${row.job_plans?.name}`}

@@ -15,7 +15,7 @@ export async function GET(
 
     const { supabase } = await getApiUser()
 
-    // Verify job plan exists and belongs to tenant
+    // Verify maintenance plan exists and belongs to tenant
     const { data: jobPlan, error: jobPlanError } = await supabase
       .from('job_plans')
       .select('id')
@@ -38,7 +38,7 @@ export async function GET(
     if (error) throw error
     return ok(data)
   } catch (error) {
-    return err(error instanceof Error ? error.message : 'Failed to fetch job plan items')
+    return err(error instanceof Error ? error.message : 'Failed to fetch maintenance plan items')
   }
 }
 
@@ -55,7 +55,7 @@ export async function POST(
 
     const { supabase } = await getApiUser()
 
-    // Verify job plan exists and belongs to tenant
+    // Verify maintenance plan exists and belongs to tenant
     const { data: jobPlan, error: jobPlanError } = await supabase
       .from('job_plans')
       .select('id')
@@ -82,6 +82,6 @@ export async function POST(
     if (error instanceof Error && error.message.includes('validation')) {
       return err('Invalid input', 400)
     }
-    return err(error instanceof Error ? error.message : 'Failed to create job plan item')
+    return err(error instanceof Error ? error.message : 'Failed to create maintenance plan item')
   }
 }

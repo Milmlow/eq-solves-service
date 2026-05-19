@@ -5,7 +5,7 @@ import { canWrite } from '@/lib/utils/roles'
 import type { Role, JobPlanItem } from '@/lib/types'
 
 /**
- * Master register of job plan items across every plan.
+ * Master register of maintenance plan items across every plan.
  * Flattens job_plan_items joined to job_plans (and site name) so the user
  * can answer "what runs annually across the whole estate?" in one place.
  *
@@ -59,7 +59,7 @@ export default async function JobPlanItemsRegisterPage() {
   if (error) {
     return (
       <div className="space-y-4">
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Job Plans', href: '/job-plans' }, { label: 'Items Register' }]} />
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Maintenance Plans', href: '/job-plans' }, { label: 'Items Register' }]} />
         <h1 className="text-3xl font-bold text-eq-sky">Items Register</h1>
         <p className="text-sm text-red-600">Failed to load: {error.message}</p>
       </div>
@@ -151,10 +151,10 @@ export default async function JobPlanItemsRegisterPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Job Plans', href: '/job-plans' }, { label: 'Items Register' }]} />
-        <h1 className="text-3xl font-bold text-eq-sky mt-2">Job Plan Items Register</h1>
+        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Maintenance Plans', href: '/job-plans' }, { label: 'Items Register' }]} />
+        <h1 className="text-3xl font-bold text-eq-sky mt-2">Maintenance Plan Items Register</h1>
         <p className="text-sm text-eq-grey mt-1">
-          Master list of every task across every active job plan with frequency, required, and reference image at a glance.
+          Master list of every task across every active maintenance plan with frequency, required, and reference image at a glance.
         </p>
       </div>
       <JobPlanItemsRegister rows={rows} sites={siteOptions} canWrite={canWrite(userRole)} />

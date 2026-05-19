@@ -94,7 +94,7 @@ export function SetupChecklist({
     },
     {
       id: 'job-plan',
-      title: 'Set up a job plan',
+      title: 'Set up a maintenance plan',
       description: 'Job plans define the tasks performed at each visit (e.g. annual switchboard PPM, RCD time-trip). Pick a template or import yours.',
       done: hasJobPlan,
       locked: !hasAsset,
@@ -104,7 +104,7 @@ export function SetupChecklist({
     {
       id: 'check',
       title: 'Schedule a maintenance check',
-      description: 'A check is the work-order — picks a site + job plan, expands to per-asset task lists for the tech.',
+      description: 'A check is the work-order — picks a site + maintenance plan, expands to per-asset task lists for the tech.',
       done: hasCheck,
       locked: !hasJobPlan,
       primaryCta: { label: 'New check', href: '/maintenance' },

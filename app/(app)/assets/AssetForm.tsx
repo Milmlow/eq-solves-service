@@ -134,7 +134,7 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
               <dd className="text-eq-ink mt-1">{asset!.install_date ? formatDate(asset!.install_date) : '—'}</dd>
             </div>
             <div>
-              <dt className="text-xs font-bold text-eq-grey uppercase">Job Plan</dt>
+              <dt className="text-xs font-bold text-eq-grey uppercase">Maintenance Plan</dt>
               <dd className="text-eq-ink mt-1">
                 {asset!.job_plan_id && jobPlans.length > 0 ? (
                   (() => {
@@ -204,13 +204,13 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
 
         <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide pt-4">Maintenance</h3>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Job Plan</label>
+          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Maintenance Plan</label>
           <select
             name="job_plan_id"
             defaultValue={asset?.job_plan_id ?? ''}
             className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
-            <option value="">No job plan</option>
+            <option value="">No maintenance plan</option>
             {jobPlans.map((jp) => (
               <option key={jp.id} value={jp.id}>{jp.name}{jp.code ? ` (${jp.code})` : ''}</option>
             ))}

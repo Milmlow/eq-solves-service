@@ -1,9 +1,9 @@
 import type { JobPlanItem } from '@/lib/types'
 
 /**
- * Compact frequency badge strip for a job plan item. Renders only the
- * frequencies that are flagged true. Used by the Job Plans master register
- * and the Job Plan edit panel item table.
+ * Compact frequency badge strip for a maintenance plan item. Renders only the
+ * frequencies that are flagged true. Used by the Maintenance Plans master register
+ * and the Maintenance Plan edit panel item table.
  *
  * Order is fixed (shortest → longest) so a row's badges always read the same.
  * Dark-site is rendered first as a separate dark pill so it's distinguishable

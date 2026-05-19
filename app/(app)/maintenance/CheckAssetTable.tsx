@@ -112,7 +112,7 @@ export function CheckAssetTable({
             ['name', 'Name'],
             ['location', 'Location'],
             ['work_order', 'WO #'],
-            ['job_plan', 'Job Plan'],
+            ['job_plan', 'Maintenance Plan'],
             ['completed', 'Done'],
             ['notes', 'Notes'],
           ] as [SortKey, string][]

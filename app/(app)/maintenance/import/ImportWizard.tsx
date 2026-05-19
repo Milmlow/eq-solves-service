@@ -705,7 +705,7 @@ function Preview({
     return n + c
   }, 0)
 
-  // A group can commit when: site is resolved, frequency is known, job plan
+  // A group can commit when: site is resolved, frequency is known, maintenance plan
   // either auto-matches or user-resolved (accept/nominate/create), no dup WOs,
   // and every unmatched row either auto-resolves or has a row resolution.
   const unresolvedAfterUserChoice = workingGroups.filter((g) => {
@@ -825,7 +825,7 @@ function Preview({
         </Banner>
       )}
 
-      {/* Unresolved job plan codes — hide once the user has resolved every group */}
+      {/* Unresolved maintenance plan codes — hide once the user has resolved every group */}
       {preview.unresolvedJobPlanCodes.length > 0 &&
         preview.groups.some(
           (g) =>
@@ -833,14 +833,14 @@ function Preview({
         ) && (
         <Banner tone="warn" icon={<AlertTriangle className="w-4 h-4" />}>
           <p className="font-medium mb-1">
-            {preview.unresolvedJobPlanCodes.length} job plan code
+            {preview.unresolvedJobPlanCodes.length} maintenance plan code
             {preview.unresolvedJobPlanCodes.length === 1 ? '' : 's'} not found:{' '}
             <span className="font-mono">{preview.unresolvedJobPlanCodes.join(', ')}</span>
           </p>
           <p className="text-xs text-eq-grey">
             Check for fuzzy-match suggestions below, or add the missing plans in{' '}
             <Link href="/job-plans" className="underline hover:text-eq-deep">
-              Job Plans
+              Maintenance Plans
             </Link>
             . After the next import you'll be prompted to create an alias.
           </p>
@@ -1750,7 +1750,7 @@ function GroupActions({
           }}
           icon={<Plus className="w-3.5 h-3.5" />}
         >
-          Create job plan
+          Create maintenance plan
         </ActionButton>
 
         <ActionButton
@@ -2010,7 +2010,7 @@ function CreatePlanInline({
           </button>
         )}
         <p className="ml-auto text-[11px] text-eq-grey">
-          A tenant-global plan will be created (no items — add later under Job Plans).
+          A tenant-global plan will be created (no items — add later under Maintenance Plans).
         </p>
       </div>
     </div>

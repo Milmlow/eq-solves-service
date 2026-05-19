@@ -5,11 +5,11 @@
  *
  * Records hub. Lands at /records and surfaces the five record-type
  * registers as a card grid: Customers · Sites · Contacts · Assets ·
- * Job Plans. Replaces the flat 5-entry "Data" section that lived in
+ * Maintenance Plans. Replaces the flat 5-entry "Data" section that lived in
  * the sidebar.
  *
  * Always-on core — none of these are togglable. Once a tenant is set
- * up, these surfaces get touched rarely (Job Plans especially), so
+ * up, these surfaces get touched rarely (Maintenance Plans especially), so
  * collapsing them behind one hub click is a fair trade for the
  * sidebar real estate.
  *
@@ -55,7 +55,7 @@ const RECORD_CARDS: RecordCard[] = [
     icon: Package,
   },
   {
-    label: 'Job Plans',
+    label: 'Maintenance Plans',
     href: '/job-plans',
     description: 'Maintenance task templates — frequency, items, customer or site scope.',
     icon: FileCheck,

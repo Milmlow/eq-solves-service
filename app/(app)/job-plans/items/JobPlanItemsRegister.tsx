@@ -36,7 +36,7 @@ const FREQUENCY_FILTERS: { key: FrequencyKey; label: string }[] = FREQUENCY_DEFS
 }))
 
 /**
- * Filterable / sortable / exportable master register of job plan items.
+ * Filterable / sortable / exportable master register of maintenance plan items.
  *
  * Filtering is fully client-side. The dataset is small enough that filtering
  * in memory feels instant and we get a free debounce on every keystroke.
@@ -100,7 +100,7 @@ export function JobPlanItemsRegister({ rows: initialRows, sites, canWrite }: Pro
     freq_8yr: boolean
     freq_10yr: boolean
   }> = {
-    entityName: 'Job Plan Items',
+    entityName: 'Maintenance Plan Items',
     requiredColumns: ['description'],
     optionalColumns: [
       'item_id', 'plan_id', 'sort_order', 'required',

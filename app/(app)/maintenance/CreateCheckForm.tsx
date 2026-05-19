@@ -274,11 +274,11 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
           </div>
         )}
 
-        {/* Job Plan Filter (optional, multi-select) */}
+        {/* Maintenance Plan Filter (optional, multi-select) */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">
-              Job Plans (optional filter)
+              Maintenance Plans (optional filter)
             </label>
             <div className="flex items-center gap-2 text-[11px]">
               {jobPlanIds.size > 0 && (
@@ -296,7 +296,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
             </div>
           </div>
           {jobPlans.length === 0 ? (
-            <p className="text-xs text-eq-grey italic px-2 py-1.5">No job plans available for this tenant.</p>
+            <p className="text-xs text-eq-grey italic px-2 py-1.5">No maintenance plans available for this tenant.</p>
           ) : (
             <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white divide-y divide-gray-50">
               {jobPlans.map((jp) => {
@@ -322,7 +322,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
             </div>
           )}
           <p className="text-[11px] text-eq-grey mt-1">
-            Leave all unchecked to include every job plan at the site.
+            Leave all unchecked to include every maintenance plan at the site.
           </p>
         </div>
 

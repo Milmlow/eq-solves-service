@@ -66,7 +66,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
     site_id: string
     description: string | null
   }> = {
-    entityName: 'Job Plans',
+    entityName: 'Maintenance Plans',
     requiredColumns: ['name'],
     optionalColumns: ['jp code', 'type', 'site', 'description'],
     mapRow: (row, columnMap) => {
@@ -102,7 +102,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
       header: 'Job Code',
       render: (row) => (row as JobPlanWithSite).code ?? '—',
     },
-    { key: 'name', header: 'Job Plan' },
+    { key: 'name', header: 'Maintenance Plan' },
     {
       key: 'type',
       header: 'Name',
@@ -137,7 +137,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
     <>
       <div className="flex items-center justify-between mb-4">
         <SearchFilter
-          placeholder="Search job plans..."
+          placeholder="Search maintenance plans..."
           filters={[
             { key: 'customer_id', label: 'All Customers', options: customerFilterOptions },
             { key: 'site_id', label: 'All Sites', options: siteFilterOptions },
@@ -162,7 +162,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
             })),
             [
               { key: 'code', header: 'Job Code' },
-              { key: 'name', header: 'Job Plan' },
+              { key: 'name', header: 'Maintenance Plan' },
               { key: 'type', header: 'Name' },
               { key: 'scope_label', header: 'Scope' },
               { key: 'item_count', header: 'Tasks' },
@@ -171,16 +171,16 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
             `job-plans-export-${new Date().toISOString().slice(0, 10)}`
           )} />
           {canWriteRole && (
-            <Button size="sm" onClick={openCreate}>Add Job Plan</Button>
+            <Button size="sm" onClick={openCreate}>Add Maintenance Plan</Button>
           )}
         </div>
       </div>
 
       {jobPlans.length === 0 ? (
         <div className="text-center py-12 border border-gray-200 rounded-lg bg-white">
-          <p className="text-eq-grey text-sm mb-3">No job plans yet.</p>
+          <p className="text-eq-grey text-sm mb-3">No maintenance plans yet.</p>
           {canWriteRole && (
-            <Button size="sm" onClick={openCreate}>Create your first job plan</Button>
+            <Button size="sm" onClick={openCreate}>Create your first maintenance plan</Button>
           )}
         </div>
       ) : (
@@ -188,7 +188,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
           <DataTable
             columns={columns}
             rows={jobPlans.map((jp) => ({ ...jp, site_name: '' } as JPRow))}
-            emptyMessage="No job plans match your filters."
+            emptyMessage="No maintenance plans match your filters."
             selectable={canWriteRole}
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
@@ -217,7 +217,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
       {canWriteRole && (
         <BulkActionBar
           selectedCount={selectedIds.size}
-          entityName="Job Plans"
+          entityName="Maintenance Plans"
           selectedIds={selectedIds}
           onClear={() => setSelectedIds(new Set())}
           onDeactivate={(ids) => bulkDeactivateAction('job_plans', ids)}

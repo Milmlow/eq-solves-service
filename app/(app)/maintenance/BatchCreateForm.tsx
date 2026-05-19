@@ -60,7 +60,7 @@ export function BatchCreateForm({ open, onClose, jobPlans, sites, technicians }:
     <SlidePanel open={open} onClose={onClose} title="Batch Create Maintenance Checks">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Job Plan</label>
+          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Maintenance Plan</label>
           <select
             name="job_plan_id"
             required
@@ -68,7 +68,7 @@ export function BatchCreateForm({ open, onClose, jobPlans, sites, technicians }:
             onChange={(e) => setSelectedJobPlan(e.target.value)}
             className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
-            <option value="">Select job plan...</option>
+            <option value="">Select maintenance plan...</option>
             {jobPlans.map((jp) => (
               <option key={jp.id} value={jp.id}>
                 {jp.name}{jp.code ? ` (${jp.code})` : ''}
@@ -79,7 +79,7 @@ export function BatchCreateForm({ open, onClose, jobPlans, sites, technicians }:
 
         {jobPlan && (
           <div className="text-xs text-eq-grey bg-eq-ice/50 rounded-md p-3">
-            Job Plan: <span className="font-medium text-eq-ink">{jobPlan.name}</span>
+            Maintenance Plan: <span className="font-medium text-eq-ink">{jobPlan.name}</span>
             {jobPlan.code && <> · Code: <span className="font-medium text-eq-ink">{jobPlan.code}</span></>}
           </div>
         )}

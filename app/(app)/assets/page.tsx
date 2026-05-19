@@ -122,7 +122,7 @@ export default async function AssetsPage({
   })
   const allAssets = (allAssetsJson ?? []) as unknown[]
 
-  // Fetch all job plans for the form dropdown
+  // Fetch all maintenance plans for the form dropdown
   const { data: allJobPlans } = await supabase
     .from('job_plans')
     .select('id, name, code, type')

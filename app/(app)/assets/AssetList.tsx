@@ -103,7 +103,7 @@ export function AssetList({ assets, allAssets, sites, customers, assetTypes, all
     },
     {
       key: 'job_plan_name',
-      header: 'Job Plan',
+      header: 'Maintenance Plan',
       filterable: 'select',
       filterOptions: jobPlanNameFilterOptions,
     },
@@ -130,7 +130,7 @@ export function AssetList({ assets, allAssets, sites, customers, assetTypes, all
           filters={[
             { key: 'customer_id', label: 'All Customers', options: customers.map((c) => ({ value: c.id, label: c.name })) },
             { key: 'site_id', label: 'All Sites', options: siteFilterOptions },
-            { key: 'job_plan_id', label: 'All Job Plans', options: jobPlanFilterOptions },
+            { key: 'job_plan_id', label: 'All Maintenance Plans', options: jobPlanFilterOptions },
           ]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">
@@ -169,7 +169,7 @@ export function AssetList({ assets, allAssets, sites, customers, assetTypes, all
               { key: 'site_name', header: 'Site' },
               { key: 'location', header: 'Location' },
               { key: 'asset_type', header: 'Type' },
-              { key: 'job_plan_name', header: 'Job Plan' },
+              { key: 'job_plan_name', header: 'Maintenance Plan' },
               { key: 'manufacturer', header: 'Manufacturer' },
               { key: 'model', header: 'Model' },
               { key: 'serial_number', header: 'Serial Number' },

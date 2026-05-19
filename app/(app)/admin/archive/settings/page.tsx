@@ -114,7 +114,7 @@ export default async function ArchiveSettingsPage() {
       <Card className="bg-gray-50 border-gray-200">
         <h3 className="text-sm font-bold text-eq-ink">How it works</h3>
         <ul className="mt-2 space-y-1.5 text-xs text-eq-grey list-disc pl-4">
-          <li>When you deactivate a customer, site, asset, job plan or check, its countdown starts from that moment.</li>
+          <li>When you deactivate a customer, site, asset, maintenance plan or check, its countdown starts from that moment.</li>
           <li>Every night at 2am AEST a cleanup job permanently removes anything past its grace window.</li>
           <li>The job deletes children before parents and skips rows that still have dependencies — they&rsquo;ll be caught on a later run.</li>
           <li>Changing the grace period here affects future countdowns <em>and</em> anything still in the archive — a shorter window will make old items disappear sooner.</li>

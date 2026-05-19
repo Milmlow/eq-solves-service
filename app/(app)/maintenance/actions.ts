@@ -205,7 +205,7 @@ export async function previewCheckAssetsAction(
       }
     }
 
-    // Standard path — task counts looked up per asset's pinned job plan.
+    // Standard path — task counts looked up per asset's pinned maintenance plan.
     const jpIds = [...new Set(assets.map((a) => a.job_plan_id).filter(Boolean))] as string[]
     let taskCountMap: Record<string, number> = {}
     if (jpIds.length > 0) {
@@ -398,7 +398,7 @@ export async function createCheckAction(formData: FormData) {
       return { success: true, checkId: check.id, assetCount: 0, taskCount: 0 }
     }
 
-    // 3. Get job plan items matching the selected frequency
+    // 3. Get maintenance plan items matching the selected frequency
     const col = freqColumn(freq)
 
     // RCD overlay: items come from the RCD plan, not the asset's pinned plan.
@@ -451,7 +451,7 @@ export async function createCheckAction(formData: FormData) {
       itemsByJP[item.job_plan_id].push(item)
     }
 
-    // 4. Filter to assets whose job plan has matching tasks
+    // 4. Filter to assets whose maintenance plan has matching tasks
     const assetsWithTasks = rcdOverlayPlanId
       ? assets
       : assets.filter((a) => a.job_plan_id && (itemsByJP[a.job_plan_id]?.length ?? 0) > 0)
@@ -475,7 +475,7 @@ export async function createCheckAction(formData: FormData) {
 
     if (caError || !insertedCA) return { success: false, error: caError?.message ?? 'Failed to create check assets.' }
 
-    // 6. Create check_items for each asset (from its job plan items, or the
+    // 6. Create check_items for each asset (from its maintenance plan items, or the
     //    RCD overlay's items when the selected plan is RCD-TEST)
     const caLookup: Record<string, string> = {}
     for (const ca of insertedCA) {
@@ -1070,8 +1070,8 @@ export async function updateCheckItemAction(
 }
 
 /**
- * Batch create maintenance checks from a job plan between start and end dates.
- * Calculates check dates based on job plan frequency.
+ * Batch create maintenance checks from a maintenance plan between start and end dates.
+ * Calculates check dates based on maintenance plan frequency.
  * Max 52 checks per batch (1 year of weeklies).
  */
 export async function batchCreateChecksAction(formData: FormData) {
@@ -1107,7 +1107,7 @@ export async function batchCreateChecksAction(formData: FormData) {
       }
     }
 
-    // Fetch job plan
+    // Fetch maintenance plan
     const { data: jobPlan } = await supabase
       .from('job_plans')
       .select('id, site_id, frequency')
@@ -1148,7 +1148,7 @@ export async function batchCreateChecksAction(formData: FormData) {
       return { success: false, error: 'No check dates generated for the given range.' }
     }
 
-    // Fetch job plan items once
+    // Fetch maintenance plan items once
     const { data: planItems } = await supabase
       .from('job_plan_items')
       .select('id, asset_id, description, sort_order, is_required')
@@ -1181,7 +1181,7 @@ export async function batchCreateChecksAction(formData: FormData) {
 
       if (!check) continue
 
-      // Copy job plan items into check items
+      // Copy maintenance plan items into check items
       if (planItems && planItems.length > 0) {
         const checkItems = planItems.map((item) => ({
           tenant_id: tenantId,
@@ -1204,7 +1204,7 @@ export async function batchCreateChecksAction(formData: FormData) {
     await logAuditEvent({
       action: 'create',
       entityType: 'maintenance_check',
-      summary: `Batch created ${createdCount} checks from job plan`,
+      summary: `Batch created ${createdCount} checks from maintenance plan`,
     })
 
     revalidateMaintenanceSurfaces()

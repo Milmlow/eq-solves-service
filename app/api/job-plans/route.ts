@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const total = count || 0
     return ok(data, paginationMeta(page, per_page, total))
   } catch (error) {
-    return err(error instanceof Error ? error.message : 'Failed to fetch job plans')
+    return err(error instanceof Error ? error.message : 'Failed to fetch maintenance plans')
   }
 }
 
@@ -73,6 +73,6 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.message.includes('validation')) {
       return err('Invalid input', 400)
     }
-    return err(error instanceof Error ? error.message : 'Failed to create job plan')
+    return err(error instanceof Error ? error.message : 'Failed to create maintenance plan')
   }
 }
