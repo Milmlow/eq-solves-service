@@ -85,6 +85,12 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [forceCompletePending, startForceCompleteTransition] = useTransition()
+  // PR G remainder (UX audit §A.13 / §3.4): client-side override for the
+  // status, used to route item updates through the in_progress branch
+  // immediately after auto-start. router.refresh() picks up the real
+  // server-side status one cycle later — this just smooths the gap so the
+  // second tap doesn't trip a re-start.
+  const [localStatus, setLocalStatus] = useState<CheckStatus>(check.status)
   const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('maximo_id')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -318,10 +324,31 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     const item = items.find(i => i.id === itemId)
     if (!item) return
 
+    // PR G remainder (UX audit §A.13 / §3.4): auto-start the check on first
+    // tap of a result button when the check is still 'scheduled' or
+    // 'overdue'. Field reality: techs open a check, start tapping pass/fail,
+    // then get rejected because they forgot the Start Check button at the
+    // top. Removing that gate by promoting the *real* intent — they're
+    // working the check — is the right ergonomic. Audit log captures the
+    // start via startCheckAction, so we don't lose the timestamp.
+    let effectiveStatus = localStatus
+    if (effectiveStatus === 'scheduled' || effectiveStatus === 'overdue') {
+      const startResult = await startCheckAction(check.id)
+      if (!startResult.success) {
+        setError(startResult.error ?? 'Failed to auto-start the check. Try the Start Check button.')
+        return
+      }
+      // Track locally so subsequent taps don't try to re-start. router.refresh
+      // below pulls the real server-side status into the prop one tick later.
+      setLocalStatus('in_progress')
+      effectiveStatus = 'in_progress'
+      router.refresh()
+    }
+
     // Both branches read the action result. The in_progress branch used to
     // discard it — silent failures would leave the optimistic TaskRow dot
     // pressed while the DB hadn't actually written. Audit 2026-05-13.
-    if (check.status === 'in_progress') {
+    if (effectiveStatus === 'in_progress') {
       const formData = new FormData()
       formData.set('result', result ?? '')
       const resultValue = await updateCheckItemAction(check.id, itemId, formData)
@@ -599,6 +626,24 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           />
         </div>
       </CollapsibleSection>
+
+      {/* Print Blank for Onsite — promoted above the asset table for scheduled
+          / in_progress checks (UX audit §A.14 / §B.13). The button lives in
+          the header toolbar too, but the toolbar overflows on a phone and
+          this is the moment the tech actually needs it: about to walk the
+          floor with the asset list. Hidden on completed checks where the
+          eyeline tool is Customer Report / Send Report. */}
+      {(localStatus === 'scheduled' || localStatus === 'in_progress' || localStatus === 'overdue') && canAct && checkAssets.length > 0 && (
+        <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-eq-sky/30 bg-eq-ice/50">
+          <div className="text-sm text-eq-ink">
+            <span className="font-semibold">Heading on site?</span>{' '}
+            <span className="text-eq-grey">Print a blank Field Run-Sheet so you can capture readings on the clipboard and key them in later.</span>
+          </div>
+          <div className="shrink-0">
+            <PrintBlankButton checkId={check.id} />
+          </div>
+        </div>
+      )}
 
       {/* Asset Table — full width */}
       {checkAssets.length > 0 && (
