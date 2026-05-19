@@ -13,6 +13,7 @@ import { AnalyticsIdentify } from '@/components/ui/AnalyticsIdentify'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
 import { AppProviders } from '@/components/ui/AppProviders'
 import { OnboardingWizard } from './onboarding/OnboardingWizard'
+import { MfaGraceBanner } from '@/components/ui/MfaGraceBanner'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { isDemoEmail } from '@/lib/utils/demo'
@@ -31,6 +32,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // are what appear in events (no race with client-side auth fetch).
   let analyticsTenantId: string | null = null
   let analyticsRole: string | null = null
+  // PR J: drives the MFA-grace banner. Null = no grace timer started
+  // (legacy / pre-migration) → banner doesn't render. Set = check elapsed.
+  let mfaGraceStartedAt: string | null = null
+  // Whether the user has an MFA factor enrolled. Banner only shows when
+  // they don't (and they're still in grace).
+  let mfaHasFactor = false
+  if (user) {
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    mfaHasFactor = data?.nextLevel === 'aal2'
+  }
 
   if (user) {
     // Fetch ALL active memberships with their tenant's setup state.
@@ -102,13 +113,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       }
     }
 
-    // Get user profile name
+    // Get user profile name + MFA grace state (PR J — read once, used by
+    // the MfaGraceBanner below).
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name')
+      // mfa_grace_started_at added in migration 0103; cast on read until
+      // database.types.ts regenerates.
+      .select('full_name, mfa_grace_started_at' as 'full_name')
       .eq('id', user.id)
       .maybeSingle()
     userName = profile?.full_name ?? null
+    mfaGraceStartedAt = (profile as { mfa_grace_started_at?: string | null } | null)?.mfa_grace_started_at ?? null
   }
 
   const { settings } = await getTenantSettings()
@@ -146,6 +161,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       />
       <div className="flex flex-1 min-w-0 flex-col">
         {isDemoSession && <DemoBanner shareUrl={demoShareUrl} />}
+        {/* MFA grace banner (PR J §B.1 / §5.4) — visible reminder during
+            the 14-day enrollment window. Renders nothing when the user has
+            a factor enrolled, when grace hasn't started, or when the grace
+            window has expired (proxy.ts redirects to /auth/enroll-mfa
+            before reaching here in that case). */}
+        {!isDemoSession && (
+          <MfaGraceBanner
+            graceStartedAt={mfaGraceStartedAt}
+            hasFactor={mfaHasFactor}
+          />
+        )}
         <main className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8">
           {children}
         </main>
