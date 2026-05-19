@@ -21,6 +21,8 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
 export function InviteUserForm() {
   const formRef = useRef<HTMLFormElement>(null)
   const [error, setError] = useState<string>()
+  // Per-field validation errors (form polish bundle — PR H pattern).
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [ok, setOk] = useState(false)
   const [pending, startTransition] = useTransition()
   const [selectedRole, setSelectedRole] = useState<string>('technician')
@@ -28,11 +30,20 @@ export function InviteUserForm() {
   const [okEmail, setOkEmail] = useState<string>()
 
   function onSubmit(formData: FormData) {
-    setError(undefined); setOk(false); setOkEmail(undefined)
+    setError(undefined); setErrors({}); setOk(false); setOkEmail(undefined)
     startTransition(async () => {
       const res = await inviteUserAction(formData)
-      if ('error' in res && res.error) setError(res.error)
-      else if ('ok' in res && res.ok) {
+      if ('error' in res && res.error) {
+        setError(res.error)
+        const fieldErrors = (res as { errors?: Record<string, string> }).errors ?? {}
+        setErrors(fieldErrors)
+        const firstKey = Object.keys(fieldErrors)[0]
+        if (firstKey && formRef.current) {
+          const el = formRef.current.querySelector(`[name="${firstKey}"]`) as HTMLElement | null
+          el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          ;(el as HTMLInputElement | null)?.focus?.()
+        }
+      } else if ('ok' in res && res.ok) {
         setOk(true)
         setOkEmail(res.email)
         formRef.current?.reset()
@@ -42,8 +53,8 @@ export function InviteUserForm() {
 
   return (
     <form ref={formRef} action={onSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-      <FormInput label="Email" name="email" type="email" required disabled={pending} />
-      <FormInput label="Full name" name="full_name" disabled={pending} />
+      <FormInput label="Email" name="email" type="email" required disabled={pending} error={errors.email} />
+      <FormInput label="Full name" name="full_name" disabled={pending} error={errors.full_name} />
       <div className="flex flex-col gap-1">
         <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Role</label>
         <select
@@ -51,7 +62,7 @@ export function InviteUserForm() {
           value={selectedRole}
           onChange={(e) => setSelectedRole(e.target.value)}
           disabled={pending}
-          className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+          className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.role ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
         >
           <option value="super_admin">Super Admin</option>
           <option value="admin">Admin</option>
@@ -59,6 +70,7 @@ export function InviteUserForm() {
           <option value="technician">Technician</option>
           <option value="read_only">Read Only</option>
         </select>
+        {errors.role && <p className="text-xs text-red-500 mt-1">{errors.role}</p>}
       </div>
       <div className="md:col-span-4 -mt-1 text-xs text-eq-grey leading-relaxed">
         <span className="font-semibold text-eq-deep">What this role can do:</span>{' '}

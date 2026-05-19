@@ -37,10 +37,20 @@ interface JobPlanFormProps {
   })[]
   isAdmin: boolean
   canWrite: boolean
+  /**
+   * Pre-fill the Site dropdown when this form opens in create mode.
+   * Used when the form is reached from a site-scoped surface (e.g.
+   * `/job-plans?site_id=X` with the URL param threaded through). Smart-
+   * defaults framework (PR D follow-on, deferred from #162). Ignored
+   * in edit mode — existing plan's site wins.
+   */
+  prefillSiteId?: string | null
 }
 
-export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin, canWrite: canWriteRole }: JobPlanFormProps) {
+export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin, canWrite: canWriteRole, prefillSiteId }: JobPlanFormProps) {
   const [error, setError] = useState<string | null>(null)
+  // Per-field validation errors (PR H pattern).
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [itemError, setItemError] = useState<string | null>(null)
@@ -58,10 +68,12 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setErrors({})
     setSuccess(false)
     setLoading(true)
 
-    const formData = new FormData(e.currentTarget)
+    const form = e.currentTarget
+    const formData = new FormData(form)
     const result = isEdit
       ? await updateJobPlanAction(jobPlan!.id, formData)
       : await createJobPlanAction(formData)
@@ -82,7 +94,20 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
         }
       }
     } else {
-      setError(result.error ?? 'Something went wrong.')
+      const r = result as { error?: string; errors?: Record<string, string> }
+      setError(r.error ?? 'Something went wrong.')
+      const fieldErrors = r.errors ?? {}
+      setErrors(fieldErrors)
+      const firstKey = Object.keys(fieldErrors)[0]
+      if (firstKey) {
+        const target = form.querySelector(`[name="${CSS.escape(firstKey)}"]`) as HTMLElement | null
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          if (typeof (target as HTMLInputElement).focus === 'function') {
+            ;(target as HTMLInputElement).focus({ preventScroll: true })
+          }
+        }
+      }
     }
   }
 
@@ -131,17 +156,17 @@ export function JobPlanForm({ open, onClose, jobPlan, items = [], sites, isAdmin
     <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Maintenance Plan' : 'Add Maintenance Plan'} wide={isEdit}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <FormInput label="Name" name="name" required defaultValue={jobPlan?.name ?? ''} placeholder="e.g. E1.12" />
-          <FormInput label="Job Code" name="code" defaultValue={jobPlan?.code ?? ''} placeholder="e.g. SJPNL1" />
+          <FormInput label="Name" name="name" required defaultValue={jobPlan?.name ?? ''} placeholder="e.g. E1.12" error={errors.name} />
+          <FormInput label="Job Code" name="code" defaultValue={jobPlan?.code ?? ''} placeholder="e.g. SJPNL1" error={errors.code} />
         </div>
 
-        <FormInput label="Type" name="type" defaultValue={jobPlan?.type ?? ''} placeholder="e.g. CP Distribution Panel (RPP)" />
+        <FormInput label="Type" name="type" defaultValue={jobPlan?.type ?? ''} placeholder="e.g. CP Distribution Panel (RPP)" error={errors.type} />
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Site</label>
           <select
             name="site_id"
-            defaultValue={jobPlan?.site_id ?? ''}
+            defaultValue={jobPlan?.site_id ?? prefillSiteId ?? ''}
             className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
             <option value="">No site (global)</option>

@@ -151,9 +151,47 @@ export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCusto
     }
   }
 
+  // Sticky-footer migration (form polish bundle — §A.12 / §3.6). The submit
+  // and cancel buttons live in the SlidePanel `footer` slot so they stay
+  // visible while the admin scrolls through the long Address / MediaPicker
+  // section on iPad portrait. The submit button lives OUTSIDE the form and
+  // uses HTML's `form="site-form"` attribute to dispatch the form's submit
+  // event — see SlidePanel.footer JSDoc.
+  const formId = 'site-form'
+  const footer = (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <Button type="submit" form={formId} loading={loading}>
+          {isEdit ? 'Update Site' : 'Create Site'}
+        </Button>
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+      {isEdit && isAdmin && (
+        <div className="pt-3 border-t border-gray-100">
+          <Button
+            type="button"
+            variant={site!.is_active ? 'danger' : 'primary'}
+            size="sm"
+            onClick={handleToggleActive}
+            disabled={loading}
+          >
+            {site!.is_active ? 'Archive Site (cascade)' : 'Reactivate Site'}
+          </Button>
+          {site!.is_active && (
+            <p className="text-xs text-eq-grey mt-2">
+              Cascades to all assets under this site. Reversible from /admin/archive inside the grace period.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
   return (
-    <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Site' : 'Add Site'}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Site' : 'Add Site'} footer={footer}>
+      <form id={formId} onSubmit={handleSubmit} className="space-y-4">
         <FormInput
           label="Name"
           name="name"
@@ -306,34 +344,6 @@ export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCusto
 
         {error && <p className="text-sm text-red-500">{error}</p>}
         {success && <p className="text-sm text-green-600">Saved successfully.</p>}
-
-        <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" loading={loading}>
-            {isEdit ? 'Update Site' : 'Create Site'}
-          </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
-
-        {isEdit && isAdmin && (
-          <div className="pt-4 border-t border-gray-200 mt-4">
-            <Button
-              type="button"
-              variant={site!.is_active ? 'danger' : 'primary'}
-              size="sm"
-              onClick={handleToggleActive}
-              disabled={loading}
-            >
-              {site!.is_active ? 'Archive Site (cascade)' : 'Reactivate Site'}
-            </Button>
-            {site!.is_active && (
-              <p className="text-xs text-eq-grey mt-2">
-                Cascades to all assets under this site. Reversible from /admin/archive inside the grace period.
-              </p>
-            )}
-          </div>
-        )}
       </form>
     </SlidePanel>
   )

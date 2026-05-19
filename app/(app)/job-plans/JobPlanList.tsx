@@ -54,6 +54,9 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
   // PR #149 §A.6 — SetupChecklist's "Import xlsx" secondary CTA links here).
   const [importOpen, setImportOpen] = useState(() => searchParams.get('import') === '1')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Smart-defaults follow-on: pre-fill Site on the Add Plan form when the
+  // URL filters to a single site (PR D pattern, deferred from #162).
+  const prefillSiteId = !selected ? (searchParams.get('site_id') || null) : null
 
   // Build site name→id lookup for CSV import
   const siteLookup: Record<string, string> = {}
@@ -199,6 +202,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
       )}
 
       <JobPlanForm
+        prefillSiteId={prefillSiteId}
         open={panelOpen}
         onClose={() => { setPanelOpen(false); setSelected(null) }}
         jobPlan={selected}

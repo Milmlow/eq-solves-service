@@ -13,6 +13,7 @@ import {
   UpdateMaintenanceCheckSchema,
   UpdateCheckItemResultSchema,
 } from '@/lib/validations/maintenance-check'
+import { zodToErrorMap } from '@/lib/utils/zodErrors'
 
 /**
  * Every page that surfaces maintenance_checks counts/lists. Any mutation to a
@@ -297,7 +298,7 @@ export async function createCheckAction(formData: FormData) {
     }
 
     const parsed = CreateMaintenanceCheckSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     // Phase 0 enforcement (pre-visit tech brief): every new check
     // starts life as `status='scheduled'` (column default), so it must
@@ -723,7 +724,7 @@ export async function updateCheckAction(id: string, formData: FormData) {
     if (formData.has('completed_at')) raw.completed_at = formData.get('completed_at') || null
 
     const parsed = UpdateMaintenanceCheckSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     // Phase 0 enforcement (pre-visit tech brief): block transitions
     // into `status='scheduled'` when no technician is assigned. Looks
@@ -1036,7 +1037,7 @@ export async function updateCheckItemAction(
     }
 
     const parsed = UpdateCheckItemResultSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     const updateData: Record<string, unknown> = { ...parsed.data }
     if (parsed.data.result) {

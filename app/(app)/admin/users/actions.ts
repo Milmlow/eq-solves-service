@@ -9,6 +9,7 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin } from '@/lib/utils/roles'
 import { getSiteUrl } from '@/lib/utils/site-url'
+import { zodToErrorMap } from '@/lib/utils/zodErrors'
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -144,14 +145,17 @@ async function recordOrphanAssignment(
  *      to re-run if a previous attempt partially succeeded.
  *   6. Friendly error messages on failure.
  */
-export async function inviteUserAction(formData: FormData): Promise<{ ok: true; email: string } | { error: string }> {
+export async function inviteUserAction(formData: FormData): Promise<{ ok: true; email: string } | { error: string; errors?: Record<string, string> }> {
   const parsed = InviteSchema.safeParse({
     email: formData.get('email'),
     role: formData.get('role'),
     full_name: formData.get('full_name') || null,
   })
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
+    return {
+      error: parsed.error.issues[0]?.message ?? 'Invalid input.',
+      errors: zodToErrorMap(parsed.error.issues),
+    }
   }
   const { email, role, full_name } = parsed.data
 
