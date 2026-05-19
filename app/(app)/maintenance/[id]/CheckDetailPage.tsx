@@ -58,6 +58,12 @@ interface CheckDetailPageProps {
   isAdmin: boolean
   canWrite: boolean
   isAssigned: boolean
+  /**
+   * True if the current user's role is technician. Used to re-shape the
+   * action buttons on a `complete` check so the primary CTA is "Back to
+   * my checks" instead of "Customer Report" (UX audit PR #149 §2 / §B.14).
+   */
+  isTechnician?: boolean
 }
 
 type SortKey = 'maximo_id' | 'name' | 'location' | 'work_order' | 'job_plan' | 'completed' | 'notes'
@@ -74,7 +80,7 @@ function statusToBadge(status: CheckStatus) {
   return map[status]
 }
 
-export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmin, canWrite: canWriteRole, isAssigned }: CheckDetailPageProps) {
+export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmin, canWrite: canWriteRole, isAssigned, isTechnician = false }: CheckDetailPageProps) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -465,13 +471,29 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           )}
           {check.status === 'complete' && (
             <>
+              {/* For techs, the primary "I'm done" affordance is to go back
+                  to their assigned-checks list — not to download a customer-
+                  facing PDF (which is admin / supervisor work). Customer
+                  Report demoted to a secondary text button. UX audit §2 /
+                  §B.14 (locked 2026-05-18). */}
+              {isTechnician && (
+                <Link
+                  href="/maintenance?view=mine"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors"
+                >
+                  &larr; Back to my checks
+                </Link>
+              )}
               {/* Relabelled 26-Apr-2026 (audit item 9): the customer-facing
                   PDF (cover page, sign-off, asset breakdown). Distinct from
                   the Field Run-Sheet, which is the tech's clipboard print. */}
               <button
                 onClick={() => setShowReportDialog(true)}
                 title="Customer-facing PDF — full report with cover page and sign-off block"
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors">
+                className={isTechnician
+                  ? "inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-eq-deep border border-eq-sky/30 rounded hover:bg-eq-ice transition-colors"
+                  : "inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-eq-sky text-white rounded hover:bg-eq-deep transition-colors"
+                }>
                 <Download className="w-4 h-4" /> Customer Report
               </button>
               <button
