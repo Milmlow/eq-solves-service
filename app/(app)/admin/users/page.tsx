@@ -107,7 +107,7 @@ export default async function AdminUsersPage({
         <div>
           <h1 className="text-2xl font-bold text-eq-ink">Users</h1>
           <p className="text-sm text-eq-grey mt-1">
-            Invite, archive, and manage roles. <strong className="font-semibold">Archive</strong> takes a user out of this tenant only — they can be re-attached. <strong className="font-semibold">Disable account</strong> blocks sign-in across all tenants. <strong className="font-semibold">Delete permanently</strong> (super_admin only) wipes the account from auth — historical records keep their name.
+            Invite, archive, and manage roles. <strong className="font-semibold">Archive</strong> removes them from this workspace only — you can add them back later. <strong className="font-semibold">Disable account</strong> stops them signing in anywhere. <strong className="font-semibold">Delete permanently</strong> (top-level admins only) wipes their login — their name still shows on past records.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

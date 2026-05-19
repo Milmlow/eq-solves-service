@@ -35,15 +35,15 @@ const ADMIN_CARDS: AdminCard[] = [
     icon: Users,
   },
   {
-    label: 'Tenant Settings',
+    label: 'Workspace Settings',
     href: '/admin/settings',
-    description: 'Branding, colours, logos, and platform configuration.',
+    description: 'Branding, colours, logos, and how the app behaves.',
     icon: Settings,
   },
   {
     label: 'Media Library',
     href: '/admin/media',
-    description: 'Tenant logos, site photos, and brand assets.',
+    description: 'Workspace logos, site photos, and brand assets.',
     icon: Image,
   },
   {
@@ -55,13 +55,13 @@ const ADMIN_CARDS: AdminCard[] = [
   {
     label: 'Archive',
     href: '/admin/archive',
-    description: 'Soft-deleted records — restore or permanently remove.',
+    description: 'Removed records — restore them or remove for good.',
     icon: Archive,
   },
   {
     label: 'Audit Log',
     href: '/audit-log',
-    description: 'Every mutation, who did it, when. Filterable by entity.',
+    description: 'Every change — who, what, when. Filter by record type.',
     icon: ScrollText,
   },
 ]

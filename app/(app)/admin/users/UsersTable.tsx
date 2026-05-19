@@ -90,7 +90,7 @@ export function UsersTable({
   async function archiveFromTenant(userId: string, label: string) {
     const ok = await confirm({
       title: `Archive ${label}?`,
-      message: 'Archive them from this tenant. Their account stays intact and they can be re-attached. Use Show archived to find them again.',
+      message: 'Remove them from this workspace. Their login stays in place and you can add them back later. Use Show archived to find them again.',
       confirmLabel: 'Archive',
     })
     if (!ok) return
@@ -122,9 +122,9 @@ export function UsersTable({
 
   async function repairUser(userId: string, label: string, role: string) {
     const ok = await confirm({
-      title: 'Attach user to tenant?',
-      message: `Attach ${label} to this tenant as ${role}?`,
-      confirmLabel: 'Attach',
+      title: 'Add user to workspace?',
+      message: `Add ${label} to this workspace as ${role}?`,
+      confirmLabel: 'Add',
     })
     if (!ok) return
     setNotice(null)
@@ -134,7 +134,7 @@ export function UsersTable({
     startTransition(async () => {
       const res = await repairUserTenantAction(fd)
       if (res && 'error' in res && res.error) show('err', res.error)
-      else show('ok', 'User attached to this tenant.')
+      else show('ok', 'User added to this workspace.')
     })
   }
 
@@ -207,7 +207,7 @@ export function UsersTable({
                     disabled={pending || isSelf || removedFromTenant}
                     onChange={(e) => changeRole(u.id, e.target.value)}
                     className="h-8 px-2 border border-gray-200 rounded text-xs text-eq-ink bg-white disabled:opacity-50"
-                    title={removedFromTenant ? 'Attach this user to the tenant first' : undefined}
+                    title={removedFromTenant ? 'Add this user to your workspace first' : undefined}
                   >
                     <option value="super_admin">Super Admin</option>
                     <option value="admin">Admin</option>
@@ -218,7 +218,7 @@ export function UsersTable({
                 </td>
                 <td className="px-4 py-3">
                   {removedFromTenant ? (
-                    <span title="Archived from this tenant. Use Attach to re-add or (super_admin) Delete permanently to wipe.">
+                    <span title="Removed from this workspace. Click Add to bring them back, or (top-level admin) Delete permanently to wipe their login.">
                       <StatusBadge status="overdue" label="Archived" />
                     </span>
                   ) : (
@@ -237,9 +237,9 @@ export function UsersTable({
                         onClick={() => repairUser(u.id, label, u.role)}
                         disabled={pending}
                         className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                        title="Re-attach this user to the current tenant"
+                        title="Add this user back into this workspace"
                       >
-                        Attach
+                        Add
                       </button>
                     )}
                     <button
@@ -248,7 +248,7 @@ export function UsersTable({
                       disabled={pending || removedFromTenant}
                       className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
                       title={removedFromTenant
-                        ? 'Attach the user first before resending an invite'
+                        ? 'Add the user to the workspace first before resending an invite'
                         : 'Resend the invite / password reset email'}
                     >
                       Resend
@@ -259,8 +259,8 @@ export function UsersTable({
                       disabled={pending || isSelf}
                       className="text-xs font-semibold text-eq-deep hover:text-eq-sky disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
                       title={u.is_active
-                        ? 'Disable sign-in across ALL tenants — different from Archive (current tenant only)'
-                        : 'Re-enable sign-in across all tenants'}
+                        ? 'Stop this person signing into ANY workspace — different from Archive (this workspace only)'
+                        : 'Let this person sign in again across every workspace'}
                     >
                       {u.is_active ? 'Disable account' : 'Enable account'}
                     </button>
@@ -270,7 +270,7 @@ export function UsersTable({
                         onClick={() => archiveFromTenant(u.id, label)}
                         disabled={pending || isSelf}
                         className="text-xs font-semibold text-amber-700 hover:text-amber-800 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                        title="Archive this user from the current tenant (reversible — see Show archived)"
+                        title="Archive this user from this workspace (you can bring them back via Show archived)"
                       >
                         Archive
                       </button>
@@ -281,7 +281,7 @@ export function UsersTable({
                         onClick={() => hardDelete(u.id, label)}
                         disabled={pending || isSelf}
                         className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                        title="PERMANENTLY delete this user from auth. Irreversible. Super_admin only."
+                        title="PERMANENTLY delete this user's login. Cannot be undone. Top-level admins only."
                       >
                         Delete permanently
                       </button>
@@ -295,8 +295,8 @@ export function UsersTable({
             <tr>
               <td colSpan={6} className="px-4 py-8 text-center text-eq-grey text-sm">
                 {showArchived
-                  ? 'No archived users in this tenant.'
-                  : 'No active users in this tenant — invite someone above to get started.'}
+                  ? 'No archived users in this workspace.'
+                  : 'No active users in this workspace — invite someone above to get started.'}
               </td>
             </tr>
           )}

@@ -127,7 +127,7 @@ export function MediaLibraryClient({ media: initialMedia, customers, sites }: Pr
         timedOut = true
         resolve({
           success: false,
-          error: 'Server didn\'t respond within 20 seconds. The page bundle may be stale — try a hard refresh (Ctrl+Shift+R) and re-open the edit dialog.',
+          error: 'Server didn\'t respond within 20 seconds. Try a hard refresh (Ctrl+Shift+R) and try again.',
         })
       }, TIMEOUT_MS)
     })
