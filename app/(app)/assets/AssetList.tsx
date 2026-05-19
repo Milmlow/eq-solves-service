@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -48,11 +49,15 @@ interface AssetListProps {
 }
 
 export function AssetList({ assets, allAssets, sites, customers, assetTypes, allJobPlans, page, totalPages, total, perPage, isAdmin, canWrite: canWriteRole }: AssetListProps) {
+  const searchParams = useSearchParams()
   const [panelOpen, setPanelOpen] = useState(false)
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [viewMode, setViewMode] = useState<'table' | 'grouped'>('grouped')
+  // Smart-defaults: pre-fill Site on the Add Asset form when the URL
+  // filters to a single site (UX audit PR #149 §A.5 / §2.8).
+  const prefillSiteId = !selected ? (searchParams.get('site_id') || null) : null
 
   function openCreate() {
     setSelected(null)
@@ -205,6 +210,7 @@ export function AssetList({ assets, allAssets, sites, customers, assetTypes, all
       )}
 
       <AssetForm
+        prefillSiteId={prefillSiteId}
         open={panelOpen}
         onClose={() => { setPanelOpen(false); setSelected(null) }}
         asset={selected}
