@@ -21,6 +21,8 @@ interface CustomerFormProps {
 
 export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormProps) {
   const [error, setError] = useState<string | null>(null)
+  // Per-field validation errors (PR H — UX audit §2.11 / §3.5).
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(customer?.logo_url ?? null)
@@ -95,10 +97,12 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setErrors({})
     setSuccess(false)
     setLoading(true)
 
-    const formData = new FormData(e.currentTarget)
+    const form = e.currentTarget
+    const formData = new FormData(form)
     const result = isEdit
       ? await updateCustomerAction(customer!.id, formData)
       : await createCustomerAction(formData)
@@ -108,7 +112,22 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
       setSuccess(true)
       setTimeout(() => onClose(), 500)
     } else {
-      setError(result.error ?? 'Something went wrong.')
+      const r = result as { error?: string; errors?: Record<string, string> }
+      setError(r.error ?? 'Something went wrong.')
+      const fieldErrors = r.errors ?? {}
+      setErrors(fieldErrors)
+      // PR H §3.5 — scroll to first error so the admin doesn't have to
+      // hunt for it at the bottom of a long form.
+      const firstKey = Object.keys(fieldErrors)[0]
+      if (firstKey) {
+        const target = form.querySelector(`[name="${CSS.escape(firstKey)}"]`) as HTMLElement | null
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          if (typeof (target as HTMLInputElement).focus === 'function') {
+            ;(target as HTMLInputElement).focus({ preventScroll: true })
+          }
+        }
+      }
     }
   }
 
@@ -157,12 +176,14 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
           required
           defaultValue={customer?.name ?? ''}
           placeholder="Customer name"
+          error={errors.name}
         />
         <FormInput
           label="Code"
           name="code"
           defaultValue={customer?.code ?? ''}
           placeholder="e.g. EQX"
+          error={errors.code}
         />
         <FormInput
           label="Email"
@@ -170,18 +191,21 @@ export function CustomerForm({ open, onClose, customer, isAdmin }: CustomerFormP
           type="email"
           defaultValue={customer?.email ?? ''}
           placeholder="contact@example.com"
+          error={errors.email}
         />
         <FormInput
           label="Phone"
           name="phone"
           defaultValue={customer?.phone ?? ''}
           placeholder="+61 400 000 000"
+          error={errors.phone}
         />
         <FormInput
           label="Address"
           name="address"
           defaultValue={customer?.address ?? ''}
           placeholder="Full address"
+          error={errors.address}
         />
         {/* Logo Section */}
         <div className="space-y-2">

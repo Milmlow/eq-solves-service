@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/actions/auth'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin } from '@/lib/utils/roles'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '@/lib/validations/customer'
+import { zodToErrorMap } from '@/lib/utils/zodErrors'
 
 const LOGO_MAX_SIZE = 500 * 1024 // 500 KB
 const LOGO_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml']
@@ -23,7 +24,14 @@ export async function createCustomerAction(formData: FormData) {
     }
 
     const parsed = CreateCustomerSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) {
+      // PR H — surface per-field errors. See lib/utils/zodErrors.ts.
+      return {
+        success: false,
+        error: parsed.error.issues[0].message,
+        errors: zodToErrorMap(parsed.error.issues),
+      }
+    }
 
     const logoUrl = (formData.get('logo_url') as string)?.trim() || null
     const logoUrlOnDark = (formData.get('logo_url_on_dark') as string)?.trim() || null
@@ -56,7 +64,14 @@ export async function updateCustomerAction(id: string, formData: FormData) {
     }
 
     const parsed = UpdateCustomerSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) {
+      // PR H — surface per-field errors. See lib/utils/zodErrors.ts.
+      return {
+        success: false,
+        error: parsed.error.issues[0].message,
+        errors: zodToErrorMap(parsed.error.issues),
+      }
+    }
 
     const logoUrl = (formData.get('logo_url') as string)?.trim() || null
     const logoUrlOnDark = (formData.get('logo_url_on_dark') as string)?.trim() || null

@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/actions/auth'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin } from '@/lib/utils/roles'
 import { CreateSiteSchema, UpdateSiteSchema } from '@/lib/validations/site'
+import { zodToErrorMap } from '@/lib/utils/zodErrors'
 
 export async function createSiteAction(formData: FormData) {
   try {
@@ -25,7 +26,16 @@ export async function createSiteAction(formData: FormData) {
     }
 
     const parsed = CreateSiteSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) {
+      // PR H: surface per-field errors alongside the legacy summary so
+      // SiteForm can render the message next to the offending input
+      // instead of a single red line at the bottom of the panel.
+      return {
+        success: false,
+        error: parsed.error.issues[0].message,
+        errors: zodToErrorMap(parsed.error.issues),
+      }
+    }
 
     const photoUrl = (formData.get('photo_url') as string)?.trim() || null
     const logoUrl = (formData.get('logo_url') as string)?.trim() || null
@@ -64,7 +74,13 @@ export async function updateSiteAction(id: string, formData: FormData) {
     }
 
     const parsed = UpdateSiteSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0].message,
+        errors: zodToErrorMap(parsed.error.issues),
+      }
+    }
 
     const photoUrl = (formData.get('photo_url') as string)?.trim() || null
     const logoUrl = (formData.get('logo_url') as string)?.trim() || null

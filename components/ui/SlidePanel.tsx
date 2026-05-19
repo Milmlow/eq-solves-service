@@ -10,9 +10,22 @@ interface SlidePanelProps {
   children: React.ReactNode
   className?: string
   wide?: boolean
+  /**
+   * Optional sticky footer slot — rendered below the scrollable content
+   * with a top border. Use to keep submit / cancel buttons visible on
+   * long forms (UX audit §A.12 / §3.6 — iPad portrait was the worst
+   * offender: admin scrolls past Submit to fill optional fields, then
+   * scrolls back to submit).
+   *
+   * Forms that opt in typically place a `<Button type="submit" form="…" />`
+   * here, with the form element carrying a matching `id`. HTML's `form="…"`
+   * attribute lets a submit button live outside the `<form>` and still
+   * trigger it.
+   */
+  footer?: React.ReactNode
 }
 
-export function SlidePanel({ open, onClose, title, children, className, wide }: SlidePanelProps) {
+export function SlidePanel({ open, onClose, title, children, className, wide, footer }: SlidePanelProps) {
   // Defer unmount so the slide-out animation can complete. Without this,
   // closing the panel would rip the children out instantly and the
   // transition would look like a snap. 200ms matches duration-200 below.
@@ -71,6 +84,11 @@ export function SlidePanel({ open, onClose, title, children, className, wide }: 
             with a different record. Keeps the fade-out smooth by
             deferring the unmount by one transition cycle. */}
         <div className="flex-1 overflow-y-auto p-5">{mounted ? children : null}</div>
+        {footer && mounted && (
+          <div className="border-t border-gray-200 px-5 py-3 bg-white">
+            {footer}
+          </div>
+        )}
       </aside>
     </div>
   )
