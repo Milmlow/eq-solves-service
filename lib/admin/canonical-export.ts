@@ -62,20 +62,6 @@ function asRows(data: unknown): Row[] {
   return (Array.isArray(data) ? data : []) as Row[];
 }
 
-/**
- * Remap a single DB row using a {db_col: canonical_col} dictionary. Columns
- * present in the dict are renamed; columns not in the dict are dropped.
- * Useful when DB and canonical share most names but differ on a handful
- * (id → entity_id, manufacturer → make, etc.).
- */
-function remap(row: Row, mapping: Record<string, string>): Row {
-  const out: Row = {};
-  for (const [dbCol, canonicalCol] of Object.entries(mapping)) {
-    if (dbCol in row) out[canonicalCol] = row[dbCol];
-  }
-  return out;
-}
-
 function stub(module: string, entity: string): EntityExportResult {
   return {
     schema_id: schemaId(module, entity),
@@ -88,12 +74,83 @@ function stub(module: string, entity: string): EntityExportResult {
 
 // ── Per-entity exporters ────────────────────────────────────────────
 
+/**
+ * customer exporter — emits ONLY the CRM-shape fields. Contract fields
+ * (CPI, SLAs, hourly rates, contract_template, term dates) are emitted
+ * by `exportServiceContract` reading from the same DB row.
+ *
+ * The eq-solves-service DB still has both sets of fields jammed into
+ * the `customers` table; the canonical split happens at export time.
+ * A future migration will physically split them into two tables.
+ *
+ * Lifecycle `type` is derived from the row state:
+ *   - has any contract_term_start/end set → "active"
+ *   - is_active=false                     → "churned"
+ *   - else                                 → "lead"
+ * This is a best-effort derivation until the DB carries the field
+ * explicitly. Customers who currently have draft quotes but no signed
+ * contracts will be tagged "lead" here — Royce can manually flag
+ * "prospect" once the customers UI grows a lifecycle picker.
+ */
 const exportCustomer: EntityExporter = async (supabase, tenantId) => {
   const { data, error } = await supabase
     .from("customers")
     .select(
       "id, name, code, email, phone, address, is_active, logo_url, " +
         "customer_entity_legal_name, customer_entity_abn, customer_entity_acn, " +
+        "contract_term_start, contract_term_end, created_at",
+    )
+    .eq("tenant_id", tenantId);
+
+  if (error) throw error;
+  const rows = asRows(data).map((r) => {
+    // Derive lifecycle type until the DB has its own column.
+    let lifecycleType: "lead" | "prospect" | "active" | "churned" = "lead";
+    if (r.is_active === false) lifecycleType = "churned";
+    else if (r.contract_term_start || r.contract_term_end) lifecycleType = "active";
+
+    const out: Row = {
+      customer_id: r.id,
+      tenant_id: tenantId,
+      type: lifecycleType,
+      company_name: r.name,
+      code: r.code,
+      customer_entity_legal_name: r.customer_entity_legal_name,
+      customer_entity_abn: r.customer_entity_abn,
+      customer_entity_acn: r.customer_entity_acn,
+      email: r.email,
+      phone: r.phone,
+      address: r.address,
+      logo_url: r.logo_url,
+      first_engaged_at: r.created_at ? String(r.created_at).slice(0, 10) : null,
+      became_active_at:
+        lifecycleType === "active" && r.contract_term_start
+          ? String(r.contract_term_start).slice(0, 10)
+          : null,
+      churned_at: null,
+      active: r.is_active !== false,
+    };
+    return out;
+  });
+
+  return { schema_id: schemaId("core", "customer"), schema_version: "2.0.0", count: rows.length, rows };
+};
+
+/**
+ * service_contract exporter — emits one row per customer that has any
+ * contract-side field set on the `customers` table. Until the DB is
+ * physically split, the canonical service_contract is derived from
+ * the customer row.
+ *
+ * Once the DB grows a real `service_contracts` table this exporter
+ * pivots to reading from that. Until then: one contract per customer
+ * with `contract_template != null OR contract_term_start != null`.
+ */
+const exportServiceContract: EntityExporter = async (supabase, tenantId) => {
+  const { data, error } = await supabase
+    .from("customers")
+    .select(
+      "id, name, " +
         "contract_template, smca_agreement_number, schedule_agreement_number, " +
         "contract_term_start, contract_term_end, contract_options, " +
         "visit_cadence, cpi_basis, cpi_rate, fiscal_year_basis, " +
@@ -109,53 +166,63 @@ const exportCustomer: EntityExporter = async (supabase, tenantId) => {
     .eq("tenant_id", tenantId);
 
   if (error) throw error;
-  const rows = asRows(data).map((r) => {
-    const out: Record<string, unknown> = remap(r, {
-      id: "customer_id",
-      name: "name",
-      code: "code",
-      email: "email",
-      phone: "phone",
-      address: "address",
-      is_active: "active",
-      logo_url: "logo_url",
-      customer_entity_legal_name: "customer_entity_legal_name",
-      customer_entity_abn: "customer_entity_abn",
-      customer_entity_acn: "customer_entity_acn",
-      contract_template: "contract_template",
-      smca_agreement_number: "smca_agreement_number",
-      schedule_agreement_number: "schedule_agreement_number",
-      contract_term_start: "contract_term_start",
-      contract_term_end: "contract_term_end",
-      contract_options: "contract_options",
-      visit_cadence: "visit_cadence",
-      cpi_basis: "cpi_basis",
-      cpi_rate: "cpi_rate",
-      fiscal_year_basis: "fiscal_year_basis",
-      payment_terms_days: "payment_terms_days",
-      hourly_rate_normal: "hourly_rate_normal",
-      hourly_rate_after_hours: "hourly_rate_after_hours",
-      hourly_rate_weekend: "hourly_rate_weekend",
-      hourly_rate_public_holiday: "hourly_rate_public_holiday",
-      min_hours_after_hours: "min_hours_after_hours",
-      min_hours_weekend: "min_hours_weekend",
-      hourly_rate_effective_from: "hourly_rate_effective_from",
-      sla_response_minutes: "sla_response_minutes",
-      sla_onsite_hours: "sla_onsite_hours",
-      sla_resolution_hours: "sla_resolution_hours",
-      monthly_report_due_day: "monthly_report_due_day",
-      pm_reschedule_notice_days: "pm_reschedule_notice_days",
-      service_credit_pm_breach_pct: "service_credit_pm_breach_pct",
-      service_credit_reactive_breach_pct: "service_credit_reactive_breach_pct",
-      service_credit_spares_breach_pct: "service_credit_spares_breach_pct",
-      management_hours_per_period: "management_hours_per_period",
-      management_period_basis: "management_period_basis",
+  // Only emit customers that have at least one contract-side field set.
+  const rows = asRows(data)
+    .filter(
+      (r) =>
+        r.contract_template !== null ||
+        r.contract_term_start !== null ||
+        r.smca_agreement_number !== null,
+    )
+    .map((r) => {
+      // Derive a deterministic contract_id from the customer id while
+      // the DB doesn't have its own — uses the customer's UUID. A real
+      // contracts table will replace this with its own PK.
+      const out: Row = {
+        contract_id: r.id,
+        tenant_id: tenantId,
+        customer_id: r.id,
+        name: r.name ? `${r.name} — current contract` : null,
+        status: "active",
+        contract_template: r.contract_template,
+        smca_agreement_number: r.smca_agreement_number,
+        schedule_agreement_number: r.schedule_agreement_number,
+        term_start: r.contract_term_start,
+        term_end: r.contract_term_end,
+        options: r.contract_options,
+        visit_cadence: r.visit_cadence,
+        cpi_basis: r.cpi_basis,
+        cpi_rate: r.cpi_rate,
+        fiscal_year_basis: r.fiscal_year_basis,
+        payment_terms_days: r.payment_terms_days,
+        hourly_rate_normal: r.hourly_rate_normal,
+        hourly_rate_after_hours: r.hourly_rate_after_hours,
+        hourly_rate_weekend: r.hourly_rate_weekend,
+        hourly_rate_public_holiday: r.hourly_rate_public_holiday,
+        min_hours_after_hours: r.min_hours_after_hours,
+        min_hours_weekend: r.min_hours_weekend,
+        hourly_rate_effective_from: r.hourly_rate_effective_from,
+        sla_response_minutes: r.sla_response_minutes,
+        sla_onsite_hours: r.sla_onsite_hours,
+        sla_resolution_hours: r.sla_resolution_hours,
+        monthly_report_due_day: r.monthly_report_due_day,
+        pm_reschedule_notice_days: r.pm_reschedule_notice_days,
+        service_credit_pm_breach_pct: r.service_credit_pm_breach_pct,
+        service_credit_reactive_breach_pct: r.service_credit_reactive_breach_pct,
+        service_credit_spares_breach_pct: r.service_credit_spares_breach_pct,
+        management_hours_per_period: r.management_hours_per_period,
+        management_period_basis: r.management_period_basis,
+        active: true,
+      };
+      return out;
     });
-    out.tenant_id = tenantId;
-    return out;
-  });
 
-  return { schema_id: schemaId("core", "customer"), schema_version: "1.0.0", count: rows.length, rows };
+  return {
+    schema_id: schemaId("service", "service-contract"),
+    schema_version: "1.0.0",
+    count: rows.length,
+    rows,
+  };
 };
 
 const exportSite: EntityExporter = async (supabase, tenantId) => {
@@ -524,6 +591,7 @@ export const ENTITY_EXPORTERS: Record<string, EntityExporter> = {
   attachment: async () => stub("core", "attachment"),
   // ── service ──
   asset: exportAsset,
+  service_contract: exportServiceContract,
   maintenance_plan: async () => stub("service", "maintenance-plan"),
   maintenance_plan_item: async () => stub("service", "maintenance-plan-item"),
   maintenance_check: exportMaintenanceCheck,
