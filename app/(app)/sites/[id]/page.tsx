@@ -1,9 +1,10 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Card } from '@/components/ui/Card'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatDate } from '@/lib/utils/format'
-import { isAdmin as checkIsAdmin } from '@/lib/utils/roles'
+import { isAdmin as checkIsAdmin, canWrite } from '@/lib/utils/roles'
 import type { Site, Asset, MaintenanceCheck, TestRecord, SiteContact, Role } from '@/lib/types'
 import { SiteContacts } from './SiteContacts'
 import { SiteAssetsTable, SiteMaintenanceChecksTable, SiteTestRecordsTable } from './SiteDetailTables'
@@ -19,6 +20,7 @@ export default async function SiteDetailPage({
   // Get current user role
   const { data: { user } } = await supabase.auth.getUser()
   let userIsAdmin = false
+  let userCanWrite = false
   if (user) {
     const { data: membership } = await supabase
       .from('tenant_members')
@@ -27,7 +29,9 @@ export default async function SiteDetailPage({
       .eq('is_active', true)
       .limit(1)
       .maybeSingle()
-    userIsAdmin = checkIsAdmin((membership?.role as Role) ?? null)
+    const role = (membership?.role as Role) ?? null
+    userIsAdmin = checkIsAdmin(role)
+    userCanWrite = canWrite(role)
   }
 
   // Fetch site with customer info
@@ -216,7 +220,21 @@ export default async function SiteDetailPage({
 
       {/* Recent Assets Table */}
       <div>
-        <h2 className="text-lg font-bold text-eq-ink mb-3">Recent Assets</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-bold text-eq-ink">Recent Assets</h2>
+          {/* Direct "Add Asset" CTA from the site detail page (UX audit
+              PR #149 §A.4 / §2.9). Passes ?site_id=X&new=1 — AssetList
+              reads site_id (smart-defaults framework, PR D) and new=1
+              auto-opens the create panel on land. */}
+          {userCanWrite && (
+            <Link
+              href={`/assets?site_id=${site.id}&new=1`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-eq-sky rounded hover:bg-eq-deep transition-colors"
+            >
+              + Add Asset
+            </Link>
+          )}
+        </div>
         <SiteAssetsTable assets={recentAssets} />
       </div>
 

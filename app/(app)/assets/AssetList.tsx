@@ -50,7 +50,10 @@ interface AssetListProps {
 
 export function AssetList({ assets, allAssets, sites, customers, assetTypes, allJobPlans, page, totalPages, total, perPage, isAdmin, canWrite: canWriteRole }: AssetListProps) {
   const searchParams = useSearchParams()
-  const [panelOpen, setPanelOpen] = useState(false)
+  // Auto-open the create panel on ?new=1 (UX audit PR #149 §A.4 / §2.9).
+  // The site detail page's "Add Asset" CTA passes ?site_id=X&new=1 — site_id
+  // flows through to the form's prefill (smart-defaults framework, see below).
+  const [panelOpen, setPanelOpen] = useState(() => searchParams.get('new') === '1')
   const [selected, setSelected] = useState<AssetWithSite | null>(null)
   // Auto-open the import modal when the URL carries ?import=1 — used by
   // the SetupChecklist secondary CTAs (UX audit PR #149 §A.6). Previously
@@ -215,6 +218,7 @@ export function AssetList({ assets, allAssets, sites, customers, assetTypes, all
 
       <AssetForm
         prefillSiteId={prefillSiteId}
+        assetTypes={assetTypes}
         open={panelOpen}
         onClose={() => { setPanelOpen(false); setSelected(null) }}
         asset={selected}
