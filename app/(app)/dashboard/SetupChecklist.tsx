@@ -95,10 +95,15 @@ export function SetupChecklist({
     {
       id: 'job-plan',
       title: 'Set up a maintenance plan',
-      description: 'Job plans define the tasks performed at each visit (e.g. annual switchboard PPM, RCD time-trip). Pick a template or import yours.',
+      description: 'Job plans define the tasks performed at each visit (e.g. annual switchboard PPM, RCD time-trip). Use the 5 starter templates, pick one of yours, or import.',
       done: hasJobPlan,
       locked: !hasAsset,
-      primaryCta: { label: 'Create plan', href: '/job-plans' },
+      // Primary CTA links to the empty /job-plans page, where the hero
+      // starter-templates callout is the first thing the admin sees. We
+      // intentionally don't pre-seed on the dashboard click — letting the
+      // admin see what plans they're about to create is part of the
+      // onboarding hand-off (UX audit §A.4 / §3.3).
+      primaryCta: { label: 'Use starter templates', href: '/job-plans' },
       secondaryCta: { label: 'Import xlsx', href: '/job-plans?import=1' },
     },
     {
