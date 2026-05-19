@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Card } from '@/components/ui/Card'
@@ -221,7 +222,23 @@ export default async function CustomerDetailPage({
 
       {/* Sites Table */}
       <div>
-        <h2 className="text-lg font-bold text-eq-ink mb-3">Sites</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-bold text-eq-ink">Sites</h2>
+          {/* Direct "Add Site" CTA from the customer detail page (UX audit
+              PR #149 §A.4 / §2.9 — detail pages were lacking Add-child
+              CTAs, forcing the admin to back out to /sites and re-pick the
+              customer). Passes ?customer_id=X&new=1 — SiteList reads the
+              customer_id (smart-defaults framework, PR D) and the new=1 to
+              auto-open the create panel on land. */}
+          {userCanWrite && (
+            <Link
+              href={`/sites?customer_id=${customer.id}&new=1`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-eq-sky rounded hover:bg-eq-deep transition-colors"
+            >
+              + Add Site
+            </Link>
+          )}
+        </div>
         <CustomerSitesTable sites={sitesData} />
       </div>
 

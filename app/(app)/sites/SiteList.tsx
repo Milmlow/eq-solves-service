@@ -35,7 +35,12 @@ interface SiteListProps {
 
 export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteListProps) {
   const searchParams = useSearchParams()
-  const [panelOpen, setPanelOpen] = useState(false)
+  // Auto-open the create panel when the URL carries ?new=1 — used by the
+  // customer detail page's "Add Site" CTA (UX audit PR #149 §A.4 / §2.9).
+  // The detail page passes ?customer_id=X&new=1 — customer_id flows through
+  // to the form's prefill (smart-defaults framework, PR D, see below) and
+  // new=1 opens the panel directly without an intermediate click.
+  const [panelOpen, setPanelOpen] = useState(() => searchParams.get('new') === '1')
   const [selected, setSelected] = useState<SiteWithCustomer | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())

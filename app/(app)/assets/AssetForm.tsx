@@ -28,9 +28,17 @@ interface AssetFormProps {
    * (UX audit PR #149 §A.5).
    */
   prefillSiteId?: string | null
+  /**
+   * Distinct existing asset types in this tenant — fed to a `<datalist>`
+   * autocomplete so admins reuse "Switchboard" instead of typing
+   * "SB" / "switchboard" / "Switch Board" inconsistently
+   * (UX audit PR #149 §A.4 — A.5 smart defaults bullet for Asset Type).
+   * Optional — defaults to no autocomplete.
+   */
+  assetTypes?: string[]
 }
 
-export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin, canWrite: canWriteRole, prefillSiteId }: AssetFormProps) {
+export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin, canWrite: canWriteRole, prefillSiteId, assetTypes = [] }: AssetFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -156,7 +164,22 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
       <form onSubmit={handleSubmit} className="space-y-4">
         <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide">Identification</h3>
         <FormInput label="Name" name="name" required defaultValue={asset?.name ?? ''} placeholder="Asset name" />
-        <FormInput label="Asset Type" name="asset_type" required defaultValue={asset?.asset_type ?? ''} placeholder="e.g. ACB, Switchboard" />
+        <FormInput
+          label="Asset Type"
+          name="asset_type"
+          required
+          defaultValue={asset?.asset_type ?? ''}
+          placeholder="e.g. ACB, Switchboard"
+          list={assetTypes.length > 0 ? 'asset-types-suggestions' : undefined}
+          autoComplete="off"
+        />
+        {assetTypes.length > 0 && (
+          <datalist id="asset-types-suggestions">
+            {assetTypes.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
+        )}
         <FormInput label="Manufacturer" name="manufacturer" defaultValue={asset?.manufacturer ?? ''} placeholder="Manufacturer" />
         <FormInput label="Model" name="model" defaultValue={asset?.model ?? ''} placeholder="Model" />
         <FormInput label="Serial Number" name="serial_number" defaultValue={asset?.serial_number ?? ''} placeholder="Serial number" />
