@@ -26,6 +26,12 @@ import {
 // stable; new code should import from lib/auth/mfa-routing directly).
 export { PUBLIC_PATHS, MFA_PATHS, AAL_EXEMPT_PATHS }
 
+// MFA grace window — 14 days from first signin (`profiles.mfa_grace_started_at`).
+// Exported so the banner component in (app)/layout.tsx can compute days-
+// remaining off the same source of truth.
+export const MFA_GRACE_DAYS = 14
+const MFA_GRACE_MS = MFA_GRACE_DAYS * 24 * 60 * 60 * 1000
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const { response, supabase, user, aal } = await updateSession(request)
@@ -73,9 +79,34 @@ export async function proxy(request: NextRequest) {
     !isAalExemptPath &&
     !isDemoUser
   ) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth/enroll-mfa'
-    return NextResponse.redirect(url)
+    // MFA grace window (PR J — UX audit §B.1 / §5.4, locked 2026-05-19).
+    // Users without a factor enrolled get N=14 days from first signin
+    // before the enroll-redirect kicks in. During grace, requests pass
+    // through and a banner reminds the user (rendered by layout). After
+    // grace, the redirect resumes its pre-PR-J behaviour.
+    //
+    // mfa_grace_started_at is stamped by migration 0103 — DEFAULT now()
+    // on new profile inserts + backfilled on existing rows. So every
+    // authenticated user has a non-null timestamp; treating null
+    // defensively (no grace) maintains backward compat if the column
+    // is missing.
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('mfa_grace_started_at')
+      .eq('id', user.id)
+      .single()
+    const graceStart = (profile as { mfa_grace_started_at?: string | null } | null)?.mfa_grace_started_at ?? null
+    const inGrace =
+      graceStart !== null &&
+      Date.now() - new Date(graceStart).getTime() < MFA_GRACE_MS
+
+    if (!inGrace) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/enroll-mfa'
+      return NextResponse.redirect(url)
+    }
+    // else: within grace — let the request through. Banner renders in
+    // (app)/layout.tsx.
   }
 
   // Admin-only routes — gated by the user's per-tenant role.
