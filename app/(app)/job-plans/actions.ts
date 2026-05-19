@@ -10,6 +10,7 @@ import {
   CreateJobPlanItemSchema,
   UpdateJobPlanItemSchema,
 } from '@/lib/validations/job-plan'
+import { STARTER_JOB_PLANS } from '@/lib/seed/starter-job-plans'
 
 export async function createJobPlanAction(formData: FormData) {
   try {
@@ -375,5 +376,121 @@ export async function importJobPlanItemsAction(
     return { success: true, imported: total, rowErrors }
   } catch (e: unknown) {
     return { success: false, imported: 0, rowErrors: [], error: (e as Error).message }
+  }
+}
+
+// --- Starter Maintenance Plan seed (one-click) ---------------------------
+
+/**
+ * Seed the tenant with the 5 starter maintenance plans + their items.
+ *
+ * Surfaced as a one-click CTA on /job-plans (when the tenant has zero plans)
+ * and on the SetupChecklist. Idempotent — if a starter plan with the same
+ * code (e.g. `STARTER-SWB-ANNUAL`) already exists in this tenant, we skip
+ * it. So clicking the button twice is safe; clicking it after the admin has
+ * customised one starter plan won't duplicate it.
+ *
+ * Returns the count of plans created so the caller can render a friendly
+ * "Created N plans" toast.
+ *
+ * UX audit PR #149 §A.4 / §3.3 — "Set up a maintenance plan" was the hardest
+ * step on the setup checklist. Pre-seeding reasonable starter plans gets new
+ * tenants through the gate in seconds.
+ */
+export async function seedStarterJobPlansAction(): Promise<{
+  success: boolean
+  error?: string
+  plansCreated: number
+  itemsCreated: number
+  skipped: string[]
+}> {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) {
+      return { success: false, error: 'Insufficient permissions.', plansCreated: 0, itemsCreated: 0, skipped: [] }
+    }
+
+    // Find which starter codes already exist for this tenant — skip those.
+    const codes = STARTER_JOB_PLANS.map((p) => p.code)
+    const { data: existing, error: lookupErr } = await supabase
+      .from('job_plans')
+      .select('code')
+      .in('code', codes)
+
+    if (lookupErr) {
+      return { success: false, error: lookupErr.message, plansCreated: 0, itemsCreated: 0, skipped: [] }
+    }
+    const existingCodes = new Set((existing ?? []).map((r) => r.code))
+
+    let plansCreated = 0
+    let itemsCreated = 0
+    const skipped: string[] = []
+
+    for (const tpl of STARTER_JOB_PLANS) {
+      if (existingCodes.has(tpl.code)) {
+        skipped.push(tpl.code)
+        continue
+      }
+
+      const { data: created, error: planErr } = await supabase
+        .from('job_plans')
+        .insert({
+          tenant_id: tenantId,
+          name: tpl.name,
+          code: tpl.code,
+          type: tpl.type,
+          description: tpl.description,
+          frequency: tpl.frequency,
+          // Global plans — no site / customer scope. Admin can convert any
+          // starter to site- or customer-scoped after the fact.
+          site_id: null,
+        })
+        .select('id')
+        .single()
+
+      if (planErr || !created) {
+        // Don't bail out the whole batch — log + continue so the other
+        // starters still land. The audit summary at the end reflects what
+        // actually wrote.
+        skipped.push(`${tpl.code} (insert failed: ${planErr?.message ?? 'unknown'})`)
+        continue
+      }
+      plansCreated++
+
+      // Insert items in one batch.
+      const itemRows = tpl.items.map((i) => ({
+        tenant_id: tenantId,
+        job_plan_id: created.id,
+        description: i.description,
+        sort_order: i.sort_order,
+        is_required: i.is_required,
+        freq_annual: i.freq_annual ?? false,
+        freq_semi_annual: i.freq_semi_annual ?? false,
+        freq_quarterly: i.freq_quarterly ?? false,
+        freq_monthly: i.freq_monthly ?? false,
+      }))
+      const { error: itemsErr } = await supabase.from('job_plan_items').insert(itemRows)
+      if (itemsErr) {
+        // Plan landed but items failed — surface as a skip note. The plan
+        // will still appear; the admin can add items manually.
+        skipped.push(`${tpl.code} items (insert failed: ${itemsErr.message})`)
+        continue
+      }
+      itemsCreated += itemRows.length
+    }
+
+    if (plansCreated > 0) {
+      await logAuditEvent({
+        action: 'create',
+        entityType: 'job_plan',
+        summary: `Seeded ${plansCreated} starter maintenance plans (${itemsCreated} items, ${skipped.length} skipped)`,
+      })
+      revalidatePath('/job-plans')
+      revalidatePath('/dashboard')
+    }
+
+    return { success: true, plansCreated, itemsCreated, skipped }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message, plansCreated: 0, itemsCreated: 0, skipped: [] }
   }
 }

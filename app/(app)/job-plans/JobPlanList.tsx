@@ -20,6 +20,7 @@ import Link from 'next/link'
 import { ExportButton } from '@/components/ui/ExportButton'
 import { exportToCsv } from '@/lib/utils/csv-export'
 import { formatSiteLabel } from '@/lib/utils/format'
+import { StarterTemplatesCta } from './StarterTemplatesCta'
 
 interface JobPlanWithSite extends JobPlan {
   sites: { name: string } | null
@@ -177,11 +178,16 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
       </div>
 
       {jobPlans.length === 0 ? (
-        <div className="text-center py-12 border border-gray-200 rounded-lg bg-white">
-          <p className="text-eq-grey text-sm mb-3">No maintenance plans yet.</p>
-          {canWriteRole && (
-            <Button size="sm" onClick={openCreate}>Create your first maintenance plan</Button>
-          )}
+        <div className="space-y-4">
+          {/* Hero starter-templates CTA — one-click seed of 5 starter plans
+              (UX audit §A.4 / §3.3). Only renders for write-roles. */}
+          {canWriteRole && <StarterTemplatesCta variant="hero" />}
+          <div className="text-center py-10 border border-gray-200 rounded-lg bg-white">
+            <p className="text-eq-grey text-sm mb-3">Or build a plan from scratch.</p>
+            {canWriteRole && (
+              <Button size="sm" onClick={openCreate}>Create a maintenance plan</Button>
+            )}
+          </div>
         </div>
       ) : (
         <>
