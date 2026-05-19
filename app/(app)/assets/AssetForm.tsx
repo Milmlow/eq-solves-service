@@ -40,6 +40,7 @@ interface AssetFormProps {
 
 export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin, canWrite: canWriteRole, prefillSiteId, assetTypes = [] }: AssetFormProps) {
   const [error, setError] = useState<string | null>(null)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [editMode, setEditMode] = useState(false)
@@ -50,10 +51,12 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setErrors({})
     setSuccess(false)
     setLoading(true)
 
-    const formData = new FormData(e.currentTarget)
+    const form = e.currentTarget
+    const formData = new FormData(form)
     const result = isEdit
       ? await updateAssetAction(asset!.id, formData)
       : await createAssetAction(formData)
@@ -64,6 +67,15 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
       setTimeout(() => { onClose(); setEditMode(false) }, 500)
     } else {
       setError(result.error ?? 'Something went wrong.')
+      // PR H follow-on (form polish bundle): per-field errors + scroll-to-first.
+      const fieldErrors = (result as { errors?: Record<string, string> }).errors ?? {}
+      setErrors(fieldErrors)
+      const firstKey = Object.keys(fieldErrors)[0]
+      if (firstKey) {
+        const el = form.querySelector(`[name="${firstKey}"]`) as HTMLElement | null
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ;(el as HTMLInputElement | null)?.focus?.()
+      }
     }
   }
 
@@ -163,7 +175,7 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
     <SlidePanel open={open} onClose={handleClose} title={isEdit ? 'Edit Asset' : 'Add Asset'}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <h3 className="text-xs font-bold text-eq-grey uppercase tracking-wide">Identification</h3>
-        <FormInput label="Name" name="name" required defaultValue={asset?.name ?? ''} placeholder="Asset name" />
+        <FormInput label="Name" name="name" required defaultValue={asset?.name ?? ''} placeholder="Asset name" error={errors.name} />
         <FormInput
           label="Asset Type"
           name="asset_type"
@@ -172,6 +184,7 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
           placeholder="e.g. ACB, Switchboard"
           list={assetTypes.length > 0 ? 'asset-types-suggestions' : undefined}
           autoComplete="off"
+          error={errors.asset_type}
         />
         {assetTypes.length > 0 && (
           <datalist id="asset-types-suggestions">
@@ -192,13 +205,14 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
             name="site_id"
             required
             defaultValue={asset?.site_id ?? prefillSiteId ?? ''}
-            className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.site_id ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
           >
             <option value="">Select site...</option>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>{formatSiteLabel(s)}</option>
             ))}
           </select>
+          {errors.site_id && <p className="text-xs text-red-500 mt-1">{errors.site_id}</p>}
         </div>
         <FormInput label="Location" name="location" defaultValue={asset?.location ?? ''} placeholder="e.g. Level 2, DB-03" />
 

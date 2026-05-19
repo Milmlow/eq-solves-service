@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { zodToErrorMap } from '@/lib/utils/zodErrors'
 import {
   CreateJobPlanSchema,
   UpdateJobPlanSchema,
@@ -27,7 +28,7 @@ export async function createJobPlanAction(formData: FormData) {
     }
 
     const parsed = CreateJobPlanSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     // Return the new id so the form can stay open in "just-created" mode
     // and reveal the Items section (UX audit PR #149 §A.3 / §2.3). Without
@@ -64,7 +65,7 @@ export async function updateJobPlanAction(id: string, formData: FormData) {
     }
 
     const parsed = UpdateJobPlanSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     const { error } = await supabase
       .from('job_plans')
@@ -175,7 +176,7 @@ export async function createJobPlanItemAction(jobPlanId: string, formData: FormD
     }
 
     const parsed = CreateJobPlanItemSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     const { error } = await supabase
       .from('job_plan_items')
@@ -215,7 +216,7 @@ export async function updateJobPlanItemAction(jobPlanId: string, itemId: string,
     if (formData.has('freq_10yr')) raw.freq_10yr = formData.get('freq_10yr') === 'true'
 
     const parsed = UpdateJobPlanItemSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     const { error } = await supabase
       .from('job_plan_items')

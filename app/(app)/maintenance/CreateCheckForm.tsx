@@ -63,6 +63,8 @@ interface CreateCheckFormProps {
 
 export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, scopeItems }: CreateCheckFormProps) {
   const [error, setError] = useState<string | null>(null)
+  // Per-field validation errors (form polish bundle — PR H pattern).
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [previewing, setPreviewing] = useState(false)
@@ -146,10 +148,12 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setErrors({})
     setSuccess(false)
     setLoading(true)
 
-    const formData = new FormData(e.currentTarget)
+    const form = e.currentTarget
+    const formData = new FormData(form)
     formData.set('is_dark_site', isDarkSite ? 'true' : 'false')
     // Serialise the multi-plan filter as JSON. The server action reads
     // `job_plan_ids`, falling back to the legacy `job_plan_id` input if
@@ -188,7 +192,17 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
       const el = document.getElementById('create-check-success')
       if (el) el.textContent = msg
     } else {
-      setError(result.error ?? 'Something went wrong.')
+      const r = result as { error?: string; errors?: Record<string, string> }
+      setError(r.error ?? 'Something went wrong.')
+      // Per-field error mapping + scroll-to-first (form polish bundle).
+      const fieldErrors = r.errors ?? {}
+      setErrors(fieldErrors)
+      const firstKey = Object.keys(fieldErrors)[0]
+      if (firstKey) {
+        const el = form.querySelector(`[name="${firstKey}"]`) as HTMLElement | null
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ;(el as HTMLInputElement | null)?.focus?.()
+      }
     }
   }
 
@@ -208,13 +222,14 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
             required
             value={siteId}
             onChange={(e) => { setSiteId(e.target.value); setHasPreview(false) }}
-            className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.site_id ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
           >
             <option value="">Select site...</option>
             {sites.map((s) => (
               <option key={s.id} value={s.id}>{formatSiteLabel(s)}</option>
             ))}
           </select>
+          {errors.site_id && <p className="text-xs text-red-500 mt-1">{errors.site_id}</p>}
         </div>
 
         {/* Frequency */}
@@ -225,13 +240,14 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
             required
             value={frequency}
             onChange={(e) => { setFrequency(e.target.value); setHasPreview(false) }}
-            className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.frequency ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
           >
             <option value="">Select frequency...</option>
             {FREQUENCIES.map((f) => (
               <option key={f.value} value={f.value}>{f.label}</option>
             ))}
           </select>
+          {errors.frequency && <p className="text-xs text-red-500 mt-1">{errors.frequency}</p>}
         </div>
 
         {/* Dark Site Toggle */}
@@ -428,7 +444,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
         <hr className="border-gray-200" />
 
         {/* Custom Name */}
-        <FormInput label="Custom Name" name="custom_name" placeholder="Optional name for this check" />
+        <FormInput label="Custom Name" name="custom_name" placeholder="Optional name for this check" error={errors.custom_name} />
 
         {/* Dates — sensible defaults so the admin doesn't have to type
             today and today+30 from scratch on every check (UX audit
@@ -441,6 +457,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
             type="date"
             required
             defaultValue={new Date().toISOString().slice(0, 10)}
+            error={errors.start_date}
           />
           <FormInput
             label="Due Date *"
@@ -448,6 +465,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
             type="date"
             required
             defaultValue={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+            error={errors.due_date}
           />
         </div>
 

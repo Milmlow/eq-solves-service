@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { CreateAssetSchema, UpdateAssetSchema } from '@/lib/validations/asset'
+import { zodToErrorMap } from '@/lib/utils/zodErrors'
 import { logAuditEvent } from '@/lib/actions/audit'
 
 export async function createAssetAction(formData: FormData) {
@@ -26,7 +27,7 @@ export async function createAssetAction(formData: FormData) {
     }
 
     const parsed = CreateAssetSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     const { error } = await supabase
       .from('assets')
@@ -62,7 +63,7 @@ export async function updateAssetAction(id: string, formData: FormData) {
     }
 
     const parsed = UpdateAssetSchema.safeParse(raw)
-    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message }
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
     const { error } = await supabase
       .from('assets')
