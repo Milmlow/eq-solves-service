@@ -133,7 +133,7 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
             category="report_image"
             surface="light"
             previewBackground="light"
-            placeholder="Select tenant logo from Media Library…"
+            placeholder="Pick your company logo from the Media Library…"
           />
           <p className="text-xs text-eq-grey -mt-2">
             Used in headers, body sections, and email signatures.
@@ -338,11 +338,10 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
       <div className="bg-white border border-gray-200 rounded-lg p-6">
         <h2 className="text-sm font-bold text-eq-ink mb-1">Commercial features</h2>
         <p className="text-xs text-eq-grey mb-4">
-          The universal tier — scope-context display on maintenance checks,
-          auto gap-close, out-of-scope block — is always on for every tenant.
-          The commercial tier below is opt-in: useful for organisations whose
-          commercial managers run contract administration; overhead for small
-          electrical contractors.
+          Everyone gets the basics: scope info on each check, automatic
+          gap-fill, and a warning when work is out of scope. The commercial
+          pack below is optional — useful if you run formal contract
+          administration; overkill for small contractors.
         </p>
         <label className="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-gray-200 hover:bg-eq-ice/30 transition-colors">
           <input
@@ -354,23 +353,24 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
           />
           <div className="flex-1">
             <p className="text-sm font-semibold text-eq-ink">
-              Enable commercial-tier features
+              Turn on the commercial pack
             </p>
-            <p className="text-xs text-eq-grey mt-1">
-              Activates: contract-scope period-locking + per-row audit
-              history; variations register for out-of-scope work capture;
-              service-credit risk surfacing on the dashboard; renewal-pack
-              generator at year-close; customer-visible scope statement PDF.
-            </p>
-            <p className="text-[10px] text-eq-grey mt-2 font-mono">
-              tenant_settings.commercial_features_enabled = {commercialFeaturesEnabled ? 'true' : 'false'}
+            <ul className="text-xs text-eq-grey mt-1 space-y-0.5 list-disc list-inside">
+              <li>Lock contract scope by financial year and track changes</li>
+              <li>Capture out-of-scope work as variations</li>
+              <li>Show dollar risk on the dashboard</li>
+              <li>Generate a renewal pack at year-end</li>
+              <li>Customer-facing scope statement PDF</li>
+            </ul>
+            <p className="text-[11px] text-eq-grey mt-2">
+              Currently: <strong>{commercialFeaturesEnabled ? 'on' : 'off'}</strong>
             </p>
           </div>
         </label>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
-      {success && <p className="text-sm text-green-600">Settings saved. Reload to see colour changes across the app.</p>}
+      {success && <p className="text-sm text-green-600">Settings saved. Reload to see colour changes everywhere.</p>}
 
       <Button type="submit" loading={loading}>
         Save Settings

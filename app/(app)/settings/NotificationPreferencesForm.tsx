@@ -103,7 +103,7 @@ export function NotificationPreferencesForm({ initial, hasOwnRow }: Props) {
           <h2 className="text-sm font-bold text-eq-ink">Notification Preferences</h2>
           {!hasOwnRow && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-eq-grey">
-              tenant default — your edits create your own row
+              Using the workspace default — saving will create your own settings
             </span>
           )}
         </div>
@@ -115,7 +115,7 @@ export function NotificationPreferencesForm({ initial, hasOwnRow }: Props) {
             <label className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
               <input type="checkbox" checked={bellEnabled} onChange={e => setBellEnabled(e.target.checked)} />
               <Bell className="w-4 h-4 text-eq-deep" />
-              <span className="text-sm">In-app bell</span>
+              <span className="text-sm">Bell inside the app</span>
             </label>
             <label className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
               <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} />
@@ -125,14 +125,14 @@ export function NotificationPreferencesForm({ initial, hasOwnRow }: Props) {
             <label className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
               <input type="checkbox" checked={digestEnabled} onChange={e => setDigestEnabled(e.target.checked)} />
               <Calendar className="w-4 h-4 text-eq-deep" />
-              <span className="text-sm">Daily digest</span>
+              <span className="text-sm">Daily summary email</span>
             </label>
           </div>
         </div>
 
-        {/* Digest delivery time + days (Outlook-style) */}
+        {/* Daily summary delivery time + days (Outlook-style) */}
         <div className="space-y-2">
-          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">When my digest arrives</label>
+          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">When my daily summary arrives</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <FormInput
               label="Delivery time"
@@ -169,14 +169,14 @@ export function NotificationPreferencesForm({ initial, hasOwnRow }: Props) {
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-eq-grey">Cron runs every 15 minutes; your digest arrives within the 15-min slot of your chosen time.</p>
+          <p className="text-[11px] text-eq-grey">Summary lands within 15 minutes of your chosen time.</p>
         </div>
 
-        {/* Pre-due reminders */}
+        {/* Heads-up reminders */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-eq-deep" />
-            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Pre-due reminders</label>
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Heads-up before due date</label>
           </div>
           <FormInput
             label="Days before due (comma-separated)"
@@ -185,12 +185,12 @@ export function NotificationPreferencesForm({ initial, hasOwnRow }: Props) {
             onChange={e => setReminderDaysStr(e.target.value)}
             placeholder="14, 7, 1"
           />
-          <p className="text-[11px] text-eq-grey">Default 14, 7, 1. Set to <code>30, 14, 7, 1</code> for a longer lead-time, or leave blank to disable pre-due reminders.</p>
+          <p className="text-[11px] text-eq-grey">Default 14, 7, 1. Use <code>30, 14, 7, 1</code> for a longer lead-time, or leave blank to turn heads-up reminders off.</p>
         </div>
 
-        {/* Event-type opt-outs */}
+        {/* Turn specific notifications off */}
         <div className="space-y-2">
-          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Mute specific event types</label>
+          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Turn specific notifications off</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {EVENT_TYPES.map(t => (
               <label key={t.value} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
@@ -201,12 +201,12 @@ export function NotificationPreferencesForm({ initial, hasOwnRow }: Props) {
                 />
                 <span className="text-sm">{t.label}</span>
                 {optOuts.includes(t.value) && (
-                  <span className="ml-auto text-[10px] text-amber-600 font-semibold">muted</span>
+                  <span className="ml-auto text-[10px] text-amber-600 font-semibold">off</span>
                 )}
               </label>
             ))}
           </div>
-          <p className="text-[11px] text-eq-grey">Tick to mute a notification type. Real-time bell still suppressed; emails for that type also stop.</p>
+          <p className="text-[11px] text-eq-grey">Tick to turn that notification off. The bell stays quiet too, and we won&apos;t email you about it.</p>
         </div>
 
         {message && (

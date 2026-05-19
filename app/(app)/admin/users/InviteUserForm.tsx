@@ -11,8 +11,8 @@ import { inviteUserAction } from './actions'
 // canWrite / canCreateCheck / canDoTestWork actually permit — not a
 // marketing description.
 const ROLE_DESCRIPTIONS: Record<string, string> = {
-  super_admin: 'Full system access including impersonation. Reserved for the platform team — most tenants don\'t need to assign this.',
-  admin: 'Full access within this tenant: invite users, edit billing, manage all records and checks. The first user on a tenant is usually an admin.',
+  super_admin: 'Full system access including signing in as anyone. Reserved for the EQ team — most workspaces never need this.',
+  admin: 'Full access in this workspace: invite users, edit billing, manage all records and checks. The first person to set up a workspace is usually the admin.',
   supervisor: 'Schedules checks, edits records (customers / sites / assets / plans), reviews defects. Cannot manage users or billing.',
   technician: 'Runs checks and tests on-site: marks items pass / fail, saves wizard steps, raises defects. Cannot manage records.',
   read_only: 'View-only access. Useful for customer-side stakeholders who want to see status but never edit.',

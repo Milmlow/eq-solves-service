@@ -103,20 +103,20 @@ export async function ServiceCreditWidget({ tenantId }: ServiceCreditWidgetProps
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-eq-ink">Service-Credit Risk</h2>
+            <h2 className="text-sm font-bold text-eq-ink">Money at risk</h2>
             <Link href="/contract-scope" className="text-xs text-eq-sky hover:text-eq-deep font-medium">
               View detail →
             </Link>
           </div>
           {isEmpty ? (
             <p className="text-sm text-eq-grey mt-1">
-              All contracted work is covered and there are no in-flight variations. No exposure today.
+              All contracted work is covered and there are no variations underway. No money at risk today.
             </p>
           ) : (
             <>
               <p className="text-2xl font-bold text-eq-ink mt-0.5">{formatMoney(totalExposure)}</p>
               <p className="text-xs text-eq-grey">
-                Estimated exposure across {customersWithGaps} {customersWithGaps === 1 ? 'customer' : 'customers'}
+                Estimated money at risk across {customersWithGaps} {customersWithGaps === 1 ? 'customer' : 'customers'}
                 {highCount > 0 && (
                   <> · <span className="text-red-600 font-semibold">{highCount} high-severity</span></>
                 )}
