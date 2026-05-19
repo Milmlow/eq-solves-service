@@ -29,6 +29,11 @@ interface SiteFormProps {
 
 export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCustomerId }: SiteFormProps) {
   const [error, setError] = useState<string | null>(null)
+  // Per-field validation errors (PR H — UX audit §2.11 / §3.5). Mirrors
+  // the legacy `error` banner: both come from the same server-action
+  // response. Form keys (`name`, `code`, `customer_id`, ...) match the
+  // input names.
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [photoUrl, setPhotoUrl] = useState<string | null>(site?.photo_url ?? null)
@@ -50,10 +55,12 @@ export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCusto
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setErrors({})
     setSuccess(false)
     setLoading(true)
 
-    const formData = new FormData(e.currentTarget)
+    const form = e.currentTarget
+    const formData = new FormData(form)
     const result = isEdit
       ? await updateSiteAction(site!.id, formData)
       : await createSiteAction(formData)
@@ -63,7 +70,23 @@ export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCusto
       setSuccess(true)
       setTimeout(() => onClose(), 500)
     } else {
-      setError(result.error ?? 'Something went wrong.')
+      const r = result as { error?: string; errors?: Record<string, string> }
+      setError(r.error ?? 'Something went wrong.')
+      const fieldErrors = r.errors ?? {}
+      setErrors(fieldErrors)
+      // Scroll-to-first-error (PR H §3.5 / §A.11 — bottom-only red line
+      // forced the admin to scroll, guess which field, fix, resubmit).
+      // Pick the first field with an error and scroll its input into view.
+      const firstKey = Object.keys(fieldErrors)[0]
+      if (firstKey) {
+        const target = form.querySelector(`[name="${CSS.escape(firstKey)}"]`) as HTMLElement | null
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          if (typeof (target as HTMLInputElement).focus === 'function') {
+            ;(target as HTMLInputElement).focus({ preventScroll: true })
+          }
+        }
+      }
     }
   }
 
@@ -137,12 +160,14 @@ export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCusto
           required
           defaultValue={site?.name ?? ''}
           placeholder="Site name"
+          error={errors.name}
         />
         <FormInput
           label="Code"
           name="code"
           defaultValue={site?.code ?? ''}
           placeholder="e.g. SY1"
+          error={errors.code}
         />
         <div className="flex flex-col gap-1">
           <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Customer</label>
