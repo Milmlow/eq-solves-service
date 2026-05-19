@@ -5,7 +5,7 @@ import { SlidePanel } from '@/components/ui/SlidePanel'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { batchCreateChecksAction } from './actions'
-import type { JobPlan, Site, Profile } from '@/lib/types'
+import type { JobPlan, Site } from '@/lib/types'
 import { formatDate } from '@/lib/utils/format'
 
 interface BatchCreateFormProps {
@@ -13,7 +13,16 @@ interface BatchCreateFormProps {
   onClose: () => void
   jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
   sites: Pick<Site, 'id' | 'name' | 'customer_id'>[]
-  technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
+  // Accept the same widened shape the page.tsx now produces (id +
+  // email + full_name + role + is_active). BatchCreateForm only uses
+  // id / full_name / email today; the extra fields are harmless.
+  technicians: {
+    id: string
+    email: string
+    full_name: string | null
+    role?: string | null
+    is_active?: boolean
+  }[]
 }
 
 export function BatchCreateForm({ open, onClose, jobPlans, sites, technicians }: BatchCreateFormProps) {

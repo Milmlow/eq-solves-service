@@ -1,15 +1,26 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { createCheckAction, previewCheckAssetsAction } from './actions'
-import type { JobPlan, Site, Profile } from '@/lib/types'
+import type { JobPlan, Site } from '@/lib/types'
 import { formatSiteLabel } from '@/lib/utils/format'
 import { CheckCircle2, XCircle, Scale } from 'lucide-react'
 import { events as analyticsEvents } from '@/lib/analytics'
 import { ScopeContextChip } from '@/components/ui/ScopeContextChip'
+
+// Tradie-friendly role labels for the assignee dropdown — keeps the
+// role chip readable without leaking DB role strings.
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: 'Super admin',
+  admin: 'Admin',
+  supervisor: 'Supervisor',
+  technician: 'Technician',
+  read_only: 'Read only',
+}
 
 const FREQUENCIES = [
   { value: 'monthly', label: 'Monthly' },
@@ -52,16 +63,40 @@ interface ScopeItem {
 interface CreateCheckFormProps {
   open: boolean
   onClose: () => void
-  jobPlans: Pick<JobPlan, 'id' | 'name' | 'code'>[]
+  jobPlans: (Pick<JobPlan, 'id' | 'name' | 'code'> & {
+    /** site_id + customer_id come from job_plans.scope tier — used for the
+     * fall-back "scope-based" filter when no asset-linked plans exist
+     * at the chosen site. */
+    site_id?: string | null
+    customer_id?: string | null
+  })[]
   sites: (Pick<Site, 'id' | 'name' | 'customer_id'> & {
     code?: string | null
     customers?: { name?: string | null } | { name?: string | null }[] | null
   })[]
-  technicians: Pick<Profile, 'id' | 'email' | 'full_name'>[]
+  customers: { id: string; name: string }[]
+  /**
+   * Flat list of (site_id, job_plan_id) pairs from every active asset
+   * with a job_plan_id set. Drives the "Maintenance Plans filtered by
+   * site assets" behaviour (Royce 2026-05-19).
+   */
+  siteAssetPlans: { site_id: string; job_plan_id: string }[]
+  /**
+   * Tenant members for the assignee dropdown. Includes role + is_active
+   * so we can show role chips, sort by hierarchy, and clarify why the
+   * list is short (no admins / no supervisors / etc).
+   */
+  technicians: {
+    id: string
+    email: string
+    full_name: string | null
+    role: string | null
+    is_active: boolean
+  }[]
   scopeItems: ScopeItem[]
 }
 
-export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, scopeItems }: CreateCheckFormProps) {
+export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, siteAssetPlans, technicians, scopeItems }: CreateCheckFormProps) {
   const [error, setError] = useState<string | null>(null)
   // Per-field validation errors (form polish bundle — PR H pattern).
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -70,6 +105,10 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
   const [previewing, setPreviewing] = useState(false)
 
   // Form state
+  // Pick customer first → site list filters to that customer (Royce
+  // 2026-05-19 — easier to digest a long site list).
+  // Empty customerId = "All customers" (legacy behaviour).
+  const [customerId, setCustomerId] = useState('')
   const [siteId, setSiteId] = useState('')
   const [frequency, setFrequency] = useState('')
   const [isDarkSite, setIsDarkSite] = useState(false)
@@ -80,6 +119,44 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
   const [jobPlanIds, setJobPlanIds] = useState<Set<string>>(new Set())
   const [manualMode, setManualMode] = useState(false)
   const [manualMaximoIds, setManualMaximoIds] = useState('')
+
+  // Filter the site dropdown by selected customer (empty = all customers).
+  const filteredSites = useMemo(() => {
+    if (!customerId) return sites
+    return sites.filter((s) => s.customer_id === customerId)
+  }, [sites, customerId])
+
+  // Filter the Maintenance Plans list to plans actually attached to
+  // active assets at the chosen site (Royce 2026-05-19 — "only for
+  // active assets for that site"). Fallback: if no asset-linked plans
+  // exist at the site (greenfield site, plans not yet wired to assets),
+  // surface the scope-based set (global + customer-scoped + site-scoped)
+  // so the admin isn't blocked.
+  const filteredJobPlans = useMemo(() => {
+    if (!siteId) return jobPlans
+    const linkedIds = new Set(
+      siteAssetPlans.filter((p) => p.site_id === siteId).map((p) => p.job_plan_id)
+    )
+    const assetLinked = jobPlans.filter((jp) => linkedIds.has(jp.id))
+    if (assetLinked.length > 0) return assetLinked
+    // Fallback: scope-based filter (global + customer-scoped + site-scoped).
+    const site = sites.find((s) => s.id === siteId)
+    return jobPlans.filter((jp) => {
+      if (jp.site_id === siteId) return true
+      if (jp.customer_id && jp.customer_id === site?.customer_id) return true
+      // Global plans (both null).
+      if (jp.site_id == null && jp.customer_id == null) return true
+      return false
+    })
+  }, [jobPlans, siteAssetPlans, siteId, sites])
+  // Track whether we fell back to scope-based filtering (no asset-linked
+  // plans at the site) — surface that as a hint so the admin knows why
+  // they see a wider list.
+  const planFilterUsedFallback = useMemo(() => {
+    if (!siteId) return false
+    const hasAssetLinked = siteAssetPlans.some((p) => p.site_id === siteId)
+    return !hasAssetLinked
+  }, [siteId, siteAssetPlans])
 
   // Preview state
   const [previewAssets, setPreviewAssets] = useState<PreviewAsset[]>([])
@@ -100,6 +177,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
   const excludedScope = relevantScope.filter((s) => !s.is_included)
 
   const resetForm = useCallback(() => {
+    setCustomerId('')
     setSiteId('')
     setFrequency('')
     setIsDarkSite(false)
@@ -214,22 +292,59 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
   return (
     <SlidePanel open={open} onClose={handleClose} title="New Maintenance Check">
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Site */}
+        {/* Customer — pick first, narrows the Site list (Royce 2026-05-19). */}
+        {customers.length > 1 && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Customer</label>
+            <select
+              value={customerId}
+              onChange={(e) => {
+                setCustomerId(e.target.value)
+                // Clear downstream selections if the picked site no longer
+                // belongs to the new customer.
+                const picked = sites.find((s) => s.id === siteId)
+                if (e.target.value && picked && picked.customer_id !== e.target.value) {
+                  setSiteId('')
+                  setJobPlanIds(new Set())
+                }
+                setHasPreview(false)
+              }}
+              className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            >
+              <option value="">All customers</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-eq-grey">Pick a customer to narrow the site list below.</p>
+          </div>
+        )}
+
+        {/* Site — filtered by customer if picked. */}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Site *</label>
           <select
             name="site_id"
             required
             value={siteId}
-            onChange={(e) => { setSiteId(e.target.value); setHasPreview(false) }}
+            onChange={(e) => {
+              setSiteId(e.target.value)
+              // Clearing site also clears the plan multi-select so the
+              // filtered-plan list re-renders cleanly.
+              setJobPlanIds(new Set())
+              setHasPreview(false)
+            }}
             className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.site_id ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
           >
             <option value="">Select site...</option>
-            {sites.map((s) => (
+            {filteredSites.map((s) => (
               <option key={s.id} value={s.id}>{formatSiteLabel(s)}</option>
             ))}
           </select>
           {errors.site_id && <p className="text-xs text-red-500 mt-1">{errors.site_id}</p>}
+          {customerId && filteredSites.length === 0 && (
+            <p className="text-[11px] text-amber-700">This customer has no active sites yet.</p>
+          )}
         </div>
 
         {/* Frequency */}
@@ -290,16 +405,24 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
           </div>
         )}
 
-        {/* Maintenance Plan Filter (optional, multi-select) */}
+        {/* Maintenance Plan Filter — filtered to plans linked to active
+            assets at the selected site (Royce 2026-05-19). When no site
+            is picked yet, every plan in the tenant is shown so the user
+            sees the catalogue. */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">
               Maintenance Plans (optional filter)
             </label>
             <div className="flex items-center gap-2 text-[11px]">
+              {siteId && (
+                <span className="text-eq-grey">
+                  {filteredJobPlans.length} for this site
+                </span>
+              )}
               {jobPlanIds.size > 0 && (
                 <>
-                  <span className="text-eq-grey">{jobPlanIds.size} selected</span>
+                  <span className="text-eq-grey">· {jobPlanIds.size} selected</span>
                   <button
                     type="button"
                     onClick={() => { setJobPlanIds(new Set()); setHasPreview(false) }}
@@ -311,11 +434,15 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
               )}
             </div>
           </div>
-          {jobPlans.length === 0 ? (
-            <p className="text-xs text-eq-grey italic px-2 py-1.5">No maintenance plans available for this tenant.</p>
+          {filteredJobPlans.length === 0 ? (
+            <p className="text-xs text-eq-grey italic px-2 py-1.5">
+              {siteId
+                ? 'No maintenance plans linked to assets at this site. Add a maintenance_plan to an asset in /assets or create a global plan in /job-plans.'
+                : 'No maintenance plans available for this tenant.'}
+            </p>
           ) : (
             <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md bg-white divide-y divide-gray-50">
-              {jobPlans.map((jp) => {
+              {filteredJobPlans.map((jp) => {
                 const checked = jobPlanIds.has(jp.id)
                 return (
                   <label
@@ -338,7 +465,11 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
             </div>
           )}
           <p className="text-[11px] text-eq-grey mt-1">
-            Leave all unchecked to include every maintenance plan at the site.
+            {siteId
+              ? planFilterUsedFallback
+                ? 'No assets at this site have a maintenance plan attached yet — showing every plan scoped to this site / customer. Attach plans to assets via /assets to narrow this list.'
+                : 'Showing plans attached to active assets at this site. Leave all unchecked to include every shown plan.'
+              : 'Pick a site above to filter this list to plans actually used at that site.'}
           </p>
         </div>
 
@@ -469,20 +600,45 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, technicians, s
           />
         </div>
 
-        {/* Owner / Assigned To */}
+        {/* Assign to — every active tenant member is selectable. Each
+            option carries the role label so the admin can see at a glance
+            who is who (Royce 2026-05-19: the previous "Owner" dropdown
+            didn't surface role; in a tenant where most members are super-
+            admins it looked filtered to one role). */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Owner</label>
+          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Assign to</label>
           <select
             name="assigned_to"
             className="h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
           >
             <option value="">— Unassigned —</option>
-            {technicians.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.full_name ?? t.email}
-              </option>
-            ))}
+            {technicians.map((t) => {
+              const name = t.full_name ?? t.email
+              const role = t.role ? ROLE_LABELS[t.role] ?? t.role : null
+              return (
+                <option key={t.id} value={t.id}>
+                  {name}{role ? ` — ${role}` : ''}
+                </option>
+              )
+            })}
           </select>
+          {technicians.length === 0 ? (
+            <p className="text-[11px] text-amber-700">
+              No active members in this workspace yet.{' '}
+              <Link href="/admin/users" className="text-eq-sky hover:text-eq-deep font-medium underline">
+                Invite teammates
+              </Link>
+              .
+            </p>
+          ) : technicians.length < 3 ? (
+            <p className="text-[11px] text-eq-grey">
+              Only {technicians.length} active member{technicians.length === 1 ? '' : 's'}.{' '}
+              <Link href="/admin/users" className="text-eq-sky hover:text-eq-deep font-medium underline">
+                Invite more
+              </Link>
+              {' '}to populate this list.
+            </p>
+          ) : null}
         </div>
 
         {/* Maximo References */}
