@@ -4,6 +4,7 @@ import { formatDate } from '@/lib/utils/format'
 import { firstRow } from '@/lib/db/relation'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { DashboardAnalytics } from './DashboardAnalytics'
+import { TechWelcomeCard } from './TechWelcomeCard'
 
 /**
  * Tech-shaped dashboard.
@@ -66,6 +67,15 @@ export interface TechDashboardProps {
     overdue: number
     complete: number
   }
+  /**
+   * True iff the user is a technician on this tenant AND
+   * `tenant_members.tech_onboarded_at` is null — first session on this
+   * tenant. Drives the one-time welcome card above the work list.
+   * UX audit PR I §B.6.
+   */
+  showWelcome?: boolean
+  /** First name for the welcome card greeting (optional). */
+  firstName?: string | null
 }
 
 export function TechDashboard({
@@ -77,14 +87,26 @@ export function TechDashboard({
   myNsxTests,
   siteCount,
   checkCounts,
+  showWelcome = false,
+  firstName = null,
 }: TechDashboardProps) {
   const totalActive = checkCounts.scheduled + checkCounts.inProgress + checkCounts.overdue
   const myTestsTotal = myAcbTests.length + myNsxTests.length
+  // Pre-compute the welcome card's "open my first check" CTA target so it
+  // jumps straight to the work, not to a list.
+  const firstCheckHref = upcomingChecks.length > 0 ? `/maintenance/${upcomingChecks[0].id}` : null
 
   return (
     <div className="space-y-6">
       {/* Analytics: dashboard_viewed (fires once per mount, client-side) */}
       <DashboardAnalytics siteCount={siteCount} openChecksCount={totalActive} />
+
+      {/* First-login welcome — only when the tenant_members row is freshly
+          minted for this tech (PR I, audit §B.6). Dismisses via a stamp on
+          tenant_members.tech_onboarded_at. */}
+      {showWelcome && (
+        <TechWelcomeCard firstName={firstName} firstCheckHref={firstCheckHref} />
+      )}
 
       {/* Greeting */}
       <div>
