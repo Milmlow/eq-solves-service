@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { CheckCircle2, Circle, Lock, ChevronRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { SetupChecklistAnalytics } from './SetupChecklistAnalytics'
+import { SetupChecklistDismiss } from './SetupChecklistDismiss'
 
 /**
  * SetupChecklist — replaces the dashboard for empty tenants.
@@ -37,6 +38,7 @@ export function SetupChecklist({
   userName,
   companyConfigured,
   hasJobPlanWithItems,
+  forcedShow = false,
 }: {
   counts: Counts
   userName: string
@@ -50,6 +52,13 @@ export function SetupChecklist({
    * empty check.
    */
   hasJobPlanWithItems: boolean
+  /**
+   * True when the dashboard is rendering this checklist because of
+   * `?setup=show` despite the row already being dismissed (user clicked
+   * the chip). Switches the dismiss link copy from "Skip for now" to
+   * "Hide checklist again" so the action's effect makes sense.
+   */
+  forcedShow?: boolean
 }) {
   const hasCustomer = counts.entities.customers > 0
   const hasSite     = counts.entities.sites > 0
@@ -141,15 +150,18 @@ export function SetupChecklist({
       />
 
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Sparkles className="w-5 h-5 text-eq-sky" />
-          <span className="text-xs font-bold text-eq-sky uppercase tracking-wider">Getting Started</span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-5 h-5 text-eq-sky" />
+            <span className="text-xs font-bold text-eq-sky uppercase tracking-wider">Getting Started</span>
+          </div>
+          <h1 className="text-2xl font-bold text-eq-ink">Welcome, {userName}</h1>
+          <p className="text-sm text-eq-grey mt-1">
+            Let&apos;s get your workspace set up. {completedCount} of {totalSteps} steps complete.
+          </p>
         </div>
-        <h1 className="text-2xl font-bold text-eq-ink">Welcome, {userName}</h1>
-        <p className="text-sm text-eq-grey mt-1">
-          Let&apos;s get your workspace set up. {completedCount} of {totalSteps} steps complete.
-        </p>
+        <SetupChecklistDismiss variant="x" forcedShow={forcedShow} />
       </div>
 
       {/* Progress bar */}
@@ -181,7 +193,7 @@ export function SetupChecklist({
       </Card>
 
       {/* Footer help */}
-      <div className="text-center pt-2">
+      <div className="text-center pt-2 space-y-2">
         <p className="text-xs text-eq-grey">
           Stuck? Try the help widget in the bottom-right corner, or jump to{' '}
           <Link href="/maintenance" className="text-eq-sky hover:text-eq-deep font-medium">
@@ -189,6 +201,9 @@ export function SetupChecklist({
           </Link>
           {' '}to see the work-order surface this is all leading toward.
         </p>
+        <div>
+          <SetupChecklistDismiss variant="link" forcedShow={forcedShow} />
+        </div>
       </div>
     </div>
   )
