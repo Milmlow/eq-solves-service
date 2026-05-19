@@ -2,7 +2,7 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, ClipboardCheck, Search, Settings, ChevronLeft, LogOut,
-  Menu, X, CalendarDays, AlertTriangle, Shield, Database, Lightbulb
+  Menu, X, CalendarDays, AlertTriangle, Shield, Database, Lightbulb, Zap
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -80,9 +80,15 @@ function buildNavSections(flags: ModuleFlags, role: Role | null): NavSection[] {
     operationsItems.push({ label: 'Defects', href: '/defects', icon: AlertTriangle })
   }
 
-  const topItems: NavItem[] = [
-    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  ]
+  // /do is action-first — sits ABOVE Dashboard for everyone (the entry
+  // point for "what brings you here today?"). Hidden for read_only since
+  // they can't actually do any of the things on offer; they get the
+  // status-reading dashboard.
+  const topItems: NavItem[] = []
+  if (role !== 'read_only') {
+    topItems.push({ label: 'Do', href: '/do', icon: Zap })
+  }
+  topItems.push({ label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard })
   if (!isTechnician) {
     topItems.push({ label: 'Records', href: '/records', icon: Database, extraActivePaths: RECORDS_PATHS })
   }
