@@ -176,7 +176,13 @@ export async function GET(request: NextRequest) {
 
   // Count outstanding items
   const outstandingAssets = checkAssets.filter(ca => ca.status !== 'completed' && ca.status !== 'na').length
-  const outstandingWOs = checkAssets.filter(ca => !ca.work_order_number).length
+  // Only meaningful for Maximo-style imports where SOME assets carry a WO
+  // number. If none do (manual-create check), the metric is "all assets are
+  // outstanding" which is useless noise — pass null so the report hides the
+  // row. If ALL assets have a WO# (typical Equinix Delta import), the count
+  // is genuinely 0 and we surface that as compliance evidence.
+  const woCount = checkAssets.filter(ca => !!ca.work_order_number).length
+  const outstandingWOs = woCount === 0 ? null : checkAssets.length - woCount
 
   // Phase 5: Linked test records — fetch ACB / NSX / RCD tests that point
   // at this maintenance_check, summarise to one row per asset, and pass

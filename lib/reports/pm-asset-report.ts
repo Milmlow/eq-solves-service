@@ -79,7 +79,13 @@ export interface PmAssetReportInput {
   dueDate: string
   completedDate: string | null
   outstandingAssets: number
-  outstandingWorkOrders: number
+  /**
+   * Count of check_assets that don't have a Maximo WO number linked.
+   * Only meaningful for Maximo-style imported checks; manually-created
+   * checks have no WO numbers at all and rendering "5 of 5 outstanding"
+   * is more confusing than useful. Pass null to hide the row entirely.
+   */
+  outstandingWorkOrders: number | null
 
   // Technician / prepared by
   technicianName: string
@@ -597,7 +603,7 @@ function buildSiteOverview(input: PmAssetReportInput): (Paragraph | Table)[] {
   const c2 = 6438
   const tw = c1 + c2
 
-  const rows = [
+  const rows: [string, string][] = [
     ['Site Name / Code', `${input.siteName} (${input.siteCode})`],
     ['Address', input.siteAddress],
     ['Customer', input.customerName],
@@ -608,8 +614,12 @@ function buildSiteOverview(input: PmAssetReportInput): (Paragraph | Table)[] {
     ['Due Date', fmtDate(input.dueDate)],
     ['Completed Date', fmtDate(input.completedDate)],
     ['Outstanding Assets', String(input.outstandingAssets)],
-    ['Outstanding Work Orders', String(input.outstandingWorkOrders)],
   ]
+  // Only surface the WO-tracking row when it's meaningful. Manual-create
+  // checks don't have WO#s; rendering "5 of 5 outstanding" is noise.
+  if (input.outstandingWorkOrders !== null) {
+    rows.push(['Outstanding Work Orders', String(input.outstandingWorkOrders)])
+  }
 
   children.push(new Table({
     width: { size: tw, type: WidthType.DXA },
