@@ -27,6 +27,7 @@ import {
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import type { AcbTestDetail, BreakerTestReading } from '@/lib/reports/pm-asset-report'
+import { resolveBreakerIdentity, formatMakeModel, type BreakerIdentityRow } from '@/lib/reports/breaker-identity'
 import { captureSlowReportRun } from '@/lib/observability/report-duration-canary'
 
 // DOCX generation is CPU-bound and runs through ~12 sequential Supabase
@@ -252,53 +253,21 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Sprint 1 schema unification (Refs #101): prefer NEW workflow columns,
-  // fall back to LEGACY. The 3-step workflow writes
-  //   brand / breaker_type / current_in / trip_unit_model
-  // and the legacy bulk-edit form writes
-  //   cb_make / cb_model / cb_rating / trip_unit
-  // cb_serial / cb_poles / performance_level / fixed_withdrawable are
-  // shared between both surfaces — single read.
-  type BreakerCols = {
-    cb_make: string | null
-    cb_model: string | null
-    cb_serial: string | null
-    cb_rating: string | null
-    cb_poles: string | null
-    trip_unit: string | null
-    brand: string | null
-    breaker_type: string | null
-    current_in: string | null
-    trip_unit_model: string | null
-    performance_level?: string | null
-    fixed_withdrawable: string | null
-    id: string
-  }
+  // Sprint 1 schema unification (Refs #101): see lib/reports/breaker-identity.ts
+  // for the canonical helper. NEW workflow columns preferred over LEGACY;
+  // the helper is the single place to update when legacy columns get dropped.
+  type BreakerCols = BreakerIdentityRow & { id: string }
   function buildAcbDetail(t: typeof acbLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
     const r = t as unknown as BreakerCols
     return {
-      cbMake: r.brand ?? r.cb_make,
-      cbModel: r.breaker_type ?? r.cb_model,
-      cbSerial: r.cb_serial,
-      cbRating: r.current_in ?? r.cb_rating,
-      poles: r.cb_poles,
-      tripUnit: r.trip_unit_model ?? r.trip_unit,
-      performanceLevel: r.performance_level ?? null,
-      fixedWithdrawable: r.fixed_withdrawable,
+      ...resolveBreakerIdentity(r, { includePerformanceLevel: true }),
       readings: acbReadingsByTest.get(r.id) ?? [],
     }
   }
   function buildNsxDetail(t: typeof nsxLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
     const r = t as unknown as BreakerCols
     return {
-      cbMake: r.brand ?? r.cb_make,
-      cbModel: r.breaker_type ?? r.cb_model,
-      cbSerial: r.cb_serial,
-      cbRating: r.current_in ?? r.cb_rating,
-      poles: r.cb_poles,
-      tripUnit: r.trip_unit_model ?? r.trip_unit,
-      performanceLevel: null,                              // NSX has no PerformanceLevel
-      fixedWithdrawable: r.fixed_withdrawable,
+      ...resolveBreakerIdentity(r, { includePerformanceLevel: false }),
       readings: nsxReadingsByTest.get(r.id) ?? [],
     }
   }
@@ -317,13 +286,9 @@ export async function GET(request: NextRequest) {
 
   const acbSummaries: AcbTestSummary[] = (acbLinkedRes.data ?? []).map((t) => {
     const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
-    // Refs #101: read `new ?? legacy` for the summary line too.
-    const r = t as unknown as { brand: string | null; cb_make: string | null; breaker_type: string | null; cb_model: string | null }
-    const make = r.brand ?? r.cb_make
-    const model = r.breaker_type ?? r.cb_model
     return {
       assetName: asset?.name ?? '—',
-      cbMakeModel: [make, model].filter(Boolean).join(' ') || '—',
+      cbMakeModel: formatMakeModel(t as unknown as BreakerIdentityRow),
       testType: t.test_type ?? '—',
       testDate: t.test_date,
       stepsDone: stepCount(t),
@@ -335,13 +300,9 @@ export async function GET(request: NextRequest) {
 
   const nsxSummaries: NsxTestSummary[] = (nsxLinkedRes.data ?? []).map((t) => {
     const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
-    // Refs #101: read `new ?? legacy` for the summary line too.
-    const r = t as unknown as { brand: string | null; cb_make: string | null; breaker_type: string | null; cb_model: string | null }
-    const make = r.brand ?? r.cb_make
-    const model = r.breaker_type ?? r.cb_model
     return {
       assetName: asset?.name ?? '—',
-      cbMakeModel: [make, model].filter(Boolean).join(' ') || '—',
+      cbMakeModel: formatMakeModel(t as unknown as BreakerIdentityRow),
       testType: t.test_type ?? '—',
       testDate: t.test_date,
       stepsDone: stepCount(t),

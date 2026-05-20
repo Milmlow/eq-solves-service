@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { generateMaintenanceChecklist } from '@/lib/reports/maintenance-checklist'
 import type { MaintenanceChecklistInput, ChecklistAsset } from '@/lib/reports/maintenance-checklist'
+import { formatMakeModel, type BreakerIdentityRow } from '@/lib/reports/breaker-identity'
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import { fetchLogoImage } from '@/lib/reports/report-branding'
@@ -219,12 +220,11 @@ export async function GET(request: NextRequest) {
       checklistAssets = (tests ?? []).map((t) => {
         const a = t.assets as { name: string; maximo_id: string | null; location: string | null } | { name: string; maximo_id: string | null; location: string | null }[] | null
         const asset = Array.isArray(a) ? a[0] ?? null : a
-        // Refs #101: prefer new columns, fall back to legacy.
-        const make = ((t as { brand?: string | null }).brand ?? (t.cb_make as string | null)) ?? ''
-        const model = ((t as { breaker_type?: string | null }).breaker_type ?? (t.cb_model as string | null)) ?? ''
+        // Refs #101: helper centralises new ?? legacy fallback.
+        const makeModel = formatMakeModel(t as unknown as BreakerIdentityRow)
         const serial = (t.cb_serial as string | null) ?? ''
         const breakerLine =
-          [make, model, serial].filter(Boolean).join(' / ') || '_______________________________________________'
+          [makeModel === '—' ? null : makeModel, serial].filter(Boolean).join(' / ') || '_______________________________________________'
         return {
           assetName: asset?.name ?? 'Breaker',
           assetId: asset?.maximo_id ?? '—',
