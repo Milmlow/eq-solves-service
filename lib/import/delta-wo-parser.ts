@@ -370,6 +370,25 @@ export async function parseWorkbook(
     return { rows: [], groups: [], errors }
   }
 
+  // ── Unknown-column detection (2026-05-21) ──
+  // Workbook-level warning when row 1 carries headers we don't recognise.
+  // Surfaces Equinix Maximo template drift early instead of silently
+  // dropping data. Doesn't block import — just signals the column was
+  // ignored so the operator can decide whether to add it to OPTIONAL_HEADERS.
+  const knownHeaders = new Set<string>([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS])
+  const unknownHeaders = Array.from(headerMap.keys()).filter((h) => !knownHeaders.has(h))
+  if (unknownHeaders.length > 0) {
+    errors.push({
+      rowNumber: 1,
+      message:
+        `Sheet "${ws.name}" has unknown column(s) which will be ignored: ` +
+        `${unknownHeaders.map((h) => `"${h}"`).join(', ')}. ` +
+        `If this column carries data the import should capture, add it to OPTIONAL_HEADERS ` +
+        `in lib/import/delta-wo-parser.ts and wire the per-row read.`,
+    })
+    // Note: not returning. Unknown columns are non-blocking — import continues.
+  }
+
   // ── Row parsing ────────────────────────────────────────────────────
   const rows: DeltaRow[] = []
 
