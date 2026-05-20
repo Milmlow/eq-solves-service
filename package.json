@@ -20,8 +20,6 @@
     "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
-    "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "docx": "^9.6.1",

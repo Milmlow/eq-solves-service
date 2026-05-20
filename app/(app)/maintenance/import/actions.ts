@@ -13,6 +13,7 @@ import {
   type FrequencyEnum,
   type ParsedGroup,
 } from '@/lib/import/delta-wo-parser'
+import { deltaRowToCheckAssetInsert } from '@/lib/import/delta-row-mapping'
 
 /**
  * Map an EQ frequency enum to the boolean flag column on `job_plan_items`.
@@ -1173,17 +1174,20 @@ export async function commitDeltaImportAction(
         return { success: false, error: checkErr?.message ?? 'Failed to create check.' }
       }
 
-      // 2. check_assets (one per parsed row, with work_order_number)
-      // Skipped rows are excluded — no check_asset, no check_items for them.
+      // 2. check_assets (one per parsed row) — carries the full Maximo
+      // payload from the parsed Delta row (priority, work_type, crew,
+      // target dates, failure/problem/cause/remedy, classification, IR
+      // scan result) so the customer report + asset history can read it
+      // back. Skipped rows are excluded — no check_asset, no check_items.
       const checkAssetRows = g.parsed.rows
         .filter((r) => !g.skippedRowNumbers.has(r.rowNumber))
-        .map((r) => ({
-          tenant_id: tenantId,
-          check_id: check.id,
-          asset_id: g.assetIdByRow.get(r.rowNumber)!,
-          status: 'pending' as const,
-          work_order_number: r.workOrder,
-        }))
+        .map((r) =>
+          deltaRowToCheckAssetInsert(r, {
+            tenantId,
+            checkId: check.id,
+            assetId: g.assetIdByRow.get(r.rowNumber)!,
+          }),
+        )
 
       const { data: insertedCA, error: caErr } = await supabase
         .from('check_assets')
@@ -1814,13 +1818,13 @@ export async function commitConsolidatedDeltaImportAction(
     const allCARows = resolved.flatMap((g) =>
       g.parsed.rows
         .filter((r) => !g.skippedRowNumbers.has(r.rowNumber))
-        .map((r) => ({
-          tenant_id: tenantId,
-          check_id: check.id,
-          asset_id: g.assetIdByRow.get(r.rowNumber)!,
-          status: 'pending' as const,
-          work_order_number: r.workOrder,
-        })),
+        .map((r) =>
+          deltaRowToCheckAssetInsert(r, {
+            tenantId,
+            checkId: check.id,
+            assetId: g.assetIdByRow.get(r.rowNumber)!,
+          }),
+        ),
     )
     const { data: insertedCA, error: caErr } = await supabase
       .from('check_assets')
