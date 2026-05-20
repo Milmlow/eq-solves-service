@@ -1257,6 +1257,13 @@ export async function forceCompleteCheckAssetAction(checkId: string, checkAssetI
 
     if (caErr) return { success: false, error: caErr.message }
 
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'check_asset',
+      entityId: checkAssetId,
+      summary: 'Force-completed check asset and its items',
+    })
+
     revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
@@ -1302,6 +1309,15 @@ export async function bulkUpdateWorkOrdersAction(
       else updated++
     }
 
+    if (updated > 0) {
+      await logAuditEvent({
+        action: 'update',
+        entityType: 'maintenance_check',
+        entityId: checkId,
+        summary: `Bulk-updated work order numbers on ${updated} check asset(s)${failed.length > 0 ? ` (${failed.length} failed)` : ''}`,
+      })
+    }
+
     revalidateMaintenanceSurfaces()
     return { success: true, updated, failed }
   } catch (e: unknown) {
@@ -1337,6 +1353,14 @@ export async function updateCheckAssetAction(
       .eq('check_id', checkId)
 
     if (error) return { success: false, error: error.message }
+
+    const fields = Object.keys(data).join(', ')
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'check_asset',
+      entityId: checkAssetId,
+      summary: `Updated check asset (${fields})`,
+    })
 
     revalidateMaintenanceSurfaces()
     return { success: true }
