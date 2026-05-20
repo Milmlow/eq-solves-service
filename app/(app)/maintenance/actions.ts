@@ -895,11 +895,17 @@ export async function completeCheckAction(id: string) {
  *
  * Behaviour:
  *   - Status flips back from 'complete' → 'in_progress'.
- *   - completed_at is preserved (so we know when the original close happened)
- *     and a separate amended_at column is bumped on each re-open.
+ *   - completed_at is preserved (so we know when the original close happened).
  *   - Audit log entry: action='update', summary marks it as a re-open.
  *   - Future report regeneration: existing PDF stays at v1, next generation
  *     becomes v2.pdf — wired via the report-deliveries revision counter.
+ *
+ * Open follow-up (2026-05-21 audit): the original design called for a
+ * dedicated `amended_at` column to track each re-open distinct from the
+ * original close. The column was never added and this action never bumped
+ * one. For now the audit_logs table is the source of truth for re-open
+ * history; if amend timeline becomes a first-class report field, add the
+ * column via migration and update this action to bump it.
  *
  * No reason field required (per Royce 26-Apr decision — reduces friction).
  * The audit log captures who and when; the diff itself is implicit in the
@@ -1481,6 +1487,13 @@ export async function completeAllCheckAssetsAction(checkId: string) {
 
     if (caErr) return { success: false, error: caErr.message }
 
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check',
+      entityId: checkId,
+      summary: 'Marked all remaining check assets + items complete (Complete All)',
+    })
+
     revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
@@ -1528,6 +1541,13 @@ export async function batchForceCompleteAssetsAction(checkId: string, checkAsset
       .in('id', checkAssetIds)
 
     if (caErr) return { success: false, error: caErr.message }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check',
+      entityId: checkId,
+      summary: `Force-completed ${checkAssetIds.length} check asset(s) and their items`,
+    })
 
     revalidateMaintenanceSurfaces()
     return { success: true }
@@ -1613,6 +1633,15 @@ export async function updateCheckItemResultAction(
         if (assetErr) return { success: false, error: assetErr.message }
       }
     }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check_item',
+      entityId: itemId,
+      summary: result === null
+        ? 'Cleared item result'
+        : `Set item result to ${result}${comment ? ' (with comment)' : ''}`,
+    })
 
     revalidateMaintenanceSurfaces()
     return { success: true }
