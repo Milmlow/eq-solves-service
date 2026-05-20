@@ -24,6 +24,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import * as Sentry from '@sentry/nextjs'
 
 interface AcbNsxRow {
   step3_status: string | null
@@ -102,7 +103,14 @@ export async function propagateCheckCompletionIfReady(
   } catch (e) {
     // Best-effort — log and swallow. The triggering save has already
     // committed; failing the propagation shouldn't surface to the user.
+    // But surface to Sentry so we know if propagation is silently failing
+    // in production (silent failure means parent checks never auto-complete
+    // and nobody notices until someone manually checks status).
     // eslint-disable-next-line no-console
     console.error('propagateCheckCompletionIfReady failed', { checkId, error: e })
+    Sentry.captureException(e, {
+      tags: { source: 'propagateCheckCompletionIfReady' },
+      extra: { checkId },
+    })
   }
 }
