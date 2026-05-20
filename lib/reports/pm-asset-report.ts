@@ -147,6 +147,23 @@ export interface PmAssetSection {
   location: string
   jobPlanName: string               // e.g. "M14.5 - Load banks"
   workOrderNumber?: string | null   // Maximo work order #, if captured via Delta import
+
+  // Maximo WO metadata persisted on check_assets via PR #178. Rendered in the
+  // per-asset info grid (priority/work_type/target dates/classification/IR scan)
+  // and the failure-chain block below it (failure/problem/cause/remedy — only
+  // surfaces when at least one is populated).
+  priority?: string | null
+  workType?: string | null
+  crewId?: string | null
+  targetStart?: string | null
+  targetFinish?: string | null
+  classification?: string | null
+  irScanResult?: string | null
+  failureCode?: string | null
+  problem?: string | null
+  cause?: string | null
+  remedy?: string | null
+
   tasks: PmAssetTask[]
   defectsFound?: string
   recommendedAction?: string
@@ -849,36 +866,120 @@ function buildAssetSection(asset: PmAssetSection, brand: string, complexity: 'su
   const c4 = 2819
   const tw = c1 + c2 + c3 + c4
 
+  // Capitalise enum-shaped values for display ('urgent' → 'Urgent').
+  const cap = (s: string | null | undefined): string => {
+    if (!s) return '—'
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+  }
+  const upper = (s: string | null | undefined): string => s ? s.toUpperCase() : '—'
+
+  // Whether we have any Maximo metadata to surface. Suppresses the
+  // metadata rows entirely for non-Maximo checks so the grid stays clean.
+  const hasMaximoMeta = Boolean(
+    asset.priority || asset.workType || asset.targetStart ||
+    asset.targetFinish || asset.classification || asset.irScanResult,
+  )
+
+  // Whether any of the failure-chain fields are populated. These are
+  // typically blank on scheduling and only fill in post-completion when
+  // a defect was logged, so we render the block conditionally.
+  const hasFailureChain = Boolean(
+    asset.failureCode || asset.problem || asset.cause || asset.remedy,
+  )
+
+  const infoRows: TableRow[] = [
+    new TableRow({
+      children: [
+        makeCell('Site', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
+        makeCell(asset.site, c2, { size: 18, bold: true }),
+        makeCell('Asset', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
+        makeCell(asset.assetName, c4, { size: 18, bold: true }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        makeCell('Location', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
+        makeCell(asset.location, c2, { size: 18 }),
+        makeCell('Maximo ID', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
+        makeCell(asset.assetId, c4, { size: 18 }),
+      ],
+    }),
+    new TableRow({
+      children: [
+        makeCell('Work Order #', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
+        makeCell(asset.workOrderNumber ?? '—', c2, { size: 18 }),
+        makeCell('Job Plan', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
+        makeCell(asset.jobPlanName, c4, { size: 18 }),
+      ],
+    }),
+  ]
+
+  if (hasMaximoMeta) {
+    infoRows.push(
+      new TableRow({
+        children: [
+          makeCell('Priority', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(cap(asset.priority), c2, { size: 18 }),
+          makeCell('Work Type', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(upper(asset.workType), c4, { size: 18 }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          makeCell('Target Start', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(fmtDate(asset.targetStart ?? null), c2, { size: 18 }),
+          makeCell('Target Finish', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(fmtDate(asset.targetFinish ?? null), c4, { size: 18 }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          makeCell('Classification', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(asset.classification ?? '—', c2, { size: 18 }),
+          makeCell('IR Scan Result', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(cap(asset.irScanResult), c4, { size: 18 }),
+        ],
+      }),
+    )
+  }
+
   children.push(new Table({
     width: { size: tw, type: WidthType.DXA },
     columnWidths: [c1, c2, c3, c4],
-    rows: [
-      new TableRow({
-        children: [
-          makeCell('Site', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
-          makeCell(asset.site, c2, { size: 18, bold: true }),
-          makeCell('Asset', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
-          makeCell(asset.assetName, c4, { size: 18, bold: true }),
-        ],
-      }),
-      new TableRow({
-        children: [
-          makeCell('Location', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
-          makeCell(asset.location, c2, { size: 18 }),
-          makeCell('Maximo ID', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
-          makeCell(asset.assetId, c4, { size: 18 }),
-        ],
-      }),
-      new TableRow({
-        children: [
-          makeCell('Work Order #', c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
-          makeCell(asset.workOrderNumber ?? '—', c2, { size: 18 }),
-          makeCell('Job Plan', c3, { bold: true, color: EQ_MID_GREY, size: 16 }),
-          makeCell(asset.jobPlanName, c4, { size: 18 }),
-        ],
-      }),
-    ],
+    rows: infoRows,
   }))
+
+  if (hasFailureChain) {
+    children.push(spacer(120))
+    children.push(new Paragraph({
+      spacing: { after: 60 },
+      children: [new TextRun({
+        text: 'Failure Analysis',
+        bold: true, size: 20, font: FONT, color: 'C0392B',
+      })],
+    }))
+    const chainRows: TableRow[] = []
+    const chain: [string, string | null | undefined][] = [
+      ['Failure Code', asset.failureCode],
+      ['Problem', asset.problem],
+      ['Cause', asset.cause],
+      ['Remedy', asset.remedy],
+    ]
+    for (const [label, value] of chain) {
+      if (!value) continue
+      chainRows.push(new TableRow({
+        children: [
+          makeCell(label, c1, { bold: true, color: EQ_MID_GREY, size: 16 }),
+          makeCell(value, c2 + c3 + c4, { size: 18 }),
+        ],
+      }))
+    }
+    children.push(new Table({
+      width: { size: tw, type: WidthType.DXA },
+      columnWidths: [c1, c2 + c3 + c4],
+      rows: chainRows,
+    }))
+  }
 
   if (complexity === 'summary') {
     // Summary: just show pass/fail counts instead of full checklist

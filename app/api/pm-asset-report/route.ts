@@ -145,15 +145,20 @@ export async function GET(request: NextRequest) {
   const reportLogos = await resolveReportLogos(tenantSettings, tenantRow)
   const sitePhoto = check.site_id ? await fetchSitePhoto(supabase, check.site_id, tenantId) : undefined
 
-  // Resolve user names (assigned_to + per-item completed_by).
+  // Resolve user names (assigned_to + created_by + per-item completed_by).
   //
-  // NOTE: maintenance_checks has NO completed_by column — only assigned_to,
+  // maintenance_checks has no completed_by column, only assigned_to,
   // created_by, and completed_at. The historical code read check.completed_by
   // (which silently returned undefined), so supervisorName and reviewerName
-  // on the customer report cover have always rendered '—' and null. We've
-  // dropped the dead reads here; rendering decisions handled below.
+  // on the cover have always rendered '—' and null. We now use created_by
+  // (the user who scheduled the check) for the supervisor / reviewer slots —
+  // that's a real, meaningful field and matches the SKS workflow where a
+  // supervisor schedules and a tech executes.
   const userIds = new Set<string>()
   if (check.assigned_to) userIds.add(check.assigned_to)
+  if ((check as { created_by?: string | null }).created_by) {
+    userIds.add((check as { created_by: string }).created_by)
+  }
   for (const item of allItems) {
     if (item.completed_by) userIds.add(item.completed_by)
   }
@@ -435,6 +440,22 @@ export async function GET(request: NextRequest) {
       location: asset?.location ?? '—',
       jobPlanName: asset?.job_plans?.name ?? (check.job_plans as { name: string } | null)?.name ?? '—',
       workOrderNumber: ca.work_order_number ?? null,
+
+      // Maximo WO metadata persisted by PR #178 (delta-row-mapping.ts). These
+      // fields render in the per-asset info grid + a conditional failure-chain
+      // block. Null on manual-create checks; populated on Delta-imported ones.
+      priority: ca.priority ?? null,
+      workType: ca.work_type ?? null,
+      crewId: ca.crew_id ?? null,
+      targetStart: ca.target_start ?? null,
+      targetFinish: ca.target_finish ?? null,
+      classification: ca.classification ?? null,
+      irScanResult: ca.ir_scan_result ?? null,
+      failureCode: ca.failure_code ?? null,
+      problem: ca.problem ?? null,
+      cause: ca.cause ?? null,
+      remedy: ca.remedy ?? null,
+
       tasks,
       defectsFound,
       recommendedAction: failedItems.length > 0 ? 'Follow-up rectification required for failed items.' : undefined,
@@ -461,10 +482,12 @@ export async function GET(request: NextRequest) {
     siteCode: jobPlanCode || siteName,
     siteAddress: site?.address ?? '—',
     customerName,
-    // supervisorName previously read from check.completed_by (never existed —
-    // always rendered '—'). Preserved that visible behaviour pending a real
-    // sign-off column / lookup via audit_log.
-    supervisorName: '—',
+    // supervisorName is the user who scheduled the check (created_by). For
+    // SKS workflow the supervisor schedules and a tech executes — this lines
+    // up with reality and replaces the historical '—' dead-read.
+    supervisorName: (check as { created_by?: string | null }).created_by
+      ? (userMap[(check as { created_by: string }).created_by] ?? '—')
+      : '—',
     contactEmail: '—',
     contactPhone: '—',
 
@@ -475,9 +498,12 @@ export async function GET(request: NextRequest) {
     outstandingWorkOrders: outstandingWOs,
 
     technicianName: check.assigned_to ? (userMap[check.assigned_to] ?? 'Unassigned') : 'Unassigned',
-    // reviewerName previously read from the non-existent completed_by column
-    // (always null). Preserved that behaviour pending a real reviewer field.
-    reviewerName: null,
+    // reviewerName uses created_by (the supervisor who scheduled). Same as
+    // supervisorName above — the sign-off page can render the same name for
+    // both fields when supervisor and reviewer are the same person.
+    reviewerName: (check as { created_by?: string | null }).created_by
+      ? (userMap[(check as { created_by: string }).created_by] ?? null)
+      : null,
 
     tenantProductName: productName,
     primaryColour,
