@@ -13,6 +13,7 @@ import {
   UpdateMaintenanceCheckSchema,
   UpdateCheckItemResultSchema,
 } from '@/lib/validations/maintenance-check'
+import { RaiseDefectSchema, UpdateDefectSchema } from '@/lib/validations/defect'
 import { zodToErrorMap } from '@/lib/utils/zodErrors'
 
 /**
@@ -1386,19 +1387,26 @@ export async function raiseDefectAction(data: {
     const { supabase, tenantId, role, user } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
-    if (!data.title?.trim()) return { success: false, error: 'Title is required.' }
+    // Zod validation — AGENTS.md requires schema validation on all mutating
+    // server actions. The TS signature already constrains compile-time
+    // callers; this is runtime defence-in-depth.
+    const parsed = RaiseDefectSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid defect input.' }
+    }
+    const input = parsed.data
 
     const { data: insertedRows, error } = await supabase
       .from('defects')
       .insert({
         tenant_id: tenantId,
-        check_id: data.check_id,
-        check_asset_id: data.check_asset_id || null,
-        asset_id: data.asset_id || null,
-        site_id: data.site_id || null,
-        title: data.title.trim(),
-        description: data.description?.trim() || null,
-        severity: data.severity || 'medium',
+        check_id: input.check_id,
+        check_asset_id: input.check_asset_id || null,
+        asset_id: input.asset_id || null,
+        site_id: input.site_id || null,
+        title: input.title.trim(),
+        description: input.description?.trim() || null,
+        severity: input.severity,
         status: 'open',
         raised_by: user.id,
       })
@@ -1412,12 +1420,12 @@ export async function raiseDefectAction(data: {
     await notifyDefectRaised({
       tenantId,
       defectId: insertedRows.id,
-      title: data.title.trim(),
-      description: data.description?.trim() ?? null,
-      severity: data.severity || 'medium',
+      title: input.title.trim(),
+      description: input.description?.trim() ?? null,
+      severity: input.severity,
     })
 
-    await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${data.title}"` })
+    await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${input.title}"` })
     revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
@@ -1436,6 +1444,14 @@ export async function updateDefectAction(defectId: string, updates: {
   try {
     const { supabase, role, user } = await requireUser()
 
+    // Zod validation — AGENTS.md requires schema validation on all mutating
+    // server actions. Status / severity enums are now enforced at runtime.
+    const parsed = UpdateDefectSchema.safeParse(updates)
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid defect update.' }
+    }
+    const input = parsed.data
+
     // Technicians can update defects assigned to them; writers can update any
     if (!canWrite(role)) {
       const { data: defect } = await supabase
@@ -1449,14 +1465,14 @@ export async function updateDefectAction(defectId: string, updates: {
     }
 
     const updateData: Record<string, unknown> = {}
-    if (updates.status) updateData.status = updates.status
-    if (updates.severity) updateData.severity = updates.severity
-    if (updates.assigned_to !== undefined) updateData.assigned_to = updates.assigned_to
-    if (updates.resolution_notes !== undefined) updateData.resolution_notes = updates.resolution_notes
-    if (updates.work_order_number !== undefined) updateData.work_order_number = updates.work_order_number
-    if (updates.work_order_date !== undefined) updateData.work_order_date = updates.work_order_date
+    if (input.status) updateData.status = input.status
+    if (input.severity) updateData.severity = input.severity
+    if (input.assigned_to !== undefined) updateData.assigned_to = input.assigned_to
+    if (input.resolution_notes !== undefined) updateData.resolution_notes = input.resolution_notes
+    if (input.work_order_number !== undefined) updateData.work_order_number = input.work_order_number
+    if (input.work_order_date !== undefined) updateData.work_order_date = input.work_order_date
 
-    if (updates.status === 'resolved' || updates.status === 'closed') {
+    if (input.status === 'resolved' || input.status === 'closed') {
       updateData.resolved_at = new Date().toISOString()
       updateData.resolved_by = user.id
     }
