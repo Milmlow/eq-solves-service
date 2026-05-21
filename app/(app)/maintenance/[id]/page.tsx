@@ -3,6 +3,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CheckDetailPage } from './CheckDetailPage'
 import { LinkedTestsPanel } from './LinkedTestsPanel'
 import { ContractScopeBanner } from '@/components/ui/ContractScopeBanner'
+import { SiteContextCard } from './SiteContextCard'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { notFound } from 'next/navigation'
 import type { Role, MaintenanceCheckItem, Attachment } from '@/lib/types'
@@ -29,14 +30,43 @@ export default async function MaintenanceCheckPage({
     userRole = (membership?.role as Role) ?? null
   }
 
-  // Fetch the maintenance check
+  // Fetch the maintenance check — pull the site context fields (address,
+  // lat/lng, photo, primary contact id) so the SiteContextCard can render
+  // "where do I need to go" without a second roundtrip on the way in.
   const { data: check, error } = await supabase
     .from('maintenance_checks')
-    .select('*, job_plans(name), sites(name)')
+    .select(`
+      *,
+      job_plans(name),
+      sites(
+        id, name, code, address, city, state, postcode, country,
+        latitude, longitude, photo_url, primary_contact_id
+      )
+    `)
     .eq('id', id)
     .maybeSingle()
 
   if (error || !check) notFound()
+
+  // Resolve the site's primary contact (name + phone + role) if the site
+  // has one nominated. Site_contacts is tenant-scoped via RLS already.
+  type SiteShape = {
+    id: string; name: string; code: string | null
+    address: string | null; city: string | null; state: string | null
+    postcode: string | null; country: string | null
+    latitude: number | null; longitude: number | null
+    photo_url: string | null; primary_contact_id: string | null
+  }
+  const site = (check.sites as SiteShape | null)
+  let siteContact: { name: string; role: string | null; phone: string | null; email: string | null } | null = null
+  if (site?.primary_contact_id) {
+    const { data: contact } = await supabase
+      .from('site_contacts')
+      .select('name, role, phone, email')
+      .eq('id', site.primary_contact_id)
+      .maybeSingle()
+    siteContact = (contact ?? null) as typeof siteContact
+  }
 
   // Resolve assignee name
   let assigneeName: string | null = null
@@ -95,7 +125,7 @@ export default async function MaintenanceCheckPage({
         ]} />
         <h1 className="text-3xl font-bold text-eq-ink mt-3 tracking-tight">{checkName}</h1>
         <p className="text-sm text-eq-grey mt-1">
-          {(check.sites as { name: string } | null)?.name ?? '—'}
+          {site?.name ?? '—'}
           {check.frequency && <span> · {(check.frequency as string).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>}
           {check.due_date && <span> · Due {new Date(check.due_date).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
         </p>
@@ -116,6 +146,27 @@ export default async function MaintenanceCheckPage({
           ) : null
         })()}
       </div>
+      {/* Site context — address, contact, map link. Sits at the top of the
+          page so a tech opening the check on their phone sees "where do I
+          need to go" before anything else. Renders nothing when the site
+          has no address + no contact + no photo. */}
+      {site && (
+        <SiteContextCard
+          site={{
+            name: site.name,
+            code: site.code,
+            address: site.address,
+            city: site.city,
+            state: site.state,
+            postcode: site.postcode,
+            country: site.country,
+            latitude: site.latitude,
+            longitude: site.longitude,
+            photo_url: site.photo_url,
+          }}
+          contact={siteContact}
+        />
+      )}
       {/* Contract scope context — shown above the detail body so site teams
           see what's in/out of scope before they pick assets to inspect.
           Phase 2 of Royce's 26-Apr review. */}
