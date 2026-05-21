@@ -790,7 +790,21 @@ export async function updateCheckAction(id: string, formData: FormData) {
 /**
  * Start a check — sets status to in_progress and started_at.
  */
-export async function startCheckAction(id: string) {
+/**
+ * Start a maintenance check.
+ *
+ * Accepts an optional GPS payload — the browser captures the tech's
+ * coordinates when they grant the permission prompt, and we stamp them
+ * on the check row alongside `started_at`. This is the "I'm onsite"
+ * signal that powers the supervisor /admin/today view + the customer-
+ * evidence audit trail (SLA disputes: "tech actually showed up at this
+ * lat/lng at this time"). GPS is optional — the action works fine
+ * without it for techs who deny the permission or are on a desktop.
+ */
+export async function startCheckAction(
+  id: string,
+  gps?: { lat: number; lng: number } | null,
+) {
   try {
     const { supabase, role, user } = await requireUser()
 
@@ -808,14 +822,40 @@ export async function startCheckAction(id: string) {
     const isAssigned = existing.assigned_to === user.id
     if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
 
+    // Range-validate the GPS payload — anything outside the valid lat/lng
+    // envelope is almost certainly a client bug, not a real coordinate.
+    const gpsValid =
+      gps !== null &&
+      gps !== undefined &&
+      Number.isFinite(gps.lat) &&
+      Number.isFinite(gps.lng) &&
+      Math.abs(gps.lat) <= 90 &&
+      Math.abs(gps.lng) <= 180
+    const update: Record<string, unknown> = {
+      status: 'in_progress',
+      started_at: new Date().toISOString(),
+    }
+    if (gpsValid && gps) {
+      update.gps_lat = gps.lat
+      update.gps_lng = gps.lng
+    }
+
     const { error } = await supabase
       .from('maintenance_checks')
-      .update({ status: 'in_progress', started_at: new Date().toISOString() })
+      .update(update)
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
 
-    await logAuditEvent({ action: 'update', entityType: 'maintenance_check', entityId: id, summary: 'Started maintenance check' })
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check',
+      entityId: id,
+      summary: gpsValid
+        ? 'Started maintenance check — onsite arrival captured'
+        : 'Started maintenance check',
+      metadata: gpsValid ? { gps_lat: gps?.lat, gps_lng: gps?.lng } : undefined,
+    })
     revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {

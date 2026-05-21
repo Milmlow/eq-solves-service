@@ -206,9 +206,31 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   }
 
   // Actions
+  /**
+   * Request the device's current position before calling startCheckAction,
+   * but never block on it — if the user denies the permission, hasn't
+   * granted yet, or geolocation isn't supported (insecure context,
+   * desktop without GPS), we proceed without coordinates. The server
+   * action accepts a null/undefined gps payload and degrades gracefully.
+   *
+   * 8-second timeout so a tech in a basement plant room with no signal
+   * doesn't sit on a permission prompt that never resolves.
+   */
+  async function captureGeolocation(): Promise<{ lat: number; lng: number } | null> {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return null
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 },
+      )
+    })
+  }
+
   async function handleStart() {
     setError(null); setLoading(true)
-    const result = await startCheckAction(check.id)
+    const gps = await captureGeolocation()
+    const result = await startCheckAction(check.id, gps)
     setLoading(false)
     if (!result.success) setError(result.error ?? 'Failed to start.')
   }
@@ -333,7 +355,10 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     // start via startCheckAction, so we don't lose the timestamp.
     let effectiveStatus = localStatus
     if (effectiveStatus === 'scheduled' || effectiveStatus === 'overdue') {
-      const startResult = await startCheckAction(check.id)
+      // Capture GPS even on the auto-start path — same logic as the explicit
+      // Start Check button. Non-blocking; no UX surprise if the user denies.
+      const gps = await captureGeolocation()
+      const startResult = await startCheckAction(check.id, gps)
       if (!startResult.success) {
         setError(startResult.error ?? 'Failed to auto-start the check. Try the Start Check button.')
         return
