@@ -17,6 +17,8 @@ import {
   type ExistingCounts,
   type CommitResult,
 } from './actions'
+import { checkImportFileSize } from '@/lib/utils/file-size-guard'
+import { downloadImportErrorCsv } from '@/lib/utils/import-error-csv'
 
 interface PreviewScope {
   jp_code: string | null
@@ -169,6 +171,11 @@ export function CommercialSheetImporter() {
   }
 
   function handleFile(f: File) {
+    const sizeError = checkImportFileSize(f)
+    if (sizeError) {
+      setBanner({ kind: 'err', msg: sizeError })
+      return
+    }
     setFile(f)
     setPreview(null)
     setCustomerId('')
@@ -508,9 +515,31 @@ export function CommercialSheetImporter() {
           </div>
         )}
         {preview && preview.parsed.warnings.length > 0 && (
-          <ul className="mt-3 text-xs text-amber-700 space-y-1">
-            {preview.parsed.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
-          </ul>
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide">
+                {preview.parsed.warnings.length} warning{preview.parsed.warnings.length === 1 ? '' : 's'} from parser
+              </p>
+              <button
+                type="button"
+                className="text-xs font-semibold text-amber-800 underline hover:no-underline"
+                onClick={() => {
+                  const rows = preview.parsed.warnings.map((w, i) => ({
+                    rowRef: `warning ${i + 1}`,
+                    context: 'commercial sheet',
+                    reason: w,
+                  }))
+                  const base = (file?.name ?? 'commercial-sheet').replace(/\.xlsx$/i, '')
+                  downloadImportErrorCsv(rows, `${base}_warnings.csv`)
+                }}
+              >
+                Download warnings (CSV)
+              </button>
+            </div>
+            <ul className="text-xs text-amber-700 space-y-1">
+              {preview.parsed.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
+            </ul>
+          </div>
         )}
       </Card>
 

@@ -39,3 +39,35 @@ export function canDoTestWork(role: Role | null): boolean {
 export function isSuperAdmin(role: Role | null): boolean {
   return role === 'super_admin'
 }
+
+// ── Import permissions ──────────────────────────────────────────────
+//
+// Each importer in the app uses a role gate from the helpers above; the
+// audit done in /docs/reviews/2026-05-21-import-audit flagged the
+// per-flow inconsistency. This block documents the decisions so the
+// next reviewer doesn't think they're accidental.
+//
+//   /testing/acb         importAcbCollectionAction      → canDoTestWork
+//   /maintenance/import  commit{,Consolidated}Delta…    → canWrite
+//   /testing/rcd/import  commitJemenaRcdImportAction    → canWrite
+//   /contract-scope      importScopeItemsAction         → canWrite
+//   /commercials/…       commitImportAction (sheet)     → isAdmin
+//
+// Rationale:
+//   * ACB collection round-trips technician-authored data. The same
+//     tech can already update one breaker at a time via the workflow
+//     UI; offline bulk-fill is an ergonomic shortcut for the same
+//     write, so the gate matches (canDoTestWork = supervisor + tech).
+//   * Delta WO + RCD imports create or replace many maintenance
+//     checks across assets and sites — a supervisor-or-above call
+//     because it shapes the team's work, not just one breaker.
+//   * Commercial-sheet is wipe-and-replace at the customer-FY level
+//     and pivots multi-year cost numbers. Admin-only — the audit-log
+//     pre-wipe snapshot is the recovery path if it goes sideways.
+//
+// `canImport` is an alias for the common case (everything except ACB
+// + commercial-sheet) so new importers default to the right gate
+// without having to re-derive the reasoning.
+export function canImport(role: Role | null): boolean {
+  return canWrite(role)
+}
