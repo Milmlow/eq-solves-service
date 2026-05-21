@@ -11,6 +11,15 @@ export const CreateSiteSchema = z.object({
   country: z.string().max(100).optional().default('Australia'),
   latitude: z.coerce.number().min(-90).max(90).nullable().optional(),
   longitude: z.coerce.number().min(-180).max(180).nullable().optional(),
+  // Migration 0105 — site access fields. Each surfaces on the
+  // Site Context Card on /maintenance/[id]. Generous max length on
+  // the textareas because real-world site access notes can be a
+  // paragraph (alarm code, after-hours doorbell, where to find
+  // the spare key, etc.).
+  gate_code: z.string().max(2000).nullable().optional(),
+  parking_notes: z.string().max(2000).nullable().optional(),
+  after_hours_phone: z.string().max(50).nullable().optional(),
+  safety_notes: z.string().max(4000).nullable().optional(),
 })
 
 export const UpdateSiteSchema = CreateSiteSchema.partial().extend({
