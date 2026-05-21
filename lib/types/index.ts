@@ -267,6 +267,13 @@ export interface Site {
   is_active: boolean
   created_at: string
   updated_at: string
+  // Migration 0105 — site access fields. Each surfaces on the Site
+  // Context Card on /maintenance/[id]. All nullable; missing fields
+  // simply hide their row from the card.
+  gate_code: string | null
+  parking_notes: string | null
+  after_hours_phone: string | null
+  safety_notes: string | null
 }
 
 export interface Asset {

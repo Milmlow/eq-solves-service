@@ -40,7 +40,8 @@ export default async function MaintenanceCheckPage({
       job_plans(name),
       sites(
         id, name, code, address, city, state, postcode, country,
-        latitude, longitude, photo_url, primary_contact_id
+        latitude, longitude, photo_url, primary_contact_id,
+        gate_code, parking_notes, after_hours_phone, safety_notes
       )
     `)
     .eq('id', id)
@@ -56,6 +57,8 @@ export default async function MaintenanceCheckPage({
     postcode: string | null; country: string | null
     latitude: number | null; longitude: number | null
     photo_url: string | null; primary_contact_id: string | null
+    gate_code: string | null; parking_notes: string | null
+    after_hours_phone: string | null; safety_notes: string | null
   }
   const site = (check.sites as SiteShape | null)
   let siteContact: { name: string; role: string | null; phone: string | null; email: string | null } | null = null
@@ -163,6 +166,10 @@ export default async function MaintenanceCheckPage({
             latitude: site.latitude,
             longitude: site.longitude,
             photo_url: site.photo_url,
+            gate_code: site.gate_code,
+            parking_notes: site.parking_notes,
+            after_hours_phone: site.after_hours_phone,
+            safety_notes: site.safety_notes,
           }}
           contact={siteContact}
         />

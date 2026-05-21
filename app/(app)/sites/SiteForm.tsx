@@ -314,6 +314,59 @@ export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCusto
           <input type="hidden" name="photo_url" value={photoUrl ?? ''} />
         </div>
 
+        {/*
+          Site access — the on-site reality the address fields don't capture.
+          The Site Context Card on /maintenance/[id] surfaces each of these
+          to the tech opening the check; leaving a field blank hides that
+          row from the card. Order matters here: access (gate code) and
+          parking are what the tech needs as they pull up; after-hours
+          phone is for emergencies; safety notes are read on arrival.
+        */}
+        <div className="space-y-3 pt-2 border-t border-gray-100">
+          <h3 className="text-sm font-semibold text-eq-ink">Site access</h3>
+          <p className="text-xs text-eq-grey -mt-1">
+            Captures the "how do I actually get in" details that show on the tech's check page.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Gate / access code</label>
+            <textarea
+              name="gate_code"
+              defaultValue={site?.gate_code ?? ''}
+              placeholder="e.g. Front gate 4521. After hours: ring doorbell at the loading dock."
+              rows={2}
+              className="min-h-[44px] px-3 py-2 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Parking</label>
+            <textarea
+              name="parking_notes"
+              defaultValue={site?.parking_notes ?? ''}
+              placeholder="e.g. Visitor parking bay 12. Don't block the loading dock between 7am–10am."
+              rows={2}
+              className="min-h-[44px] px-3 py-2 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            />
+          </div>
+          <FormInput
+            label="After-hours phone"
+            name="after_hours_phone"
+            type="tel"
+            defaultValue={site?.after_hours_phone ?? ''}
+            placeholder="e.g. 0400 123 456"
+          />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Site safety notes</label>
+            <textarea
+              name="safety_notes"
+              defaultValue={site?.safety_notes ?? ''}
+              placeholder="PPE required: hi-vis, hard hat, safety glasses. Hot work permit needed for cutting/welding. Isolation procedure: SOP-001."
+              rows={3}
+              className="min-h-[44px] px-3 py-2 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            />
+            <p className="text-[11px] text-eq-grey">Shown on a red accent on the tech's check page — use this for must-read safety, not nice-to-have.</p>
+          </div>
+        </div>
+
         {/* Site Logo — optional override of customer logo */}
         <div className="space-y-3 pt-2 border-t border-gray-100">
           <div>

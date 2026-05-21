@@ -18,7 +18,7 @@
  */
 
 import Link from 'next/link'
-import { MapPin, Phone, Navigation, User } from 'lucide-react'
+import { MapPin, Phone, Navigation, User, Key, Car, ShieldAlert, PhoneCall } from 'lucide-react'
 
 interface SiteContextCardProps {
   site: {
@@ -32,6 +32,14 @@ interface SiteContextCardProps {
     latitude: number | null
     longitude: number | null
     photo_url: string | null
+    /** Free-text access instructions — gate / dock / front-door code or steps. */
+    gate_code: string | null
+    /** Where to park, restrictions, after-hours options. */
+    parking_notes: string | null
+    /** Out-of-hours emergency contact, distinct from the daytime primary contact. */
+    after_hours_phone: string | null
+    /** Site-specific safety requirements: PPE, isolation, induction-required, etc. */
+    safety_notes: string | null
   }
   contact: {
     name: string
@@ -80,7 +88,8 @@ function telHref(phone: string): string {
 export function SiteContextCard({ site, contact }: SiteContextCardProps) {
   const address = formatAddress(site)
   const mapHref = buildMapHref(site)
-  const hasAnyContent = address || contact || site.photo_url
+  const hasAccessFields = !!(site.gate_code || site.parking_notes || site.after_hours_phone || site.safety_notes)
+  const hasAnyContent = address || contact || site.photo_url || hasAccessFields
 
   if (!hasAnyContent) return null
 
@@ -149,6 +158,59 @@ export function SiteContextCard({ site, contact }: SiteContextCardProps) {
                     {contact.phone}
                   </a>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* After-hours phone — distinct from the primary contact because
+              the on-call number is usually a different person/number. */}
+          {site.after_hours_phone && (
+            <div className="flex items-start gap-2 text-sm border-t border-eq-line pt-3">
+              <PhoneCall className="w-4 h-4 mt-0.5 text-eq-deep shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-eq-grey uppercase tracking-wider">After hours</p>
+                <a
+                  href={telHref(site.after_hours_phone)}
+                  className="inline-flex items-center gap-1 min-h-[44px] text-sm font-semibold text-eq-deep hover:text-eq-sky touch-manipulation"
+                >
+                  <Phone className="w-4 h-4" />
+                  {site.after_hours_phone}
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Gate / access code — the field that saves the tech 20 minutes
+              of standing at a locked dock on their first visit. */}
+          {site.gate_code && (
+            <div className="flex items-start gap-2 text-sm border-t border-eq-line pt-3">
+              <Key className="w-4 h-4 mt-0.5 text-eq-deep shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-eq-grey uppercase tracking-wider">Access</p>
+                <p className="text-eq-ink whitespace-pre-line">{site.gate_code}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Parking notes */}
+          {site.parking_notes && (
+            <div className="flex items-start gap-2 text-sm border-t border-eq-line pt-3">
+              <Car className="w-4 h-4 mt-0.5 text-eq-deep shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-eq-grey uppercase tracking-wider">Parking</p>
+                <p className="text-eq-ink whitespace-pre-line">{site.parking_notes}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Safety notes — rendered with a red accent because PPE / isolation
+              info is the kind of thing you want a tech to actually READ. */}
+          {site.safety_notes && (
+            <div className="flex items-start gap-2 text-sm border-t border-eq-line pt-3 bg-red-50/40 -mx-4 px-4 -mb-1 pb-3 rounded-b-xl sm:rounded-none">
+              <ShieldAlert className="w-4 h-4 mt-0.5 text-red-700 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-red-800 uppercase tracking-wider">Site safety</p>
+                <p className="text-eq-ink whitespace-pre-line">{site.safety_notes}</p>
               </div>
             </div>
           )}

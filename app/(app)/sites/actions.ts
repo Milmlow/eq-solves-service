@@ -23,6 +23,12 @@ export async function createSiteAction(formData: FormData) {
       country: formData.get('country') || 'Australia',
       latitude: formData.get('latitude') ? Number(formData.get('latitude')) : null,
       longitude: formData.get('longitude') ? Number(formData.get('longitude')) : null,
+      // Migration 0105 — site access fields. Empty strings get coerced
+      // to null so a supervisor clearing a field actually clears it.
+      gate_code: (formData.get('gate_code') as string | null)?.trim() || null,
+      parking_notes: (formData.get('parking_notes') as string | null)?.trim() || null,
+      after_hours_phone: (formData.get('after_hours_phone') as string | null)?.trim() || null,
+      safety_notes: (formData.get('safety_notes') as string | null)?.trim() || null,
     }
 
     const parsed = CreateSiteSchema.safeParse(raw)
@@ -71,6 +77,12 @@ export async function updateSiteAction(id: string, formData: FormData) {
       country: formData.get('country') || 'Australia',
       latitude: formData.get('latitude') ? Number(formData.get('latitude')) : null,
       longitude: formData.get('longitude') ? Number(formData.get('longitude')) : null,
+      // Migration 0105 — site access fields. Empty strings get coerced
+      // to null so a supervisor clearing a field actually clears it.
+      gate_code: (formData.get('gate_code') as string | null)?.trim() || null,
+      parking_notes: (formData.get('parking_notes') as string | null)?.trim() || null,
+      after_hours_phone: (formData.get('after_hours_phone') as string | null)?.trim() || null,
+      safety_notes: (formData.get('safety_notes') as string | null)?.trim() || null,
     }
 
     const parsed = UpdateSiteSchema.safeParse(raw)
