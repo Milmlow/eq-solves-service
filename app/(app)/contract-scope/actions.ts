@@ -64,6 +64,16 @@ export async function updateScopeItemAction(id: string, formData: FormData) {
   }
 }
 
+export interface ScopeImportRowResult {
+  /** 1-based row number from the CSV the user uploaded. */
+  rowNumber: number
+  customer: string
+  site: string | null
+  scope_item: string
+  ok: boolean
+  reason?: string
+}
+
 export async function importScopeItemsAction(items: {
   customer_name: string
   site_name: string | null
@@ -93,10 +103,44 @@ export async function importScopeItemsAction(items: {
 
     let imported = 0
     let skipped = 0
-    for (const item of items) {
+    // Per-row results — replaces the old "imported / skipped" counts so
+    // the UI can show exactly which rows failed and why. The order
+    // matches the input array so callers can map rowNumber = idx + 2
+    // (row 1 = CSV header).
+    const rowResults: ScopeImportRowResult[] = []
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]!
+      const rowNumber = i + 2
       const customerId = custMap[item.customer_name.toLowerCase()]
-      if (!customerId) { skipped++; continue }
+      if (!customerId) {
+        skipped++
+        rowResults.push({
+          rowNumber,
+          customer: item.customer_name,
+          site: item.site_name,
+          scope_item: item.scope_item,
+          ok: false,
+          reason: `Customer "${item.customer_name}" not found in this workspace.`,
+        })
+        continue
+      }
       const siteId = item.site_name ? (siteMap[item.site_name.toLowerCase()] ?? null) : null
+      if (item.site_name && !siteId) {
+        // Site name supplied but no match — note it as a soft issue so
+        // the user can fix the typo. We still insert the row at customer
+        // level (site_id = null) to preserve prior behaviour where a
+        // missing site quietly became customer-level, but flag it.
+        rowResults.push({
+          rowNumber,
+          customer: item.customer_name,
+          site: item.site_name,
+          scope_item: item.scope_item,
+          ok: false,
+          reason: `Site "${item.site_name}" not found — inserted at customer level. Fix the site name and re-import to attach.`,
+        })
+        // Note: not skipping the insert here intentionally — see comment above.
+      }
 
       const { error } = await supabase
         .from('contract_scopes')
@@ -110,15 +154,47 @@ export async function importScopeItemsAction(items: {
           notes: item.notes,
         })
 
-      if (error) { skipped++; continue }
+      if (error) {
+        skipped++
+        rowResults.push({
+          rowNumber,
+          customer: item.customer_name,
+          site: item.site_name,
+          scope_item: item.scope_item,
+          ok: false,
+          reason: error.message,
+        })
+        continue
+      }
       imported++
+      // Only push a success row if we haven't already pushed a soft-fail row above
+      if (!(item.site_name && !siteId)) {
+        rowResults.push({
+          rowNumber,
+          customer: item.customer_name,
+          site: item.site_name,
+          scope_item: item.scope_item,
+          ok: true,
+        })
+      }
     }
 
-    await logAuditEvent({ action: 'create', entityType: 'contract_scope', summary: `Imported ${imported} scope items` })
+    // Emit plain-string rowErrors for the shared ImportCSVModal contract,
+    // and structured rowResults for any caller that wants full detail.
+    const rowErrors = rowResults
+      .filter((r) => !r.ok)
+      .map((r) => `Row ${r.rowNumber}: ${r.customer}${r.site ? ` / ${r.site}` : ''} — ${r.reason ?? 'Unknown error'}`)
+
+    await logAuditEvent({
+      action: 'import',
+      entityType: 'contract_scope',
+      summary: `Scope import: ${imported} imported, ${skipped} skipped, ${rowErrors.length} row issues`,
+      metadata: { imported, skipped, total: items.length },
+    })
     revalidatePath('/contract-scope')
-    return { success: true, imported, skipped }
+    return { success: true as const, imported, skipped, rowResults, rowErrors }
   } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
+    return { success: false as const, error: (e as Error).message }
   }
 }
 

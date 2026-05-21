@@ -10,8 +10,14 @@ import { AcbSiteCollection } from './AcbSiteCollection'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight, Download, Upload, Plus } from 'lucide-react'
 import type { AcbTest, AcbTestReading, Asset } from '@/lib/types'
-import { createAcbTestAction, updateAcbDetailsAction } from '@/app/(app)/testing/acb/actions'
-import { exportAcbCollectionXlsx, parseAcbCollectionXlsx } from '@/lib/utils/acb-excel'
+import { createAcbTestAction, updateAcbDetailsAction, importAcbCollectionAction } from '@/app/(app)/testing/acb/actions'
+import {
+  exportAcbCollectionXlsx,
+  parseAcbCollectionXlsx,
+  buildAcbImportErrorCsv,
+  type AcbImportRowResult,
+  type AcbParseRowError,
+} from '@/lib/utils/acb-excel'
 import { createTestingCheckAction } from '@/app/(app)/testing/check-actions'
 import { formatSiteLabel } from '@/lib/utils/format'
 
@@ -45,7 +51,14 @@ export default function AcbTestingPage() {
   const [creating, setCreating] = useState<string | null>(null)
   const [noAssets, setNoAssets] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ success: number; errors: number } | null>(null)
+  type ImportResultDetail = {
+    updated: number
+    failed: number
+    parseErrors: AcbParseRowError[]
+    rowResults: AcbImportRowResult[]
+    siteName: string
+  }
+  const [importResult, setImportResult] = useState<ImportResultDetail | null>(null)
   // Create Check form state
   const [checkFrequency, setCheckFrequency] = useState<string>('Annual')
   const [checkMonth, setCheckMonth] = useState<number>(new Date().getMonth() + 1)
@@ -225,30 +238,99 @@ export default function AcbTestingPage() {
     exportAcbCollectionXlsx(siteName, assets)
   }
 
-  // Excel import
+  // Excel import — parse client-side, push the whole batch to the server
+  // action which validates, runs as a single audited mutation, and returns
+  // per-row results so the UI can show exactly which rows failed and why.
   async function handleImport(file: File) {
     setImporting(true)
     setImportResult(null)
+    const siteName = sites.find((s) => s.id === selectedSite)?.name ?? 'Site'
     try {
-      const rows = await parseAcbCollectionXlsx(file)
-      let success = 0
-      let errors = 0
-      for (const row of rows) {
-        if (!row.test_id) { errors++; continue }
-        const { asset_id: _a, test_id: _t, ...data } = row
-        const result = await updateAcbDetailsAction(row.test_id, {
-          ...data,
-          step1_status: 'complete',
-        } as Parameters<typeof updateAcbDetailsAction>[1])
-        if (result.success) success++
-        else errors++
+      // Defence-in-depth file-size guard — the server can't introspect the
+      // raw file size cheaply once it has the parsed rows, so we catch the
+      // pathological case (50MB+ xlsx) at the browser before parsing.
+      if (file.size > 10 * 1024 * 1024) {
+        setImportResult({
+          updated: 0,
+          failed: 0,
+          parseErrors: [{ rowNumber: 0, reason: 'File is over 10MB — split the workbook into smaller files.' }],
+          rowResults: [],
+          siteName,
+        })
+        return
       }
-      setImportResult({ success, errors })
+
+      const { rows: parsedRows, errors: parseErrors } = await parseAcbCollectionXlsx(file)
+
+      // Assemble the payload with row numbers + asset names from the parse
+      // so the server can echo them back in its row results.
+      const assetIndex = new Map(assets.map((a) => [a.id, a.name]))
+      const payloadRows = parsedRows.map((r, idx) => ({
+        ...r,
+        // Excel rows are 1-based with row 1 = header; parser returned them
+        // in workbook order, but doesn't currently expose the row number.
+        // We approximate: header (1) + index + 1. Parse errors carry the
+        // true row number from the parser.
+        rowNumber: idx + 2,
+        assetName: assetIndex.get(r.asset_id) ?? null,
+      }))
+
+      const result = await importAcbCollectionAction({
+        rows: payloadRows,
+        mutationId: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : null,
+      })
+
+      if (!result.success) {
+        setImportResult({
+          updated: 0,
+          failed: parsedRows.length,
+          parseErrors,
+          rowResults: payloadRows.map((r) => ({
+            test_id: r.test_id,
+            rowNumber: r.rowNumber,
+            assetName: r.assetName ?? undefined,
+            ok: false,
+            reason: result.error,
+          })),
+          siteName,
+        })
+      } else {
+        const data = result.data ?? { updated: 0, failed: 0, rowResults: [] }
+        setImportResult({
+          updated: data.updated,
+          failed: data.failed + parseErrors.length,
+          parseErrors,
+          rowResults: data.rowResults,
+          siteName,
+        })
+      }
       await loadSiteData()
-    } catch {
-      setImportResult({ success: 0, errors: 1 })
+    } catch (e) {
+      setImportResult({
+        updated: 0,
+        failed: 1,
+        parseErrors: [{ rowNumber: 0, reason: e instanceof Error ? e.message : 'Unexpected error reading the file.' }],
+        rowResults: [],
+        siteName,
+      })
     }
     setImporting(false)
+  }
+
+  function downloadAcbImportErrorReport() {
+    if (!importResult) return
+    const csv = buildAcbImportErrorCsv(importResult.parseErrors, importResult.rowResults)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${importResult.siteName.replace(/[^a-zA-Z0-9_-]/g, '_')}_ACB_Import_Errors.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   // Create Check handler — on success, route straight to the Testing Summary
@@ -681,12 +763,46 @@ export default function AcbTestingPage() {
           )}
         </div>
         {importResult && (
-          <div className={`mt-2 p-2 rounded-md text-sm ${
-            importResult.errors > 0
-              ? 'bg-amber-50 border border-amber-200 text-amber-700'
+          <div className={`mt-2 p-3 rounded-md text-sm space-y-2 ${
+            importResult.failed > 0
+              ? 'bg-amber-50 border border-amber-200 text-amber-800'
               : 'bg-green-50 border border-green-200 text-green-700'
           }`}>
-            Import complete: {importResult.success} updated{importResult.errors > 0 ? `, ${importResult.errors} failed` : ''}
+            <div className="font-semibold">
+              Import complete: {importResult.updated} updated
+              {importResult.failed > 0 ? `, ${importResult.failed} failed` : ''}
+            </div>
+            {importResult.failed > 0 && (
+              <>
+                <ul className="list-disc list-inside text-xs space-y-0.5 max-h-32 overflow-y-auto">
+                  {importResult.parseErrors.slice(0, 5).map((e, i) => (
+                    <li key={`pe-${i}`}>
+                      Row {e.rowNumber}
+                      {e.assetName ? ` (${e.assetName})` : ''}: {e.reason}
+                    </li>
+                  ))}
+                  {importResult.rowResults
+                    .filter((r) => !r.ok)
+                    .slice(0, Math.max(0, 5 - importResult.parseErrors.length))
+                    .map((r) => (
+                      <li key={`rr-${r.test_id}-${r.rowNumber}`}>
+                        Row {r.rowNumber}
+                        {r.assetName ? ` (${r.assetName})` : ''}: {r.reason ?? 'Update failed'}
+                      </li>
+                    ))}
+                </ul>
+                {importResult.failed > 5 && (
+                  <p className="text-xs italic">…and {importResult.failed - 5} more. Download the report for the full list.</p>
+                )}
+                <button
+                  type="button"
+                  className="text-xs font-semibold underline hover:no-underline"
+                  onClick={downloadAcbImportErrorReport}
+                >
+                  Download error report (CSV)
+                </button>
+              </>
+            )}
           </div>
         )}
       </Card>

@@ -4,10 +4,55 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/actions/auth'
 import { isAdmin, canDoTestWork } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { withIdempotency } from '@/lib/actions/idempotency'
 import { CreateAcbTestSchema, UpdateAcbTestSchema, CreateAcbReadingSchema } from '@/lib/validations/acb-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
+import { z } from 'zod'
+
+// Parser ships AcbImportRowSchema separately to avoid pulling exceljs into
+// the server bundle. Re-declare the shape here (server-side trust boundary).
+const AcbImportRowServerSchema = z.object({
+  asset_id: z.string().uuid(),
+  test_id: z.string().uuid(),
+  brand: z.string().max(200).nullable().optional(),
+  breaker_type: z.string().max(200).nullable().optional(),
+  name_location: z.string().max(200).nullable().optional(),
+  cb_serial: z.string().max(200).nullable().optional(),
+  performance_level: z.string().max(200).nullable().optional(),
+  protection_unit_fitted: z.boolean().nullable().optional(),
+  trip_unit_model: z.string().max(200).nullable().optional(),
+  cb_poles: z.string().max(200).nullable().optional(),
+  current_in: z.string().max(200).nullable().optional(),
+  fixed_withdrawable: z.string().max(200).nullable().optional(),
+  long_time_ir: z.string().max(200).nullable().optional(),
+  long_time_delay_tr: z.string().max(200).nullable().optional(),
+  short_time_pickup_isd: z.string().max(200).nullable().optional(),
+  short_time_delay_tsd: z.string().max(200).nullable().optional(),
+  instantaneous_pickup: z.string().max(200).nullable().optional(),
+  earth_fault_pickup: z.string().max(200).nullable().optional(),
+  earth_fault_delay: z.string().max(200).nullable().optional(),
+  earth_leakage_pickup: z.string().max(200).nullable().optional(),
+  earth_leakage_delay: z.string().max(200).nullable().optional(),
+  motor_charge: z.string().max(200).nullable().optional(),
+  shunt_trip_mx1: z.string().max(200).nullable().optional(),
+  shunt_close_xf: z.string().max(200).nullable().optional(),
+  undervoltage_mn: z.string().max(200).nullable().optional(),
+  second_shunt_trip: z.string().max(200).nullable().optional(),
+})
+
+const ImportPayloadSchema = z.object({
+  rows: z.array(
+    AcbImportRowServerSchema.extend({
+      rowNumber: z.number().int().min(1),
+      assetName: z.string().optional().nullable(),
+    }),
+  ).max(2000, 'Too many rows in a single import — split the file.'),
+  mutationId: z.string().optional().nullable(),
+})
+
+export type AcbImportPayload = z.infer<typeof ImportPayloadSchema>
 
 export async function createAcbTestAction(formData: FormData) {
   try {
@@ -245,6 +290,123 @@ export async function updateAcbDetailsAction(testId: string, data: {
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }
+}
+
+export interface AcbImportRowResultServer {
+  test_id: string
+  rowNumber: number
+  ok: boolean
+  reason?: string
+  assetName?: string
+}
+
+/**
+ * Batch ACB collection import. Replaces the per-row client-side update
+ * loop in /testing/acb. Surfaces per-row errors with row numbers and
+ * plain-language reasons; tenant-scoped so a malicious payload can't
+ * touch another tenant's tests; replay-safe when called with a
+ * `mutationId` (offline queue / retry).
+ *
+ * Returns:
+ *   { success: true, data: { updated, failed, rowResults } }
+ *   { success: false, error }
+ *
+ * Atomicity caveat: each row's UPDATE is a separate statement. A failure
+ * partway through leaves prior rows committed — the rowResults tell the
+ * tech exactly which rows landed and which didn't, so a re-upload of the
+ * failed-rows-only CSV cleans things up. A full RPC wrap (one
+ * transaction) is the natural follow-up once the action proves stable.
+ */
+export async function importAcbCollectionAction(input: AcbImportPayload) {
+  const parsed = ImportPayloadSchema.safeParse(input)
+  if (!parsed.success) {
+    return { success: false as const, error: parsed.error.issues[0]?.message ?? 'Invalid import payload.' }
+  }
+  return withIdempotency(parsed.data.mutationId ?? null, async () => {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canDoTestWork(role)) return { success: false as const, error: 'Insufficient permissions.' }
+
+    const rows = parsed.data.rows
+    if (rows.length === 0) {
+      return { success: true as const, data: { updated: 0, failed: 0, rowResults: [] as AcbImportRowResultServer[] } }
+    }
+
+    // Tenant scoping: confirm every test_id in the payload belongs to this
+    // tenant before we touch anything. RLS would block cross-tenant writes
+    // too, but this gives a clean "row 47 references a test that isn't
+    // yours" error instead of an opaque RLS denial.
+    const testIds = Array.from(new Set(rows.map((r) => r.test_id)))
+    const { data: ownership, error: ownershipError } = await supabase
+      .from('acb_tests')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .in('id', testIds)
+    if (ownershipError) {
+      return { success: false as const, error: `Ownership check failed: ${ownershipError.message}` }
+    }
+    const ownedIds = new Set((ownership ?? []).map((r: { id: string }) => r.id))
+
+    const rowResults: AcbImportRowResultServer[] = []
+    let updated = 0
+    let failed = 0
+    for (const row of rows) {
+      if (!ownedIds.has(row.test_id)) {
+        rowResults.push({
+          test_id: row.test_id,
+          rowNumber: row.rowNumber,
+          assetName: row.assetName ?? undefined,
+          ok: false,
+          reason: 'Test record not found in this workspace.',
+        })
+        failed++
+        continue
+      }
+
+      const { rowNumber: _rn, assetName: _an, asset_id: _aid, test_id: _tid, ...fields } = row
+      const updateData: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v !== undefined) updateData[k] = v
+      }
+      updateData.step1_status = 'complete'
+      const dualWrite = mirrorBreakerColumns(updateData)
+
+      const { error } = await supabase
+        .from('acb_tests')
+        .update(dualWrite)
+        .eq('id', row.test_id)
+        .eq('tenant_id', tenantId)
+
+      if (error) {
+        rowResults.push({
+          test_id: row.test_id,
+          rowNumber: row.rowNumber,
+          assetName: row.assetName ?? undefined,
+          ok: false,
+          reason: error.message,
+        })
+        failed++
+      } else {
+        rowResults.push({
+          test_id: row.test_id,
+          rowNumber: row.rowNumber,
+          assetName: row.assetName ?? undefined,
+          ok: true,
+        })
+        updated++
+      }
+    }
+
+    await logAuditEvent({
+      action: 'import',
+      entityType: 'acb_test',
+      summary: `ACB collection import: ${updated} updated, ${failed} failed`,
+      mutationId: parsed.data.mutationId ?? null,
+      metadata: { updated, failed, total: rows.length },
+    })
+    revalidatePath('/testing/acb')
+
+    return { success: true as const, data: { updated, failed, rowResults } }
+  })
 }
 
 export async function saveAcbVisualCheckAction(testId: string, items: Array<{
