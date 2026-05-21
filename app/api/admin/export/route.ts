@@ -72,14 +72,33 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const entityResults: Record<string, Awaited<ReturnType<(typeof ENTITY_EXPORTERS)[string]>>> = {};
+    // Multi-entity export. We run exporters serially (no client-side
+    // transaction across PostgREST roundtrips) so a single broken
+    // exporter must not nuke the whole snapshot — catch per entity and
+    // emit an error stub so the consumer can see what failed without
+    // losing the rest of the payload.
+    const entityResults: Record<
+      string,
+      Awaited<ReturnType<(typeof ENTITY_EXPORTERS)[string]>>
+    > = {};
     for (const entity of entities) {
-      entityResults[entity] = await ENTITY_EXPORTERS[entity]!(supabase, tenantId);
+      try {
+        entityResults[entity] = await ENTITY_EXPORTERS[entity]!(supabase, tenantId);
+      } catch (e) {
+        entityResults[entity] = {
+          schema_id: `internal:error:${entity}`,
+          schema_version: "0",
+          count: 0,
+          rows: [],
+          note: `exporter failed: ${e instanceof Error ? e.message : String(e)}`,
+        };
+      }
     }
 
     return ok({
       tenant_id: tenantId,
       exported_at: exportedAt,
+      consistency: "per-entity (serial select); cross-entity skew sub-second on idle tenant",
       entities: entityResults,
     });
   } catch (error) {
