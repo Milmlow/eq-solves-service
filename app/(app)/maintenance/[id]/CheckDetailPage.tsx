@@ -762,6 +762,44 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           <p className="text-eq-grey text-sm">No assets linked to this maintenance check.</p>
         </div>
       )}
+
+      {/*
+        Sticky bottom action bar — mobile only (sm:hidden so desktop
+        unchanged). Mirrors the primary CTA from the header so a tech
+        who's scrolled through 40 tasks doesn't have to scroll back to
+        the top to start or complete the check. Padded for the home-
+        indicator safe area on iPhones via `pb-[env(safe-area-inset-bottom)]`.
+      */}
+      {canAct && (check.status === 'scheduled' || check.status === 'overdue' || check.status === 'in_progress') && (
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-eq-line shadow-[0_-4px_12px_rgba(0,0,0,0.05)] pb-[env(safe-area-inset-bottom)]">
+          <div className="px-4 py-3 flex items-center gap-2">
+            {(check.status === 'scheduled' || check.status === 'overdue') && (
+              <Button size="md" onClick={handleStart} loading={loading} className="w-full min-h-[44px]">
+                Start Check
+              </Button>
+            )}
+            {check.status === 'in_progress' && (
+              <>
+                <Button
+                  size="md"
+                  onClick={handleComplete}
+                  loading={loading}
+                  disabled={requiredIncomplete > 0}
+                  className="flex-1 min-h-[44px]"
+                >
+                  {requiredIncomplete > 0
+                    ? `${requiredIncomplete} required ${requiredIncomplete === 1 ? 'task' : 'tasks'} left`
+                    : 'Complete Check'}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Spacer so the sticky bar doesn't cover the last task row on mobile. */}
+      {canAct && (check.status === 'scheduled' || check.status === 'overdue' || check.status === 'in_progress') && (
+        <div className="sm:hidden h-20" aria-hidden="true" />
+      )}
     </div>
   )
 }
