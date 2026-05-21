@@ -1174,6 +1174,23 @@ export async function commitDeltaImportAction(
         return { success: false, error: checkErr?.message ?? 'Failed to create check.' }
       }
 
+      // The three-step insert below (check → check_assets → check_items)
+      // cannot run inside a single Postgres transaction via the Supabase JS
+      // client — each call is its own HTTP roundtrip to PostgREST. If a
+      // later step fails after the parent check is in, the user is left
+      // with an orphaned `maintenance_checks` row pointing at no work.
+      //
+      // Compensating delete: on any downstream failure, DELETE the parent
+      // check. The FK from `check_assets.check_id` is ON DELETE CASCADE
+      // (migration 0013) so the partial `check_assets` rows are removed
+      // automatically; `maintenance_check_items` cascades from there.
+      // The result is the same end state as a real transaction: either
+      // every row for this group lands, or none of them do.
+      const rollbackCheck = async (reason: string): Promise<string> => {
+        await supabase.from('maintenance_checks').delete().eq('id', check.id)
+        return reason
+      }
+
       // 2. check_assets (one per parsed row) — carries the full Maximo
       // payload from the parsed Delta row (priority, work_type, crew,
       // target dates, failure/problem/cause/remedy, classification, IR
@@ -1195,7 +1212,8 @@ export async function commitDeltaImportAction(
         .select('id, asset_id')
 
       if (caErr || !insertedCA) {
-        return { success: false, error: caErr?.message ?? 'Failed to create check assets.' }
+        const reason = await rollbackCheck(caErr?.message ?? 'Failed to create check assets.')
+        return { success: false, error: reason }
       }
 
       const caByAsset = new Map<string, string>()
@@ -1236,7 +1254,8 @@ export async function commitDeltaImportAction(
             .from('maintenance_check_items')
             .insert(batch)
           if (itemsErr) {
-            return { success: false, error: itemsErr.message }
+            const reason = await rollbackCheck(itemsErr.message)
+            return { success: false, error: reason }
           }
         }
       }
@@ -1815,6 +1834,16 @@ export async function commitConsolidatedDeltaImportAction(
     }
     summary.checksCreated = 1
 
+    // Compensating delete on downstream failure — same pattern as the
+    // single-file commit above. ON DELETE CASCADE on the FK to
+    // maintenance_checks removes any partial check_assets /
+    // maintenance_check_items so the parent never ends up with no
+    // children.
+    const rollbackCheck = async (reason: string): Promise<string> => {
+      await supabase.from('maintenance_checks').delete().eq('id', check.id)
+      return reason
+    }
+
     const allCARows = resolved.flatMap((g) =>
       g.parsed.rows
         .filter((r) => !g.skippedRowNumbers.has(r.rowNumber))
@@ -1831,7 +1860,8 @@ export async function commitConsolidatedDeltaImportAction(
       .insert(allCARows)
       .select('id, asset_id')
     if (caErr || !insertedCA) {
-      return { success: false, error: caErr?.message ?? 'Failed to create check assets.' }
+      const reason = await rollbackCheck(caErr?.message ?? 'Failed to create check assets.')
+      return { success: false, error: reason }
     }
     summary.checkAssetsCreated = insertedCA.length
     const caByAsset = new Map<string, string>()
@@ -1865,7 +1895,10 @@ export async function commitConsolidatedDeltaImportAction(
         const { error: itemsErr } = await supabase
           .from('maintenance_check_items')
           .insert(batch)
-        if (itemsErr) return { success: false, error: itemsErr.message }
+        if (itemsErr) {
+          const reason = await rollbackCheck(itemsErr.message)
+          return { success: false, error: reason }
+        }
       }
     }
     summary.checkItemsCreated = checkItemRows.length
