@@ -16,6 +16,8 @@ import {
   type RcdImportPreviewResult,
   type RcdImportCommitSummary,
 } from './actions'
+import { checkImportFileSize } from '@/lib/utils/file-size-guard'
+import { downloadImportErrorCsv, type ImportErrorRow } from '@/lib/utils/import-error-csv'
 
 /**
  * Jemena RCD xlsx import wizard.
@@ -36,10 +38,19 @@ export function RcdImportWizard() {
 
   function handleChoose(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files?.[0] ?? null
-    setFile(picked)
     setPreview(null)
-    setError(null)
     setCommitResult(null)
+    if (picked) {
+      const sizeError = checkImportFileSize(picked)
+      if (sizeError) {
+        setError(sizeError)
+        setFile(null)
+        if (fileInput.current) fileInput.current.value = ''
+        return
+      }
+    }
+    setError(null)
+    setFile(picked)
   }
 
   function handlePreview() {
@@ -230,12 +241,36 @@ export function RcdImportWizard() {
           {/* Parse errors */}
           {preview.parseErrors.length > 0 && (
             <div className="border border-red-200 bg-red-50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle className="w-4 h-4 text-red-700" />
-                <h4 className="text-xs font-bold text-red-900 uppercase tracking-wide">
-                  {preview.parseErrors.length} parse error
-                  {preview.parseErrors.length === 1 ? '' : 's'}
-                </h4>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-700" />
+                  <h4 className="text-xs font-bold text-red-900 uppercase tracking-wide">
+                    {preview.parseErrors.length} parse error
+                    {preview.parseErrors.length === 1 ? '' : 's'}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-red-900 underline hover:no-underline"
+                  onClick={() => {
+                    const rows: ImportErrorRow[] = [
+                      ...preview.skippedSheets.map((s) => ({
+                        rowRef: s.tabName,
+                        context: 'skipped sheet',
+                        reason: s.reason,
+                      })),
+                      ...preview.parseErrors.map((e) => ({
+                        rowRef: `${e.tabName}:${e.rowNumber}`,
+                        context: e.tabName,
+                        reason: e.message,
+                      })),
+                    ]
+                    const base = (file?.name ?? 'rcd-import').replace(/\.xlsx$/i, '')
+                    downloadImportErrorCsv(rows, `${base}_errors.csv`)
+                  }}
+                >
+                  Download error report (CSV)
+                </button>
               </div>
               <ul className="text-xs text-red-800 space-y-0.5 list-disc list-inside">
                 {preview.parseErrors.slice(0, 12).map((e, i) => (

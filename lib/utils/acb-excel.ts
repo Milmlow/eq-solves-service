@@ -9,6 +9,7 @@
 
 import type { Cell, Row } from 'exceljs'
 import { Workbook } from 'exceljs'
+import { z } from 'zod'
 
 // ── Column definitions ──────────────────────────────────────────────
 // Keys, headers, widths, and hidden flags must stay identical to the
@@ -222,15 +223,61 @@ const READ_ONLY_KEYS = new Set(
   COLUMNS.filter(c => c.readOnly).map(c => c.key),
 )
 
-export async function parseAcbCollectionXlsx(
-  file: File,
-): Promise<AcbImportRow[]> {
+// Zod schema for a row coming out of the parser. Forces test_id + asset_id
+// to be UUIDs so a malformed sheet (e.g. the user pasted plain text into
+// the hidden columns) gets a clear "row 47: test_id is not a UUID" instead
+// of silently disappearing.
+const nullableShortText = z.string().max(200).nullable().optional()
+export const AcbImportRowSchema = z.object({
+  asset_id: z.string().uuid('Asset ID is not a valid UUID — preserve the hidden column'),
+  test_id: z.string().uuid('Test ID is not a valid UUID — preserve the hidden column'),
+  brand: nullableShortText,
+  breaker_type: nullableShortText,
+  name_location: nullableShortText,
+  cb_serial: nullableShortText,
+  performance_level: nullableShortText,
+  protection_unit_fitted: z.boolean().nullable().optional(),
+  trip_unit_model: nullableShortText,
+  cb_poles: nullableShortText,
+  current_in: nullableShortText,
+  fixed_withdrawable: nullableShortText,
+  long_time_ir: nullableShortText,
+  long_time_delay_tr: nullableShortText,
+  short_time_pickup_isd: nullableShortText,
+  short_time_delay_tsd: nullableShortText,
+  instantaneous_pickup: nullableShortText,
+  earth_fault_pickup: nullableShortText,
+  earth_fault_delay: nullableShortText,
+  earth_leakage_pickup: nullableShortText,
+  earth_leakage_delay: nullableShortText,
+  motor_charge: nullableShortText,
+  shunt_trip_mx1: nullableShortText,
+  shunt_close_xf: nullableShortText,
+  undervoltage_mn: nullableShortText,
+  second_shunt_trip: nullableShortText,
+})
+
+export interface AcbParseRowError {
+  /** Row number from the xlsx (1-based; matches what Excel shows in the gutter). */
+  rowNumber: number
+  /** Plain-language reason a tech can act on. */
+  reason: string
+  /** Asset name when available, for context in error reports. */
+  assetName?: string
+}
+
+export interface AcbParseResult {
+  rows: AcbImportRow[]
+  errors: AcbParseRowError[]
+}
+
+export async function parseAcbCollectionXlsx(file: File): Promise<AcbParseResult> {
   const arrayBuffer = await file.arrayBuffer()
   const wb = new Workbook()
   await wb.xlsx.load(arrayBuffer as ArrayBuffer)
 
   const ws = wb.worksheets[0]
-  if (!ws) return []
+  if (!ws) return { rows: [], errors: [{ rowNumber: 0, reason: 'Spreadsheet has no sheets.' }] }
 
   // Build header→column-key map from the first row
   const headerRow = ws.getRow(1)
@@ -242,6 +289,7 @@ export async function parseAcbCollectionXlsx(
   })
 
   const rows: AcbImportRow[] = []
+  const errors: AcbParseRowError[] = []
 
   ws.eachRow((row: Row, rowNumber: number) => {
     if (rowNumber === 1) return // skip header
@@ -252,8 +300,23 @@ export async function parseAcbCollectionXlsx(
       obj[key] = cellStr(row.getCell(colNumber))
     })
 
-    // Skip rows missing Asset ID or Test ID
-    if (!obj.asset_id || !obj.test_id) return
+    // Empty row in the body of the sheet — just skip silently, exceljs can
+    // emit phantom rows past the data. A missing Asset/Test ID on a row
+    // with any other content IS an error though.
+    const anyContent = Object.values(obj).some(v => v && v.trim() !== '')
+    if (!anyContent) return
+    if (!obj.asset_id || !obj.test_id) {
+      errors.push({
+        rowNumber,
+        assetName: obj.asset_name || undefined,
+        reason: !obj.asset_id && !obj.test_id
+          ? 'Missing Asset ID and Test ID — these come from Export and must not be cleared.'
+          : !obj.asset_id
+            ? 'Missing Asset ID — preserve the hidden column from the Export.'
+            : 'Missing Test ID — preserve the hidden column from the Export.',
+      })
+      return
+    }
 
     const importRow: AcbImportRow = {
       asset_id: obj.asset_id,
@@ -296,8 +359,53 @@ export async function parseAcbCollectionXlsx(
       }
     }
 
-    rows.push(importRow)
+    const validated = AcbImportRowSchema.safeParse(importRow)
+    if (!validated.success) {
+      errors.push({
+        rowNumber,
+        assetName: obj.asset_name || undefined,
+        reason: validated.error.issues[0]?.message ?? 'Row failed validation.',
+      })
+      return
+    }
+
+    rows.push(validated.data as AcbImportRow)
   })
 
-  return rows
+  return { rows, errors }
+}
+
+/**
+ * Produce a CSV of failed rows from a parser run + a server-side import
+ * result, suitable for "Download error report" so the tech can see exactly
+ * which rows need fixing and re-upload only those.
+ */
+export interface AcbImportRowResult {
+  test_id: string
+  rowNumber: number
+  ok: boolean
+  reason?: string
+  assetName?: string
+}
+
+export function buildAcbImportErrorCsv(
+  parseErrors: AcbParseRowError[],
+  rowResults: AcbImportRowResult[],
+): string {
+  const header = 'Row,Asset,Test ID,Reason'
+  const lines: string[] = [header]
+  for (const e of parseErrors) {
+    lines.push([e.rowNumber, csvEscape(e.assetName ?? ''), '', csvEscape(e.reason)].join(','))
+  }
+  for (const r of rowResults) {
+    if (r.ok) continue
+    lines.push([r.rowNumber, csvEscape(r.assetName ?? ''), csvEscape(r.test_id), csvEscape(r.reason ?? 'Update failed')].join(','))
+  }
+  return lines.join('\n') + '\n'
+}
+
+function csvEscape(value: string): string {
+  if (value === '') return ''
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+  return value
 }

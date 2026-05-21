@@ -5,6 +5,7 @@ import { SlidePanel } from '@/components/ui/SlidePanel'
 import { Button } from '@/components/ui/Button'
 import { parseCSV, autoMapColumns } from '@/lib/utils/csv-parser'
 import type { ParsedRow } from '@/lib/utils/csv-parser'
+import { checkImportFileSize } from '@/lib/utils/file-size-guard'
 import { Upload, AlertTriangle, CheckCircle, FileText } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
@@ -77,6 +78,14 @@ export function ImportCSVModal<T>({ open, onClose, config }: ImportCSVModalProps
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const sizeError = checkImportFileSize(file)
+    if (sizeError) {
+      setFileName(null)
+      setResult(null)
+      setErrors([sizeError])
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
     setFileName(file.name)
     setResult(null)
     setErrors([])
