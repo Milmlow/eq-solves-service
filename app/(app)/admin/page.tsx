@@ -16,7 +16,7 @@
  */
 import Link from 'next/link'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { Users, Settings, Image, FileText, Archive, ScrollText, Upload, Download, Activity } from 'lucide-react'
+import { Users, Settings, Image, FileText, Archive, ScrollText, Upload, Download, Activity, MapPin } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +81,12 @@ const ADMIN_CARDS: AdminCard[] = [
     href: '/admin/activity',
     description: 'Live feed of every action across the workspace. Mountable on a wall display.',
     icon: Activity,
+  },
+  {
+    label: 'Today',
+    href: '/admin/today',
+    description: 'Where everyone is right now — onsite, scheduled, done. Live supervisor view.',
+    icon: MapPin,
   },
 ]
 
