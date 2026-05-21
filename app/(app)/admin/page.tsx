@@ -16,7 +16,7 @@
  */
 import Link from 'next/link'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { Users, Settings, Image, FileText, Archive, ScrollText, Download } from 'lucide-react'
+import { Users, Settings, Image, FileText, Archive, ScrollText, Upload, Download } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,6 +63,12 @@ const ADMIN_CARDS: AdminCard[] = [
     href: '/audit-log',
     description: 'Every change — who, what, when. Filter by record type.',
     icon: ScrollText,
+  },
+  {
+    label: 'Imports',
+    href: '/admin/imports',
+    description: 'All import flows in one place — work orders, ACB, RCD, scope.',
+    icon: Upload,
   },
   {
     label: 'Backup',
