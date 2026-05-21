@@ -32,6 +32,7 @@ import {
   type RowResolution,
 } from './actions'
 import { events as analyticsEvents } from '@/lib/analytics'
+import { checkImportFileSizes } from '@/lib/utils/file-size-guard'
 
 // ── Resolution state — keyed by group.key ───────────────────────────────
 
@@ -199,6 +200,12 @@ export function ImportWizard() {
   function handleChoose(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? [])
     if (picked.length === 0) return
+    const sizeError = checkImportFileSizes(picked)
+    if (sizeError) {
+      setError(sizeError)
+      if (fileInput.current) fileInput.current.value = ''
+      return
+    }
     const newEntries: FileEntry[] = picked.map((f) => ({
       id: cryptoRandomId(),
       file: f,
