@@ -39,6 +39,10 @@ export function MfaChallengeForm() {
           name="code"
           required
           disabled={pending}
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          autoComplete="off"
           hint="Format: XXXXX-XXXXX"
         />
       )}

@@ -181,6 +181,10 @@ export function SignInForm({
               id="email"
               name="email"
               type="email"
+              inputMode="email"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               required
               autoComplete="email"
               disabled={anyPending}

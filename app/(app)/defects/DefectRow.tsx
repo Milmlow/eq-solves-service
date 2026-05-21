@@ -197,15 +197,19 @@ export function DefectRow({ defect, team, canWrite, currentUserId }: DefectRowPr
                 </div>
               </div>
 
-              {/* Resolution notes */}
+              {/* Resolution notes — was 2 rows; bumped to 4 so techs can
+                  write a real write-up one-handed on a phone keyboard
+                  without zooming. Resize-y lets supervisors expand on
+                  desktop without trying to squeeze a paragraph into a
+                  fixed window. */}
               <div>
                 <label className="text-xs font-bold text-eq-grey uppercase block mb-1">Resolution notes</label>
                 <textarea
                   value={localNotes}
                   onChange={(e) => setLocalNotes(e.target.value)}
-                  rows={2}
+                  rows={4}
                   placeholder="Describe what was done to resolve this defect..."
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white resize-none"
+                  className="w-full min-h-[88px] text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white resize-y"
                 />
               </div>
 
