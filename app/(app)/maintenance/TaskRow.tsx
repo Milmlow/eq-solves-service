@@ -48,9 +48,14 @@ export function TaskRow({ item, checkStatus, canAct, onResult, onNotes }: TaskRo
   const btnBase = 'min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded select-none touch-manipulation active:scale-90'
 
   return (
-    <div className="grid grid-cols-[1fr_152px_1fr] gap-2 px-3 py-2 text-xs items-center">
+    // Mobile: single column stack (description → buttons → notes).
+    // sm+ (≥640px) keeps the original [1fr_152px_1fr] tri-column row so
+    // tablet / desktop layouts are unchanged. On a 375px phone the
+    // previous tri-column squeezed description + notes into ~99px each;
+    // stacking gives every band full width and keeps tap targets clear.
+    <div className="flex flex-col gap-2 px-3 py-2.5 text-xs sm:grid sm:grid-cols-[1fr_152px_1fr] sm:items-center sm:gap-2 sm:py-2">
       {/* Task description */}
-      <span className="text-eq-ink">
+      <span className="text-sm sm:text-xs text-eq-ink leading-snug">
         {item.description}
         {item.is_required && <span className="text-eq-sky font-medium ml-1">*</span>}
       </span>
@@ -100,30 +105,51 @@ export function TaskRow({ item, checkStatus, canAct, onResult, onNotes }: TaskRo
         <span className="text-gray-300">—</span>
       )}
 
-      {/* Comments — inline editable */}
+      {/*
+        Comments — inline editable.
+
+        Tap target was a 24px-tall single-line input which is unusable
+        on a phone keyboard. Lift to a multiline textarea sized at the
+        44px tap-target floor so techs can write a real note without
+        zooming. Stays single-line visually until edit; Save on blur
+        or ⌘/Ctrl+Enter. Plain Enter inserts a newline (was Save before;
+        switched because techs typing one-handed on a phone hit Enter
+        constantly).
+      */}
       {editingNotes ? (
-        <input
+        <textarea
           defaultValue={item.notes ?? ''}
           onBlur={(e) => {
             onNotes(item.id, e.target.value)
             setEditingNotes(false)
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              onNotes(item.id, (e.target as HTMLInputElement).value)
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              onNotes(item.id, (e.target as HTMLTextAreaElement).value)
+              setEditingNotes(false)
+            }
+            if (e.key === 'Escape') {
               setEditingNotes(false)
             }
           }}
-          className="h-6 px-1 border border-eq-sky rounded text-xs bg-white focus:outline-none"
+          rows={2}
+          className="min-h-[44px] px-2 py-1.5 border border-eq-sky rounded text-sm sm:text-xs bg-white focus:outline-none focus:ring-2 focus:ring-eq-sky/20 resize-y w-full"
+          placeholder="Add a note…"
           autoFocus
         />
       ) : (
-        <span
-          className={`cursor-text truncate ${item.notes ? 'text-eq-ink' : 'text-gray-300'}`}
+        <button
+          type="button"
           onClick={() => isActive && setEditingNotes(true)}
+          disabled={!isActive}
+          className={`min-h-[44px] sm:min-h-0 text-left px-2 py-1.5 sm:p-0 rounded border border-dashed sm:border-0 transition-colors touch-manipulation ${
+            isActive ? 'cursor-text hover:bg-eq-ice/50 border-gray-200 sm:border-transparent' : 'cursor-default border-transparent'
+          } ${item.notes ? 'text-eq-ink' : 'text-gray-400'}`}
         >
-          {item.notes || '---'}
-        </span>
+          <span className="block sm:truncate">
+            {item.notes || (isActive ? 'Tap to add a note' : '—')}
+          </span>
+        </button>
       )}
     </div>
   )
