@@ -1,10 +1,24 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { uploadAttachmentAction, deleteAttachmentAction, getAttachmentUrlAction } from '@/lib/actions/attachments'
 import type { Attachment, AttachmentType } from '@/lib/types'
-import { Paperclip, Upload, Trash2, Download, FileText, Image, FileSpreadsheet, Camera, BookOpen, Receipt } from 'lucide-react'
+import { Paperclip, Upload, Trash2, Download, FileText, Image, FileSpreadsheet, Camera, BookOpen, Receipt, AlertCircle, X } from 'lucide-react'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+
+/**
+ * Entity types where "Evidence" is the only sensible attachment kind
+ * — the type picker is friction. A tech raising a defect with a photo
+ * doesn't want a modal asking "is this Evidence, Reference, or
+ * Paperwork?" — it's always Evidence. Skip the prompt for these.
+ */
+const EVIDENCE_ONLY_ENTITIES = new Set([
+  'defect',
+  'maintenance_check_item',
+  'acb_test',
+  'nsx_test',
+  'rcd_test',
+])
 
 interface AttachmentListProps {
   entityType: string
@@ -84,6 +98,36 @@ export function AttachmentList({
   const [showTypePrompt, setShowTypePrompt] = useState(false)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
 
+  // Signed-URL cache for image attachments so techs can see what they
+  // photographed without opening each file. Keyed by attachment id;
+  // populated on mount + when the attachment list changes. Signed URLs
+  // expire (typically 1h) but that's longer than any sane page view.
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({})
+  useEffect(() => {
+    let cancelled = false
+    async function loadThumbnails() {
+      const images = attachments.filter((a) => a.content_type.startsWith('image/'))
+      const missing = images.filter((a) => !imageUrls[a.id])
+      if (missing.length === 0) return
+      const results = await Promise.all(
+        missing.map(async (a) => {
+          const result = await getAttachmentUrlAction(a.storage_path)
+          return [a.id, result.success && result.url ? result.url : null] as const
+        }),
+      )
+      if (cancelled) return
+      setImageUrls((prev) => {
+        const next = { ...prev }
+        for (const [id, url] of results) {
+          if (url) next[id] = url
+        }
+        return next
+      })
+    }
+    void loadThumbnails()
+    return () => { cancelled = true }
+  }, [attachments])
+
   function handlePickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -92,6 +136,14 @@ export function AttachmentList({
     // picker — there's no choice to make.
     if (types.length === 1) {
       void doUpload(file, types[0])
+      return
+    }
+    // Defect / test / check-item entities are always Evidence — skip the
+    // prompt so the tech can shoot a photo and walk away. The type picker
+    // was real friction on a phone (extra tap + modal scroll). For admin
+    // surfaces (sites, assets, customers) the picker still appears.
+    if (EVIDENCE_ONLY_ENTITIES.has(entityType) && types.includes('evidence')) {
+      void doUpload(file, 'evidence')
       return
     }
     setPendingFile(file)
@@ -166,7 +218,25 @@ export function AttachmentList({
         )}
       </div>
 
-      {error && <p className="text-xs text-red-500 mb-2">{error}</p>}
+      {/*
+        Upgraded from a one-line text-xs string to a real banner with
+        icon + dismiss. The previous version disappeared off-screen on
+        mobile keyboards and was easy to miss.
+      */}
+      {error && (
+        <div className="mb-3 bg-red-50 border border-red-200 rounded-md p-3 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700 flex-1">{error}</p>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="min-w-[28px] min-h-[28px] inline-flex items-center justify-center text-red-600 hover:bg-red-100 rounded transition-colors"
+            aria-label="Dismiss error"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Type picker — modal-lite. Appears between file pick and upload. */}
       {showTypePrompt && pendingFile && (
@@ -225,10 +295,30 @@ export function AttachmentList({
         <div className="space-y-2">
           {attachments.map((att) => {
             const TypeIcon = TYPE_META[att.attachment_type]?.icon ?? FileText
+            const isImage = att.content_type.startsWith('image/')
+            const thumbUrl = isImage ? imageUrls[att.id] : undefined
             return (
               <div key={att.id} className="flex items-center justify-between p-2.5 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                  <FileIcon contentType={att.content_type} />
+                  {/*
+                    Thumbnail when the attachment is an image and we
+                    have its signed URL loaded. Falls back to the
+                    generic FileIcon while loading or for non-images.
+                    A tech who just shot three defect photos can tell
+                    them apart at a glance now.
+                  */}
+                  {isImage && thumbUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={thumbUrl}
+                      alt=""
+                      className="w-12 h-12 object-cover rounded border border-gray-200 shrink-0 cursor-pointer"
+                      loading="lazy"
+                      onClick={() => handleDownload(att)}
+                    />
+                  ) : (
+                    <FileIcon contentType={att.content_type} />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-eq-ink truncate">{att.file_name}</p>
                     <p className="text-xs text-eq-grey flex items-center gap-1.5">

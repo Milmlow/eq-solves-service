@@ -179,7 +179,14 @@ export function MaintenanceList({
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
+      {/*
+        Filter row sticks to the top of the scroll container on mobile
+        so the tech doesn't lose their place when scrolling through a
+        long list. Desktop layout unchanged. The `-mx-4 px-4` pulls the
+        background bleed to the page edge so the sticky strip looks
+        intentional rather than a floating chip.
+      */}
+      <div className="sticky top-0 z-30 bg-white -mx-4 px-4 py-2 mb-4 sm:py-0 sm:mb-4 sm:mx-0 sm:px-0 sm:static sm:bg-transparent flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-eq-line sm:border-b-0">
         <SearchFilter
           placeholder="Search checks..."
           filters={[
@@ -188,7 +195,7 @@ export function MaintenanceList({
             { key: 'status', label: 'All Statuses', options: statusFilterOptions },
           ]}
         />
-        <div className="flex gap-2 ml-4 shrink-0">
+        <div className="flex gap-2 sm:ml-4 shrink-0">
           {/* Mine / All toggle (UX audit PR #149 §2.4) */}
           <div className="flex gap-1 bg-gray-100 rounded-md p-1 text-xs font-medium">
             <button
