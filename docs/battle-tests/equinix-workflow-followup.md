@@ -55,41 +55,29 @@ Compliance evidence trail is now complete across the maintenance write surface.
 
 ### Findings — not yet fixed (worth your input)
 
-#### 🔴 No dispatch / "today's jobs" view exists
-The closest surface is `/calendar` (pm_calendar entries — forward-looking PM planning, not today's actual work). No view answers "which techs are at which sites today doing what" — that's a Simpro feature you're working around. Likely needs a new `/dispatch` route that queries `maintenance_checks WHERE status IN ('in_progress','scheduled') AND assigned_to IS NOT NULL` grouped by day + tech.
+#### ❌ ~~No dispatch / "today's jobs" view exists~~ — RETRACTED 2026-05-21
+Earlier framing claimed eq-service should grow a `/dispatch` view to fill a Simpro gap. **Wrong call.** Resource management — dispatch, "who's where today", labour hire, staff licences, availability — lives in **EQ Field**, which is already built and polished. eq-service consumes Field's resource data via the canonical layer; it does not own a parallel dispatch surface. The `/calendar` page in eq-service may evolve into a labour coordination surface (block-out dates for nominated techs, labour-meeting reminders) but that's distinct from dispatch.
 
-This is one of the Phase 1 gaps in the Simpro-replacement story.
+See `~/.claude/projects/C--Projects-eq-solves-service/memory/project_field_service_boundary.md` for the canonical ownership table.
 
-#### 🔴 No `/quotes` module in eq-service — defect → quote loop is impossible internally
-You said "we have built quotes already" but the eq-service repo has no `app/(app)/quotes/**` route. Quotes lives in a separate app/repo. To wire the **Service defect → Quote remediation** loop you described as the killer cross-app demo, eq-service would need either:
+#### ⚪ Defect → Quote cross-app linkage — parked 2026-05-21
+Royce 2026-05-21: "eq quotes won't be relevant for this just yet." The defect → quote remediation loop is deferred. DefectRow stays as-is until the cross-app surface is the next deliberate piece of work.
 
-- (A) An API call to the Quotes app's "create draft from defect" endpoint, or
-- (B) A "Create remediation quote" button that opens Quotes with prefilled query params
-
-Either way needs to know where Quotes lives. **Tell me when you're back.**
-
-#### 🟠 DefectRow has no "Create remediation quote" action
-Defects on `/defects` go open → in_progress → resolved → closed with `work_order_number`, `resolution_notes`. No quote linkage. Once the cross-app shape is settled (above), add the button to [DefectRow.tsx:1](app/(app)/defects/DefectRow.tsx).
-
-#### 🟡 `/do` page is missing common-ops tiles
-The action hub has Import / Add / Create sections but no tiles for the common day-to-day ops:
-- "Find my next job" — query open checks assigned to me
-- "Complete an open check" — open `/maintenance?status=in_progress&assigned_to=me`
-- "Review defects" — `/defects?status=open`
-- "Drop a file" — the Intake-style upload tile (placeholder until skill exists)
-
-Adding these is a 30-minute change. Worth doing once the dispatch view above is sorted.
+#### ⚪ `/do` common-ops tiles — parked 2026-05-21
+Royce 2026-05-21: "ignore common ops tiles for now." Skip.
 
 #### 🟡 Defect actions lack Zod validation
-`raiseDefectAction` and `updateDefectAction` in [maintenance/actions.ts:1346,1398](app/(app)/maintenance/actions.ts:1346) accept free-form `data: {...}` parameters and don't run them through a Zod schema. AGENTS.md explicitly requires Zod validation on all mutating server actions. Defensive — low risk in practice but the security invariant is a non-negotiable per the project's own rules.
+**Status:** ✅ FIXED — `81cb8a3`
 
-Quick fix when you're back: add `raiseDefectSchema` and `updateDefectSchema` in [lib/validations/](lib/validations) and run `.safeParse()` at the top of each action.
+Added `lib/validations/defect.ts` with `RaiseDefectSchema` + `UpdateDefectSchema`. Both `raiseDefectAction` and `updateDefectAction` now `safeParse()` at the top per the AGENTS.md security invariant.
 
 #### 🟡 `amended_at` column doesn't exist but reopen design called for it
 The reopen action was supposed to bump a per-amend timestamp distinct from `completed_at`. The column was never added; the comment misleadingly claimed it was bumped. Comment is now corrected (see fixed list above). If amendment timeline becomes a first-class report field, add `amended_at` to `maintenance_checks` via migration and bump it on every reopen.
 
 #### 🟢 `propagateCheckCompletionIfReady` swallows errors with only console.error
-[lib/actions/check-completion.ts:102-107](lib/actions/check-completion.ts:102). Best-effort by design — the calling test save action has already committed before this fires. But in production a silent failure means the parent maintenance_check never auto-completes and nobody knows. Add Sentry capture (the global stack already has the Sentry MCP wired) so production silently-failing propagation is visible.
+**Status:** ✅ FIXED — `dc2e32d`
+
+Added `Sentry.captureException` alongside the existing `console.error` so production has signal when propagation fails silently. Pattern matches the slow-report canary in `lib/observability/report-duration-canary.ts`.
 
 ---
 
@@ -104,26 +92,28 @@ a750dfe  fix: delta parser warns when unknown columns are in row 1
 ae78016  refactor: extract breaker-identity helper for ACB/NSX fallback
 9f45d98  fix: add audit logs to completion-flow actions + correct reopen comment
 fb1abb2  fix: audit-log the remaining check_asset mutation actions
+16683ac  docs: continued-audit followup with status + new findings
+81cb8a3  fix: Zod validation on raiseDefectAction + updateDefectAction
+dc2e32d  fix: Sentry capture on propagateCheckCompletionIfReady failure
 ```
 
-8 commits, none pushed. Branch is `claude/nervous-heisenberg-086c97`.
+11 commits, plus the corrections commit landing alongside this doc edit. Branch is `claude/nervous-heisenberg-086c97`.
 
 ## Test status
 
 - `tsc --noEmit` clean across all changes
-- 58 tests passing (3 report smoke + 34 delta parser + 21 row-mapping)
+- 199 tests passing across 12 test files
 - Smoke test fixture extended to exercise the new Maximo metadata + failure-chain rendering paths
 
 ## What's outside this branch
 
 - **EQ Intake fixture** for the future `maximo-pdf-wo` skill — Danny's 4 PDFs + README + SKILL-BRIEF.md at `C:/Projects/eq-intake/eq-platform/packages/eq-validation/test/fixtures/equinix-maximo-pdf-wo-2026-05-19/`
-- **Memory updates** in `~/.claude/projects/C--Projects-eq-solves-service/memory/` — 4 files updated/added covering the Intake-as-Service architecture, Simpro-replacement context, and canonical migration refinements
+- **Memory updates** in `~/.claude/CLAUDE.md` (global) and `~/.claude/projects/C--Projects-eq-solves-service/memory/` (project) — including the new EQ Suite architecture map (Field as resource owner, eq-service as CMMS consumer) and the canonical Cards → Shell/Canonical → Field flow.
 
-## Recommended next steps when you're back
+## What's next (locked by Royce 2026-05-21)
 
-1. **Eyes on `tmp/smoke/pm-asset-report-standard.docx`** — verify the new Maximo metadata block + failure-chain section look right
-2. **Confirm where EQ Quotes lives** so we can plan the defect → quote loop
-3. **Decide whether to push this branch** as a single PR or split into 8 commits with separate review
-4. **Decide whether to ship a `/dispatch` view pre-launch** — it's the highest-impact gap remaining
+- **EQ Quotes integration** — parked, not relevant now
+- **`/do` common-ops tiles** — parked, ignored for now
+- **Maximo PDF skill** — built in EQ Intake, not eq-service. Fixture + SKILL-BRIEF.md ready under `C:/Projects/eq-intake/eq-platform/packages/eq-validation/test/fixtures/equinix-maximo-pdf-wo-2026-05-19/`. Picks up when the canonical migration sprint runs.
 
-If you want me to keep going on anything specific, just say which.
+Any future "should we build a /dispatch view in eq-service?" prompt should be redirected to EQ Field, per the EQ Suite architecture map in global CLAUDE.md.
