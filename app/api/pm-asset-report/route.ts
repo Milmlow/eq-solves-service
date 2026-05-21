@@ -27,6 +27,7 @@ import {
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import type { AcbTestDetail, BreakerTestReading } from '@/lib/reports/pm-asset-report'
+import { resolveBreakerIdentity, formatMakeModel, type BreakerIdentityRow } from '@/lib/reports/breaker-identity'
 import { captureSlowReportRun } from '@/lib/observability/report-duration-canary'
 
 // DOCX generation is CPU-bound and runs through ~12 sequential Supabase
@@ -145,15 +146,20 @@ export async function GET(request: NextRequest) {
   const reportLogos = await resolveReportLogos(tenantSettings, tenantRow)
   const sitePhoto = check.site_id ? await fetchSitePhoto(supabase, check.site_id, tenantId) : undefined
 
-  // Resolve user names (assigned_to + per-item completed_by).
+  // Resolve user names (assigned_to + created_by + per-item completed_by).
   //
-  // NOTE: maintenance_checks has NO completed_by column — only assigned_to,
+  // maintenance_checks has no completed_by column, only assigned_to,
   // created_by, and completed_at. The historical code read check.completed_by
   // (which silently returned undefined), so supervisorName and reviewerName
-  // on the customer report cover have always rendered '—' and null. We've
-  // dropped the dead reads here; rendering decisions handled below.
+  // on the cover have always rendered '—' and null. We now use created_by
+  // (the user who scheduled the check) for the supervisor / reviewer slots —
+  // that's a real, meaningful field and matches the SKS workflow where a
+  // supervisor schedules and a tech executes.
   const userIds = new Set<string>()
   if (check.assigned_to) userIds.add(check.assigned_to)
+  if ((check as { created_by?: string | null }).created_by) {
+    userIds.add((check as { created_by: string }).created_by)
+  }
   for (const item of allItems) {
     if (item.completed_by) userIds.add(item.completed_by)
   }
@@ -171,7 +177,13 @@ export async function GET(request: NextRequest) {
 
   // Count outstanding items
   const outstandingAssets = checkAssets.filter(ca => ca.status !== 'completed' && ca.status !== 'na').length
-  const outstandingWOs = checkAssets.filter(ca => !ca.work_order_number).length
+  // Only meaningful for Maximo-style imports where SOME assets carry a WO
+  // number. If none do (manual-create check), the metric is "all assets are
+  // outstanding" which is useless noise — pass null so the report hides the
+  // row. If ALL assets have a WO# (typical Equinix Delta import), the count
+  // is genuinely 0 and we surface that as compliance evidence.
+  const woCount = checkAssets.filter(ca => !!ca.work_order_number).length
+  const outstandingWOs = woCount === 0 ? null : checkAssets.length - woCount
 
   // Phase 5: Linked test records — fetch ACB / NSX / RCD tests that point
   // at this maintenance_check, summarise to one row per asset, and pass
@@ -241,53 +253,21 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Sprint 1 schema unification (Refs #101): prefer NEW workflow columns,
-  // fall back to LEGACY. The 3-step workflow writes
-  //   brand / breaker_type / current_in / trip_unit_model
-  // and the legacy bulk-edit form writes
-  //   cb_make / cb_model / cb_rating / trip_unit
-  // cb_serial / cb_poles / performance_level / fixed_withdrawable are
-  // shared between both surfaces — single read.
-  type BreakerCols = {
-    cb_make: string | null
-    cb_model: string | null
-    cb_serial: string | null
-    cb_rating: string | null
-    cb_poles: string | null
-    trip_unit: string | null
-    brand: string | null
-    breaker_type: string | null
-    current_in: string | null
-    trip_unit_model: string | null
-    performance_level?: string | null
-    fixed_withdrawable: string | null
-    id: string
-  }
+  // Sprint 1 schema unification (Refs #101): see lib/reports/breaker-identity.ts
+  // for the canonical helper. NEW workflow columns preferred over LEGACY;
+  // the helper is the single place to update when legacy columns get dropped.
+  type BreakerCols = BreakerIdentityRow & { id: string }
   function buildAcbDetail(t: typeof acbLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
     const r = t as unknown as BreakerCols
     return {
-      cbMake: r.brand ?? r.cb_make,
-      cbModel: r.breaker_type ?? r.cb_model,
-      cbSerial: r.cb_serial,
-      cbRating: r.current_in ?? r.cb_rating,
-      poles: r.cb_poles,
-      tripUnit: r.trip_unit_model ?? r.trip_unit,
-      performanceLevel: r.performance_level ?? null,
-      fixedWithdrawable: r.fixed_withdrawable,
+      ...resolveBreakerIdentity(r, { includePerformanceLevel: true }),
       readings: acbReadingsByTest.get(r.id) ?? [],
     }
   }
   function buildNsxDetail(t: typeof nsxLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
     const r = t as unknown as BreakerCols
     return {
-      cbMake: r.brand ?? r.cb_make,
-      cbModel: r.breaker_type ?? r.cb_model,
-      cbSerial: r.cb_serial,
-      cbRating: r.current_in ?? r.cb_rating,
-      poles: r.cb_poles,
-      tripUnit: r.trip_unit_model ?? r.trip_unit,
-      performanceLevel: null,                              // NSX has no PerformanceLevel
-      fixedWithdrawable: r.fixed_withdrawable,
+      ...resolveBreakerIdentity(r, { includePerformanceLevel: false }),
       readings: nsxReadingsByTest.get(r.id) ?? [],
     }
   }
@@ -306,13 +286,9 @@ export async function GET(request: NextRequest) {
 
   const acbSummaries: AcbTestSummary[] = (acbLinkedRes.data ?? []).map((t) => {
     const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
-    // Refs #101: read `new ?? legacy` for the summary line too.
-    const r = t as unknown as { brand: string | null; cb_make: string | null; breaker_type: string | null; cb_model: string | null }
-    const make = r.brand ?? r.cb_make
-    const model = r.breaker_type ?? r.cb_model
     return {
       assetName: asset?.name ?? '—',
-      cbMakeModel: [make, model].filter(Boolean).join(' ') || '—',
+      cbMakeModel: formatMakeModel(t as unknown as BreakerIdentityRow),
       testType: t.test_type ?? '—',
       testDate: t.test_date,
       stepsDone: stepCount(t),
@@ -324,13 +300,9 @@ export async function GET(request: NextRequest) {
 
   const nsxSummaries: NsxTestSummary[] = (nsxLinkedRes.data ?? []).map((t) => {
     const asset = unwrap(t.assets as { name: string } | { name: string }[] | null)
-    // Refs #101: read `new ?? legacy` for the summary line too.
-    const r = t as unknown as { brand: string | null; cb_make: string | null; breaker_type: string | null; cb_model: string | null }
-    const make = r.brand ?? r.cb_make
-    const model = r.breaker_type ?? r.cb_model
     return {
       assetName: asset?.name ?? '—',
-      cbMakeModel: [make, model].filter(Boolean).join(' ') || '—',
+      cbMakeModel: formatMakeModel(t as unknown as BreakerIdentityRow),
       testType: t.test_type ?? '—',
       testDate: t.test_date,
       stepsDone: stepCount(t),
@@ -435,6 +407,22 @@ export async function GET(request: NextRequest) {
       location: asset?.location ?? '—',
       jobPlanName: asset?.job_plans?.name ?? (check.job_plans as { name: string } | null)?.name ?? '—',
       workOrderNumber: ca.work_order_number ?? null,
+
+      // Maximo WO metadata persisted by PR #178 (delta-row-mapping.ts). These
+      // fields render in the per-asset info grid + a conditional failure-chain
+      // block. Null on manual-create checks; populated on Delta-imported ones.
+      priority: ca.priority ?? null,
+      workType: ca.work_type ?? null,
+      crewId: ca.crew_id ?? null,
+      targetStart: ca.target_start ?? null,
+      targetFinish: ca.target_finish ?? null,
+      classification: ca.classification ?? null,
+      irScanResult: ca.ir_scan_result ?? null,
+      failureCode: ca.failure_code ?? null,
+      problem: ca.problem ?? null,
+      cause: ca.cause ?? null,
+      remedy: ca.remedy ?? null,
+
       tasks,
       defectsFound,
       recommendedAction: failedItems.length > 0 ? 'Follow-up rectification required for failed items.' : undefined,
@@ -461,10 +449,12 @@ export async function GET(request: NextRequest) {
     siteCode: jobPlanCode || siteName,
     siteAddress: site?.address ?? '—',
     customerName,
-    // supervisorName previously read from check.completed_by (never existed —
-    // always rendered '—'). Preserved that visible behaviour pending a real
-    // sign-off column / lookup via audit_log.
-    supervisorName: '—',
+    // supervisorName is the user who scheduled the check (created_by). For
+    // SKS workflow the supervisor schedules and a tech executes — this lines
+    // up with reality and replaces the historical '—' dead-read.
+    supervisorName: (check as { created_by?: string | null }).created_by
+      ? (userMap[(check as { created_by: string }).created_by] ?? '—')
+      : '—',
     contactEmail: '—',
     contactPhone: '—',
 
@@ -475,9 +465,12 @@ export async function GET(request: NextRequest) {
     outstandingWorkOrders: outstandingWOs,
 
     technicianName: check.assigned_to ? (userMap[check.assigned_to] ?? 'Unassigned') : 'Unassigned',
-    // reviewerName previously read from the non-existent completed_by column
-    // (always null). Preserved that behaviour pending a real reviewer field.
-    reviewerName: null,
+    // reviewerName uses created_by (the supervisor who scheduled). Same as
+    // supervisorName above — the sign-off page can render the same name for
+    // both fields when supervisor and reviewer are the same person.
+    reviewerName: (check as { created_by?: string | null }).created_by
+      ? (userMap[(check as { created_by: string }).created_by] ?? null)
+      : null,
 
     tenantProductName: productName,
     primaryColour,

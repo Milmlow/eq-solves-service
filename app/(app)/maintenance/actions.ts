@@ -13,6 +13,7 @@ import {
   UpdateMaintenanceCheckSchema,
   UpdateCheckItemResultSchema,
 } from '@/lib/validations/maintenance-check'
+import { RaiseDefectSchema, UpdateDefectSchema } from '@/lib/validations/defect'
 import { zodToErrorMap } from '@/lib/utils/zodErrors'
 
 /**
@@ -895,11 +896,17 @@ export async function completeCheckAction(id: string) {
  *
  * Behaviour:
  *   - Status flips back from 'complete' → 'in_progress'.
- *   - completed_at is preserved (so we know when the original close happened)
- *     and a separate amended_at column is bumped on each re-open.
+ *   - completed_at is preserved (so we know when the original close happened).
  *   - Audit log entry: action='update', summary marks it as a re-open.
  *   - Future report regeneration: existing PDF stays at v1, next generation
  *     becomes v2.pdf — wired via the report-deliveries revision counter.
+ *
+ * Open follow-up (2026-05-21 audit): the original design called for a
+ * dedicated `amended_at` column to track each re-open distinct from the
+ * original close. The column was never added and this action never bumped
+ * one. For now the audit_logs table is the source of truth for re-open
+ * history; if amend timeline becomes a first-class report field, add the
+ * column via migration and update this action to bump it.
  *
  * No reason field required (per Royce 26-Apr decision — reduces friction).
  * The audit log captures who and when; the diff itself is implicit in the
@@ -1251,6 +1258,13 @@ export async function forceCompleteCheckAssetAction(checkId: string, checkAssetI
 
     if (caErr) return { success: false, error: caErr.message }
 
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'check_asset',
+      entityId: checkAssetId,
+      summary: 'Force-completed check asset and its items',
+    })
+
     revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
@@ -1296,6 +1310,15 @@ export async function bulkUpdateWorkOrdersAction(
       else updated++
     }
 
+    if (updated > 0) {
+      await logAuditEvent({
+        action: 'update',
+        entityType: 'maintenance_check',
+        entityId: checkId,
+        summary: `Bulk-updated work order numbers on ${updated} check asset(s)${failed.length > 0 ? ` (${failed.length} failed)` : ''}`,
+      })
+    }
+
     revalidateMaintenanceSurfaces()
     return { success: true, updated, failed }
   } catch (e: unknown) {
@@ -1332,6 +1355,14 @@ export async function updateCheckAssetAction(
 
     if (error) return { success: false, error: error.message }
 
+    const fields = Object.keys(data).join(', ')
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'check_asset',
+      entityId: checkAssetId,
+      summary: `Updated check asset (${fields})`,
+    })
+
     revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
@@ -1356,19 +1387,26 @@ export async function raiseDefectAction(data: {
     const { supabase, tenantId, role, user } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
-    if (!data.title?.trim()) return { success: false, error: 'Title is required.' }
+    // Zod validation — AGENTS.md requires schema validation on all mutating
+    // server actions. The TS signature already constrains compile-time
+    // callers; this is runtime defence-in-depth.
+    const parsed = RaiseDefectSchema.safeParse(data)
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid defect input.' }
+    }
+    const input = parsed.data
 
     const { data: insertedRows, error } = await supabase
       .from('defects')
       .insert({
         tenant_id: tenantId,
-        check_id: data.check_id,
-        check_asset_id: data.check_asset_id || null,
-        asset_id: data.asset_id || null,
-        site_id: data.site_id || null,
-        title: data.title.trim(),
-        description: data.description?.trim() || null,
-        severity: data.severity || 'medium',
+        check_id: input.check_id,
+        check_asset_id: input.check_asset_id || null,
+        asset_id: input.asset_id || null,
+        site_id: input.site_id || null,
+        title: input.title.trim(),
+        description: input.description?.trim() || null,
+        severity: input.severity,
         status: 'open',
         raised_by: user.id,
       })
@@ -1382,12 +1420,12 @@ export async function raiseDefectAction(data: {
     await notifyDefectRaised({
       tenantId,
       defectId: insertedRows.id,
-      title: data.title.trim(),
-      description: data.description?.trim() ?? null,
-      severity: data.severity || 'medium',
+      title: input.title.trim(),
+      description: input.description?.trim() ?? null,
+      severity: input.severity,
     })
 
-    await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${data.title}"` })
+    await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${input.title}"` })
     revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
@@ -1406,6 +1444,14 @@ export async function updateDefectAction(defectId: string, updates: {
   try {
     const { supabase, role, user } = await requireUser()
 
+    // Zod validation — AGENTS.md requires schema validation on all mutating
+    // server actions. Status / severity enums are now enforced at runtime.
+    const parsed = UpdateDefectSchema.safeParse(updates)
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0]?.message ?? 'Invalid defect update.' }
+    }
+    const input = parsed.data
+
     // Technicians can update defects assigned to them; writers can update any
     if (!canWrite(role)) {
       const { data: defect } = await supabase
@@ -1419,14 +1465,14 @@ export async function updateDefectAction(defectId: string, updates: {
     }
 
     const updateData: Record<string, unknown> = {}
-    if (updates.status) updateData.status = updates.status
-    if (updates.severity) updateData.severity = updates.severity
-    if (updates.assigned_to !== undefined) updateData.assigned_to = updates.assigned_to
-    if (updates.resolution_notes !== undefined) updateData.resolution_notes = updates.resolution_notes
-    if (updates.work_order_number !== undefined) updateData.work_order_number = updates.work_order_number
-    if (updates.work_order_date !== undefined) updateData.work_order_date = updates.work_order_date
+    if (input.status) updateData.status = input.status
+    if (input.severity) updateData.severity = input.severity
+    if (input.assigned_to !== undefined) updateData.assigned_to = input.assigned_to
+    if (input.resolution_notes !== undefined) updateData.resolution_notes = input.resolution_notes
+    if (input.work_order_number !== undefined) updateData.work_order_number = input.work_order_number
+    if (input.work_order_date !== undefined) updateData.work_order_date = input.work_order_date
 
-    if (updates.status === 'resolved' || updates.status === 'closed') {
+    if (input.status === 'resolved' || input.status === 'closed') {
       updateData.resolved_at = new Date().toISOString()
       updateData.resolved_by = user.id
     }
@@ -1481,6 +1527,13 @@ export async function completeAllCheckAssetsAction(checkId: string) {
 
     if (caErr) return { success: false, error: caErr.message }
 
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check',
+      entityId: checkId,
+      summary: 'Marked all remaining check assets + items complete (Complete All)',
+    })
+
     revalidateMaintenanceSurfaces()
     return { success: true }
   } catch (e: unknown) {
@@ -1528,6 +1581,13 @@ export async function batchForceCompleteAssetsAction(checkId: string, checkAsset
       .in('id', checkAssetIds)
 
     if (caErr) return { success: false, error: caErr.message }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check',
+      entityId: checkId,
+      summary: `Force-completed ${checkAssetIds.length} check asset(s) and their items`,
+    })
 
     revalidateMaintenanceSurfaces()
     return { success: true }
@@ -1613,6 +1673,15 @@ export async function updateCheckItemResultAction(
         if (assetErr) return { success: false, error: assetErr.message }
       }
     }
+
+    await logAuditEvent({
+      action: 'update',
+      entityType: 'maintenance_check_item',
+      entityId: itemId,
+      summary: result === null
+        ? 'Cleared item result'
+        : `Set item result to ${result}${comment ? ' (with comment)' : ''}`,
+    })
 
     revalidateMaintenanceSurfaces()
     return { success: true }

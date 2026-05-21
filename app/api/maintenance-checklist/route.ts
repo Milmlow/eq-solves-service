@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { generateMaintenanceChecklist } from '@/lib/reports/maintenance-checklist'
 import type { MaintenanceChecklistInput, ChecklistAsset } from '@/lib/reports/maintenance-checklist'
+import { formatMakeModel, type BreakerIdentityRow } from '@/lib/reports/breaker-identity'
 import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import { fetchLogoImage } from '@/lib/reports/report-branding'
@@ -182,10 +183,16 @@ export async function GET(request: NextRequest) {
   })
 
   // Phase A (2026-04-28): when this is a test-bench check (kind in
-  // acb/nsx/rcd) AND check_assets is empty, synthesize ChecklistAsset
-  // entries from the linked tests so the run-sheet has something useful
-  // to print. Without this the tech got a blank page (cover + sign-off
-  // only) — confirmed by Royce printing the SY6 NSX run-sheet today.
+  // acb/nsx/rcd), synthesize ChecklistAsset entries from the linked tests
+  // so the run-sheet has something useful to print. Without this the tech
+  // got a blank page (cover + sign-off only) — confirmed by Royce printing
+  // the SY6 NSX run-sheet 2026-04-28.
+  //
+  // 2026-05-21: kind is the only discriminator. Previously we also required
+  // checkAssets.length === 0, but that silently dropped test detail on
+  // hybrid checks where the asset under test also exists as a check_asset
+  // (legitimate — e.g. an ACB workflow attached to a PPM check_asset row).
+  // For test-kind checks, the synthesized rows are always the right answer.
   //
   // Each linked test → one ChecklistAsset with a compact 5-row task list
   // (breaker details, visual, electrical, overall, notes) for ACB/NSX,
@@ -194,7 +201,7 @@ export async function GET(request: NextRequest) {
   const kind = (check as { kind?: string | null }).kind ?? 'maintenance'
   const isTestKind = kind === 'acb' || kind === 'nsx' || kind === 'rcd'
 
-  if (isTestKind && checklistAssets.length === 0) {
+  if (isTestKind) {
     if (kind === 'acb' || kind === 'nsx') {
       const table = kind === 'acb' ? 'acb_tests' : 'nsx_tests'
       // Sprint 1 schema unification (Refs #101): pull NEW columns alongside
@@ -213,12 +220,11 @@ export async function GET(request: NextRequest) {
       checklistAssets = (tests ?? []).map((t) => {
         const a = t.assets as { name: string; maximo_id: string | null; location: string | null } | { name: string; maximo_id: string | null; location: string | null }[] | null
         const asset = Array.isArray(a) ? a[0] ?? null : a
-        // Refs #101: prefer new columns, fall back to legacy.
-        const make = ((t as { brand?: string | null }).brand ?? (t.cb_make as string | null)) ?? ''
-        const model = ((t as { breaker_type?: string | null }).breaker_type ?? (t.cb_model as string | null)) ?? ''
+        // Refs #101: helper centralises new ?? legacy fallback.
+        const makeModel = formatMakeModel(t as unknown as BreakerIdentityRow)
         const serial = (t.cb_serial as string | null) ?? ''
         const breakerLine =
-          [make, model, serial].filter(Boolean).join(' / ') || '_______________________________________________'
+          [makeModel === '—' ? null : makeModel, serial].filter(Boolean).join(' / ') || '_______________________________________________'
         return {
           assetName: asset?.name ?? 'Breaker',
           assetId: asset?.maximo_id ?? '—',
@@ -303,6 +309,19 @@ export async function GET(request: NextRequest) {
   const rawFreq = check.frequency?.replace(/_/g, ' ') ?? '—'
   const frequency = rawFreq.charAt(0).toUpperCase() + rawFreq.slice(1)
 
+  // Maximo WO# at check level — derive a sensible summary from the per-asset
+  // WO numbers. Single WO across all assets → show it; multiple distinct →
+  // "Multiple (see assets)"; none → null (header row stays hidden).
+  // Previously hardcoded to null with comment "Not stored at check level
+  // currently" — true at the DB level but not useful at the header.
+  const distinctWoNumbers = Array.from(
+    new Set(checkAssets.map(ca => ca.work_order_number).filter((wo): wo is string => !!wo)),
+  )
+  const maximoWoSummary =
+    distinctWoNumbers.length === 0 ? null
+    : distinctWoNumbers.length === 1 ? distinctWoNumbers[0]
+    : `Multiple (${distinctWoNumbers.length} — see asset sections)`
+
   // Build the checklist input
   const checklistInput: MaintenanceChecklistInput = {
     companyName,
@@ -312,7 +331,7 @@ export async function GET(request: NextRequest) {
     dueDate: dueDateStr,
     frequency,
     assignedTo: check.assigned_to ? (userMap[check.assigned_to] ?? 'Unassigned') : null,
-    maximoWONumber: null,  // Not stored at check level currently
+    maximoWONumber: maximoWoSummary,
     maximoPMNumber: (check.job_plans as { code: string | null } | null)?.code ?? null,
     printedDate: printedDateStr,
     assets: checklistAssets,
