@@ -139,20 +139,28 @@ export function AttachmentList({
         </h3>
         {canWriteRole && (
           <>
+            {/*
+              `capture="environment"` makes phone browsers open the rear-
+              facing camera directly instead of a generic file picker.
+              On desktop the attribute is ignored, so it's safe to apply
+              unconditionally — the user still gets the standard file
+              dialog. Critical for the onsite defect-photo flow.
+            */}
             <input
               ref={fileRef}
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.docx,.csv,.txt"
+              capture="environment"
               onChange={handlePickFile}
               className="hidden"
             />
             <button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="flex items-center gap-1 text-xs text-eq-sky hover:text-eq-deep transition-colors disabled:opacity-50"
+              className="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-3 text-sm font-semibold text-eq-sky hover:text-eq-deep hover:bg-eq-ice/50 rounded-md transition-colors disabled:opacity-50 touch-manipulation"
             >
-              <Upload className="w-3.5 h-3.5" />
-              {uploading ? 'Uploading...' : 'Upload'}
+              <Upload className="w-4 h-4" />
+              {uploading ? 'Uploading…' : 'Upload'}
             </button>
           </>
         )}
@@ -234,18 +242,20 @@ export function AttachmentList({
                 <div className="flex items-center gap-1 ml-2">
                   <button
                     onClick={() => handleDownload(att)}
-                    className="p-1.5 rounded text-eq-grey hover:text-eq-sky transition-colors"
+                    className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded text-eq-grey hover:text-eq-sky hover:bg-eq-ice/50 transition-colors touch-manipulation"
                     title="Download"
+                    aria-label="Download attachment"
                   >
-                    <Download className="w-3.5 h-3.5" />
+                    <Download className="w-4 h-4" />
                   </button>
                   {isAdminRole && (
                     <button
                       onClick={() => handleDelete(att.id)}
-                      className="p-1.5 rounded text-gray-300 hover:text-red-500 transition-colors"
+                      className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors touch-manipulation"
                       title="Delete"
+                      aria-label="Delete attachment"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   )}
                 </div>
