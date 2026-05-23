@@ -1,5 +1,25 @@
 [build]
-  command = "npm run build"
+  # The `git config --add url.<base>.insteadOf` lines rewrite EVERY github.com
+  # clone URL (HTTPS, SSH shorthand `git@github.com:`, and SSH explicit
+  # `ssh://git@github.com/`) into an HTTPS URL embedding GITHUB_TOKEN as the
+  # auth credential. This lets `npm install` clone the private
+  # `@eq-solutions/tokens` dep (and any future private @eq-solutions/* git-URL
+  # dep) during the build, regardless of which form the lockfile pins.
+  #
+  # GITHUB_TOKEN must be a fine-grained PAT scoped to the eq-solutions org
+  # with read-only access to the dep repo(s). Set it as a Netlify site env
+  # var with scope "Builds" only — never expose it to runtime / bundled code.
+  # The rewrite has no effect locally because GITHUB_TOKEN is unset there;
+  # local installs use the developer's existing git/SSH credentials, so this
+  # is invisible outside Netlify.
+  command = """
+    git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && \
+    git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:" && \
+    git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/" && \
+    git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git+ssh://git@github.com/" && \
+    npm ci && \
+    npm run build
+    """
   publish = ".next"
 
 # ─────────── Scheduled Functions ───────────
