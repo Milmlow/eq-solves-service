@@ -5,8 +5,10 @@
   # HSTS: force HTTPS on every subdomain for 1 year, eligible for preload.
   Strict-Transport-Security: max-age=31536000; includeSubDomains
 
-  # Clickjacking protection (legacy + modern browsers)
-  X-Frame-Options: DENY
+  # Framing — allow Shell (core.eq.solutions / *.eq.solutions) to embed Service as an
+  # iframe. X-Frame-Options removed; CSP frame-ancestors is the authority for modern
+  # browsers and allows the cross-origin Shell embed. Approved 2026-05-23 (B1 sprint).
+  Content-Security-Policy: frame-ancestors https://core.eq.solutions https://*.eq.solutions
 
   # Stop MIME sniffing
   X-Content-Type-Options: nosniff
@@ -32,4 +34,4 @@
   # eu-assets.i.posthog.com which serves array.js.
   # Flip "Content-Security-Policy-Report-Only" to "Content-Security-Policy"
   # after confirming no legitimate requests are being blocked.
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.posthog.com https://*.i.posthog.com https://www.clarity.ms https://*.clarity.ms; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.supabase.co https://*.basemaps.cartocdn.com https://*.posthog.com https://*.i.posthog.com https://*.clarity.ms; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://urjhmkhbgaxrofurpbgc.supabase.co wss://urjhmkhbgaxrofurpbgc.supabase.co https://*.basemaps.cartocdn.com https://*.posthog.com https://*.i.posthog.com https://*.clarity.ms https://c.bing.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.posthog.com https://*.i.posthog.com https://www.clarity.ms https://*.clarity.ms; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.supabase.co https://*.basemaps.cartocdn.com https://*.posthog.com https://*.i.posthog.com https://*.clarity.ms; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://urjhmkhbgaxrofurpbgc.supabase.co wss://urjhmkhbgaxrofurpbgc.supabase.co https://*.basemaps.cartocdn.com https://*.posthog.com https://*.i.posthog.com https://*.clarity.ms https://c.bing.com; worker-src 'self' blob:; frame-ancestors https://core.eq.solutions https://*.eq.solutions; base-uri 'self'; form-action 'self'; object-src 'none'

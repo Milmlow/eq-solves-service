@@ -19,9 +19,8 @@ interface SiteMapLeafletProps {
   sites: MapSite[]
 }
 
-// Theme-matched marker colour
-const PIN_COLOUR = '#3DA8D8' // eq-sky
-const PIN_COLOUR_DEEP = '#2986B4' // eq-deep
+const PIN_COLOUR = 'var(--eq-sky)'
+const PIN_COLOUR_DEEP = 'var(--eq-deep)'
 
 function createPinIcon(count: number, isCluster = false) {
   const size = isCluster ? 40 : 30
@@ -85,10 +84,10 @@ export function SiteMapLeaflet({ sites }: SiteMapLeafletProps) {
       // Tooltip on hover
       const tooltipContent = `
         <div style="font-family:system-ui,sans-serif;min-width:140px;">
-          <div style="font-weight:700;font-size:13px;color:#1A1A2E;margin-bottom:2px;">${site.name}</div>
-          ${site.customer_name ? `<div style="font-size:11px;color:#6B7280;">${site.customer_name}</div>` : ''}
-          ${site.city || site.state ? `<div style="font-size:11px;color:#6B7280;">${[site.city, site.state].filter(Boolean).join(', ')}</div>` : ''}
-          ${site.asset_count > 0 ? `<div style="font-size:11px;color:#3DA8D8;font-weight:600;margin-top:3px;">${site.asset_count} assets</div>` : ''}
+          <div style="font-weight:700;font-size:13px;color:var(--eq-ink);margin-bottom:2px;">${site.name}</div>
+          ${site.customer_name ? `<div style="font-size:11px;color:var(--eq-gray-500);">${site.customer_name}</div>` : ''}
+          ${site.city || site.state ? `<div style="font-size:11px;color:var(--eq-gray-500);">${[site.city, site.state].filter(Boolean).join(', ')}</div>` : ''}
+          ${site.asset_count > 0 ? `<div style="font-size:11px;color:var(--eq-sky);font-weight:600;margin-top:3px;">${site.asset_count} assets</div>` : ''}
         </div>
       `
       marker.bindTooltip(tooltipContent, {
@@ -135,13 +134,13 @@ export function SiteMapLeaflet({ sites }: SiteMapLeafletProps) {
       {/* Override leaflet tooltip styling */}
       <style dangerouslySetInnerHTML={{ __html: `
         .site-tooltip {
-          border: 1px solid #E5E7EB !important;
+          border: 1px solid var(--eq-gray-200) !important;
           border-radius: 8px !important;
           box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
           padding: 8px 10px !important;
         }
         .site-tooltip::before {
-          border-top-color: #E5E7EB !important;
+          border-top-color: var(--eq-gray-200) !important;
         }
         .leaflet-container {
           font-family: system-ui, -apple-system, sans-serif;

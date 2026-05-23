@@ -134,7 +134,7 @@ export function ReportSettingsForm({ settings }: Props) {
                 type="button"
                 onClick={() => s.toggle(!s.value)}
                 className="w-full flex items-center justify-between px-4 py-3 rounded-lg border transition-colors text-left hover:bg-gray-50"
-                style={{ borderColor: s.value ? 'var(--eq-sky, #3DA8D8)' : '#e5e7eb' }}
+                style={{ borderColor: s.value ? 'var(--eq-sky)' : 'var(--eq-gray-200)' }}
               >
                 <div>
                   <p className="text-sm font-medium text-eq-ink">{s.label}</p>
@@ -203,7 +203,7 @@ export function ReportSettingsForm({ settings }: Props) {
                 type="button"
                 onClick={() => setComplexity(opt.value)}
                 className="flex flex-col items-start p-4 rounded-lg border transition-colors text-left hover:bg-gray-50"
-                style={{ borderColor: complexity === opt.value ? 'var(--eq-sky, #3DA8D8)' : '#e5e7eb' }}
+                style={{ borderColor: complexity === opt.value ? 'var(--eq-sky)' : 'var(--eq-gray-200)' }}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <FileText className={`w-4 h-4 ${complexity === opt.value ? 'text-eq-sky' : 'text-gray-300'}`} />
