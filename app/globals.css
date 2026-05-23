@@ -1,7 +1,7 @@
-/* Design tokens — single source of truth across every EQ surface.
-   Bumping the version requires updating the github:#vX.Y.Z pin in package.json
-   and reinstalling. See https://github.com/eq-solutions/eq-design-tokens. */
-@import "@eq-solutions/tokens/tokens.css";
+/* Design tokens — vendored from @eq-solutions/tokens v1.0.0.
+   To update: copy the new tokens.css from the eq-design-tokens repo into
+   lib/tokens/tokens.css. See https://github.com/eq-solutions/eq-design-tokens. */
+@import "../lib/tokens/tokens.css";
 @import "tailwindcss";
 
 /* Plus Jakarta Sans is loaded via next/font/google in app/layout.tsx,
