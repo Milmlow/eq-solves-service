@@ -52,6 +52,13 @@ export const PUBLIC_PATHS = [
   // The signed token in ?token=... IS the auth check — no Supabase
   // session required. Visiting flips the receive_* prefs synchronously.
   '/portal/unsubscribe',
+  // Shell iframe entry point — bootstraps a Supabase session from an
+  // HMAC-signed Shell token. No session exists yet when the iframe first
+  // loads this page, so it must be reachable without auth.
+  '/shell',
+  // Shell auth API — validates the HMAC token and returns a one-time OTP.
+  // Called by /shell (client-side fetch) before any session exists.
+  '/api/shell-auth',
 ] as const
 
 export const MFA_PATHS = [

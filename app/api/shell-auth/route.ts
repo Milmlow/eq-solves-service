@@ -97,8 +97,20 @@ export async function POST(req: NextRequest) {
 
   // Return the OTP for the client to exchange via supabase.auth.verifyOtp.
   // Single-use, expires per Supabase's OTP TTL (typically 60s).
-  return json(200, {
-    email: payload.email,
-    otp: linkData.properties.email_otp,
+  //
+  // Also set eq_shell_bridge cookie so proxy.ts can skip the MFA redirect
+  // for this session — Shell already verified the user's identity via HMAC.
+  // HttpOnly prevents JS manipulation; 4-hour TTL covers a normal work session.
+  const resp = NextResponse.json(
+    { email: payload.email, otp: linkData.properties.email_otp },
+    { status: 200, headers: { 'Cache-Control': 'no-store' } },
+  )
+  resp.cookies.set('eq_shell_bridge', '1', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 4, // 4 hours
   })
+  return resp
 }

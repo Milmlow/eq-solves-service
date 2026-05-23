@@ -53,8 +53,12 @@ export async function proxy(request: NextRequest) {
   // Demo accounts bypass MFA entirely.
   const isDemoUser = user.email === 'demo@eqsolves.com.au'
 
+  // Shell iframe sessions bypass MFA — Shell already verified the user via HMAC.
+  // The cookie is set by /api/shell-auth after a successful token exchange.
+  const isShellSession = request.cookies.get('eq_shell_bridge')?.value === '1'
+
   // Authenticated users on public auth pages -> dashboard.
-  if (isPublic && (aal.currentLevel === 'aal2' || isDemoUser)) {
+  if (isPublic && (aal.currentLevel === 'aal2' || isDemoUser || isShellSession)) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
@@ -63,7 +67,7 @@ export async function proxy(request: NextRequest) {
   // AAL enforcement:
   //   nextLevel === 'aal2' && currentLevel === 'aal1'  -> must challenge existing factor
   //   nextLevel === 'aal1' && currentLevel === 'aal1'  -> no factor enrolled yet
-  if (aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2' && !isAalExemptPath) {
+  if (aal.currentLevel === 'aal1' && aal.nextLevel === 'aal2' && !isAalExemptPath && !isShellSession) {
     // Fire-and-forget observability: makes the MFA loop visible if it recurs.
     // Two of these within ~30s for the same user = suspected loop.
     trackServer(user.id, 'mfa_redirect', { from: pathname }).catch(() => {})
@@ -77,7 +81,8 @@ export async function proxy(request: NextRequest) {
     aal.currentLevel === 'aal1' &&
     aal.nextLevel === 'aal1' &&
     !isAalExemptPath &&
-    !isDemoUser
+    !isDemoUser &&
+    !isShellSession
   ) {
     // MFA grace window (PR J — UX audit §B.1 / §5.4, locked 2026-05-19).
     // Users without a factor enrolled get N=14 days from first signin
