@@ -2,7 +2,8 @@
 import { cn } from '@/lib/utils/cn'
 import {
   LayoutDashboard, ClipboardCheck, Search, Settings, ChevronLeft, LogOut,
-  Menu, X, CalendarDays, AlertTriangle, Shield, Database, Lightbulb, Zap
+  Menu, X, CalendarDays, AlertTriangle, Shield, Database, Lightbulb, Zap,
+  ExternalLink,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -117,12 +118,16 @@ interface SidebarProps {
    */
   role?: Role | null
   settings?: TenantSettings
+  /** True when Service is embedded inside the EQ Shell iframe. Replaces
+   *  sign-out with an "Open in new tab" link and adds a Shell indicator. */
+  isShellIframe?: boolean
 }
 
 export function Sidebar({
   isAdmin = false,
   role = null,
   settings,
+  isShellIframe = false,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -261,15 +266,35 @@ export function Sidebar({
         </div>
       )}
       <div className="border-t border-white/10 p-2 mt-2">
-        <form action="/auth/signout" method="post">
-          <button
-            type="submit"
-            className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium touch-manipulation"
-          >
-            <LogOut className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>Sign out</span>}
-          </button>
-        </form>
+        {isShellIframe ? (
+          <>
+            {/* Shell indicator — subtle chip so admins know they're in iframe mode */}
+            {!collapsed && (
+              <div className="px-3 pb-1">
+                <span className="text-[10px] uppercase tracking-wider text-white/30">Via EQ Shell</span>
+              </div>
+            )}
+            <a
+              href="https://eq-solves-service.netlify.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium touch-manipulation"
+            >
+              <ExternalLink className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Open in new tab</span>}
+            </a>
+          </>
+        ) : (
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium touch-manipulation"
+            >
+              <LogOut className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Sign out</span>}
+            </button>
+          </form>
+        )}
       </div>
     </>
   )

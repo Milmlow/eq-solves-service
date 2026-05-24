@@ -16,6 +16,7 @@ import {
   batchForceCompleteAssetsAction,
   updateCheckItemResultAction,
   reopenCheckAction,
+  removeCheckAssetAction,
 } from '../actions'
 import { formatDate } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
@@ -32,7 +33,7 @@ import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 const ASSET_TABLE_COLLAPSE_THRESHOLD = 10
 const ATTACHMENTS_COLLAPSE_THRESHOLD = 5
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
-import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Send } from 'lucide-react'
+import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Send, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { events as analyticsEvents } from '@/lib/analytics'
 import { SendReportModal } from './SendReportModal'
@@ -425,6 +426,19 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     }
   }, [check.id])
 
+  const handleRemoveAsset = useCallback(async (checkAssetId: string, assetName: string) => {
+    const confirmed = await confirm({
+      title: `Remove "${assetName}" from this check?`,
+      message: 'Its task list will be deleted. This cannot be undone.',
+      confirmLabel: 'Remove',
+    })
+    if (!confirmed) return
+    setLoading(true)
+    const result = await removeCheckAssetAction(check.id, checkAssetId)
+    setLoading(false)
+    if (!result.success) setError(result.error ?? 'Failed to remove asset.')
+  }, [check.id, confirm])
+
   // Paste WO numbers from Excel
   async function handlePasteWOs() {
     const lines = pasteText.split('\n').map(l => l.trim()).filter(Boolean)
@@ -766,6 +780,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                     onItemNotes={handleItemNotes}
                     onAssetNote={(notes) => handleAssetNote(ca.id, notes)}
                     onAssetWO={(wo) => handleAssetWO(ca.id, wo)}
+                    onRemove={canAct ? () => handleRemoveAsset(ca.id, ca.assets?.name ?? 'this asset') : undefined}
                   />
                 ))}
                 {displayedAssets.length === 0 && filterText && (
@@ -833,7 +848,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 
 function AssetRow({
   ca, items, isExpanded, onToggle, canAct, checkStatus, isSelected, onToggleSelect,
-  onForceComplete, onItemResult, onItemNotes, onAssetNote, onAssetWO,
+  onForceComplete, onItemResult, onItemNotes, onAssetNote, onAssetWO, onRemove,
 }: {
   ca: CheckAssetWithDetails
   items: MaintenanceCheckItem[]
@@ -848,6 +863,7 @@ function AssetRow({
   onItemNotes: (itemId: string, notes: string) => void
   onAssetNote: (notes: string) => void
   onAssetWO: (wo: string) => void
+  onRemove?: () => void
 }) {
   const [editingWO, setEditingWO] = useState(false)
   const [editingNotes, setEditingNotes] = useState(false)
@@ -957,14 +973,25 @@ function AssetRow({
                 <h4 className="text-sm font-bold text-eq-ink">
                   Outstanding Tasks — {jpName} ({items.length} tasks, {doneCount} completed)
                 </h4>
-                {canAct && !allDone && (
-                  <button
-                    onClick={onForceComplete}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200 transition-colors"
-                  >
-                    <CheckCheck className="w-3.5 h-3.5" /> Force Complete All
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {canAct && !allDone && (
+                    <button
+                      onClick={onForceComplete}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200 transition-colors"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" /> Force Complete All
+                    </button>
+                  )}
+                  {onRemove && (
+                    <button
+                      onClick={onRemove}
+                      title="Remove this asset from the check"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </button>
+                  )}
+                </div>
               </div>
 
               {items.length === 0 ? (
