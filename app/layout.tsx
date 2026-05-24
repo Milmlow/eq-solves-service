@@ -51,7 +51,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${jakarta.variable} h-full antialiased`}>
       <head>
-        <link rel="apple-touch-icon" href="/icons/icon.svg" />
+        <link rel="apple-touch-icon" href="/icons/icon-1024.png" />
         <meta name="theme-color" content="#3DA8D8" />
       </head>
       <body className="min-h-full">
