@@ -216,6 +216,30 @@ Customer onboarded April 2026 under SKS tenant — first non-Equinix customer, f
 - **Sites missing data (per SOW review):** site contact name/mobile/after-hrs are null on all 16 sites (TO POPULATE on first visit); some assets missing JM numbers (acquired on-site).
 - **Subcontractor exclusions:** UPS PPM owned by Vertiv, generator 6-monthly by Cummins (note in calendar entry descriptions only — no scope flag on assets yet).
 
+## Check Comments (migration 0107, 2026-05-24)
+
+Threaded notes on a maintenance check — techs and supervisors can leave context without leaving the app.
+
+- **Table:** `check_comments` — columns: `id`, `check_id` (FK → maintenance_checks cascade), `tenant_id`, `created_by` (FK → auth.users), `body` (text, 1–2000 chars, DB constraint), `created_at`, `updated_at`.
+- **RLS:** all tenant members can read; non-`read_only` members can insert own; authors can delete own. No edit — comments are immutable.
+- **Server actions** in `app/(app)/maintenance/actions.ts`: `addCheckCommentAction(checkId, body)` and `deleteCheckCommentAction(commentId, checkId)`.
+- **UI:** `CheckCommentsPanel` (client component at `app/(app)/maintenance/[id]/CheckCommentsPanel.tsx`) — placed between `LinkedTestsPanel` and `CheckDetailPage` in the detail page. Optimistic append on post, relative timestamps, initials avatar, ⌘↵ to post, × to delete own.
+- **Page fetch:** `page.tsx` fetches raw comments then batch-fetches profiles for author names — no FK to `public.profiles` required.
+
+## PWA / Offline (2026-05-24)
+
+Makes the app installable on iOS/Android and keeps recently-visited check pages readable in zero-signal switchrooms.
+
+- **Packages:** `@serwist/next` + `serwist` (App Router service worker compiler).
+- **Service worker source:** `sw.ts` at project root — compiled by serwist at build time into `public/sw.js` (gitignored). Disabled in development (`NODE_ENV === "development"`) to avoid breaking hot reload.
+- **Caching strategy:** precaches all static Next.js assets via `self.__SW_MANIFEST`; network-first for `/maintenance/[uuid]` routes (100 entries max, 7-day TTL). Falls back to `/offline` page on failed navigation.
+- **Offline page:** `app/offline/page.tsx` — force-static, branded, links back to `/maintenance`.
+- **Manifest:** `public/manifest.json` — standalone display, EQ sky blue theme, `background_color: #ffffff`.
+- **Icon:** `public/icons/icon-1024.png` — real EQ logo (blue full variant from brand kit). SVG placeholders also in `public/icons/` but PNG is the canonical icon referenced in manifest and apple-touch-icon.
+- **Registration:** `ServiceWorkerRegistration` client component (`components/ui/ServiceWorkerRegistration.tsx`) — registers `/sw.js` on mount, included in root layout.
+- **`next.config.ts`:** `withSerwist()` chained inside the existing `withSentryConfig()` wrapper.
+- **Write queuing deferred** — server actions require a network connection; offline mutation buffering is not yet implemented. Planned post-architecture redo.
+
 ## Conventions
 - `requireUser()` at the top of every server action — resolves user, tenant, role
 - `tsc --noEmit` at 0 errors before any sprint is closed
