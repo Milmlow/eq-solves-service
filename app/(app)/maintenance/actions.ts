@@ -16,20 +16,8 @@ import {
 import { RaiseDefectSchema, UpdateDefectSchema } from '@/lib/validations/defect'
 import { zodToErrorMap } from '@/lib/utils/zodErrors'
 
-/**
- * Every page that surfaces maintenance_checks counts/lists. Any mutation to a
- * check (create / update / archive / delete / complete / item result) must
- * invalidate all of these so the numbers don't drift out of sync.
- *
- * Kept as a single source of truth — add new paths here as new surfaces land.
- */
 function revalidateMaintenanceSurfaces() {
   revalidatePath('/maintenance')
-  revalidatePath('/testing/summary')
-  revalidatePath('/dashboard')
-  revalidatePath('/analytics')
-  revalidatePath('/reports')
-  revalidatePath('/sites', 'layout')
 }
 
 /**

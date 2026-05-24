@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { DataTable } from '@/components/ui/DataTable'
@@ -100,6 +100,11 @@ export function MaintenanceList({
   const [batchOpen, setBatchOpen] = useState(false)
   const [layoutView, setLayoutView] = useState<'table' | 'sites'>('sites')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Prefetch detail pages for every visible check so navigating feels instant.
+  useEffect(() => {
+    checks.forEach((c) => router.prefetch(`/maintenance/${c.id}`))
+  }, [checks, router])
 
   // Mine/All URL writer — preserves every other filter param, just flips
   // `view`. Used by the segmented control in the toolbar.
