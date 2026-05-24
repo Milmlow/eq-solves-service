@@ -25,7 +25,9 @@ export default function ShellEntryPage() {
   useEffect(() => {
     const hash = window.location.hash
     const match = hash.match(/[#&]sh=([^&]+)/)
-    const token = match?.[1]
+    // Shell encodes the token with encodeURIComponent before placing it in
+    // the URL hash. Decode it here — browsers don't auto-decode hash fragments.
+    const token = match?.[1] ? decodeURIComponent(match[1]) : undefined
 
     if (!token) {
       setStatus('error')
