@@ -1,0 +1,25 @@
+{
+  "name": "EQ Service",
+  "short_name": "EQ Service",
+  "description": "Maintenance management for electrical contractors.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#EAF5FB",
+  "theme_color": "#3DA8D8",
+  "categories": ["business", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

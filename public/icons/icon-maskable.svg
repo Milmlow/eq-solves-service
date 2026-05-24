@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable: no rounded corners, full bleed, content within safe zone (40px inset) -->
+  <rect width="512" height="512" fill="#3DA8D8"/>
+  <text
+    x="256"
+    y="330"
+    font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+    font-size="228"
+    font-weight="700"
+    text-anchor="middle"
+    fill="white"
+    letter-spacing="-8"
+  >EQ</text>
+</svg>

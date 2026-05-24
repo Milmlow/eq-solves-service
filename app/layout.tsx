@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { RouteProgress } from "@/components/ui/RouteProgress";
+import { ServiceWorkerRegistration } from "@/components/ui/ServiceWorkerRegistration";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -25,13 +26,20 @@ const jakarta = Plus_Jakarta_Sans({
 // This distinction is deliberate — it encodes the ASIC "registered business name"
 // relationship in crawlable/discoverable metadata.
 export const metadata: Metadata = {
-  title: "EQ Solves Service",
-  description: "EQ Solves Service — proprietary maintenance management platform for electrical contractors.",
-  applicationName: "EQ Solves Service",
+  title: "EQ Service",
+  description: "Maintenance management for electrical contractors.",
+  applicationName: "EQ Service",
   authors: [{ name: "CDC Solutions Pty Ltd" }],
   publisher: "EQ",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "EQ Service",
+  },
   other: {
     copyright: "© 2026 EQ · CDC Solutions Pty Ltd",
+    "mobile-web-app-capable": "yes",
   },
 };
 
@@ -42,6 +50,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${jakarta.variable} h-full antialiased`}>
+      <head>
+        <link rel="apple-touch-icon" href="/icons/icon.svg" />
+        <meta name="theme-color" content="#3DA8D8" />
+      </head>
       <body className="min-h-full">
         <Providers>
           {/* RouteProgress reads useSearchParams() — must live inside a Suspense
@@ -52,6 +64,7 @@ export default function RootLayout({
           </Suspense>
           {children}
         </Providers>
+        <ServiceWorkerRegistration />
       </body>
     </html>
   );

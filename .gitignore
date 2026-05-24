@@ -41,6 +41,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# serwist — generated service worker (compiled from sw.ts at build time)
+/public/sw.js
+/public/sw.js.map
+
 # sprint prompts & release archives (kept local, not committed)
 SPRINT_*_COWORK_PROMPT.md
 eq-solves-release-*.zip
