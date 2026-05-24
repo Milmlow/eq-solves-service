@@ -1809,3 +1809,73 @@ export async function removeCheckAssetAction(checkId: string, checkAssetId: stri
     return { success: false, error: (e as Error).message }
   }
 }
+
+export async function addCheckCommentAction(checkId: string, body: string) {
+  try {
+    const { supabase, tenantId, user, role } = await requireUser()
+
+    if (role === 'read_only') return { success: false as const, error: 'Read-only users cannot post comments.' }
+
+    const trimmed = body.trim()
+    if (!trimmed || trimmed.length > 2000) {
+      return { success: false as const, error: 'Comment must be between 1 and 2000 characters.' }
+    }
+
+    // Confirm the check exists in this tenant (RLS covers it, but an explicit
+    // check gives a cleaner error than a silent empty result).
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('id')
+      .eq('id', checkId)
+      .maybeSingle()
+
+    if (!check) return { success: false as const, error: 'Check not found.' }
+
+    const { error } = await supabase
+      .from('check_comments')
+      .insert({ check_id: checkId, tenant_id: tenantId, created_by: user.id, body: trimmed })
+
+    if (error) return { success: false as const, error: error.message }
+
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'check_comment',
+      entityId: checkId,
+      summary: 'Posted a comment on check',
+      metadata: { check_id: checkId },
+    })
+
+    revalidatePath(`/maintenance/${checkId}`)
+    return { success: true as const }
+  } catch (e: unknown) {
+    return { success: false as const, error: (e as Error).message }
+  }
+}
+
+export async function deleteCheckCommentAction(commentId: string, checkId: string) {
+  try {
+    const { supabase, user } = await requireUser()
+
+    // RLS enforces ownership — the delete policy only allows the author.
+    const { error } = await supabase
+      .from('check_comments')
+      .delete()
+      .eq('id', commentId)
+      .eq('created_by', user.id)
+
+    if (error) return { success: false as const, error: error.message }
+
+    await logAuditEvent({
+      action: 'delete',
+      entityType: 'check_comment',
+      entityId: commentId,
+      summary: 'Deleted a comment on check',
+      metadata: { check_id: checkId },
+    })
+
+    revalidatePath(`/maintenance/${checkId}`)
+    return { success: true as const }
+  } catch (e: unknown) {
+    return { success: false as const, error: (e as Error).message }
+  }
+}

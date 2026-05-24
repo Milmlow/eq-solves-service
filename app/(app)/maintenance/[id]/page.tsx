@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CheckDetailPage } from './CheckDetailPage'
 import { LinkedTestsPanel } from './LinkedTestsPanel'
+import { CheckCommentsPanel } from './CheckCommentsPanel'
 import { ContractScopeBanner } from '@/components/ui/ContractScopeBanner'
 import { SiteContextCard } from './SiteContextCard'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
@@ -105,6 +106,29 @@ export default async function MaintenanceCheckPage({
     .eq('entity_id', id)
     .order('created_at')
 
+  // Fetch comments + resolve author names
+  const { data: rawComments } = await supabase
+    .from('check_comments')
+    .select('id, body, created_by, created_at')
+    .eq('check_id', id)
+    .order('created_at')
+
+  const commenterIds = [...new Set((rawComments ?? []).map((c) => c.created_by))]
+  const profileMap: Record<string, string> = {}
+  if (commenterIds.length > 0) {
+    const { data: commenters } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', commenterIds)
+    for (const p of commenters ?? []) {
+      profileMap[p.id] = p.full_name ?? p.email ?? 'Unknown'
+    }
+  }
+  const comments = (rawComments ?? []).map((c) => ({
+    ...c,
+    author_name: profileMap[c.created_by] ?? 'Unknown',
+  }))
+
   const checkName = check.custom_name ?? (check.job_plans as { name: string } | null)?.name ?? 'Maintenance Check'
 
   // Status-driven page accent (2026-04-28 chrome polish). A hairline
@@ -188,6 +212,12 @@ export default async function MaintenanceCheckPage({
       <LinkedTestsPanel
         checkId={id}
         siteId={check.site_id as string | null}
+      />
+      <CheckCommentsPanel
+        checkId={id}
+        comments={comments}
+        currentUserId={user?.id ?? null}
+        canComment={userRole !== 'read_only' && userRole !== null}
       />
       <CheckDetailPage
         check={{ ...check, assignee_name: assigneeName } as never}

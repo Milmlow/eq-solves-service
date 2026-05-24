@@ -703,6 +703,58 @@ export type Database = {
           },
         ]
       }
+      check_comments: {
+        Row: {
+          body: string
+          check_id: string
+          created_at: string
+          created_by: string
+          id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          check_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          check_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "check_comments_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_comments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_tier_view"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "check_comments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string | null
