@@ -31,8 +31,16 @@ export async function updateSession(request: NextRequest) {
             request.cookies.set(name, value)
           )
           response = NextResponse.next({ request })
+          // SameSite=None required in production: Service is embedded cross-site
+          // inside Shell (core.eq.solutions ≠ eq-solves-service.netlify.app).
+          // Lax cookies are not forwarded in cross-site sub-frame requests, so
+          // the session would be invisible to the proxy on every iframe navigation.
+          // Netlify is always HTTPS, so None+Secure is valid in production.
+          const sameSiteOverride = process.env.NODE_ENV === 'production'
+            ? { sameSite: 'none' as const, secure: true }
+            : {}
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+            response.cookies.set(name, value, { ...options, ...sameSiteOverride })
           )
         },
       },
