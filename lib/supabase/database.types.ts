@@ -3659,12 +3659,14 @@ export type Database = {
         Row: {
           address: string | null
           after_hours_phone: string | null
+          canonical_field_id: string | null
           city: string | null
           code: string | null
           country: string
           created_at: string
           customer_id: string | null
           deleted_at: string | null
+          field_synced_at: string | null
           gate_code: string | null
           id: string
           is_active: boolean
@@ -3685,12 +3687,14 @@ export type Database = {
         Insert: {
           address?: string | null
           after_hours_phone?: string | null
+          canonical_field_id?: string | null
           city?: string | null
           code?: string | null
           country?: string
           created_at?: string
           customer_id?: string | null
           deleted_at?: string | null
+          field_synced_at?: string | null
           gate_code?: string | null
           id?: string
           is_active?: boolean
@@ -3711,12 +3715,14 @@ export type Database = {
         Update: {
           address?: string | null
           after_hours_phone?: string | null
+          canonical_field_id?: string | null
           city?: string | null
           code?: string | null
           country?: string
           created_at?: string
           customer_id?: string | null
           deleted_at?: string | null
+          field_synced_at?: string | null
           gate_code?: string | null
           id?: string
           is_active?: boolean

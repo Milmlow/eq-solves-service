@@ -16,7 +16,7 @@
  */
 import Link from 'next/link'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { Users, Settings, Image, FileText, Archive, ScrollText, Upload, Download, Activity, MapPin } from 'lucide-react'
+import { Users, Settings, Image, FileText, Archive, ScrollText, Upload, Download, Activity, MapPin, Link2 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,6 +87,12 @@ const ADMIN_CARDS: AdminCard[] = [
     href: '/admin/today',
     description: 'Where everyone is right now — onsite, scheduled, done. Live supervisor view.',
     icon: MapPin,
+  },
+  {
+    label: 'Connected Apps',
+    href: '/admin/integrations',
+    description: 'Sync sites and data from EQ Field and other apps in the EQ suite.',
+    icon: Link2,
   },
 ]
 
