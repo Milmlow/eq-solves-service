@@ -4,7 +4,7 @@
  * ACN 651 962 935 · ABN 40 651 962 935
  * Proprietary and confidential. All rights reserved.
  */
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { Sidebar } from '@/components/ui/Sidebar'
 import { HelpWidget } from '@/components/ui/HelpWidget'
 import { EqFooter } from '@/components/ui/EqFooter'
@@ -128,6 +128,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { settings } = await getTenantSettings()
 
+  // Detect shell iframe sessions — set by /api/shell-auth after a successful
+  // HMAC exchange. When true, strip standalone chrome (footer, help widget,
+  // sign-out) and show an "Open in new tab" escape hatch instead.
+  const cookieStore = await cookies()
+  const isShellIframe = cookieStore.get('eq_shell_bridge')?.value === '1'
+
   // Inject tenant colours as CSS custom properties — overrides :root defaults
   const tenantStyle = {
     '--eq-sky': settings.primary_colour,
@@ -158,6 +164,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         isAdmin={isAdmin}
         role={analyticsRole as Role | null}
         settings={settings}
+        isShellIframe={isShellIframe}
       />
       <div className="flex flex-1 min-w-0 flex-col">
         {isDemoSession && <DemoBanner shareUrl={demoShareUrl} />}
@@ -175,9 +182,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8">
           {children}
         </main>
-        <EqFooter />
+        {!isShellIframe && <EqFooter />}
       </div>
-      <HelpWidget />
+      {!isShellIframe && <HelpWidget />}
       {showOnboarding && (
         <OnboardingWizard userName={userName} companyName={tenantName} />
       )}
