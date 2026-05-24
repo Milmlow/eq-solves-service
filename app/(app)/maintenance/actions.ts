@@ -1775,6 +1775,53 @@ export async function getPlansWithFrequencyAction(frequency: string): Promise<{ 
  * Remove a single asset (and its task items) from a maintenance check.
  * Only allowed when the check is not yet complete or cancelled.
  */
+export async function batchRemoveCheckAssetsAction(checkId: string, checkAssetIds: string[]) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (checkAssetIds.length === 0) return { success: false, error: 'No assets selected.' }
+
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('id, status')
+      .eq('id', checkId)
+      .eq('tenant_id', tenantId)
+      .single()
+
+    if (!check) return { success: false, error: 'Check not found.' }
+    if (check.status === 'complete' || check.status === 'cancelled') {
+      return { success: false, error: 'Cannot remove assets from a completed or cancelled check.' }
+    }
+
+    await supabase
+      .from('maintenance_check_items')
+      .delete()
+      .in('check_asset_id', checkAssetIds)
+      .eq('check_id', checkId)
+
+    const { error } = await supabase
+      .from('check_assets')
+      .delete()
+      .in('id', checkAssetIds)
+      .eq('check_id', checkId)
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'delete',
+      entityType: 'check_asset',
+      entityId: checkId,
+      summary: `Removed ${checkAssetIds.length} asset(s) from check`,
+      metadata: { check_id: checkId, removed_ids: checkAssetIds },
+    })
+
+    revalidatePath(`/maintenance/${checkId}`)
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
 export async function removeCheckAssetAction(checkId: string, checkAssetId: string) {
   try {
     const { supabase, tenantId, role } = await requireUser()

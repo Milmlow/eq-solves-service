@@ -17,6 +17,7 @@ import {
   updateCheckItemResultAction,
   reopenCheckAction,
   removeCheckAssetAction,
+  batchRemoveCheckAssetsAction,
 } from '../actions'
 import { formatDate } from '@/lib/utils/format'
 import { AttachmentList } from '@/components/ui/AttachmentList'
@@ -99,6 +100,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   const [showPasteModal, setShowPasteModal] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
+  const [removedAssetIds, setRemovedAssetIds] = useState<Set<string>>(new Set())
   const [showSendReport, setShowSendReport] = useState(false)
   const [showReportDialog, setShowReportDialog] = useState(false)
   const confirm = useConfirm()
@@ -132,7 +134,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 
   // Sort logic
   const sortedAssets = useMemo(() => {
-    const arr = [...checkAssets]
+    const arr = checkAssets.filter(ca => !removedAssetIds.has(ca.id))
     arr.sort((a, b) => {
       let aVal = ''
       let bVal = ''
@@ -156,7 +158,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
       return sortDir === 'asc' ? cmp : -cmp
     })
     return arr
-  }, [checkAssets, items, sortKey, sortDir])
+  }, [checkAssets, removedAssetIds, items, sortKey, sortDir])
 
   // Free-text filter on asset name + Maximo ID. Case-insensitive substring
   // match. Royce 2026-04-28: scanning a 100-row table by eye is painful.
@@ -342,6 +344,27 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     }
   }
 
+  async function handleBatchRemove() {
+    const selectedIds = Array.from(selectedAssetIds)
+    if (selectedIds.length === 0) return
+    const ok = await confirm({
+      title: `Remove ${selectedIds.length} asset(s) from this check?`,
+      message: 'Their task lists will be deleted. This cannot be undone.',
+      confirmLabel: 'Remove',
+    })
+    if (!ok) return
+    setError(null); setLoading(true)
+    const result = await batchRemoveCheckAssetsAction(check.id, selectedIds)
+    setLoading(false)
+    if (result.success) {
+      setRemovedAssetIds(prev => new Set([...prev, ...selectedIds]))
+      setSelectedAssetIds(new Set())
+      router.refresh()
+    } else {
+      setError(result.error ?? 'Failed to remove selected assets.')
+    }
+  }
+
   async function handleItemResult(itemId: string, result: CheckItemResult | null) {
     setError(null)
     const item = items.find(i => i.id === itemId)
@@ -436,8 +459,13 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
     setLoading(true)
     const result = await removeCheckAssetAction(check.id, checkAssetId)
     setLoading(false)
-    if (!result.success) setError(result.error ?? 'Failed to remove asset.')
-  }, [check.id, confirm])
+    if (!result.success) {
+      setError(result.error ?? 'Failed to remove asset.')
+    } else {
+      setRemovedAssetIds(prev => new Set([...prev, checkAssetId]))
+      router.refresh()
+    }
+  }, [check.id, confirm, router])
 
   // Paste WO numbers from Excel
   async function handlePasteWOs() {
@@ -469,7 +497,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 
   const completedCount = items.filter(i => i.result !== null).length
   const totalCount = items.length
-  const completedAssets = checkAssets.filter(ca => ca.status === 'completed').length
+  const completedAssets = sortedAssets.filter(ca => ca.status === 'completed').length
   const requiredIncomplete = items.filter(i => i.is_required && i.result === null).length
 
   return (
@@ -672,7 +700,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
           this is the moment the tech actually needs it: about to walk the
           floor with the asset list. Hidden on completed checks where the
           eyeline tool is Customer Report / Send Report. */}
-      {(localStatus === 'scheduled' || localStatus === 'in_progress' || localStatus === 'overdue') && canAct && checkAssets.length > 0 && (
+      {(localStatus === 'scheduled' || localStatus === 'in_progress' || localStatus === 'overdue') && canAct && sortedAssets.length > 0 && (
         <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-eq-sky/30 bg-eq-ice/50">
           <div className="text-sm text-eq-ink">
             <span className="font-semibold">Heading on site?</span>{' '}
@@ -685,7 +713,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
       )}
 
       {/* Asset Table — full width */}
-      {checkAssets.length > 0 && (
+      {sortedAssets.length > 0 && (
         <>
           {selectedAssetIds.size > 0 && canAct && (
             <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
@@ -695,6 +723,9 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
               <Button size="sm" onClick={handleBatchComplete} loading={loading}>
                 <CheckCheck className="w-4 h-4 mr-1" /> Complete {selectedAssetIds.size} Selected
               </Button>
+              <Button size="sm" variant="danger" onClick={handleBatchRemove} loading={loading}>
+                <Trash2 className="w-4 h-4 mr-1" /> Remove {selectedAssetIds.size} Selected
+              </Button>
               <Button size="sm" variant="secondary" onClick={() => setSelectedAssetIds(new Set())}>
                 Clear
               </Button>
@@ -703,8 +734,8 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 
           <CollapsibleSection
             title="Assets"
-            summary={`${completedAssets}/${checkAssets.length} completed`}
-            defaultOpen={checkAssets.length <= ASSET_TABLE_COLLAPSE_THRESHOLD}
+            summary={`${completedAssets}/${sortedAssets.length} completed`}
+            defaultOpen={sortedAssets.length <= ASSET_TABLE_COLLAPSE_THRESHOLD}
             actions={
               <>
                 {/* Free-text filter (Royce 2026-04-28 — scanning a 100-row
@@ -718,7 +749,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                 />
                 {filterText && (
                   <span className="text-sm text-eq-grey shrink-0">
-                    {displayedAssets.length}/{checkAssets.length}
+                    {displayedAssets.length}/{sortedAssets.length}
                   </span>
                 )}
                 {canAct && (
@@ -797,7 +828,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
         </>
       )}
 
-      {checkAssets.length === 0 && (
+      {sortedAssets.length === 0 && (
         <div className="text-center py-12 border border-gray-200 rounded-lg bg-white">
           <p className="text-eq-grey text-sm">No assets linked to this maintenance check.</p>
         </div>
