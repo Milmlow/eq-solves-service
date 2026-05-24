@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { MediaPicker } from '@/components/ui/MediaPicker'
 import { updateReportSettingsAction } from './actions'
 import type { TenantSettings } from '@/lib/types'
-import { Eye, EyeOff, Plus, Trash2, GripVertical, Image, FileText } from 'lucide-react'
+import { Eye, EyeOff, Plus, Trash2, GripVertical, FileText } from 'lucide-react'
 
 interface Props {
   settings: TenantSettings

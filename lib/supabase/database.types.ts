@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -329,6 +329,8 @@ export type Database = {
           asset_type: string
           block_or_zone: string | null
           building: string | null
+          canonical_id: string | null
+          canonical_synced_at: string | null
           commissioned_date: string | null
           created_at: string
           cycle_anchor_notes: string | null
@@ -359,6 +361,8 @@ export type Database = {
           asset_type: string
           block_or_zone?: string | null
           building?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           commissioned_date?: string | null
           created_at?: string
           cycle_anchor_notes?: string | null
@@ -389,6 +393,8 @@ export type Database = {
           asset_type?: string
           block_or_zone?: string | null
           building?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           commissioned_date?: string | null
           created_at?: string
           cycle_anchor_notes?: string | null
@@ -1279,6 +1285,8 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
+          canonical_id: string | null
+          canonical_synced_at: string | null
           code: string | null
           contract_options: string | null
           contract_template: string | null
@@ -1328,6 +1336,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           code?: string | null
           contract_options?: string | null
           contract_template?: string | null
@@ -1377,6 +1387,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           code?: string | null
           contract_options?: string | null
           contract_template?: string | null
@@ -3660,6 +3672,8 @@ export type Database = {
           address: string | null
           after_hours_phone: string | null
           canonical_field_id: string | null
+          canonical_id: string | null
+          canonical_synced_at: string | null
           city: string | null
           code: string | null
           country: string
@@ -3688,6 +3702,8 @@ export type Database = {
           address?: string | null
           after_hours_phone?: string | null
           canonical_field_id?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           city?: string | null
           code?: string | null
           country?: string
@@ -3716,6 +3732,8 @@ export type Database = {
           address?: string | null
           after_hours_phone?: string | null
           canonical_field_id?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           city?: string | null
           code?: string | null
           country?: string

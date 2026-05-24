@@ -117,13 +117,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // the MfaGraceBanner below).
     const { data: profile } = await supabase
       .from('profiles')
-      // mfa_grace_started_at added in migration 0103; cast on read until
-      // database.types.ts regenerates.
-      .select('full_name, mfa_grace_started_at' as 'full_name')
+      .select('full_name, mfa_grace_started_at')
       .eq('id', user.id)
       .maybeSingle()
     userName = profile?.full_name ?? null
-    mfaGraceStartedAt = (profile as { mfa_grace_started_at?: string | null } | null)?.mfa_grace_started_at ?? null
+    mfaGraceStartedAt = profile?.mfa_grace_started_at ?? null
   }
 
   const { settings } = await getTenantSettings()
