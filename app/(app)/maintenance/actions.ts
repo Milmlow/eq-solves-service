@@ -326,6 +326,28 @@ export async function createCheckAction(formData: FormData) {
     const { manual_asset_ids: parsedManualIds, job_plan_ids: parsedJobPlanIds, ...checkData } = parsed.data
     const freq = parsed.data.frequency
 
+    // Resolve Maximo IDs → asset UUIDs when the user used the manual-ID
+    // textarea. The form sends `manual_maximo_ids` (raw strings) instead of
+    // `manual_asset_ids` (UUIDs) in that mode; we look them up here so the
+    // rest of the action treats them identically to previewed asset IDs.
+    const manualMaximoIdsRaw = formData.get('manual_maximo_ids') as string | null
+    let effectiveManualIds: string[] | undefined = parsedManualIds?.length ? parsedManualIds : undefined
+    if (!effectiveManualIds && manualMaximoIdsRaw) {
+      const maximoIds = (JSON.parse(manualMaximoIdsRaw) as string[]).map((s) => s.trim()).filter(Boolean)
+      if (maximoIds.length > 0) {
+        const { data: resolved } = await supabase
+          .from('assets')
+          .select('id')
+          .eq('site_id', parsed.data.site_id)
+          .in('maximo_id', maximoIds)
+          .eq('is_active', true)
+        effectiveManualIds = resolved?.map((a) => a.id) ?? []
+        if (effectiveManualIds.length === 0) {
+          return { success: false, error: 'None of the Maximo IDs matched active assets at this site. Check the IDs and try again.' }
+        }
+      }
+    }
+
     // Auto-generate name as "Site - Month - Year" if not provided
     if (!checkData.custom_name) {
       const { data: site } = await supabase
@@ -357,7 +379,7 @@ export async function createCheckAction(formData: FormData) {
     // switchboard maintenance plan; the RCD plan rides on top.
     const planIds = parsedJobPlanIds ?? []
     let rcdOverlayPlanId: string | null = null
-    if (planIds.length === 1 && (!parsedManualIds || parsedManualIds.length === 0)) {
+    if (planIds.length === 1 && (!effectiveManualIds || effectiveManualIds.length === 0)) {
       const { data: plan } = await supabase
         .from('job_plans')
         .select('id, code, name')
@@ -373,9 +395,9 @@ export async function createCheckAction(formData: FormData) {
       .select('id, job_plan_id, expected_rcd_circuits')
       .eq('is_active', true)
 
-    if (parsedManualIds && parsedManualIds.length > 0) {
-      // Path B: specific assets
-      assetQuery = assetQuery.in('id', parsedManualIds)
+    if (effectiveManualIds && effectiveManualIds.length > 0) {
+      // Path B: specific assets (from preview selection or resolved Maximo IDs)
+      assetQuery = assetQuery.in('id', effectiveManualIds)
     } else {
       // Path A: all assets at site matching criteria
       assetQuery = assetQuery.eq('site_id', parsed.data.site_id)
@@ -1724,6 +1746,76 @@ export async function updateCheckItemResultAction(
     })
 
     revalidateMaintenanceSurfaces()
+    return { success: true }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+/**
+ * Return the IDs of job plans that have at least one task item at the given
+ * frequency. Used by the New Check form to hide irrelevant plans once the
+ * user picks a frequency (slicer behaviour).
+ */
+export async function getPlansWithFrequencyAction(frequency: string): Promise<{ planIds: string[] }> {
+  try {
+    const { supabase } = await requireUser()
+    const col = freqColumn(frequency)
+    const { data } = await supabase
+      .from('job_plan_items')
+      .select('job_plan_id')
+      .eq(col, true)
+    return { planIds: [...new Set((data ?? []).map((d) => d.job_plan_id as string))] }
+  } catch {
+    return { planIds: [] }
+  }
+}
+
+/**
+ * Remove a single asset (and its task items) from a maintenance check.
+ * Only allowed when the check is not yet complete or cancelled.
+ */
+export async function removeCheckAssetAction(checkId: string, checkAssetId: string) {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const { data: check } = await supabase
+      .from('maintenance_checks')
+      .select('id, status')
+      .eq('id', checkId)
+      .eq('tenant_id', tenantId)
+      .single()
+
+    if (!check) return { success: false, error: 'Check not found.' }
+    if (check.status === 'complete' || check.status === 'cancelled') {
+      return { success: false, error: 'Cannot remove assets from a completed or cancelled check.' }
+    }
+
+    // Delete task items first (no cascade FK).
+    await supabase
+      .from('maintenance_check_items')
+      .delete()
+      .eq('check_asset_id', checkAssetId)
+      .eq('check_id', checkId)
+
+    const { error } = await supabase
+      .from('check_assets')
+      .delete()
+      .eq('id', checkAssetId)
+      .eq('check_id', checkId)
+
+    if (error) return { success: false, error: error.message }
+
+    await logAuditEvent({
+      action: 'delete',
+      entityType: 'check_asset',
+      entityId: checkAssetId,
+      summary: `Removed asset from check`,
+      metadata: { check_id: checkId },
+    })
+
+    revalidatePath(`/maintenance/${checkId}`)
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

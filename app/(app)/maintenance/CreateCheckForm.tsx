@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useTransition } from 'react'
 import Link from 'next/link'
 import { SlidePanel } from '@/components/ui/SlidePanel'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
-import { createCheckAction, previewCheckAssetsAction } from './actions'
+import { createCheckAction, previewCheckAssetsAction, getPlansWithFrequencyAction } from './actions'
 import type { JobPlan, Site } from '@/lib/types'
 import { formatSiteLabel } from '@/lib/utils/format'
 import { CheckCircle2, XCircle, Scale } from 'lucide-react'
@@ -119,6 +119,11 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
   const [jobPlanIds, setJobPlanIds] = useState<Set<string>>(new Set())
   const [manualMode, setManualMode] = useState(false)
   const [manualMaximoIds, setManualMaximoIds] = useState('')
+  // Plan IDs that have at least one task at the selected frequency — null
+  // means "not yet loaded" (show all plans). Populated by the frequency
+  // slicer when the user picks a frequency.
+  const [planIdsForFrequency, setPlanIdsForFrequency] = useState<Set<string> | null>(null)
+  const [, startFreqTransition] = useTransition()
 
   // Filter the site dropdown by selected customer (empty = all customers).
   const filteredSites = useMemo(() => {
@@ -133,22 +138,32 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
   // surface the scope-based set (global + customer-scoped + site-scoped)
   // so the admin isn't blocked.
   const filteredJobPlans = useMemo(() => {
-    if (!siteId) return jobPlans
-    const linkedIds = new Set(
-      siteAssetPlans.filter((p) => p.site_id === siteId).map((p) => p.job_plan_id)
-    )
-    const assetLinked = jobPlans.filter((jp) => linkedIds.has(jp.id))
-    if (assetLinked.length > 0) return assetLinked
-    // Fallback: scope-based filter (global + customer-scoped + site-scoped).
-    const site = sites.find((s) => s.id === siteId)
-    return jobPlans.filter((jp) => {
-      if (jp.site_id === siteId) return true
-      if (jp.customer_id && jp.customer_id === site?.customer_id) return true
-      // Global plans (both null).
-      if (jp.site_id == null && jp.customer_id == null) return true
-      return false
-    })
-  }, [jobPlans, siteAssetPlans, siteId, sites])
+    let plans = jobPlans
+    if (siteId) {
+      const linkedIds = new Set(
+        siteAssetPlans.filter((p) => p.site_id === siteId).map((p) => p.job_plan_id)
+      )
+      const assetLinked = jobPlans.filter((jp) => linkedIds.has(jp.id))
+      if (assetLinked.length > 0) {
+        plans = assetLinked
+      } else {
+        // Fallback: scope-based filter (global + customer-scoped + site-scoped).
+        const site = sites.find((s) => s.id === siteId)
+        plans = jobPlans.filter((jp) => {
+          if (jp.site_id === siteId) return true
+          if (jp.customer_id && jp.customer_id === site?.customer_id) return true
+          if (jp.site_id == null && jp.customer_id == null) return true
+          return false
+        })
+      }
+    }
+    // Secondary filter: only show plans that have items at the selected
+    // frequency. Populated async when the user picks a frequency.
+    if (planIdsForFrequency !== null) {
+      plans = plans.filter((jp) => planIdsForFrequency.has(jp.id))
+    }
+    return plans
+  }, [jobPlans, siteAssetPlans, siteId, sites, planIdsForFrequency])
   // Track whether we fell back to scope-based filtering (no asset-linked
   // plans at the site) — surface that as a hint so the admin knows why
   // they see a wider list.
@@ -184,6 +199,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
     setJobPlanIds(new Set())
     setManualMode(false)
     setManualMaximoIds('')
+    setPlanIdsForFrequency(null)
     setPreviewAssets([])
     setPreviewTotal(0)
     setHasPreview(false)
@@ -238,10 +254,19 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
     // absent (see actions.ts handling).
     formData.set('job_plan_ids', JSON.stringify(Array.from(jobPlanIds)))
 
-    // If manual mode, we need to resolve Maximo IDs to asset UUIDs on the server
-    // For now, pass the preview asset IDs
-    if (!manualMode && previewAssets.length > 0) {
-      // Path A: pass the previewed asset IDs
+    if (manualMode) {
+      // Manual mode: send raw Maximo IDs for server-side resolution to UUIDs.
+      const ids = manualMaximoIds.split('\n').map((s) => s.trim()).filter(Boolean)
+      if (ids.length === 0) {
+        setError('Enter at least one Maximo ID.')
+        setLoading(false)
+        return
+      }
+      formData.set('manual_maximo_ids', JSON.stringify(ids))
+    } else if (previewAssets.length > 0) {
+      // Standard mode: constrain to the previewed asset set so the server
+      // doesn't re-run the full site query and possibly pick up new assets
+      // added between preview and submit.
       formData.set('manual_asset_ids', JSON.stringify(previewAssets.map((a) => a.id)))
     }
 
@@ -354,7 +379,22 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
             name="frequency"
             required
             value={frequency}
-            onChange={(e) => { setFrequency(e.target.value); setHasPreview(false) }}
+            onChange={(e) => {
+              const newFreq = e.target.value
+              setFrequency(newFreq)
+              setHasPreview(false)
+              setJobPlanIds(new Set())
+              // Load plans that have items at this frequency (frequency slicer).
+              if (newFreq) {
+                startFreqTransition(() => {
+                  getPlansWithFrequencyAction(newFreq).then(({ planIds }) => {
+                    setPlanIdsForFrequency(new Set(planIds))
+                  })
+                })
+              } else {
+                setPlanIdsForFrequency(null)
+              }
+            }}
             className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.frequency ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
           >
             <option value="">Select frequency...</option>
