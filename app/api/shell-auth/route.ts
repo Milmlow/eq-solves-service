@@ -108,7 +108,12 @@ export async function POST(req: NextRequest) {
   resp.cookies.set('eq_shell_bridge', '1', {
     httpOnly: true,
     secure: true,
-    sameSite: 'lax',
+    // SameSite=None required: Service is embedded cross-site inside Shell
+    // (core.eq.solutions ≠ eq-solves-service.netlify.app). SameSite=Lax cookies
+    // are not sent in cross-site sub-frame requests, so the MFA bypass in
+    // proxy.ts would never see this flag. Secure is already true; Netlify is
+    // always HTTPS so the None+Secure combination is valid in production.
+    sameSite: 'none',
     path: '/',
     maxAge: 60 * 60 * 4, // 4 hours
   })

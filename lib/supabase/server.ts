@@ -13,8 +13,12 @@ export async function createClient() {
         getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
           try {
+            // SameSite=None required in production — see lib/supabase/middleware.ts
+            const sameSiteOverride = process.env.NODE_ENV === 'production'
+              ? { sameSite: 'none' as const, secure: true }
+              : {}
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, { ...options, ...sameSiteOverride })
             )
           } catch {}
         },
