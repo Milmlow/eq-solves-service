@@ -274,6 +274,11 @@ export interface Site {
   parking_notes: string | null
   after_hours_phone: string | null
   safety_notes: string | null
+  // Migration 0106 — EQ Field canonical link.
+  // Set when this site was pulled from EQ Field via the Connected Apps sync.
+  // Null = locally-created site that hasn't been matched to Field yet.
+  canonical_field_id: string | null
+  field_synced_at: string | null
 }
 
 export interface Asset {

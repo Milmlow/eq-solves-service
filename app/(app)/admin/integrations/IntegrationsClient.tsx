@@ -12,25 +12,51 @@ type SyncResult =
 
 interface Props {
   fieldConfigured: boolean
+  totalSites: number
+  syncedSites: number
 }
 
-export function IntegrationsClient({ fieldConfigured }: Props) {
+export function IntegrationsClient({ fieldConfigured, totalSites, syncedSites }: Props) {
   return (
     <div className="space-y-4">
-      <FieldSyncCard fieldConfigured={fieldConfigured} />
+      <FieldSyncCard
+        fieldConfigured={fieldConfigured}
+        totalSites={totalSites}
+        syncedSites={syncedSites}
+      />
     </div>
   )
 }
 
-function FieldSyncCard({ fieldConfigured }: { fieldConfigured: boolean }) {
+function FieldSyncCard({
+  fieldConfigured,
+  totalSites,
+  syncedSites,
+}: {
+  fieldConfigured: boolean
+  totalSites: number
+  syncedSites: number
+}) {
   const [isPending, startTransition] = useTransition()
   const [result, setResult] = useState<SyncResult | null>(null)
+  // Optimistic local counts — bump them after a successful sync so the
+  // coverage bar updates without a full page reload.
+  const [localSynced, setLocalSynced] = useState(syncedSites)
+  const [localTotal, setLocalTotal] = useState(totalSites)
+
+  const coveragePct = localTotal > 0 ? Math.round((localSynced / localTotal) * 100) : 0
 
   function handleSync() {
     setResult(null)
     startTransition(async () => {
       const res = await syncSitesFromFieldAction()
       setResult(res as SyncResult)
+      if ((res as { success: boolean }).success) {
+        const r = res as { success: true; created: number; updated: number }
+        // Bump counts optimistically — next page load gets the real numbers.
+        setLocalTotal((prev) => prev + r.created)
+        setLocalSynced((prev) => prev + r.created + r.updated)
+      }
     })
   }
 
@@ -58,11 +84,41 @@ function FieldSyncCard({ fieldConfigured }: { fieldConfigured: boolean }) {
           </div>
 
           <p className="text-xs text-eq-grey mb-3">
-            Pull the site list from EQ Field into this workspace. Field is the
-            canonical owner of sites — this sync updates names and addresses only,
+            Pull the site list from EQ Field into this workspace. EQ Field is the
+            single source of truth for sites — this sync updates names and addresses only,
             and never overwrites gate codes, parking notes, or other info captured
             on-site in Service.
           </p>
+
+          {/* Sync coverage indicator */}
+          {localTotal > 0 && (
+            <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-eq-ink">Sites linked to EQ Field</span>
+                <span className="text-xs font-semibold text-eq-ink">
+                  {localSynced} / {localTotal}
+                  {coveragePct < 100 && (
+                    <span className="ml-1 font-normal text-eq-grey">({coveragePct}%)</span>
+                  )}
+                </span>
+              </div>
+              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-eq-sky rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(coveragePct, 100)}%` }}
+                />
+              </div>
+              {localSynced < localTotal && (
+                <p className="text-[11px] text-eq-grey mt-1.5">
+                  {Math.max(0, localTotal - localSynced)} site{Math.max(0, localTotal - localSynced) !== 1 ? 's' : ''} not yet linked to EQ Field.
+                  Run a sync to match them, or add them in EQ Field first.
+                </p>
+              )}
+              {localSynced >= localTotal && localTotal > 0 && (
+                <p className="text-[11px] text-green-700 mt-1.5">All sites are linked to EQ Field.</p>
+              )}
+            </div>
+          )}
 
           {!fieldConfigured && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">

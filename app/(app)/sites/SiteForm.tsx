@@ -10,6 +10,7 @@ import { geocodeSiteAddressAction } from './geocode-action'
 import { cascadeArchiveAction } from '@/app/(app)/admin/archive/actions'
 import type { Site, Customer } from '@/lib/types'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { Link2 } from 'lucide-react'
 
 interface SiteFormProps {
   open: boolean
@@ -192,6 +193,16 @@ export function SiteForm({ open, onClose, site, customers, isAdmin, prefillCusto
   return (
     <SlidePanel open={open} onClose={onClose} title={isEdit ? 'Edit Site' : 'Add Site'} footer={footer}>
       <form id={formId} onSubmit={handleSubmit} className="space-y-4">
+        {!isEdit && (
+          <div className="flex items-start gap-2.5 text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-md px-3 py-2.5">
+            <Link2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+            <span>
+              New sites are usually added in <strong>EQ Field</strong> and pulled into Service via{' '}
+              <a href="/admin/integrations" className="underline font-medium">Admin → Connected Apps</a>.{' '}
+              Sites added here directly won&apos;t appear in EQ Field or other EQ apps.
+            </span>
+          </div>
+        )}
         <FormInput
           label="Name"
           name="name"

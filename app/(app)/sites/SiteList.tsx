@@ -15,7 +15,7 @@ import { importSitesAction } from './actions'
 import type { Site, Customer } from '@/lib/types'
 import { BulkActionBar } from '@/components/ui/BulkActionBar'
 import { bulkDeactivateAction, bulkDeleteAction } from '@/lib/actions/bulk'
-import { Upload } from 'lucide-react'
+import { Upload, Link2 } from 'lucide-react'
 import Link from 'next/link'
 import { ExportButton } from '@/components/ui/ExportButton'
 import { exportToCsv } from '@/lib/utils/csv-export'
@@ -159,6 +159,25 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
         ) : (
           <span className="text-eq-grey">0</span>
         )
+      },
+    },
+    {
+      key: 'canonical_field_id',
+      header: 'Source',
+      render: (row) => {
+        const site = row as SiteWithCustomer
+        if (site.canonical_field_id) {
+          return (
+            <span
+              className="inline-flex items-center gap-1 text-xs text-eq-deep bg-eq-ice px-2 py-0.5 rounded-full"
+              title={`Linked to EQ Field — last synced ${site.field_synced_at ? new Date(site.field_synced_at).toLocaleDateString('en-AU') : 'unknown'}`}
+            >
+              <Link2 className="w-3 h-3" />
+              EQ Field
+            </span>
+          )
+        }
+        return <span className="text-eq-grey text-xs">Local</span>
       },
     },
     {
