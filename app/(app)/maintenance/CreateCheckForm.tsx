@@ -76,12 +76,6 @@ interface CreateCheckFormProps {
   })[]
   customers: { id: string; name: string }[]
   /**
-   * Flat list of (site_id, job_plan_id) pairs from every active asset
-   * with a job_plan_id set. Drives the "Maintenance Plans filtered by
-   * site assets" behaviour (Royce 2026-05-19).
-   */
-  siteAssetPlans: { site_id: string; job_plan_id: string }[]
-  /**
    * Tenant members for the assignee dropdown. Includes role + is_active
    * so we can show role chips, sort by hierarchy, and clarify why the
    * list is short (no admins / no supervisors / etc).
@@ -96,7 +90,7 @@ interface CreateCheckFormProps {
   scopeItems: ScopeItem[]
 }
 
-export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, siteAssetPlans, technicians, scopeItems }: CreateCheckFormProps) {
+export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, technicians, scopeItems }: CreateCheckFormProps) {
   const [error, setError] = useState<string | null>(null)
   // Per-field validation errors (form polish bundle — PR H pattern).
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -110,7 +104,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
   // Empty customerId = "All customers" (legacy behaviour).
   const [customerId, setCustomerId] = useState('')
   const [siteId, setSiteId] = useState('')
-  const [frequency, setFrequency] = useState('')
+  const [frequencies, setFrequencies] = useState<string[]>([])
   const [isDarkSite, setIsDarkSite] = useState(false)
   // Multi-plan filter (Simon 2026-04 feedback item 9 — "ability to add
   // multiple JCs"). Empty set means "all plans". One id ≡ legacy single
@@ -131,47 +125,26 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
     return sites.filter((s) => s.customer_id === customerId)
   }, [sites, customerId])
 
-  // Filter the Maintenance Plans list to plans actually attached to
-  // active assets at the chosen site (Royce 2026-05-19 — "only for
-  // active assets for that site"). Fallback: if no asset-linked plans
-  // exist at the site (greenfield site, plans not yet wired to assets),
-  // surface the scope-based set (global + customer-scoped + site-scoped)
-  // so the admin isn't blocked.
+  // Filter the Maintenance Plans list by scope tier: show all global plans
+  // + customer-scoped plans for the site's customer + site-scoped plans.
+  // Secondary filter: only show plans that have items at the selected
+  // frequency/frequencies (populated async via getPlansWithFrequencyAction).
   const filteredJobPlans = useMemo(() => {
     let plans = jobPlans
     if (siteId) {
-      const linkedIds = new Set(
-        siteAssetPlans.filter((p) => p.site_id === siteId).map((p) => p.job_plan_id)
-      )
-      const assetLinked = jobPlans.filter((jp) => linkedIds.has(jp.id))
-      if (assetLinked.length > 0) {
-        plans = assetLinked
-      } else {
-        // Fallback: scope-based filter (global + customer-scoped + site-scoped).
-        const site = sites.find((s) => s.id === siteId)
-        plans = jobPlans.filter((jp) => {
-          if (jp.site_id === siteId) return true
-          if (jp.customer_id && jp.customer_id === site?.customer_id) return true
-          if (jp.site_id == null && jp.customer_id == null) return true
-          return false
-        })
-      }
+      const site = sites.find((s) => s.id === siteId)
+      plans = jobPlans.filter((jp) => {
+        if (jp.site_id === siteId) return true
+        if (jp.customer_id && jp.customer_id === site?.customer_id && jp.site_id == null) return true
+        if (jp.site_id == null && jp.customer_id == null) return true
+        return false
+      })
     }
-    // Secondary filter: only show plans that have items at the selected
-    // frequency. Populated async when the user picks a frequency.
     if (planIdsForFrequency !== null) {
       plans = plans.filter((jp) => planIdsForFrequency.has(jp.id))
     }
     return plans
-  }, [jobPlans, siteAssetPlans, siteId, sites, planIdsForFrequency])
-  // Track whether we fell back to scope-based filtering (no asset-linked
-  // plans at the site) — surface that as a hint so the admin knows why
-  // they see a wider list.
-  const planFilterUsedFallback = useMemo(() => {
-    if (!siteId) return false
-    const hasAssetLinked = siteAssetPlans.some((p) => p.site_id === siteId)
-    return !hasAssetLinked
-  }, [siteId, siteAssetPlans])
+  }, [jobPlans, siteId, sites, planIdsForFrequency])
 
   // Preview state
   const [previewAssets, setPreviewAssets] = useState<PreviewAsset[]>([])
@@ -194,7 +167,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
   const resetForm = useCallback(() => {
     setCustomerId('')
     setSiteId('')
-    setFrequency('')
+    setFrequencies([])
     setIsDarkSite(false)
     setJobPlanIds(new Set())
     setManualMode(false)
@@ -218,13 +191,13 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
   }
 
   async function handlePreview() {
-    if (!siteId || !frequency) return
+    if (!siteId || frequencies.length === 0) return
     setPreviewing(true)
     setError(null)
 
     const result = await previewCheckAssetsAction(
       siteId,
-      frequency,
+      frequencies,
       isDarkSite,
       Array.from(jobPlanIds),
     )
@@ -253,6 +226,9 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
     // `job_plan_ids`, falling back to the legacy `job_plan_id` input if
     // absent (see actions.ts handling).
     formData.set('job_plan_ids', JSON.stringify(Array.from(jobPlanIds)))
+    // Primary frequency for storage; full array for item filtering.
+    formData.set('frequency', frequencies[0] ?? '')
+    formData.set('frequencies', JSON.stringify(frequencies))
 
     if (manualMode) {
       // Manual mode: send raw Maximo IDs for server-side resolution to UUIDs.
@@ -354,9 +330,9 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
             value={siteId}
             onChange={(e) => {
               setSiteId(e.target.value)
-              // Clearing site also clears the plan multi-select so the
-              // filtered-plan list re-renders cleanly.
               setJobPlanIds(new Set())
+              setFrequencies([])
+              setPlanIdsForFrequency(null)
               setHasPreview(false)
             }}
             className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.site_id ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
@@ -374,34 +350,55 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
 
         {/* Frequency */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">Maintenance Frequency *</label>
-          <select
-            name="frequency"
-            required
-            value={frequency}
-            onChange={(e) => {
-              const newFreq = e.target.value
-              setFrequency(newFreq)
-              setHasPreview(false)
-              setJobPlanIds(new Set())
-              // Load plans that have items at this frequency (frequency slicer).
-              if (newFreq) {
-                startFreqTransition(() => {
-                  getPlansWithFrequencyAction(newFreq).then(({ planIds }) => {
-                    setPlanIdsForFrequency(new Set(planIds))
-                  })
-                })
-              } else {
-                setPlanIdsForFrequency(null)
-              }
-            }}
-            className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.frequency ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
-          >
-            <option value="">Select frequency...</option>
-            {FREQUENCIES.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-eq-grey uppercase tracking-wide">
+              Maintenance Frequency *
+            </label>
+            {frequencies.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setFrequencies([]); setPlanIdsForFrequency(null); setHasPreview(false); setJobPlanIds(new Set()) }}
+                className="text-[11px] text-eq-sky hover:text-eq-deep font-medium"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="border border-gray-200 rounded-md bg-white divide-y divide-gray-50 max-h-48 overflow-y-auto">
+            {FREQUENCIES.map((f) => {
+              const checked = frequencies.includes(f.value)
+              return (
+                <label
+                  key={f.value}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm text-eq-ink hover:bg-gray-50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      const next = checked
+                        ? frequencies.filter((v) => v !== f.value)
+                        : [...frequencies, f.value]
+                      setFrequencies(next)
+                      setHasPreview(false)
+                      setJobPlanIds(new Set())
+                      if (next.length > 0) {
+                        startFreqTransition(() => {
+                          getPlansWithFrequencyAction(next).then(({ planIds }) => {
+                            setPlanIdsForFrequency(new Set(planIds))
+                          })
+                        })
+                      } else {
+                        setPlanIdsForFrequency(null)
+                      }
+                    }}
+                    className="rounded border-gray-300 text-eq-sky focus:ring-eq-sky"
+                  />
+                  {f.label}
+                </label>
+              )
+            })}
+          </div>
           {errors.frequency && <p className="text-xs text-red-500 mt-1">{errors.frequency}</p>}
         </div>
 
@@ -457,7 +454,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
             <div className="flex items-center gap-2 text-[11px]">
               {siteId && (
                 <span className="text-eq-grey">
-                  {filteredJobPlans.length} for this site
+                  {filteredJobPlans.length} in scope
                 </span>
               )}
               {jobPlanIds.size > 0 && (
@@ -506,10 +503,8 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
           )}
           <p className="text-[11px] text-eq-grey mt-1">
             {siteId
-              ? planFilterUsedFallback
-                ? 'No assets at this site have a maintenance plan attached yet — showing every plan scoped to this site / customer. Attach plans to assets via /assets to narrow this list.'
-                : 'Showing plans attached to active assets at this site. Leave all unchecked to include every shown plan.'
-              : 'Pick a site above to filter this list to plans actually used at that site.'}
+              ? 'Showing plans in scope for this site. Leave all unchecked to include every shown plan.'
+              : 'Pick a site above to filter this list.'}
           </p>
         </div>
 
@@ -532,7 +527,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
         })()}
 
         {/* Preview Button */}
-        {siteId && frequency && !manualMode && (
+        {siteId && frequencies.length > 0 && !manualMode && (
           <Button
             type="button"
             variant="secondary"
@@ -702,7 +697,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, sit
         {success && <p id="create-check-success" className="text-sm text-green-600">Check created successfully.</p>}
 
         <div className="flex items-center gap-3 pt-2">
-          <Button type="submit" loading={loading} disabled={!siteId || !frequency}>
+          <Button type="submit" loading={loading} disabled={!siteId || frequencies.length === 0}>
             Create Check
           </Button>
           <Button type="button" variant="secondary" onClick={handleClose}>

@@ -50,13 +50,6 @@ interface MaintenanceListProps {
   })[]
   customers: { id: string; name: string }[]
   /**
-   * Flat list of {site_id, job_plan_id} pairs from every active asset
-   * that has a job_plan_id set. Used by the New Check form to filter
-   * the Maintenance Plans list to plans actually attached to assets at
-   * the selected site (Royce 2026-05-19).
-   */
-  siteAssetPlans: { site_id: string; job_plan_id: string }[]
-  /**
    * Tenant members eligible for the assignee dropdown. Includes role +
    * is_active so the form can label + sort + (optionally) bucket
    * inactive members. Variable name kept as `technicians` for diff size
@@ -90,7 +83,7 @@ function statusToBadge(status: CheckStatus) {
 }
 
 export function MaintenanceList({
-  checks, itemsMap, jobPlans, sites, customers, siteAssetPlans, technicians, scopeItems,
+  checks, itemsMap, jobPlans, sites, customers, technicians, scopeItems,
   page, totalPages, isAdmin, canWrite: canWriteRole, view: assignedView,
 }: MaintenanceListProps) {
   const router = useRouter()
@@ -299,7 +292,6 @@ export function MaintenanceList({
         jobPlans={jobPlans}
         sites={sites}
         customers={customers}
-        siteAssetPlans={siteAssetPlans}
         technicians={technicians}
         scopeItems={scopeItems}
       />
