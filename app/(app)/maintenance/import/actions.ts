@@ -1217,50 +1217,67 @@ export async function commitDeltaImportAction(
       let siteAssetCount = 0
       let siteItemCount = 0
 
-      // 2. check_assets + check_items — one pass per sub-group.
+      // 2. Phase A — one check_asset per unique physical asset across all sub-groups.
+      //    An asset can appear in multiple groups (e.g. XFMROIL annual + XFMROIL 2yr)
+      //    but check_assets has UNIQUE (check_id, asset_id) — deduplicate before insert.
+      const uniqueAssetRows = new Map<string, ReturnType<typeof deltaRowToCheckAssetInsert>>()
       for (const g of siteGroups) {
         if (g.skippedRowNumbers.size === g.parsed.rows.length) continue
-
-        const checkAssetRows = g.parsed.rows
-          .filter((r) => !g.skippedRowNumbers.has(r.rowNumber))
-          .map((r) =>
-            deltaRowToCheckAssetInsert(r, {
-              tenantId,
-              checkId: check.id,
-              assetId: g.assetIdByRow.get(r.rowNumber)!,
-            }),
-          )
-
-        const { data: insertedCA, error: caErr } = await supabase
-          .from('check_assets')
-          .insert(checkAssetRows)
-          .select('id, asset_id')
-
-        if (caErr || !insertedCA) {
-          const reason = await rollbackCheck(caErr?.message ?? 'Failed to create check assets.')
-          return { success: false, error: reason }
+        for (const r of g.parsed.rows) {
+          if (g.skippedRowNumbers.has(r.rowNumber)) continue
+          const assetId = g.assetIdByRow.get(r.rowNumber)!
+          if (!uniqueAssetRows.has(assetId)) {
+            uniqueAssetRows.set(
+              assetId,
+              deltaRowToCheckAssetInsert(r, { tenantId, checkId: check.id, assetId }),
+            )
+          }
         }
+      }
 
-        const caByAsset = new Map<string, string>()
-        for (const ca of insertedCA) caByAsset.set(ca.asset_id, ca.id)
+      const { data: insertedCA, error: caErr } = await supabase
+        .from('check_assets')
+        .insert([...uniqueAssetRows.values()])
+        .select('id, asset_id')
 
-        // Items still use each group's own (jobPlanId, frequency) key so
-        // per-asset task scope is preserved even within a multi-plan check.
+      if (caErr || !insertedCA) {
+        const reason = await rollbackCheck(caErr?.message ?? 'Failed to create check assets.')
+        return { success: false, error: reason }
+      }
+
+      const globalCaByAsset = new Map<string, string>()
+      for (const ca of insertedCA) globalCaByAsset.set(ca.asset_id, ca.id)
+      siteAssetCount = insertedCA.length
+
+      // Phase B — check_items per sub-group, using the shared caByAsset.
+      //    Items still use each group's own (jobPlanId, frequency) key so
+      //    per-asset task scope is preserved even within a multi-plan check.
+      const allCheckItemRows: {
+        tenant_id: string
+        check_id: string
+        check_asset_id: string
+        job_plan_item_id: string
+        asset_id: string
+        description: string
+        sort_order: number
+        is_required: boolean
+      }[] = []
+
+      for (const g of siteGroups) {
+        if (g.skippedRowNumbers.size === g.parsed.rows.length) continue
         const items = itemsByGroup.get(`${g.jobPlanId}|${g.frequency}`) ?? []
-        const checkItemRows: {
-          tenant_id: string
-          check_id: string
-          check_asset_id: string
-          job_plan_item_id: string
-          asset_id: string
-          description: string
-          sort_order: number
-          is_required: boolean
-        }[] = []
+        if (items.length === 0) continue
 
-        for (const [assetId, caId] of caByAsset) {
+        const seenInGroup = new Set<string>()
+        for (const r of g.parsed.rows) {
+          if (g.skippedRowNumbers.has(r.rowNumber)) continue
+          const assetId = g.assetIdByRow.get(r.rowNumber)!
+          if (seenInGroup.has(assetId)) continue // same asset referenced twice in one group
+          seenInGroup.add(assetId)
+          const caId = globalCaByAsset.get(assetId)
+          if (!caId) continue
           for (const it of items) {
-            checkItemRows.push({
+            allCheckItemRows.push({
               tenant_id: tenantId,
               check_id: check.id,
               check_asset_id: caId,
@@ -1272,23 +1289,21 @@ export async function commitDeltaImportAction(
             })
           }
         }
+      }
 
-        if (checkItemRows.length > 0) {
-          for (let i = 0; i < checkItemRows.length; i += 500) {
-            const batch = checkItemRows.slice(i, i + 500)
-            const { error: itemsErr } = await supabase
-              .from('maintenance_check_items')
-              .insert(batch)
-            if (itemsErr) {
-              const reason = await rollbackCheck(itemsErr.message)
-              return { success: false, error: reason }
-            }
+      if (allCheckItemRows.length > 0) {
+        for (let i = 0; i < allCheckItemRows.length; i += 500) {
+          const batch = allCheckItemRows.slice(i, i + 500)
+          const { error: itemsErr } = await supabase
+            .from('maintenance_check_items')
+            .insert(batch)
+          if (itemsErr) {
+            const reason = await rollbackCheck(itemsErr.message)
+            return { success: false, error: reason }
           }
         }
-
-        siteAssetCount += insertedCA.length
-        siteItemCount += checkItemRows.length
       }
+      siteItemCount = allCheckItemRows.length
 
       summary.checksCreated += 1
       summary.checkAssetsCreated += siteAssetCount
