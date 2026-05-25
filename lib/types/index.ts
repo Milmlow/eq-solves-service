@@ -373,7 +373,7 @@ export interface MaintenanceCheck {
    * (where `frequency` is null). e.g. ['annual', '2yr', 'semi_annual'].
    * Null on all standard single-frequency checks.
    */
-  frequency_tags: string[] | null
+  frequency_tags?: string[] | null
   created_at: string
   updated_at: string
 }
