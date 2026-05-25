@@ -10,6 +10,7 @@ import { HelpWidget } from '@/components/ui/HelpWidget'
 import { EqFooter } from '@/components/ui/EqFooter'
 import { DemoBanner } from '@/components/ui/DemoBanner'
 import { AnalyticsIdentify } from '@/components/ui/AnalyticsIdentify'
+import { ShellReadySignal } from '@/components/ui/ShellReadySignal'
 import { NavigationProgress } from '@/components/ui/NavigationProgress'
 import { AppProviders } from '@/components/ui/AppProviders'
 import { OnboardingWizard } from './onboarding/OnboardingWizard'
@@ -188,6 +189,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {showOnboarding && (
         <OnboardingWizard userName={userName} companyName={tenantName} />
       )}
+      <ShellReadySignal isShellIframe={isShellIframe} />
       {user && analyticsTenantId && analyticsRole && (
         <AnalyticsIdentify
           userId={user.id}
