@@ -198,6 +198,20 @@ export const OPTIONAL_HEADERS = [
  */
 export const DATA_SHEET_NAME = 'List of Work Orders'
 
+/**
+ * Positional column map for headerless Delta exports (Metronode format).
+ * Some Maximo configurations export without a header row — data starts at
+ * row 1 with columns in this fixed order. "Target Start" is absent; rows
+ * default to the 1st of the current month for grouping purposes.
+ */
+export const POSITIONAL_HEADERS: Record<number, string> = {
+  1: 'Site',
+  2: 'Work Order',
+  3: 'Description',
+  4: 'Asset',
+  5: 'Job Plan',
+}
+
 // ── Pure helpers (exported for unit testing) ────────────────────────
 
 /**
@@ -277,22 +291,46 @@ function hasRequiredHeaders(ws: Worksheet): boolean {
 }
 
 /**
+ * True when a sheet looks like a headerless Maximo export: it has data in
+ * row 1 but that data doesn't contain any of the REQUIRED_HEADERS. We use
+ * this to accept the "List of Work Orders" sheet even when Maximo omits the
+ * header row (Metronode format).
+ */
+function isHeaderlessDataSheet(ws: Worksheet): boolean {
+  if (ws.actualRowCount === 0) return false
+  const row1 = readHeaderRow(ws)
+  const row1Set = new Set(row1.map((v) => v.toLowerCase()))
+  // If ANY required header is present in row 1, this is a headered sheet.
+  for (const h of REQUIRED_HEADERS) {
+    if (row1Set.has(h.toLowerCase())) return false
+  }
+  // Must have at least some data in the first few expected column positions.
+  return row1.slice(0, 5).some((v) => v.trim() !== '')
+}
+
+export interface FindDataSheetResult {
+  ws: Worksheet
+  /** True when the sheet has no header row — use POSITIONAL_HEADERS instead. */
+  headerless: boolean
+}
+
+/**
  * Pick the sheet that holds the work-order data. Maximo exports usually
  * land on `List of Work Orders`, but the file may also include pivot tabs
  * (`Sheet1`, etc.) that get marked active. Order of preference:
- *   1. Sheet named exactly DATA_SHEET_NAME, if it has the required headers
- *   2. First sheet whose row 1 contains all REQUIRED_HEADERS
- *   3. null — caller emits a workbook-level error
- *
- * The named-sheet match still requires headers to validate so a renamed
- * pivot tab named `List of Work Orders` doesn't fool us.
+ *   1. Sheet named exactly DATA_SHEET_NAME with required headers (headered)
+ *   2. First sheet with required headers (headered)
+ *   3. Sheet named exactly DATA_SHEET_NAME without headers (headerless)
+ *   4. null — caller emits a workbook-level error
  */
-export function findDataSheet(wb: Workbook): Worksheet | null {
+export function findDataSheet(wb: Workbook): FindDataSheetResult | null {
   const named = wb.getWorksheet(DATA_SHEET_NAME)
-  if (named && hasRequiredHeaders(named)) return named
+  if (named && hasRequiredHeaders(named)) return { ws: named, headerless: false }
   for (const ws of wb.worksheets) {
-    if (hasRequiredHeaders(ws)) return ws
+    if (hasRequiredHeaders(ws)) return { ws, headerless: false }
   }
+  // Headerless fallback: accept the named sheet if it looks like raw data.
+  if (named && isHeaderlessDataSheet(named)) return { ws: named, headerless: true }
   return null
 }
 
@@ -331,8 +369,8 @@ export async function parseWorkbook(
     }
   }
 
-  const ws = findDataSheet(wb)
-  if (!ws) {
+  const found = findDataSheet(wb)
+  if (!found) {
     const available = wb.worksheets.map((w) => `"${w.name}"`).join(', ')
     return {
       rows: [],
@@ -350,50 +388,57 @@ export async function parseWorkbook(
     }
   }
 
+  const { ws, headerless } = found
   const errors: ParseError[] = []
 
-  // ── Header validation ──────────────────────────────────────────────
-  // findDataSheet guarantees REQUIRED_HEADERS are present, but we
-  // re-resolve the map here to drive cell access by header name. This is
-  // what lets the parser tolerate Equinix's per-classification column
-  // shapes (CR Required / Qualifications Required on ACB, no History on
-  // PDU/HV/LV).
-  const headerMap = buildHeaderMap(ws)
-  const missing = REQUIRED_HEADERS.filter((h) => !headerMap.has(h))
-  if (missing.length > 0) {
-    errors.push({
-      rowNumber: 1,
-      message:
-        `Sheet "${ws.name}" is missing required column(s): ${missing.map((m) => `"${m}"`).join(', ')}. ` +
-        `Found columns: ${Array.from(headerMap.keys()).map((k) => `"${k}"`).join(', ')}.`,
-    })
-    return { rows: [], groups: [], errors }
+  // ── Header map ────────────────────────────────────────────────────
+  // For headered sheets: build from row 1 as before.
+  // For headerless sheets: use the fixed positional column map so the
+  // per-row cell() helper works identically in both modes.
+  let headerMap: Map<string, number>
+  if (headerless) {
+    headerMap = new Map(Object.entries(POSITIONAL_HEADERS).map(([col, name]) => [name, Number(col)]))
+  } else {
+    headerMap = buildHeaderMap(ws)
+    const missing = REQUIRED_HEADERS.filter((h) => !headerMap.has(h))
+    if (missing.length > 0) {
+      errors.push({
+        rowNumber: 1,
+        message:
+          `Sheet "${ws.name}" is missing required column(s): ${missing.map((m) => `"${m}"`).join(', ')}. ` +
+          `Found columns: ${Array.from(headerMap.keys()).map((k) => `"${k}"`).join(', ')}.`,
+      })
+      return { rows: [], groups: [], errors }
+    }
+
+    // ── Unknown-column detection ──
+    const knownHeaders = new Set<string>([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS])
+    const unknownHeaders = Array.from(headerMap.keys()).filter((h) => !knownHeaders.has(h))
+    if (unknownHeaders.length > 0) {
+      errors.push({
+        rowNumber: 1,
+        message:
+          `Sheet "${ws.name}" has unknown column(s) which will be ignored: ` +
+          `${unknownHeaders.map((h) => `"${h}"`).join(', ')}. ` +
+          `If this column carries data the import should capture, add it to OPTIONAL_HEADERS ` +
+          `in lib/import/delta-wo-parser.ts and wire the per-row read.`,
+      })
+    }
   }
 
-  // ── Unknown-column detection (2026-05-21) ──
-  // Workbook-level warning when row 1 carries headers we don't recognise.
-  // Surfaces Equinix Maximo template drift early instead of silently
-  // dropping data. Doesn't block import — just signals the column was
-  // ignored so the operator can decide whether to add it to OPTIONAL_HEADERS.
-  const knownHeaders = new Set<string>([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS])
-  const unknownHeaders = Array.from(headerMap.keys()).filter((h) => !knownHeaders.has(h))
-  if (unknownHeaders.length > 0) {
-    errors.push({
-      rowNumber: 1,
-      message:
-        `Sheet "${ws.name}" has unknown column(s) which will be ignored: ` +
-        `${unknownHeaders.map((h) => `"${h}"`).join(', ')}. ` +
-        `If this column carries data the import should capture, add it to OPTIONAL_HEADERS ` +
-        `in lib/import/delta-wo-parser.ts and wire the per-row read.`,
-    })
-    // Note: not returning. Unknown columns are non-blocking — import continues.
-  }
+  // Default date for headerless imports (no Target Start column): 1st of current month.
+  const headerlessDefaultDate = (() => {
+    const d = new Date()
+    return new Date(d.getFullYear(), d.getMonth(), 1)
+  })()
 
   // ── Row parsing ────────────────────────────────────────────────────
   const rows: DeltaRow[] = []
 
   const lastRow = ws.actualRowCount
-  for (let rowNumber = 2; rowNumber <= lastRow; rowNumber++) {
+  // Headerless: data starts at row 1. Headered: skip row 1 (headers).
+  const startRow = headerless ? 1 : 2
+  for (let rowNumber = startRow; rowNumber <= lastRow; rowNumber++) {
     const row = ws.getRow(rowNumber)
     if (!row.hasValues) continue
 
@@ -426,7 +471,10 @@ export async function parseWorkbook(
     const maximoAssetId = assetRaw != null ? String(assetRaw).trim() : ''
     const jobPlanRaw = String(cell('Job Plan') ?? '').trim()
     const targetRaw = cell('Target Start')
-    const targetStart = targetRaw instanceof Date ? targetRaw : null
+    // Headerless exports have no Target Start column — default to 1st of current month.
+    const targetStart = headerless
+      ? headerlessDefaultDate
+      : (targetRaw instanceof Date ? targetRaw : null)
 
     // ── Maximo WO metadata fields (all optional) ──
     const priorityRaw = cell('Priority')
@@ -476,7 +524,7 @@ export async function parseWorkbook(
       errors.push({ rowNumber, message: 'Missing Job Plan' })
       continue
     }
-    if (!targetStart) {
+    if (!targetStart && !headerless) {
       errors.push({ rowNumber, message: 'Missing or non-date Target Start' })
       continue
     }
@@ -513,7 +561,7 @@ export async function parseWorkbook(
       jobPlanCode,
       frequencySuffix,
       frequency,
-      targetStart,
+      targetStart: targetStart!,
       priority,
       workType,
       crewId,
