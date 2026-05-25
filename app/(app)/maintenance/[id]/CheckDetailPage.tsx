@@ -562,9 +562,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             <div>
               <dt className="text-xs font-bold text-eq-grey uppercase">Frequency</dt>
               {check.frequency ? (
-                <dd className="text-eq-ink mt-1">
-                  {check.frequency.replace('_', '-').replace(/\b\w/g, c => c.toUpperCase())}
-                </dd>
+                <FrequencyPills tags={[check.frequency]} />
               ) : check.frequency_tags?.length ? (
                 <FrequencyPills tags={check.frequency_tags} />
               ) : (
