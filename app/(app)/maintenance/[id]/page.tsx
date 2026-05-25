@@ -97,6 +97,52 @@ export default async function MaintenanceCheckPage({
     .order('sort_order')
     .limit(10000)
 
+  // Per-asset frequency map: asset_id → string[]. Populated for all checks
+  // so the asset table can show frequency pills next to each asset's plan.
+  // For single-frequency checks every asset gets the same tag. For multi-
+  // frequency import checks each asset gets only the cycles its items cover.
+  const assetFreqMap: Record<string, string[]> = {}
+  const checkFrequency = check.frequency as string | null
+  const checkFreqTags = (check as { frequency_tags?: string[] | null }).frequency_tags
+
+  if (checkFrequency) {
+    // Single-frequency check — every asset shares the same cycle.
+    for (const ca of checkAssets ?? []) {
+      assetFreqMap[ca.asset_id] = [checkFrequency]
+    }
+  } else if (checkFreqTags?.length) {
+    // Multi-frequency import check — derive per-asset tags from which
+    // job_plan_items flags are set on each asset's check_items.
+    const jpiIds = Array.from(
+      new Set((allItems ?? []).map(i => i.job_plan_item_id).filter(Boolean) as string[]),
+    )
+    if (jpiIds.length > 0) {
+      // Cast to unknown first — freq_6yr/freq_8yr were added after the last
+      // type generation so the generated types don't know about them yet.
+      const { data: jpiRows } = await (supabase
+        .from('job_plan_items')
+        .select('id, freq_monthly, freq_quarterly, freq_semi_annual, freq_annual, freq_2yr, freq_3yr, freq_5yr, freq_6yr, freq_8yr, freq_10yr')
+        .in('id', jpiIds) as unknown as Promise<{ data: Record<string, unknown>[] | null }>)
+      const jpiById = new Map((jpiRows ?? []).map(r => [r.id as string, r]))
+      const FREQ_FLAGS: [string, string][] = [
+        ['freq_monthly', 'monthly'], ['freq_quarterly', 'quarterly'],
+        ['freq_semi_annual', 'semi_annual'], ['freq_annual', 'annual'],
+        ['freq_2yr', '2yr'], ['freq_3yr', '3yr'], ['freq_5yr', '5yr'],
+        ['freq_6yr', '6yr'], ['freq_8yr', '8yr'], ['freq_10yr', '10yr'],
+      ]
+      for (const item of allItems ?? []) {
+        if (!item.asset_id || !item.job_plan_item_id) continue
+        const jpi = jpiById.get(item.job_plan_item_id) as Record<string, boolean> | undefined
+        if (!jpi) continue
+        const tags = assetFreqMap[item.asset_id] ?? []
+        for (const [flag, freq] of FREQ_FLAGS) {
+          if (jpi[flag] && !tags.includes(freq)) tags.push(freq)
+        }
+        assetFreqMap[item.asset_id] = tags
+      }
+    }
+  }
+
   // Fetch attachments
   const { data: attachments } = await supabase
     .from('attachments')
@@ -194,6 +240,7 @@ export default async function MaintenanceCheckPage({
         items={(allItems ?? []) as MaintenanceCheckItem[]}
         checkAssets={(checkAssets ?? []) as never}
         attachments={(attachments ?? []) as Attachment[]}
+        assetFreqMap={assetFreqMap}
         isAdmin={isAdmin(userRole)}
         canWrite={canWrite(userRole)}
         isAssigned={check.assigned_to === user?.id}

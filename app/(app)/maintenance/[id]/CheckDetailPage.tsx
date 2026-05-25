@@ -57,6 +57,8 @@ interface CheckDetailPageProps {
   items: MaintenanceCheckItem[]
   checkAssets: CheckAssetWithDetails[]
   attachments: Attachment[]
+  /** asset_id → frequency tag array. Used to render per-row frequency pills. */
+  assetFreqMap?: Record<string, string[]>
   isAdmin: boolean
   canWrite: boolean
   isAssigned: boolean
@@ -119,7 +121,7 @@ function statusToBadge(status: CheckStatus) {
   return map[status]
 }
 
-export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmin, canWrite: canWriteRole, isAssigned, isTechnician = false }: CheckDetailPageProps) {
+export function CheckDetailPage({ check, items, checkAssets, attachments, assetFreqMap = {}, isAdmin, canWrite: canWriteRole, isAssigned, isTechnician = false }: CheckDetailPageProps) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -852,6 +854,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
                     key={ca.id}
                     ca={ca}
                     items={items.filter(i => i.check_asset_id === ca.id)}
+                    freqTags={assetFreqMap[ca.asset_id] ?? []}
                     isExpanded={expandedAssetId === ca.id}
                     onToggle={() => setExpandedAssetId(expandedAssetId === ca.id ? null : ca.id)}
                     canAct={canAct}
@@ -930,11 +933,13 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
 /* ──────── Asset Row ──────── */
 
 function AssetRow({
-  ca, items, isExpanded, onToggle, canAct, checkStatus, isSelected, onToggleSelect,
+  ca, items, freqTags, isExpanded, onToggle, canAct, checkStatus, isSelected, onToggleSelect,
   onForceComplete, onItemResult, onItemNotes, onAssetNote, onAssetWO, onRemove,
 }: {
   ca: CheckAssetWithDetails
   items: MaintenanceCheckItem[]
+  /** Frequency tags for this asset — rendered as pills under the plan name. */
+  freqTags: string[]
   isExpanded: boolean
   onToggle: () => void
   canAct: boolean
@@ -1004,7 +1009,10 @@ function AssetRow({
           )}
         </td>
 
-        <td className="px-4 py-2.5 text-eq-grey">{jpName}</td>
+        <td className="px-4 py-2.5 text-eq-grey">
+          <div>{jpName}</div>
+          {freqTags.length > 0 && <FrequencyPills tags={freqTags} />}
+        </td>
 
         {/* Completed indicator */}
         <td className="px-4 py-2.5">
