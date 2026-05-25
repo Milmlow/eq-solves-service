@@ -136,7 +136,11 @@ export default async function MaintenanceCheckPage({
         if (!jpi) continue
         const tags = assetFreqMap[item.asset_id] ?? []
         for (const [flag, freq] of FREQ_FLAGS) {
-          if (jpi[flag] && !tags.includes(freq)) tags.push(freq)
+          // Only include frequencies that were actually used in this check —
+          // job_plan_items often have multiple freq flags set (e.g. annual +
+          // 5yr + quarterly), but only the cycles in frequency_tags were
+          // imported. Filtering to that set avoids phantom pills.
+          if (jpi[flag] && !tags.includes(freq) && checkFreqTags.includes(freq)) tags.push(freq)
         }
         assetFreqMap[item.asset_id] = tags
       }
