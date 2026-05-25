@@ -71,6 +71,43 @@ interface CheckDetailPageProps {
 type SortKey = 'maximo_id' | 'name' | 'location' | 'work_order' | 'job_plan' | 'completed' | 'notes'
 type SortDir = 'asc' | 'desc'
 
+// ── Frequency pills ─────────────────────────────────────────────────────
+// Shown in the Frequency slot when a check spans multiple cycles (imported
+// multi-plan check where `frequency` is null but `frequency_tags` is set).
+
+const FREQ_PILL: Record<string, { abbr: string; label: string; cls: string }> = {
+  monthly:     { abbr: 'M',  label: 'Monthly',     cls: 'bg-amber-100 text-amber-700' },
+  quarterly:   { abbr: 'Q',  label: 'Quarterly',   cls: 'bg-purple-100 text-purple-700' },
+  semi_annual: { abbr: 'S',  label: 'Semi-annual', cls: 'bg-teal-100 text-teal-700' },
+  annual:      { abbr: 'A',  label: 'Annual',      cls: 'bg-sky-100 text-sky-700' },
+  '2yr':       { abbr: '2',  label: '2-year',      cls: 'bg-indigo-100 text-indigo-700' },
+  '3yr':       { abbr: '3',  label: '3-year',      cls: 'bg-violet-100 text-violet-700' },
+  '5yr':       { abbr: '5',  label: '5-year',      cls: 'bg-orange-100 text-orange-700' },
+  '6yr':       { abbr: '6',  label: '6-year',      cls: 'bg-rose-100 text-rose-700' },
+  '8yr':       { abbr: '8',  label: '8-year',      cls: 'bg-red-100 text-red-700' },
+  '10yr':      { abbr: '10', label: '10-year',     cls: 'bg-gray-100 text-gray-600' },
+}
+
+function FrequencyPills({ tags }: { tags: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {tags.map((tag) => {
+        const p = FREQ_PILL[tag]
+        if (!p) return null
+        return (
+          <span
+            key={tag}
+            title={p.label}
+            className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${p.cls}`}
+          >
+            {p.abbr}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 function statusToBadge(status: CheckStatus) {
   const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
     scheduled: 'not-started',
@@ -524,9 +561,15 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
             </div>
             <div>
               <dt className="text-xs font-bold text-eq-grey uppercase">Frequency</dt>
-              <dd className="text-eq-ink mt-1">
-                {check.frequency ? check.frequency.replace('_', '-').replace(/\b\w/g, c => c.toUpperCase()) : '—'}
-              </dd>
+              {check.frequency ? (
+                <dd className="text-eq-ink mt-1">
+                  {check.frequency.replace('_', '-').replace(/\b\w/g, c => c.toUpperCase())}
+                </dd>
+              ) : check.frequency_tags?.length ? (
+                <FrequencyPills tags={check.frequency_tags} />
+              ) : (
+                <dd className="text-eq-ink mt-1">—</dd>
+              )}
             </div>
           </div>
         </div>

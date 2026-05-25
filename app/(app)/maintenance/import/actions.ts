@@ -1189,6 +1189,9 @@ export async function commitDeltaImportAction(
       // 1. ONE maintenance_check for the site.
       // Compensating delete pattern: if any downstream step fails, delete
       // the parent check — CASCADE handles check_assets + check_items.
+      // frequency_tags carries the individual cycle strings so the UI can
+      // render colour-coded pills (A, 2, S, …) instead of "—".
+      const siteFrequencyTags = Array.from(new Set(siteGroups.map((g) => g.frequency as string)))
       const { data: check, error: checkErr } = await supabase
         .from('maintenance_checks')
         .insert({
@@ -1196,6 +1199,7 @@ export async function commitDeltaImportAction(
           site_id: firstGroup.siteId,
           job_plan_id: null,
           frequency: null,
+          frequency_tags: siteFrequencyTags,
           start_date: startIso,
           due_date: startIso,
           custom_name: customName,

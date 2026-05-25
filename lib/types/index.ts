@@ -368,6 +368,12 @@ export interface MaintenanceCheck {
   signature_initials: string | null
   gps_lat: number | null
   gps_lng: number | null
+  /**
+   * Array of frequency strings for multi-frequency import checks
+   * (where `frequency` is null). e.g. ['annual', '2yr', 'semi_annual'].
+   * Null on all standard single-frequency checks.
+   */
+  frequency_tags: string[] | null
   created_at: string
   updated_at: string
 }
