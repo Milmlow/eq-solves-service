@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { Button } from './Button'
-import { Archive, Trash2, X, AlertTriangle } from 'lucide-react'
+import { Archive, Trash2, X } from 'lucide-react'
 
 interface BulkActionBarProps {
   selectedCount: number
@@ -25,7 +25,7 @@ export function BulkActionBar({
   hideDelete = false,
 }: BulkActionBarProps) {
   const [confirmAction, setConfirmAction] = useState<'deactivate' | 'delete' | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (selectedCount === 0) return null
@@ -37,8 +37,9 @@ export function BulkActionBar({
 
   function executeAction() {
     setError(null)
+    setIsPending(true)
     const ids = [...selectedIds]
-    startTransition(async () => {
+    ;(async () => {
       try {
         const result = confirmAction === 'deactivate'
           ? await onDeactivate(ids)
@@ -52,8 +53,10 @@ export function BulkActionBar({
         }
       } catch (e) {
         setError((e as Error).message)
+      } finally {
+        setIsPending(false)
       }
-    })
+    })()
   }
 
   return (

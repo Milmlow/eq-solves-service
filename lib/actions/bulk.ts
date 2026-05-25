@@ -117,8 +117,8 @@ export async function bulkDeleteAction(table: EntityTable, ids: string[]) {
       // Unlink sites from these customers (don't delete sites)
       await supabase.from('sites').update({ customer_id: null }).in('customer_id', ids)
     } else if (table === 'maintenance_checks') {
-      // Delete check items first
-      await supabase.from('maintenance_check_items').delete().in('check_id', ids)
+      // check_assets and maintenance_check_items both cascade from maintenance_checks —
+      // no manual pre-delete needed.
     }
 
     const { error } = await supabase.from(table).delete().in('id', ids)

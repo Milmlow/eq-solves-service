@@ -31,6 +31,7 @@ function freqColumn(freq: string | null): string {
     '2yr': 'freq_2yr',
     '3yr': 'freq_3yr',
     '5yr': 'freq_5yr',
+    '6yr': 'freq_6yr',
     '8yr': 'freq_8yr',
     '10yr': 'freq_10yr',
   }
@@ -373,15 +374,18 @@ export async function previewDeltaImportAction(
       }
     }
 
-    // ── Detect duplicate work orders (tenant-scoped) ──────────────────
+    // ── Detect duplicate work orders (tenant-scoped, active checks only) ─
+    // Only flag WOs that belong to is_active=true checks — deactivated/
+    // archived checks shouldn't block a re-import of the same data.
     const incomingWOs = Array.from(new Set(rows.map((r) => r.workOrder)))
     const existingWO = new Set<string>()
     if (incomingWOs.length > 0) {
       const { data: dupRows } = await supabase
         .from('check_assets')
-        .select('work_order_number')
+        .select('work_order_number, maintenance_checks!inner(is_active)')
         .eq('tenant_id', tenantId)
         .in('work_order_number', incomingWOs)
+        .eq('maintenance_checks.is_active', true)
       for (const d of dupRows ?? []) {
         if (d.work_order_number) existingWO.add(d.work_order_number)
       }
@@ -577,7 +581,7 @@ export interface CommitSummary {
     customName: string
     siteCode: string
     jobPlanCode: string
-    frequency: FrequencyEnum
+    frequency: FrequencyEnum | null
     startDate: string
     assetCount: number
     taskCount: number
@@ -901,14 +905,17 @@ export async function commitDeltaImportAction(
       }
     }
 
+    // Only flag WOs that belong to is_active=true checks — deactivated/
+    // archived checks shouldn't block a re-import of the same data.
     const incomingWOs = Array.from(new Set(workingRows.map((r) => r.workOrder)))
     const existingWO = new Set<string>()
     if (incomingWOs.length > 0) {
       const { data: dupRows } = await supabase
         .from('check_assets')
-        .select('work_order_number')
+        .select('work_order_number, maintenance_checks!inner(is_active)')
         .eq('tenant_id', tenantId)
         .in('work_order_number', incomingWOs)
+        .eq('maintenance_checks.is_active', true)
       for (const d of dupRows ?? []) {
         if (d.work_order_number) existingWO.add(d.work_order_number)
       }
@@ -1131,7 +1138,15 @@ export async function commitDeltaImportAction(
       }
     }
 
-    // ── Write: per group, insert check + check_assets + check_items ──
+    // ── Write: one check per site — all job plans merged under one check ─
+    //
+    // Locked decision: one maintenance_check per site per import.
+    //   job_plan_id = null  — multiple plans, no single canonical plan
+    //   frequency   = null  — multiple frequencies, shown as "Import" in list
+    //   custom_name = "SY7 — May 2026" (site code + month + year)
+    //
+    // Per-asset task fidelity is preserved: check_items still derive from
+    // each asset's own (jobPlanId, frequency) pair via itemsByGroup.
     const summary: CommitSummary = {
       checksCreated: 0,
       checkAssetsCreated: 0,
@@ -1142,25 +1157,45 @@ export async function commitDeltaImportAction(
       groupsCreated: [],
     }
 
+    // Bucket resolved groups by site. Insertion order preserved so the
+    // first group for each site provides the canonical start date + name.
+    const bySite = new Map<string, typeof resolved>()
     for (const g of resolved) {
-      // If the user skipped every row in the group, don't create a check at all.
-      if (g.skippedRowNumbers.size === g.parsed.rows.length) {
-        continue
+      const arr = bySite.get(g.siteId) ?? []
+      arr.push(g)
+      bySite.set(g.siteId, arr)
+    }
+
+    for (const siteGroups of bySite.values()) {
+      const firstGroup = siteGroups[0]
+
+      // Skip site if every row across all its groups was skipped.
+      const totalNonSkipped = siteGroups.reduce(
+        (acc, g) => acc + (g.parsed.rows.length - g.skippedRowNumbers.size),
+        0,
+      )
+      if (totalNonSkipped === 0) continue
+
+      // Use the earliest start date across all groups for this site.
+      let earliestStart = firstGroup.parsed.startDate
+      for (const g of siteGroups) {
+        if (g.parsed.startDate < earliestStart) earliestStart = g.parsed.startDate
       }
+      const startIso = earliestStart.toISOString().slice(0, 10)
+      const monthName = earliestStart.toLocaleString('en-AU', { month: 'long' })
+      const year = earliestStart.getFullYear()
+      const customName = `${firstGroup.parsed.siteCode} — ${monthName} ${year}`
 
-      const startIso = g.parsed.startDate.toISOString().slice(0, 10)
-      const monthName = g.parsed.startDate.toLocaleString('en-AU', { month: 'long' })
-      const year = g.parsed.startDate.getFullYear()
-      const customName = `${g.siteName} — ${g.jobPlanName} — ${monthName} ${year}`
-
-      // 1. maintenance_checks
+      // 1. ONE maintenance_check for the site.
+      // Compensating delete pattern: if any downstream step fails, delete
+      // the parent check — CASCADE handles check_assets + check_items.
       const { data: check, error: checkErr } = await supabase
         .from('maintenance_checks')
         .insert({
           tenant_id: tenantId,
-          site_id: g.siteId,
-          job_plan_id: g.jobPlanId,
-          frequency: g.frequency,
+          site_id: firstGroup.siteId,
+          job_plan_id: null,
+          frequency: null,
           start_date: startIso,
           due_date: startIso,
           custom_name: customName,
@@ -1174,105 +1209,100 @@ export async function commitDeltaImportAction(
         return { success: false, error: checkErr?.message ?? 'Failed to create check.' }
       }
 
-      // The three-step insert below (check → check_assets → check_items)
-      // cannot run inside a single Postgres transaction via the Supabase JS
-      // client — each call is its own HTTP roundtrip to PostgREST. If a
-      // later step fails after the parent check is in, the user is left
-      // with an orphaned `maintenance_checks` row pointing at no work.
-      //
-      // Compensating delete: on any downstream failure, DELETE the parent
-      // check. The FK from `check_assets.check_id` is ON DELETE CASCADE
-      // (migration 0013) so the partial `check_assets` rows are removed
-      // automatically; `maintenance_check_items` cascades from there.
-      // The result is the same end state as a real transaction: either
-      // every row for this group lands, or none of them do.
       const rollbackCheck = async (reason: string): Promise<string> => {
         await supabase.from('maintenance_checks').delete().eq('id', check.id)
         return reason
       }
 
-      // 2. check_assets (one per parsed row) — carries the full Maximo
-      // payload from the parsed Delta row (priority, work_type, crew,
-      // target dates, failure/problem/cause/remedy, classification, IR
-      // scan result) so the customer report + asset history can read it
-      // back. Skipped rows are excluded — no check_asset, no check_items.
-      const checkAssetRows = g.parsed.rows
-        .filter((r) => !g.skippedRowNumbers.has(r.rowNumber))
-        .map((r) =>
-          deltaRowToCheckAssetInsert(r, {
-            tenantId,
-            checkId: check.id,
-            assetId: g.assetIdByRow.get(r.rowNumber)!,
-          }),
-        )
+      let siteAssetCount = 0
+      let siteItemCount = 0
 
-      const { data: insertedCA, error: caErr } = await supabase
-        .from('check_assets')
-        .insert(checkAssetRows)
-        .select('id, asset_id')
+      // 2. check_assets + check_items — one pass per sub-group.
+      for (const g of siteGroups) {
+        if (g.skippedRowNumbers.size === g.parsed.rows.length) continue
 
-      if (caErr || !insertedCA) {
-        const reason = await rollbackCheck(caErr?.message ?? 'Failed to create check assets.')
-        return { success: false, error: reason }
-      }
+        const checkAssetRows = g.parsed.rows
+          .filter((r) => !g.skippedRowNumbers.has(r.rowNumber))
+          .map((r) =>
+            deltaRowToCheckAssetInsert(r, {
+              tenantId,
+              checkId: check.id,
+              assetId: g.assetIdByRow.get(r.rowNumber)!,
+            }),
+          )
 
-      const caByAsset = new Map<string, string>()
-      for (const ca of insertedCA) caByAsset.set(ca.asset_id, ca.id)
+        const { data: insertedCA, error: caErr } = await supabase
+          .from('check_assets')
+          .insert(checkAssetRows)
+          .select('id, asset_id')
 
-      // 3. maintenance_check_items (one per asset × matching job_plan_item)
-      const items = itemsByGroup.get(`${g.jobPlanId}|${g.frequency}`) ?? []
-      const checkItemRows: {
-        tenant_id: string
-        check_id: string
-        check_asset_id: string
-        job_plan_item_id: string
-        asset_id: string
-        description: string
-        sort_order: number
-        is_required: boolean
-      }[] = []
-
-      for (const [assetId, caId] of caByAsset) {
-        for (const it of items) {
-          checkItemRows.push({
-            tenant_id: tenantId,
-            check_id: check.id,
-            check_asset_id: caId,
-            job_plan_item_id: it.id,
-            asset_id: assetId,
-            description: it.description,
-            sort_order: it.sort_order,
-            is_required: it.is_required,
-          })
+        if (caErr || !insertedCA) {
+          const reason = await rollbackCheck(caErr?.message ?? 'Failed to create check assets.')
+          return { success: false, error: reason }
         }
-      }
 
-      if (checkItemRows.length > 0) {
-        for (let i = 0; i < checkItemRows.length; i += 500) {
-          const batch = checkItemRows.slice(i, i + 500)
-          const { error: itemsErr } = await supabase
-            .from('maintenance_check_items')
-            .insert(batch)
-          if (itemsErr) {
-            const reason = await rollbackCheck(itemsErr.message)
-            return { success: false, error: reason }
+        const caByAsset = new Map<string, string>()
+        for (const ca of insertedCA) caByAsset.set(ca.asset_id, ca.id)
+
+        // Items still use each group's own (jobPlanId, frequency) key so
+        // per-asset task scope is preserved even within a multi-plan check.
+        const items = itemsByGroup.get(`${g.jobPlanId}|${g.frequency}`) ?? []
+        const checkItemRows: {
+          tenant_id: string
+          check_id: string
+          check_asset_id: string
+          job_plan_item_id: string
+          asset_id: string
+          description: string
+          sort_order: number
+          is_required: boolean
+        }[] = []
+
+        for (const [assetId, caId] of caByAsset) {
+          for (const it of items) {
+            checkItemRows.push({
+              tenant_id: tenantId,
+              check_id: check.id,
+              check_asset_id: caId,
+              job_plan_item_id: it.id,
+              asset_id: assetId,
+              description: it.description,
+              sort_order: it.sort_order,
+              is_required: it.is_required,
+            })
           }
         }
+
+        if (checkItemRows.length > 0) {
+          for (let i = 0; i < checkItemRows.length; i += 500) {
+            const batch = checkItemRows.slice(i, i + 500)
+            const { error: itemsErr } = await supabase
+              .from('maintenance_check_items')
+              .insert(batch)
+            if (itemsErr) {
+              const reason = await rollbackCheck(itemsErr.message)
+              return { success: false, error: reason }
+            }
+          }
+        }
+
+        siteAssetCount += insertedCA.length
+        siteItemCount += checkItemRows.length
       }
 
       summary.checksCreated += 1
-      summary.checkAssetsCreated += insertedCA.length
-      summary.checkItemsCreated += checkItemRows.length
+      summary.checkAssetsCreated += siteAssetCount
+      summary.checkItemsCreated += siteItemCount
       summary.groupsCreated.push({
-        key: g.parsed.key,
+        key: firstGroup.parsed.key,
         checkId: check.id,
         customName,
-        siteCode: g.parsed.siteCode,
-        jobPlanCode: g.parsed.jobPlanCode,
-        frequency: g.frequency,
+        siteCode: firstGroup.parsed.siteCode,
+        jobPlanCode: siteGroups.map((g) => g.parsed.jobPlanCode).join(', '),
+        frequency: null,
         startDate: startIso,
-        assetCount: insertedCA.length,
-        taskCount: checkItemRows.length,
+        assetCount: siteAssetCount,
+        taskCount: siteItemCount,
       })
     }
 
@@ -1611,14 +1641,17 @@ export async function commitConsolidatedDeltaImportAction(
       }
     }
 
+    // Only flag WOs that belong to is_active=true checks — deactivated/
+    // archived checks shouldn't block a re-import of the same data.
     const incomingWOs = Array.from(new Set(workingRows.map((r) => r.workOrder)))
     const existingWO = new Set<string>()
     if (incomingWOs.length > 0) {
       const { data: dupRows } = await supabase
         .from('check_assets')
-        .select('work_order_number')
+        .select('work_order_number, maintenance_checks!inner(is_active)')
         .eq('tenant_id', tenantId)
         .in('work_order_number', incomingWOs)
+        .eq('maintenance_checks.is_active', true)
       for (const d of dupRows ?? []) {
         if (d.work_order_number) existingWO.add(d.work_order_number)
       }
