@@ -144,6 +144,24 @@ export default async function MaintenanceCheckPage({
         }
         assetFreqMap[item.asset_id] = tags
       }
+
+      // Reduce multi-frequency assets to ONE pill — the lowest frequency
+      // (longest cycle). A 2yr service encompasses the annual and semi-annual
+      // tasks within the same job plan, so showing "2" is the correct summary.
+      // Order: monthly → quarterly → semi_annual → annual → 2yr → … → 10yr
+      const FREQ_ORDER = [
+        'monthly', 'quarterly', 'semi_annual', 'annual',
+        '2yr', '3yr', '5yr', '6yr', '8yr', '10yr',
+      ]
+      for (const assetId of Object.keys(assetFreqMap)) {
+        const tags = assetFreqMap[assetId]
+        if (tags.length <= 1) continue
+        // Sort descending by index in FREQ_ORDER (highest index = lowest frequency)
+        const sorted = [...tags].sort(
+          (a, b) => FREQ_ORDER.indexOf(b) - FREQ_ORDER.indexOf(a),
+        )
+        assetFreqMap[assetId] = [sorted[0]]
+      }
     }
   }
 
