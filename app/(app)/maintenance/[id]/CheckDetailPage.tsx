@@ -140,6 +140,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
   const [removedAssetIds, setRemovedAssetIds] = useState<Set<string>>(new Set())
   const [showSendReport, setShowSendReport] = useState(false)
   const [showReportDialog, setShowReportDialog] = useState(false)
+  const [deleteStatus, setDeleteStatus] = useState<'idle' | 'deleting' | 'deleted'>('idle')
   const confirm = useConfirm()
 
   async function handleDownloadReport(complexity: ReportComplexity) {
@@ -319,17 +320,15 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
       destructive: true,
     })
     if (!ok) return
-    setError(null); setLoading(true)
+    setError(null)
+    setDeleteStatus('deleting')
     const result = await archiveCheckAction(check.id, false)
     if (!result.success) {
-      setLoading(false)
+      setDeleteStatus('idle')
       setError(result.error ?? 'Failed to delete.')
       return
     }
-    // Success: leave the now-archived check behind and return to the list.
-    // We intentionally don't clear `loading` first — the button stays
-    // disabled while the navigation transitions so a double-click can't
-    // re-fire archiveCheckAction. router.push handles unmount cleanup.
+    setDeleteStatus('deleted')
     router.push('/maintenance')
   }
 
@@ -669,6 +668,18 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, isAdmi
       </div>
 
       {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg">{error}</p>}
+
+      {deleteStatus === 'deleting' && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <span className="inline-block w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin shrink-0" />
+          Deleting check…
+        </div>
+      )}
+      {deleteStatus === 'deleted' && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+          ✓ Check deleted. Returning to Maintenance…
+        </div>
+      )}
 
       {/* Paste WO modal */}
       {showPasteModal && (
