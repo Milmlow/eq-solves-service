@@ -50,6 +50,11 @@ function freqColumn(freq: string): string {
   return map[freq] ?? 'freq_monthly'
 }
 
+/** Supabase OR filter string for multiple frequencies, e.g. "freq_annual.eq.true,freq_semi_annual.eq.true" */
+function freqFilter(frequencies: string[]): string {
+  return frequencies.map(freqColumn).map((c) => `${c}.eq.true`).join(',')
+}
+
 /**
  * RCD test plans behave as a secondary overlay: their assets are RCD-bearing
  * boards (assets.expected_rcd_circuits > 0), even though those boards are
@@ -77,7 +82,7 @@ function isRcdPlan(plan: { code: string | null; name: string | null }): boolean 
  */
 export async function previewCheckAssetsAction(
   siteId: string,
-  frequency: string,
+  frequencies: string[],
   isDarkSite: boolean,
   jobPlanFilter?: string | string[] | null,
 ) {
@@ -137,7 +142,7 @@ export async function previewCheckAssetsAction(
       return { success: true, assets: [], totalTasks: 0 }
     }
 
-    const col = freqColumn(frequency)
+    const freqOr = freqFilter(frequencies)
 
     // RCD overlay path: every surfaced asset shares the same task list pulled
     // from the RCD plan. No per-asset task lookup needed. Also surface the
@@ -148,7 +153,7 @@ export async function previewCheckAssetsAction(
         .from('job_plan_items')
         .select('id')
         .eq('job_plan_id', rcdOverlayPlanId)
-        .eq(col, true)
+        .or(freqOr)
 
       const taskCount = rcdItems?.length ?? 0
       if (taskCount === 0) {
@@ -215,7 +220,7 @@ export async function previewCheckAssetsAction(
         .from('job_plan_items')
         .select('job_plan_id')
         .in('job_plan_id', jpIds)
-        .eq(col, true)
+        .or(freqOr)
 
       taskCountMap = (items ?? []).reduce((acc, item) => {
         acc[item.job_plan_id] = (acc[item.job_plan_id] || 0) + 1
@@ -325,6 +330,16 @@ export async function createCheckAction(formData: FormData) {
     // a column on the DB table.
     const { manual_asset_ids: parsedManualIds, job_plan_ids: parsedJobPlanIds, ...checkData } = parsed.data
     const freq = parsed.data.frequency
+    // Multi-frequency support: the form may send a JSON array of frequencies;
+    // fall back to the single stored frequency when absent.
+    const freqsRaw = formData.get('frequencies') as string | null
+    let effectiveFreqs: string[]
+    try {
+      effectiveFreqs = freqsRaw ? (JSON.parse(freqsRaw) as string[]).filter(Boolean) : []
+    } catch {
+      effectiveFreqs = []
+    }
+    if (effectiveFreqs.length === 0) effectiveFreqs = [freq]
 
     // Resolve Maximo IDs → asset UUIDs when the user used the manual-ID
     // textarea. The form sends `manual_maximo_ids` (raw strings) instead of
@@ -422,8 +437,8 @@ export async function createCheckAction(formData: FormData) {
       return { success: true, checkId: check.id, assetCount: 0, taskCount: 0 }
     }
 
-    // 3. Get maintenance plan items matching the selected frequency
-    const col = freqColumn(freq)
+    // 3. Get maintenance plan items matching the selected frequency/frequencies
+    const itemFreqOr = freqFilter(effectiveFreqs)
 
     // RCD overlay: items come from the RCD plan, not the asset's pinned plan.
     // Every asset shares the same task list, so we build a single items array
@@ -440,7 +455,7 @@ export async function createCheckAction(formData: FormData) {
         .from('job_plan_items')
         .select('id, description, sort_order, is_required')
         .eq('job_plan_id', rcdOverlayPlanId)
-        .eq(col, true)
+        .or(itemFreqOr)
         .order('sort_order')
       rcdOverlayItems = rcdItems ?? []
       if (rcdOverlayItems.length === 0) {
@@ -462,7 +477,7 @@ export async function createCheckAction(formData: FormData) {
         .from('job_plan_items')
         .select('id, job_plan_id, description, sort_order, is_required')
         .in('job_plan_id', jpIds)
-        .eq(col, true)
+        .or(itemFreqOr)
         .order('sort_order')
 
       allItems = items ?? []
@@ -1757,14 +1772,15 @@ export async function updateCheckItemResultAction(
  * frequency. Used by the New Check form to hide irrelevant plans once the
  * user picks a frequency (slicer behaviour).
  */
-export async function getPlansWithFrequencyAction(frequency: string): Promise<{ planIds: string[] }> {
+export async function getPlansWithFrequencyAction(frequencies: string[]): Promise<{ planIds: string[] }> {
   try {
+    if (frequencies.length === 0) return { planIds: [] }
     const { supabase } = await requireUser()
-    const col = freqColumn(frequency)
+    const orFilter = freqFilter(frequencies)
     const { data } = await supabase
       .from('job_plan_items')
       .select('job_plan_id')
-      .eq(col, true)
+      .or(orFilter)
     return { planIds: [...new Set((data ?? []).map((d) => d.job_plan_id as string))] }
   } catch {
     return { planIds: [] }

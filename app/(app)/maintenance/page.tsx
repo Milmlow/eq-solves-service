@@ -119,7 +119,6 @@ export default async function MaintenancePage({
       .from('profiles')
       .select('id, email, full_name')
       .in('id', activeMemberIds)
-      .eq('is_active', true)
       .order('full_name')
     const memberRoleMap = new Map(
       (members ?? []).map((m) => [m.user_id, { role: m.role as string, is_active: m.is_active as boolean }])
@@ -261,7 +260,6 @@ export default async function MaintenancePage({
         jobPlans={(jobPlans ?? []) as never}
         sites={sites ?? []}
         customers={customers ?? []}
-        siteAssetPlans={(siteAssetPlans ?? []) as { site_id: string; job_plan_id: string }[]}
         technicians={technicians}
         scopeItems={(scopeItems ?? []) as never}
         page={page}

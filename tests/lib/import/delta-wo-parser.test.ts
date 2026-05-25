@@ -458,3 +458,57 @@ describe('parseWorkbook — sheet selection', () => {
     expect(result.errors[0].message).toContain('"Sheet1"')
   })
 })
+
+describe('parseWorkbook — headerless (Metronode format)', () => {
+  it('parses a "List of Work Orders" sheet with no header row using positional columns', async () => {
+    const buf = await buildBuffer((wb) => {
+      const ws = wb.addWorksheet(DATA_SHEET_NAME)
+      // Data starts at row 1 — no header row (Metronode Maximo export format)
+      ws.addRow(['AU01-SY7', '4447408', 'SY7-HV MAIN SWITCHBOARD A HV-DB-A', '1786', 'MVSWBD-A'])
+      ws.addRow(['AU01-SY7', '4394484', 'SY7-GENSET JUNCTION BOX-1-1', '1026', 'JBI-A'])
+    })
+
+    const result = await parseWorkbook(buf)
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.rows).toHaveLength(2)
+    expect(result.rows[0]).toMatchObject({
+      site: 'AU01-SY7',
+      siteCode: 'SY7',
+      workOrder: '4447408',
+      description: 'SY7-HV MAIN SWITCHBOARD A HV-DB-A',
+      maximoAssetId: '1786',
+      jobPlanRaw: 'MVSWBD-A',
+      jobPlanCode: 'MVSWBD',
+      frequencySuffix: 'A',
+      frequency: 'annual',
+    })
+    expect(result.rows[1]).toMatchObject({
+      siteCode: 'SY7',
+      workOrder: '4394484',
+      maximoAssetId: '1026',
+      jobPlanCode: 'JBI',
+      frequency: 'annual',
+    })
+    // Grouped into one group (same site + plan + freq)
+    expect(result.groups).toHaveLength(2)
+  })
+
+  it('groups headerless rows by site + job plan code', async () => {
+    const buf = await buildBuffer((wb) => {
+      const ws = wb.addWorksheet(DATA_SHEET_NAME)
+      ws.addRow(['AU01-SY7', '1001', 'Asset 1', '100', 'LVACB-A'])
+      ws.addRow(['AU01-SY7', '1002', 'Asset 2', '101', 'LVACB-A'])
+      ws.addRow(['AU01-SY7', '1003', 'Asset 3', '102', 'LVNSX-S'])
+    })
+
+    const result = await parseWorkbook(buf)
+
+    expect(result.errors).toHaveLength(0)
+    expect(result.rows).toHaveLength(3)
+    // Two groups: LVACB-A (2 rows) and LVNSX-S (1 row)
+    expect(result.groups).toHaveLength(2)
+    const acbGroup = result.groups.find((g) => g.jobPlanCode === 'LVACB')
+    expect(acbGroup?.rows).toHaveLength(2)
+  })
+})
