@@ -62,8 +62,8 @@ describe('mapFrequencySuffix', () => {
     expect(mapFrequencySuffix('A')).toBe('annual')
   })
 
-  it('3 → quarterly (3-monthly is quarterly)', () => {
-    expect(mapFrequencySuffix('3')).toBe('quarterly')
+  it('3 → 3yr (3-year cycle)', () => {
+    expect(mapFrequencySuffix('3')).toBe('3yr')
   })
 
   it('Q → quarterly', () => {
@@ -86,7 +86,7 @@ describe('mapFrequencySuffix', () => {
   it('maps all documented suffixes', () => {
     // Smoke — guard against accidental deletions from the map
     expect(Object.keys(FREQUENCY_SUFFIX_MAP)).toEqual(
-      expect.arrayContaining(['A', 'Q', 'M', 'S', 'W', '2', '3', '5', '6', '10']),
+      expect.arrayContaining(['A', 'Q', 'M', 'S', 'W', '2', '3', '5', '6', '8', '10']),
     )
   })
 })
@@ -141,7 +141,7 @@ describe('parseWorkbook — WO Aug 2025_Delta.xlsx fixture', () => {
     expect(pdu!.startDate.toISOString().slice(0, 10)).toBe('2025-08-02')
   })
 
-  it('ATS uses quarterly suffix "3"', async () => {
+  it('ATS uses 3-year suffix "3"', async () => {
     const buf = readFileSync(FIXTURE)
     const { rows } = await parseWorkbook(buf)
 
@@ -149,7 +149,7 @@ describe('parseWorkbook — WO Aug 2025_Delta.xlsx fixture', () => {
     expect(atsRows.length).toBeGreaterThan(0)
     for (const r of atsRows) {
       expect(r.frequencySuffix).toBe('3')
-      expect(r.frequency).toBe('quarterly')
+      expect(r.frequency).toBe('3yr')
     }
   })
 
@@ -209,8 +209,8 @@ describe('parseWorkbook — WO Aug 2025_Delta.xlsx fixture', () => {
       { code: 'SWBD', freq: 'annual', date: '2025-08-07', n: 14 },
       { code: 'LTSWBD', freq: 'annual', date: '2025-08-07', n: 14 },
       { code: 'SWBD', freq: 'annual', date: '2025-08-20', n: 3 },
-      { code: 'ATS', freq: 'quarterly', date: '2025-08-05', n: 2 },
-      { code: 'ATS', freq: 'quarterly', date: '2025-08-07', n: 2 },
+      { code: 'ATS', freq: '3yr', date: '2025-08-05', n: 2 },
+      { code: 'ATS', freq: '3yr', date: '2025-08-07', n: 2 },
       { code: 'EVCS', freq: 'annual', date: '2025-08-20', n: 2 },
       { code: 'LBS', freq: 'annual', date: '2025-08-26', n: 2 },
       { code: 'LIGHTN', freq: 'annual', date: '2025-08-07', n: 1 },

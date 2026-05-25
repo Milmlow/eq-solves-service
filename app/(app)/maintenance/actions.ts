@@ -44,6 +44,7 @@ function freqColumn(freq: string): string {
     '2yr': 'freq_2yr',
     '3yr': 'freq_3yr',
     '5yr': 'freq_5yr',
+    '6yr': 'freq_6yr',
     '8yr': 'freq_8yr',
     '10yr': 'freq_10yr',
   }

@@ -20,13 +20,14 @@ import { Workbook, Worksheet } from 'exceljs'
 export const FREQUENCY_SUFFIX_MAP: Record<string, FrequencyEnum> = {
   A: 'annual',
   Q: 'quarterly',
-  '3': 'quarterly',
   M: 'monthly',
   S: 'semi_annual',
-  '6': 'semi_annual',
   W: 'weekly',
   '2': '2yr',
+  '3': '3yr',
   '5': '5yr',
+  '6': '6yr',
+  '8': '8yr',
   '10': '10yr',
 }
 
@@ -39,6 +40,7 @@ export type FrequencyEnum =
   | '2yr'
   | '3yr'
   | '5yr'
+  | '6yr'
   | '8yr'
   | '10yr'
 
