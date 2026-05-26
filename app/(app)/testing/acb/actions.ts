@@ -10,6 +10,8 @@ import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
 import { z } from 'zod'
+import exceljs from 'exceljs'
+const { Workbook } = exceljs
 
 // Parser ships AcbImportRowSchema separately to avoid pulling exceljs into
 // the server bundle. Re-declare the shape here (server-side trust boundary).
@@ -563,5 +565,298 @@ export async function raiseTestDefectAction(data: {
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
+  }
+}
+
+// ── Maximo XLSM import ────────────────────────────────────────────────────────
+// Column indices (1-indexed) from the Equinix IAM ADCS_V01 spreadsheet format.
+// Header row is 12; data starts at row 13.
+const MAXIMO_DATA_START = 13
+const MAXIMO_COL = {
+  ASSET_ID:             7,   // Maximo asset number — match key
+  ASSET_DESC:           8,   // Asset description → name_location
+  MANUFACTURER:         18,  // Brand
+  MODEL_NO:             19,  // Model # → extract performance_level suffix
+  SERIAL_NO:            20,  // Serial number → cb_serial
+  AMP_FRAME:            34,  // Amp frame → current_in
+  BREAKER_CONSTRUCTION: 41,  // ACB/MCCB → breaker_type
+  BREAKER_MOUNT:        42,  // DRAWOUT/FIXED → fixed_withdrawable
+  GROUND_FAULT_DELAY:   58,  // earth_fault_delay
+  GROUND_FAULT_PICKUP:  59,  // earth_fault_pickup
+  INST_PICKUP:          62,  // instantaneous_pickup
+  LONG_TIME_DELAY:      71,  // long_time_delay_tr
+  LONG_TIME_PICKUP:     72,  // long_time_ir
+  SHORT_TIME_DELAY:     97,  // short_time_delay_tsd
+  SHORT_TIME_PICKUP:    98,  // short_time_pickup_isd
+  TRIP_MODEL:           103, // trip_unit_model; also drives protection_unit_fitted
+} as const
+
+/** Treat "No micrologic installed", "N/A", and blanks as null. */
+function cleanProtection(val: unknown): string | null {
+  if (!val) return null
+  const s = String(val).trim()
+  if (!s || s.toLowerCase().startsWith('no micrologic') || s.toUpperCase() === 'N/A') return null
+  return s
+}
+
+/** "NW32 H1" → "H1". Returns null if suffix isn't a recognised code. */
+function extractPerformanceLevel(model: unknown): string | null {
+  if (!model) return null
+  const parts = String(model).trim().split(/\s+/)
+  const last = parts[parts.length - 1]?.toUpperCase() ?? ''
+  const valid = ['N1', 'H1', 'H2', 'H3', 'L1', 'HF']
+  return valid.includes(last) ? last : null
+}
+
+/** "AIR CIRCUIT BREAKER" → "ACB", "MOLDED CASE …" → "MCCB", etc. */
+function mapBreakerType(construction: unknown): string | null {
+  if (!construction) return null
+  const s = String(construction).toUpperCase()
+  if (s.includes('AIR CIRCUIT') || s.startsWith('ACB')) return 'ACB'
+  if (s.includes('MOLDED CASE') || s.includes('MOULDED CASE') || s.startsWith('MCCB')) return 'MCCB'
+  if (s.includes('INSULATED CASE') || s.startsWith('ICB')) return 'ICB'
+  return String(construction).trim()
+}
+
+/** "DRAWOUT" → "Withdrawable", "FIXED" → "Fixed" */
+function mapMount(mount: unknown): string | null {
+  if (!mount) return null
+  const s = String(mount).toUpperCase()
+  if (s === 'DRAWOUT' || s === 'DRAW-OUT') return 'Withdrawable'
+  if (s === 'FIXED') return 'Fixed'
+  return String(mount).trim()
+}
+
+/** Read a cell value from a row by 1-indexed column number. */
+function cellVal(row: exceljs.Row, colIndex: number): string | null {
+  const c = row.getCell(colIndex)
+  const v = c?.value
+  if (v === null || v === undefined) return null
+  if (typeof v === 'object' && 'result' in v) return v.result != null ? String(v.result).trim() || null : null
+  if (typeof v === 'object' && v instanceof Date) return v.toISOString().split('T')[0]
+  return String(v).trim() || null
+}
+
+export interface MaximoParsePreview {
+  matched: number
+  unmatched: number
+  newTestsCreated: number
+  nameMismatches: Array<{ maximoId: string; eqName: string; maximoName: string }>
+}
+
+export interface MaximoImportRow {
+  asset_id: string
+  test_id: string
+  assetName: string
+  rowNumber: number
+  brand: string | null
+  breaker_type: string | null
+  name_location: string | null
+  cb_serial: string | null
+  performance_level: string | null
+  protection_unit_fitted: boolean | null
+  trip_unit_model: string | null
+  cb_poles: null
+  current_in: string | null
+  fixed_withdrawable: string | null
+  long_time_ir: string | null
+  long_time_delay_tr: string | null
+  short_time_pickup_isd: string | null
+  short_time_delay_tsd: string | null
+  instantaneous_pickup: string | null
+  earth_fault_pickup: string | null
+  earth_fault_delay: string | null
+  earth_leakage_pickup: null
+  earth_leakage_delay: null
+  motor_charge: string
+  shunt_trip_mx1: string
+  shunt_close_xf: string
+  undervoltage_mn: string
+  second_shunt_trip: string
+}
+
+/**
+ * Parse a Maximo XLSM file and match assets against EQ Service.
+ * Creates missing acb_tests rows, then returns a preview + the built rows.
+ * Does NOT write collection data — call importAcbCollectionAction with the
+ * rows after the user confirms.
+ */
+export async function parseMaximoXlsxAction(input: {
+  site_id: string
+  fileBuffer: number[]
+}): Promise<
+  | { success: true; preview: MaximoParsePreview; rows: MaximoImportRow[] }
+  | { success: false; error: string }
+> {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    if (!input.site_id) return { success: false, error: 'No site selected.' }
+    if (!input.fileBuffer || input.fileBuffer.length === 0) return { success: false, error: 'No file data received.' }
+
+    // ── 1. Read the XLSM ────────────────────────────────────────────────────
+    const wb = new Workbook()
+    await wb.xlsx.load(Buffer.from(input.fileBuffer) as unknown as ArrayBuffer)
+
+    const sheet = wb.worksheets[0]
+    if (!sheet) return { success: false, error: 'The file has no worksheets. Check it is a valid Maximo XLSM.' }
+
+    // Collect data rows (skip rows before MAXIMO_DATA_START)
+    type MaximoRow = { rowNum: number; row: exceljs.Row; assetId: string }
+    const maximoRows: MaximoRow[] = []
+    sheet.eachRow((row, rowNum) => {
+      if (rowNum < MAXIMO_DATA_START) return
+      const assetId = cellVal(row, MAXIMO_COL.ASSET_ID)
+      if (!assetId) return
+      maximoRows.push({ rowNum, row, assetId })
+    })
+
+    if (maximoRows.length === 0) {
+      return { success: false, error: 'No data rows found. Make sure this is the correct Maximo spreadsheet (header on row 12, data from row 13).' }
+    }
+
+    // ── 2. Match assets in EQ Service by maximo_id, scoped to this site ────
+    const maximoIds = maximoRows.map(r => r.assetId)
+
+    const { data: assets, error: assetErr } = await supabase
+      .from('assets')
+      .select('id, name, maximo_id, site_id')
+      .in('maximo_id', maximoIds)
+      .eq('site_id', input.site_id)
+      .eq('is_active', true)
+
+    if (assetErr) return { success: false, error: `Asset lookup failed: ${assetErr.message}` }
+
+    const assetByMaximoId = Object.fromEntries((assets ?? []).map(a => [a.maximo_id as string, a as { id: string; name: string; maximo_id: string; site_id: string }]))
+    const matched = assets?.length ?? 0
+    const unmatched = maximoIds.filter(id => !assetByMaximoId[id]).length
+
+    if (matched === 0) {
+      return { success: false, error: `No assets in this site matched any Maximo IDs in the file. Check you have the correct site selected and that assets have their Maximo ID set.` }
+    }
+
+    // ── 3. Look up existing acb_tests rows ──────────────────────────────────
+    const assetIds = (assets ?? []).map(a => a.id)
+    const { data: existingTests } = await supabase
+      .from('acb_tests')
+      .select('id, asset_id, step1_status')
+      .in('asset_id', assetIds)
+      .eq('is_active', true)
+
+    const testByAssetId: Record<string, { id: string; asset_id: string }> = Object.fromEntries(
+      (existingTests ?? []).map(t => [t.asset_id as string, t as { id: string; asset_id: string }])
+    )
+
+    // ── 4. Create missing acb_tests rows ────────────────────────────────────
+    const toCreate = assetIds
+      .filter(id => !testByAssetId[id])
+      .map(assetId => {
+        const asset = (assets ?? []).find(a => a.id === assetId)
+        return {
+          tenant_id: tenantId,
+          asset_id: assetId,
+          site_id: asset?.site_id ?? input.site_id,
+          test_date: new Date().toISOString().split('T')[0],
+          test_type: 'Initial',
+          overall_result: 'Pending',
+          step1_status: 'pending',
+          step2_status: 'pending',
+          step3_status: 'pending',
+          is_active: true,
+        }
+      })
+
+    let newTestsCreated = 0
+    if (toCreate.length > 0) {
+      const { data: created, error: createErr } = await supabase
+        .from('acb_tests')
+        .insert(toCreate)
+        .select('id, asset_id')
+
+      if (createErr) return { success: false, error: `Failed to create test records: ${createErr.message}` }
+      newTestsCreated = created?.length ?? 0
+      for (const t of (created ?? []) as { id: string; asset_id: string }[]) {
+        testByAssetId[t.asset_id] = t
+      }
+    }
+
+    // ── 5. Build import rows ─────────────────────────────────────────────────
+    const importRows: MaximoImportRow[] = []
+    const nameMismatches: MaximoParsePreview['nameMismatches'] = []
+
+    for (const { rowNum, row, assetId } of maximoRows) {
+      const asset = assetByMaximoId[assetId]
+      if (!asset) continue
+      const test = testByAssetId[asset.id]
+      if (!test) continue
+
+      const rawModel     = cellVal(row, MAXIMO_COL.MODEL_NO)
+      const rawTripModel = cellVal(row, MAXIMO_COL.TRIP_MODEL)
+      const tripModel    = cleanProtection(rawTripModel)
+      const protection   = tripModel !== null
+
+      const rawLtIr   = cleanProtection(cellVal(row, MAXIMO_COL.LONG_TIME_PICKUP))
+      const rawLtTr   = cleanProtection(cellVal(row, MAXIMO_COL.LONG_TIME_DELAY))
+      const rawStIsd  = cleanProtection(cellVal(row, MAXIMO_COL.SHORT_TIME_PICKUP))
+      const rawStTsd  = cleanProtection(cellVal(row, MAXIMO_COL.SHORT_TIME_DELAY))
+      const rawInstIi = cleanProtection(cellVal(row, MAXIMO_COL.INST_PICKUP))
+      const rawEfIg   = cleanProtection(cellVal(row, MAXIMO_COL.GROUND_FAULT_PICKUP))
+      const rawEfTg   = cleanProtection(cellVal(row, MAXIMO_COL.GROUND_FAULT_DELAY))
+
+      const maximoDesc = cellVal(row, MAXIMO_COL.ASSET_DESC)
+      if (maximoDesc && asset.name !== maximoDesc) {
+        nameMismatches.push({ maximoId: assetId, eqName: asset.name, maximoName: maximoDesc })
+      }
+
+      const rawAmpFrame = cellVal(row, MAXIMO_COL.AMP_FRAME)
+      const currentIn = rawAmpFrame ? String(rawAmpFrame).replace(/[^0-9]/g, '') || null : null
+
+      importRows.push({
+        asset_id:              asset.id,
+        test_id:               test.id,
+        assetName:             asset.name,
+        rowNumber:             rowNum,
+        brand:                 cellVal(row, MAXIMO_COL.MANUFACTURER),
+        breaker_type:          mapBreakerType(cellVal(row, MAXIMO_COL.BREAKER_CONSTRUCTION)),
+        name_location:         maximoDesc,
+        cb_serial:             cellVal(row, MAXIMO_COL.SERIAL_NO),
+        performance_level:     extractPerformanceLevel(rawModel),
+        protection_unit_fitted: protection,
+        trip_unit_model:       tripModel,
+        cb_poles:              null,
+        current_in:            currentIn,
+        fixed_withdrawable:    mapMount(cellVal(row, MAXIMO_COL.BREAKER_MOUNT)),
+        long_time_ir:          protection ? rawLtIr   : null,
+        long_time_delay_tr:    protection ? rawLtTr   : null,
+        short_time_pickup_isd: protection ? rawStIsd  : null,
+        short_time_delay_tsd:  protection ? rawStTsd  : null,
+        instantaneous_pickup:  protection ? rawInstIi : null,
+        earth_fault_pickup:    protection ? rawEfIg   : null,
+        earth_fault_delay:     protection ? rawEfTg   : null,
+        earth_leakage_pickup:  null,
+        earth_leakage_delay:   null,
+        motor_charge:          'Not installed',
+        shunt_trip_mx1:        'Not installed',
+        shunt_close_xf:        'Not installed',
+        undervoltage_mn:       'Not installed',
+        second_shunt_trip:     'Not installed',
+      })
+    }
+
+    await logAuditEvent({
+      action: 'import',
+      entityType: 'acb_test',
+      summary: `Maximo XLSM parsed: ${matched} matched, ${unmatched} unmatched, ${newTestsCreated} new tests created`,
+      metadata: { matched, unmatched, newTestsCreated },
+    })
+
+    return {
+      success: true,
+      preview: { matched, unmatched, newTestsCreated, nameMismatches },
+      rows: importRows,
+    }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message ?? 'Unknown error parsing file.' }
   }
 }

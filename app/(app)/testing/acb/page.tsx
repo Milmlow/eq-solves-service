@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { AcbWorkflow } from './AcbWorkflow'
 import { AcbSiteCollection } from './AcbSiteCollection'
+import { AcbMaximoImportModal } from './AcbMaximoImportModal'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight, Download, Upload, Plus } from 'lucide-react'
 import type { AcbTest, AcbTestReading, Asset } from '@/lib/types'
@@ -51,6 +52,7 @@ export default function AcbTestingPage() {
   const [creating, setCreating] = useState<string | null>(null)
   const [noAssets, setNoAssets] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [showMaximoImport, setShowMaximoImport] = useState(false)
   type ImportResultDetail = {
     updated: number
     failed: number
@@ -756,6 +758,14 @@ export default function AcbTestingPage() {
               <Button
                 size="sm"
                 variant="secondary"
+                onClick={() => setShowMaximoImport(true)}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Import from Maximo
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
                 onClick={handleExport}
               >
                 <Download className="w-4 h-4 mr-1" />
@@ -950,6 +960,18 @@ export default function AcbTestingPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {/* Maximo import modal */}
+      {showMaximoImport && selectedSite && (
+        <AcbMaximoImportModal
+          siteId={selectedSite}
+          onClose={() => setShowMaximoImport(false)}
+          onComplete={() => {
+            setShowMaximoImport(false)
+            loadSiteData()
+          }}
+        />
       )}
     </div>
   )
