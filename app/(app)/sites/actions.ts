@@ -6,6 +6,7 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin } from '@/lib/utils/roles'
 import { CreateSiteSchema, UpdateSiteSchema } from '@/lib/validations/site'
 import { zodToErrorMap } from '@/lib/utils/zodErrors'
+import { syncSite, siteExternalId, customerExternalId } from '@/lib/canonical-sync'
 
 export async function createSiteAction(formData: FormData) {
   try {
@@ -47,11 +48,32 @@ export async function createSiteAction(formData: FormData) {
     const logoUrl = (formData.get('logo_url') as string)?.trim() || null
     const logoUrlOnDark = (formData.get('logo_url_on_dark') as string)?.trim() || null
 
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from('sites')
       .insert({ ...parsed.data, photo_url: photoUrl, logo_url: logoUrl, logo_url_on_dark: logoUrlOnDark, tenant_id: tenantId })
+      .select('id, name, customer_id, address, city, state, postcode, country')
+      .single()
 
     if (error) return { success: false, error: error.message }
+
+    // Push to canonical — non-throwing, won't block on failure
+    // customer_id is a canonical UUID we may not have yet; pass external_customer_id
+    // so canonical-api can resolve it from our EQ Service customer ID.
+    const sync = await syncSite({
+      external_id:          siteExternalId(inserted.id),
+      name:                 inserted.name,
+      external_customer_id: inserted.customer_id ? customerExternalId(inserted.customer_id) : undefined,
+      address_line_1:       inserted.address ?? undefined,
+      suburb:               inserted.city ?? undefined,
+      state:                inserted.state ?? undefined,
+      postcode:             inserted.postcode ?? undefined,
+      country:              inserted.country ?? undefined,
+    })
+    if (sync.canonical_id) {
+      await supabase.from('sites')
+        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() })
+        .eq('id', inserted.id)
+    }
 
     await logAuditEvent({ action: 'create', entityType: 'site', summary: `Created site "${parsed.data.name}"` })
     revalidatePath('/sites')
@@ -104,6 +126,23 @@ export async function updateSiteAction(id: string, formData: FormData) {
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
+
+    // Push to canonical — non-throwing, won't block on failure
+    const sync = await syncSite({
+      external_id:          siteExternalId(id),
+      name:                 parsed.data.name,
+      external_customer_id: parsed.data.customer_id ? customerExternalId(parsed.data.customer_id) : undefined,
+      address_line_1:       parsed.data.address ?? undefined,
+      suburb:               parsed.data.city ?? undefined,
+      state:                parsed.data.state ?? undefined,
+      postcode:             parsed.data.postcode ?? undefined,
+      country:              parsed.data.country ?? undefined,
+    })
+    if (sync.canonical_id) {
+      await supabase.from('sites')
+        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() })
+        .eq('id', id)
+    }
 
     await logAuditEvent({ action: 'update', entityType: 'site', entityId: id, summary: 'Updated site' })
     revalidatePath('/sites')
@@ -206,9 +245,25 @@ export async function importSitesAction(
       country: r.country || 'Australia',
       tenant_id: tenantId,
     }))
-    const { error } = await supabase.from('sites').insert(insertRows)
+    const { data: created, error } = await supabase.from('sites').insert(insertRows).select('id, name, customer_id, address, city, state, postcode, country')
 
     if (error) return { success: false, error: error.message, imported: 0, rowErrors }
+
+    // Fire canonical syncs in background — don't await; won't block import response
+    void Promise.allSettled(
+      (created ?? []).map((s) =>
+        syncSite({
+          external_id:          siteExternalId(s.id),
+          name:                 s.name,
+          external_customer_id: s.customer_id ? customerExternalId(s.customer_id) : undefined,
+          address_line_1:       s.address ?? undefined,
+          suburb:               s.city ?? undefined,
+          state:                s.state ?? undefined,
+          postcode:             s.postcode ?? undefined,
+          country:              s.country ?? undefined,
+        })
+      )
+    )
 
     await logAuditEvent({ action: 'create', entityType: 'site', summary: `Imported ${validRows.length} sites from CSV` })
     revalidatePath('/sites')
@@ -230,6 +285,9 @@ export async function toggleSiteActiveAction(id: string, isActive: boolean) {
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
+
+    // Keep canonical active flag in sync
+    void syncSite({ external_id: siteExternalId(id), active: isActive })
 
     await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'site', entityId: id, summary: isActive ? 'Reactivated site' : 'Deactivated site' })
     revalidatePath('/sites')

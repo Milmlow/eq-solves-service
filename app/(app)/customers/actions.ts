@@ -6,6 +6,7 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin } from '@/lib/utils/roles'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '@/lib/validations/customer'
 import { zodToErrorMap } from '@/lib/utils/zodErrors'
+import { syncCustomer, customerExternalId } from '@/lib/canonical-sync'
 
 const LOGO_MAX_SIZE = 500 * 1024 // 500 KB
 const LOGO_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml']
@@ -36,11 +37,26 @@ export async function createCustomerAction(formData: FormData) {
     const logoUrl = (formData.get('logo_url') as string)?.trim() || null
     const logoUrlOnDark = (formData.get('logo_url_on_dark') as string)?.trim() || null
 
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from('customers')
       .insert({ ...parsed.data, logo_url: logoUrl, logo_url_on_dark: logoUrlOnDark, tenant_id: tenantId })
+      .select('id, name, email, phone')
+      .single()
 
     if (error) return { success: false, error: error.message }
+
+    // Push to canonical — non-throwing, won't block on failure
+    const sync = await syncCustomer({
+      external_id: customerExternalId(inserted.id),
+      company_name: inserted.name,
+      email: inserted.email ?? undefined,
+      primary_phone: inserted.phone ?? undefined,
+    })
+    if (sync.canonical_id) {
+      await supabase.from('customers')
+        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() })
+        .eq('id', inserted.id)
+    }
 
     await logAuditEvent({ action: 'create', entityType: 'customer', summary: `Created customer "${parsed.data.name}"` })
     revalidatePath('/customers')
@@ -83,6 +99,19 @@ export async function updateCustomerAction(id: string, formData: FormData) {
 
     if (error) return { success: false, error: error.message }
 
+    // Push to canonical — non-throwing, won't block on failure
+    const sync = await syncCustomer({
+      external_id: customerExternalId(id),
+      company_name: parsed.data.name,
+      email: parsed.data.email ?? undefined,
+      primary_phone: parsed.data.phone ?? undefined,
+    })
+    if (sync.canonical_id) {
+      await supabase.from('customers')
+        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() })
+        .eq('id', id)
+    }
+
     await logAuditEvent({ action: 'update', entityType: 'customer', entityId: id, summary: `Updated customer` })
     revalidatePath('/customers')
     revalidatePath(`/customers/${id}`)
@@ -123,9 +152,21 @@ export async function importCustomersAction(
     }
 
     const insertRows = validRows.map((r) => ({ ...r, tenant_id: tenantId }))
-    const { error } = await supabase.from('customers').insert(insertRows)
+    const { data: created, error } = await supabase.from('customers').insert(insertRows).select('id, name, email, phone')
 
     if (error) return { success: false, error: error.message, imported: 0, rowErrors }
+
+    // Fire canonical syncs in background — don't await; won't block import response
+    void Promise.allSettled(
+      (created ?? []).map((c) =>
+        syncCustomer({
+          external_id: customerExternalId(c.id),
+          company_name: c.name,
+          email: c.email ?? undefined,
+          primary_phone: c.phone ?? undefined,
+        })
+      )
+    )
 
     await logAuditEvent({ action: 'create', entityType: 'customer', summary: `Imported ${validRows.length} customers from CSV` })
     revalidatePath('/customers')
@@ -146,6 +187,9 @@ export async function toggleCustomerActiveAction(id: string, isActive: boolean) 
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
+
+    // Keep canonical active flag in sync
+    void syncCustomer({ external_id: customerExternalId(id), active: isActive })
 
     await logAuditEvent({ action: isActive ? 'update' : 'delete', entityType: 'customer', entityId: id, summary: isActive ? 'Reactivated customer' : 'Deactivated customer' })
     revalidatePath('/customers')
