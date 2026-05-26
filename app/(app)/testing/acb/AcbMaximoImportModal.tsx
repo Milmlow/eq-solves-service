@@ -59,6 +59,16 @@ export function AcbMaximoImportModal({ siteId, onClose, onComplete }: Props) {
   // bulkApplyValue[key] = the "apply same value to all" input
   const [bulkApplyValue, setBulkApplyValue] = useState<Partial<Record<FieldKey, string>>>({})
 
+  // ── Derived: map of asset_id → rawModel for performance level hints ──────
+  const rawModelByAssetId = useMemo((): Record<string, string> => {
+    if (!preview) return {}
+    const map: Record<string, string> = {}
+    for (const m of preview.missingPerformanceLevel) {
+      if (m.rawModel) map[m.asset_id] = m.rawModel
+    }
+    return map
+  }, [preview])
+
   // ── Derived: which rows have blank values per askable field ───────────────
   const blanksByField = useMemo((): Partial<Record<FieldKey, MaximoImportRow[]>> => {
     const result: Partial<Record<FieldKey, MaximoImportRow[]>> = {}
@@ -113,16 +123,25 @@ export function AcbMaximoImportModal({ siteId, onClose, onComplete }: Props) {
       const existing = prev[key] ?? {}
       const next = { ...existing }
       for (const r of affected) {
+        // Only fill rows the user hasn't individually skipped — skips stay intact.
         if (!isSkipped(key, r.asset_id)) next[r.asset_id] = val
       }
       return { ...prev, [key]: next }
     })
-    // Clear individual skips when bulk-applying
-    setFieldSkipped(prev => ({ ...prev, [key]: new Set() }))
+    // Intentionally NOT clearing fieldSkipped: individually-skipped rows should
+    // stay skipped after a bulk-apply. Previously this wiped all skips, meaning
+    // a skipped row would silently get the bulk value on confirm.
   }
 
   // ── File upload ───────────────────────────────────────────────────────────
   async function handleFile(file: File) {
+    // Guard against exceeding Next.js's default 4 MB server-action body limit.
+    // An XLSM is serialised as a JSON number array (3–4× raw size), so a 1.5 MB
+    // file can produce a ~5 MB payload that triggers a cryptic 413 error.
+    if (file.size > 3.5 * 1024 * 1024) {
+      setError(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB — max ~3.5 MB). If your spreadsheet is larger, contact support.`)
+      return
+    }
     setFileName(file.name)
     setError(null)
     setStage('parsing')
@@ -179,7 +198,14 @@ export function AcbMaximoImportModal({ siteId, onClose, onComplete }: Props) {
     })
 
     // 3. Write collection data
-    if (finalRows.length === 0) { onComplete(); return }
+    if (finalRows.length === 0) {
+      // Nothing to write — show the done screen before calling onComplete so
+      // the modal doesn't get torn down while still in 'importing' stage.
+      setImportResult({ updated: 0, failed: 0 })
+      setStage('done')
+      onComplete()
+      return
+    }
     try {
       const result = await importAcbCollectionAction({ rows: finalRows })
       if (!result.success) { setError(result.error); setStage('review'); return }
@@ -221,7 +247,7 @@ export function AcbMaximoImportModal({ siteId, onClose, onComplete }: Props) {
         {stage === 'upload' && (
           <div className="space-y-4">
             <p className="text-sm text-eq-grey">
-              Upload the Maximo breaker spreadsheet for this site. Nothing is written until you confirm on the next screen.
+              Upload the Maximo breaker spreadsheet for this site. When the file is read, new test records are created for any breakers that don&apos;t have one yet. Collection data is written when you confirm on the next screen.
             </p>
             <p className="text-xs text-eq-grey bg-gray-50 rounded p-3 leading-relaxed">
               Expected format: Equinix IAM ADCS_V01 — header row 12, data from row 13. Assets are matched by Maximo ID.
@@ -383,9 +409,19 @@ export function AcbMaximoImportModal({ siteId, onClose, onComplete }: Props) {
                           <ScrollList>
                             {affected.map(r => {
                               const skipped = isSkipped(field.key, r.asset_id)
+                              // For performance_level, show the raw Maximo model
+                              // string so the user can infer the class manually.
+                              const hint = field.key === 'performance_level'
+                                ? rawModelByAssetId[r.asset_id]
+                                : undefined
                               return (
-                                <div key={r.asset_id} className={`px-3 py-2 flex items-center gap-3 ${skipped ? 'opacity-40' : ''}`}>
-                                  <span className="text-xs text-eq-ink flex-1 truncate min-w-0">{r.assetName}</span>
+                                <div key={r.asset_id} className={`px-3 py-2 flex items-start gap-3 ${skipped ? 'opacity-40' : ''}`}>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-xs text-eq-ink truncate block">{r.assetName}</span>
+                                    {hint && !skipped && (
+                                      <span className="text-xs text-eq-grey">Model: {hint}</span>
+                                    )}
+                                  </div>
                                   {!skipped && (
                                     <FieldInput
                                       fieldDef={field}
@@ -396,7 +432,7 @@ export function AcbMaximoImportModal({ siteId, onClose, onComplete }: Props) {
                                   )}
                                   <button
                                     onClick={() => toggleSkip(field.key, r.asset_id)}
-                                    className="text-xs text-eq-grey hover:text-eq-ink shrink-0"
+                                    className="text-xs text-eq-grey hover:text-eq-ink shrink-0 mt-0.5"
                                   >
                                     {skipped ? 'Undo skip' : 'Skip'}
                                   </button>

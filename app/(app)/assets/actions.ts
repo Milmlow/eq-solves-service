@@ -158,11 +158,12 @@ export async function bulkUpdateAssetNamesAction(
   updates: Array<{ id: string; name: string }>
 ): Promise<{ success: boolean; error?: string; updated: number }> {
   try {
-    const { supabase, role } = await requireUser()
+    const { supabase, tenantId, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.', updated: 0 }
     if (updates.length === 0) return { success: true, updated: 0 }
 
     let updated = 0
+    let firstDbError: string | undefined
     for (const { id, name } of updates) {
       const trimmed = name.trim()
       if (!trimmed) continue
@@ -170,7 +171,19 @@ export async function bulkUpdateAssetNamesAction(
         .from('assets')
         .update({ name: trimmed })
         .eq('id', id)
-      if (!error) updated++
+        // Belt-and-suspenders: RLS already scopes to tenant, but explicit
+        // tenant_id check ensures a stale/wrong id can never touch another
+        // tenant's assets even if RLS policy is mis-configured.
+        .eq('tenant_id', tenantId)
+      if (error) firstDbError = firstDbError ?? error.message
+      else updated++
+    }
+
+    // Surface failure if nothing was written — the caller (modal) checks
+    // success and blocks confirm if this returns false.
+    const attempted = updates.filter(u => u.name.trim()).length
+    if (updated === 0 && attempted > 0) {
+      return { success: false, error: firstDbError ?? 'No assets were updated.', updated: 0 }
     }
 
     revalidatePath('/assets')

@@ -81,20 +81,21 @@ export default function AcbTestingPage() {
         .select('id, name, code')
         .eq('is_active', true)
 
-      const e125Plan = (jobPlans ?? []).find(
+      const e125Plans = (jobPlans ?? []).filter(
         (jp) => jp.name === 'E1.25' || jp.code === 'LVACB'
       )
 
-      if (!e125Plan) {
+      if (e125Plans.length === 0) {
         setSites([])
         return
       }
 
       // 2. Get distinct site_ids that have active E1.25 assets
+      // Use .in() to handle the rare case of duplicate E1.25 plan records.
       const { data: assetRows } = await supabase
         .from('assets')
         .select('site_id')
-        .eq('job_plan_id', e125Plan.id)
+        .in('job_plan_id', e125Plans.map(p => p.id))
         .eq('is_active', true)
 
       const siteIds = [...new Set(
@@ -137,11 +138,11 @@ export default function AcbTestingPage() {
       .select('id, name, code')
       .eq('is_active', true)
 
-    const e125Plan = (jobPlans ?? []).find(
+    const e125Plans = (jobPlans ?? []).filter(
       (jp) => jp.name === 'E1.25' || jp.code === 'LVACB'
     )
 
-    if (!e125Plan) {
+    if (e125Plans.length === 0) {
       setNoAssets(true)
       setAssets([])
       setReadings({})
@@ -150,14 +151,15 @@ export default function AcbTestingPage() {
       return
     }
 
-    setJobPlanId(e125Plan.id)
+    // Use first match for display (check name preview); .in() covers duplicates.
+    setJobPlanId(e125Plans[0].id)
 
     // Fetch assets for this site assigned to E1.25
     const { data: assetsData } = await supabase
       .from('assets')
       .select('*')
       .eq('site_id', selectedSite)
-      .eq('job_plan_id', e125Plan.id)
+      .in('job_plan_id', e125Plans.map(p => p.id))
       .eq('is_active', true)
       .order('name')
 
