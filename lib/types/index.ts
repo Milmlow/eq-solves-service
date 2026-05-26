@@ -545,7 +545,7 @@ export type AcbTestType = 'Initial' | 'Routine' | 'Special'
 
 export type AcbTestResult = 'Pending' | 'Pass' | 'Fail' | 'Defect'
 
-export type AcbPerformanceLevel = 'N1' | 'H1' | 'H2' | 'H3' | 'L1'
+export type AcbPerformanceLevel = 'N1' | 'H1' | 'H2' | 'H3' | 'L1' | 'HF'
 export type AcbFixedWithdrawable = 'Fixed' | 'Withdrawable'
 
 export interface AcbTest {

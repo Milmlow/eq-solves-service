@@ -13,7 +13,7 @@ interface AcbSiteCollectionProps {
 }
 
 const VOLTAGE_OPTIONS = ['Not installed', '24V', '48V', '110V', '120V', '240V', 'Other'] as const
-const PERFORMANCE_LEVELS = ['N1', 'H1', 'H2', 'H3', 'L1'] as const
+const PERFORMANCE_LEVELS = ['N1', 'H1', 'H2', 'H3', 'L1', 'HF'] as const
 const POLES_OPTIONS = ['3', '4', 'Other'] as const
 
 type CollectionFormData = {
