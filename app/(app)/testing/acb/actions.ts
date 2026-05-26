@@ -641,7 +641,12 @@ export interface MaximoParsePreview {
   matched: number
   unmatched: number
   newTestsCreated: number
-  nameMismatches: Array<{ maximoId: string; eqName: string; maximoName: string }>
+  /** Assets where name differs between EQ Service and Maximo */
+  nameMismatches: Array<{ maximoId: string; assetId: string; eqName: string; maximoName: string }>
+  /** Maximo rows that had no matching asset in EQ Service for this site */
+  unmatchedDetails: Array<{ maximoId: string; maximoName: string | null }>
+  /** Rows where performance level couldn't be detected from the model number */
+  missingPerformanceLevel: Array<{ asset_id: string; assetName: string; rawModel: string | null }>
 }
 
 export interface MaximoImportRow {
@@ -730,7 +735,16 @@ export async function parseMaximoXlsxAction(input: {
 
     const assetByMaximoId = Object.fromEntries((assets ?? []).map(a => [a.maximo_id as string, a as { id: string; name: string; maximo_id: string; site_id: string }]))
     const matched = assets?.length ?? 0
-    const unmatched = maximoIds.filter(id => !assetByMaximoId[id]).length
+    const unmatchedIds = maximoIds.filter(id => !assetByMaximoId[id])
+    const unmatched = unmatchedIds.length
+
+    // Build details for unmatched rows so the UI can show the user exactly
+    // which Maximo entries had no corresponding asset in EQ Service
+    const unmatchedDetails = unmatchedIds.map(maximoId => {
+      const srcRow = maximoRows.find(r => r.assetId === maximoId)
+      const maximoName = srcRow ? cellVal(srcRow.row, MAXIMO_COL.ASSET_DESC) : null
+      return { maximoId, maximoName }
+    })
 
     if (matched === 0) {
       return { success: false, error: `No assets in this site matched any Maximo IDs in the file. Check you have the correct site selected and that assets have their Maximo ID set.` }
@@ -784,6 +798,7 @@ export async function parseMaximoXlsxAction(input: {
     // ── 5. Build import rows ─────────────────────────────────────────────────
     const importRows: MaximoImportRow[] = []
     const nameMismatches: MaximoParsePreview['nameMismatches'] = []
+    const missingPerformanceLevel: MaximoParsePreview['missingPerformanceLevel'] = []
 
     for (const { rowNum, row, assetId } of maximoRows) {
       const asset = assetByMaximoId[assetId]
@@ -795,6 +810,7 @@ export async function parseMaximoXlsxAction(input: {
       const rawTripModel = cellVal(row, MAXIMO_COL.TRIP_MODEL)
       const tripModel    = cleanProtection(rawTripModel)
       const protection   = tripModel !== null
+      const perfLevel    = extractPerformanceLevel(rawModel)
 
       const rawLtIr   = cleanProtection(cellVal(row, MAXIMO_COL.LONG_TIME_PICKUP))
       const rawLtTr   = cleanProtection(cellVal(row, MAXIMO_COL.LONG_TIME_DELAY))
@@ -805,8 +821,15 @@ export async function parseMaximoXlsxAction(input: {
       const rawEfTg   = cleanProtection(cellVal(row, MAXIMO_COL.GROUND_FAULT_DELAY))
 
       const maximoDesc = cellVal(row, MAXIMO_COL.ASSET_DESC)
+
+      // Flag name differences so the UI can offer per-asset resolution
       if (maximoDesc && asset.name !== maximoDesc) {
-        nameMismatches.push({ maximoId: assetId, eqName: asset.name, maximoName: maximoDesc })
+        nameMismatches.push({ maximoId: assetId, assetId: asset.id, eqName: asset.name, maximoName: maximoDesc })
+      }
+
+      // Flag assets where no performance level could be detected from the model string
+      if (perfLevel === null) {
+        missingPerformanceLevel.push({ asset_id: asset.id, assetName: asset.name, rawModel })
       }
 
       const rawAmpFrame = cellVal(row, MAXIMO_COL.AMP_FRAME)
@@ -821,7 +844,7 @@ export async function parseMaximoXlsxAction(input: {
         breaker_type:          mapBreakerType(cellVal(row, MAXIMO_COL.BREAKER_CONSTRUCTION)),
         name_location:         maximoDesc,
         cb_serial:             cellVal(row, MAXIMO_COL.SERIAL_NO),
-        performance_level:     extractPerformanceLevel(rawModel),
+        performance_level:     perfLevel,
         protection_unit_fitted: protection,
         trip_unit_model:       tripModel,
         cb_poles:              null,
@@ -853,7 +876,7 @@ export async function parseMaximoXlsxAction(input: {
 
     return {
       success: true,
-      preview: { matched, unmatched, newTestsCreated, nameMismatches },
+      preview: { matched, unmatched, newTestsCreated, nameMismatches, unmatchedDetails, missingPerformanceLevel },
       rows: importRows,
     }
   } catch (e: unknown) {

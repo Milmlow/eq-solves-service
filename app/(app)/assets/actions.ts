@@ -148,3 +148,34 @@ export async function toggleAssetActiveAction(id: string, isActive: boolean) {
     return { success: false, error: (e as Error).message }
   }
 }
+
+/**
+ * Bulk-rename assets by ID. Used by the Maximo import review step when the
+ * user chooses to adopt Maximo names over the existing EQ Service names.
+ * Each update is a minimal patch — only `name` is touched.
+ */
+export async function bulkUpdateAssetNamesAction(
+  updates: Array<{ id: string; name: string }>
+): Promise<{ success: boolean; error?: string; updated: number }> {
+  try {
+    const { supabase, role } = await requireUser()
+    if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.', updated: 0 }
+    if (updates.length === 0) return { success: true, updated: 0 }
+
+    let updated = 0
+    for (const { id, name } of updates) {
+      const trimmed = name.trim()
+      if (!trimmed) continue
+      const { error } = await supabase
+        .from('assets')
+        .update({ name: trimmed })
+        .eq('id', id)
+      if (!error) updated++
+    }
+
+    revalidatePath('/assets')
+    return { success: true, updated }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message, updated: 0 }
+  }
+}
