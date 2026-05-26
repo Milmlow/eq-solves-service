@@ -688,7 +688,7 @@ export interface MaximoImportRow {
  */
 export async function parseMaximoXlsxAction(input: {
   site_id: string
-  fileBuffer: number[]
+  fileBase64: string
 }): Promise<
   | { success: true; preview: MaximoParsePreview; rows: MaximoImportRow[] }
   | { success: false; error: string }
@@ -698,11 +698,11 @@ export async function parseMaximoXlsxAction(input: {
     if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
     if (!input.site_id) return { success: false, error: 'No site selected.' }
-    if (!input.fileBuffer || input.fileBuffer.length === 0) return { success: false, error: 'No file data received.' }
+    if (!input.fileBase64) return { success: false, error: 'No file data received.' }
 
     // ── 1. Read the XLSM ────────────────────────────────────────────────────
     const wb = new Workbook()
-    await wb.xlsx.load(Buffer.from(input.fileBuffer) as unknown as ArrayBuffer)
+    await wb.xlsx.load(Buffer.from(input.fileBase64, 'base64') as unknown as ArrayBuffer)
 
     const sheet = wb.worksheets[0]
     if (!sheet) return { success: false, error: 'The file has no worksheets. Check it is a valid Maximo XLSM.' }

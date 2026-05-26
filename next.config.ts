@@ -19,6 +19,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  experimental: {
+    serverActions: {
+      // XLSM files arrive as base64 strings (1.33× raw size). 6 MB covers a
+      // ~4.5 MB spreadsheet and stays within Netlify's 6 MB function body limit.
+      bodySizeLimit: '6mb',
+    },
+  },
   async redirects() {
     return [
       // Phase 1 of the Testing simplification (2026-04-28). The legacy

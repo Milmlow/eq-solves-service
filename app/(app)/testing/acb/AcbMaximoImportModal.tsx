@@ -135,19 +135,25 @@ export function AcbMaximoImportModal({ siteId, onClose, onComplete }: Props) {
 
   // ── File upload ───────────────────────────────────────────────────────────
   async function handleFile(file: File) {
-    // Guard against exceeding Next.js's default 4 MB server-action body limit.
-    // An XLSM is serialised as a JSON number array (3–4× raw size), so a 1.5 MB
-    // file can produce a ~5 MB payload that triggers a cryptic 413 error.
-    if (file.size > 3.5 * 1024 * 1024) {
-      setError(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB — max ~3.5 MB). If your spreadsheet is larger, contact support.`)
+    // Base64 adds ~33% overhead. 6 MB raw → ~8 MB base64, but Netlify caps
+    // function bodies at 6 MB, so guard at ~4.5 MB raw to stay under the wire.
+    if (file.size > 4.5 * 1024 * 1024) {
+      setError(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB — max ~4.5 MB). If your spreadsheet is larger, contact support.`)
       return
     }
     setFileName(file.name)
     setError(null)
     setStage('parsing')
     try {
-      const fileBuffer = Array.from(new Uint8Array(await file.arrayBuffer()))
-      const result = await parseMaximoXlsxAction({ site_id: siteId, fileBuffer })
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      // Encode in chunks to avoid call-stack overflow on large files.
+      let binary = ''
+      const chunkSize = 8192
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+      }
+      const fileBase64 = btoa(binary)
+      const result = await parseMaximoXlsxAction({ site_id: siteId, fileBase64 })
       if (!result.success) { setError(result.error); setStage('upload'); return }
       setPreview(result.preview)
       setRows(result.rows)
