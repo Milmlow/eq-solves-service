@@ -24,13 +24,19 @@
  */
 
 import { readFile } from 'fs/promises'
+import { fileURLToPath } from 'url'
 import path from 'path'
-import { Workbook } from 'exceljs'
+import exceljs from 'exceljs'
+const { Workbook } = exceljs
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 
 // ── Load env ──────────────────────────────────────────────────────────────────
-dotenv.config({ path: '.env.local' })
+// fileURLToPath handles Windows drive letters correctly (avoids leading slash)
+const __filename = fileURLToPath(import.meta.url)
+const __dirname  = path.dirname(__filename)
+const envPath    = path.resolve(__dirname, '..', '.env.local')
+dotenv.config({ path: envPath })
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -43,11 +49,16 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
+// Usage: node tools/maximo-acb-import.mjs <spreadsheet.xlsm> [output.xlsx] [SITE_CODE]
+// SITE_CODE (e.g. SY7) restricts the asset lookup to one site, preventing
+// false matches when the same Maximo IDs appear on assets in multiple sites.
 const inputPath  = process.argv[2]
 const outputPath = process.argv[3] ?? 'maximo-acb-import-ready.xlsx'
+const siteCode   = process.argv[4] ?? null
 
 if (!inputPath) {
-  console.error('Usage: node tools/maximo-acb-import.mjs <spreadsheet.xlsm> [output.xlsx]')
+  console.error('Usage: node tools/maximo-acb-import.mjs <spreadsheet.xlsm> [output.xlsx] [SITE_CODE]')
+  console.error('Example: node tools/maximo-acb-import.mjs breakers.xlsm output.xlsx SY7')
   process.exit(1)
 }
 
@@ -185,11 +196,37 @@ async function main() {
   const maximoIds = maximoRows.map(r => r.assetId)
   console.log(`\nLooking up ${maximoIds.length} assets by maximo_id…`)
 
-  const { data: assets, error: assetErr } = await supabase
+  // If a site code was provided, resolve it to a site_id first so we only
+  // match assets from that site. Without this filter, the same Maximo ID
+  // can match assets from multiple sites (SY7, SY9x, SY1, CA1 etc.) and the
+  // wrong test records end up in the output file.
+  let siteIdFilter = null
+  if (siteCode) {
+    const { data: siteRow } = await supabase
+      .from('sites')
+      .select('id, name')
+      .eq('code', siteCode)
+      .maybeSingle()
+    if (!siteRow) {
+      console.error(`Site with code "${siteCode}" not found in EQ Service.`)
+      process.exit(1)
+    }
+    siteIdFilter = siteRow.id
+    console.log(`  Site filter: ${siteRow.name} (${siteCode})`)
+  } else {
+    console.warn('  ⚠  No site code provided — results may include assets from multiple sites.')
+    console.warn('     Re-run with a site code to scope correctly, e.g.: node tools/maximo-acb-import.mjs <file> output.xlsx SY7')
+  }
+
+  let assetQuery = supabase
     .from('assets')
     .select('id, name, maximo_id, site_id')
     .in('maximo_id', maximoIds)
     .eq('is_active', true)
+
+  if (siteIdFilter) assetQuery = assetQuery.eq('site_id', siteIdFilter)
+
+  const { data: assets, error: assetErr } = await assetQuery
 
   if (assetErr) {
     console.error('Asset lookup failed:', assetErr.message)

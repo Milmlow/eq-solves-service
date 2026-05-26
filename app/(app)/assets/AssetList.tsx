@@ -86,7 +86,7 @@ export function AssetList({ assets, allAssets, sites, customers, assetTypes, all
   const assetTypeFilterOptions = assetTypes.map((t) => ({ value: t, label: t }))
 
   const columns: DataTableColumn<AssetRow>[] = [
-    { key: 'maximo_id', header: 'Maximo ID', filterable: 'text' },
+    { key: 'maximo_id', header: 'Maximo ID' },
     { key: 'name', header: 'Name', filterable: 'text' },
     {
       key: 'site_name',

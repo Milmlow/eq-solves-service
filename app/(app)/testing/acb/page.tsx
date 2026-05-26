@@ -28,7 +28,7 @@ type SitePick = {
   customers?: { name?: string | null } | { name?: string | null }[] | null
 }
 
-const FREQUENCIES = ['Annual', 'Semi-Annual', 'Quarterly', 'Monthly'] as const
+const FREQUENCIES = ['Annual', '5 Yearly', 'Semi-Annual', 'Quarterly', 'Monthly'] as const
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -70,13 +70,46 @@ export default function AcbTestingPage() {
 
   const supabase = createClient()
 
-  // Load sites
+  // Load only sites that have at least one active E1.25 asset
   useEffect(() => {
     async function loadSites() {
+      // 1. Find the E1.25 / LVACB job plan
+      const { data: jobPlans } = await supabase
+        .from('job_plans')
+        .select('id, name, code')
+        .eq('is_active', true)
+
+      const e125Plan = (jobPlans ?? []).find(
+        (jp) => jp.name === 'E1.25' || jp.code === 'LVACB'
+      )
+
+      if (!e125Plan) {
+        setSites([])
+        return
+      }
+
+      // 2. Get distinct site_ids that have active E1.25 assets
+      const { data: assetRows } = await supabase
+        .from('assets')
+        .select('site_id')
+        .eq('job_plan_id', e125Plan.id)
+        .eq('is_active', true)
+
+      const siteIds = [...new Set(
+        (assetRows ?? []).map(a => a.site_id).filter(Boolean)
+      )] as string[]
+
+      if (siteIds.length === 0) {
+        setSites([])
+        return
+      }
+
+      // 3. Fetch only those sites
       const { data } = await supabase
         .from('sites')
         .select('id, name, code, customers(name)')
         .eq('is_active', true)
+        .in('id', siteIds)
         .order('name')
 
       setSites((data ?? []) as SitePick[])

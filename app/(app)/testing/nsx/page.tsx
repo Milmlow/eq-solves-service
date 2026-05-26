@@ -26,7 +26,7 @@ type SitePick = {
   customers?: { name?: string | null } | { name?: string | null }[] | null
 }
 
-const FREQUENCIES = ['Annual', 'Semi-Annual', 'Quarterly', 'Monthly'] as const
+const FREQUENCIES = ['Annual', '5 Yearly', 'Semi-Annual', 'Quarterly', 'Monthly'] as const
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
