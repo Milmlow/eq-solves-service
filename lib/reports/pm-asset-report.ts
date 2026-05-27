@@ -1698,8 +1698,12 @@ function buildBreakerTestDetail(
     ),
   }))
 
-  // Readings table
-  if (d.readings.length > 0) {
+  // Separate SI readings from other readings
+  const siReadings = d.readings.filter(r => r.label.startsWith('SI: '))
+  const otherReadings = d.readings.filter(r => !r.label.startsWith('SI: '))
+
+  // Readings table (non-SI)
+  if (otherReadings.length > 0) {
     children.push(new Paragraph({
       spacing: { before: 160, after: 60 },
       children: [new TextRun({
@@ -1722,7 +1726,7 @@ function buildBreakerTestDetail(
         makeHeaderCell('Pass / Fail', rPass, brand),
       ],
     })
-    const dataRows = d.readings.map((r) =>
+    const dataRows = otherReadings.map((r) =>
       new TableRow({
         children: [
           makeCell(r.label, rLabel, { size: 14 }),
@@ -1747,13 +1751,99 @@ function buildBreakerTestDetail(
       columnWidths: [rLabel, rValue, rUnit, rPass],
       rows: [headerRow, ...dataRows],
     }))
-  } else {
+  } else if (siReadings.length === 0) {
     children.push(new Paragraph({
       spacing: { before: 80, after: 80 },
       children: [new TextRun({
         text: 'No readings recorded — workflow steps not yet completed.',
         size: 14, font: FONT, color: EQ_MID_GREY, italics: true,
       })],
+    }))
+  }
+
+  // Secondary Injection — per-function table
+  if (siReadings.length > 0) {
+    children.push(new Paragraph({
+      spacing: { before: 200, after: 60 },
+      children: [new TextRun({
+        text: 'Secondary Injection — Protection Function Results',
+        bold: true, size: 16, font: FONT_HEADING, color: brand,
+      })],
+    }))
+
+    // Helper to extract a value from siReadings by exact label
+    const siVal = (label: string) =>
+      siReadings.find(r => r.label === label)?.value ?? '—'
+    const siPass = (label: string) => {
+      const r = siReadings.find(r => r.label === label)
+      if (!r) return null
+      return r.isPass === null ? null : r.isPass
+    }
+
+    const siLabelCol = 2800
+    const siValCols = Math.floor((CONTENT_WIDTH - siLabelCol) / 3)
+    const siTw = siLabelCol + siValCols * 3
+
+    const siHeaderRow = new TableRow({
+      tableHeader: true,
+      children: [
+        makeHeaderCell('', siLabelCol, brand),
+        makeHeaderCell('Long Time', siValCols, brand),
+        makeHeaderCell('Short Time', siValCols, brand),
+        makeHeaderCell('Instantaneous', siValCols, brand),
+      ],
+    })
+
+    type SiRowDef = {
+      label: string
+      ltKey: string
+      stKey: string
+      iiKey: string
+      isResult?: boolean
+    }
+
+    const siRows: SiRowDef[] = [
+      { label: 'Setting (Ir / Isd / Ii)', ltKey: 'SI: Long Time - Setting',        stKey: 'SI: Short Time - Setting',        iiKey: 'SI: Instantaneous - Setting' },
+      { label: 'Delay (tr / tsd)',         ltKey: 'SI: Long Time - Delay',           stKey: 'SI: Short Time - Delay',           iiKey: '' },
+      { label: 'Current Levels (A)',       ltKey: 'SI: Long Time - Current Levels (A)', stKey: 'SI: Short Time - Current Levels (A)', iiKey: 'SI: Instantaneous - Current Levels (A)' },
+      { label: 'Current Coefficient',      ltKey: 'SI: Long Time - Current Coefficient', stKey: 'SI: Short Time - Current Coefficient', iiKey: 'SI: Instantaneous - Current Coefficient' },
+      { label: 'Trip Time (s)',            ltKey: 'SI: Long Time - Trip Time (s)',    stKey: 'SI: Short Time - Trip Time (s)',    iiKey: 'SI: Instantaneous - Trip Time (s)' },
+      { label: 'Min Trip Time',            ltKey: 'SI: Long Time - Min Trip Time',   stKey: 'SI: Short Time - Min Trip Time',   iiKey: 'SI: Instantaneous - Min Trip Time' },
+      { label: 'Max Trip Time',            ltKey: 'SI: Long Time - Max Trip Time',   stKey: 'SI: Short Time - Max Trip Time',   iiKey: 'SI: Instantaneous - Max Trip Time' },
+      { label: 'Result',                   ltKey: 'SI: Long Time - Result',          stKey: 'SI: Short Time - Result',          iiKey: 'SI: Instantaneous - Result', isResult: true },
+    ]
+
+    const dataRows = siRows.map(row => {
+      const cells = [makeCell(row.label, siLabelCol, { bold: true, size: 14, color: EQ_MID_GREY })]
+
+      for (const key of [row.ltKey, row.stKey, row.iiKey]) {
+        if (!key) {
+          // Instantaneous has no delay
+          cells.push(makeCell('—', siValCols, { size: 14, align: AlignmentType.CENTER, color: EQ_MID_GREY }))
+          continue
+        }
+        if (row.isResult) {
+          const pass = siPass(key)
+          const label = pass === true ? 'PASS' : pass === false ? 'FAIL' : '—'
+          cells.push(makeCell(label, siValCols, {
+            size: 14,
+            bold: pass !== null,
+            align: AlignmentType.CENTER,
+            shading: pass === true ? 'E8F5E9' : pass === false ? 'FFEBEE' : undefined,
+            color: pass === true ? STATUS_PASS : pass === false ? STATUS_FAIL : undefined,
+          }))
+        } else {
+          cells.push(makeCell(siVal(key), siValCols, { size: 14, align: AlignmentType.CENTER }))
+        }
+      }
+
+      return new TableRow({ children: cells })
+    })
+
+    children.push(new Table({
+      width: { size: siTw, type: WidthType.DXA },
+      columnWidths: [siLabelCol, siValCols, siValCols, siValCols],
+      rows: [siHeaderRow, ...dataRows],
     }))
   }
 

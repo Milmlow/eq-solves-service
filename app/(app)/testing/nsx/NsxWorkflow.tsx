@@ -37,6 +37,12 @@ import {
   saveNsxElectricalReadingAction,
   raiseNsxTestDefectAction,
 } from '@/app/(app)/testing/nsx/actions'
+import {
+  SecondaryInjectionTable,
+  loadSiFunction,
+  siToReadings,
+  type SiFunctionData,
+} from '@/app/(app)/testing/components/SecondaryInjectionTable'
 
 type StepKey = 'step1' | 'step2' | 'step3'
 type StepStatus = 'pending' | 'in_progress' | 'complete'
@@ -556,15 +562,13 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
     return map
   })
 
-  // Secondary injection
-  const [secondaryInjection, setSecondaryInjection] = useState<'pass' | 'fail' | 'na'>(() => {
-    const r = readings.find(rd => rd.label === 'Electrical: Secondary Injection')
-    if (!r) return 'pass'
-    return r.is_pass === true ? 'pass' : r.is_pass === false ? 'fail' : 'na'
-  })
-  const [secondaryInjectionNotes, setSecondaryInjectionNotes] = useState(() => {
-    return readings.find(rd => rd.label === 'Electrical: Secondary Injection Notes')?.value || ''
-  })
+  // Secondary injection — structured per protection function
+  const [siLongTime, setSiLongTime] = useState<SiFunctionData>(() =>
+    loadSiFunction(readings, 'SI: Long Time - ', true))
+  const [siShortTime, setSiShortTime] = useState<SiFunctionData>(() =>
+    loadSiFunction(readings, 'SI: Short Time - ', true))
+  const [siInstantaneous, setSiInstantaneous] = useState<SiFunctionData>(() =>
+    loadSiFunction(readings, 'SI: Instantaneous - ', false))
 
   async function handleSave() {
     setError(null)
@@ -586,16 +590,10 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
       }
     }
 
-    // Secondary injection
-    allReadings.push({
-      label: 'Secondary Injection',
-      value: secondaryInjection.toUpperCase(),
-      unit: '',
-      is_pass: secondaryInjection === 'pass' ? true : secondaryInjection === 'fail' ? false : undefined,
-    })
-    if (secondaryInjectionNotes) {
-      allReadings.push({ label: 'Secondary Injection Notes', value: secondaryInjectionNotes, unit: '' })
-    }
+    // Secondary injection — structured per protection function
+    allReadings.push(...siToReadings(siLongTime, 'SI: Long Time - ', true))
+    allReadings.push(...siToReadings(siShortTime, 'SI: Short Time - ', true))
+    allReadings.push(...siToReadings(siInstantaneous, 'SI: Instantaneous - ', false))
 
     const result = await saveNsxElectricalReadingAction(test.id, allReadings)
     setLoading(false)
@@ -646,23 +644,17 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
 
       {/* Secondary Injection */}
       <div className="border-t pt-4">
-        <h3 className="font-medium text-eq-ink mb-3">Secondary Injection</h3>
-        <div className="space-y-3">
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-eq-grey w-16">Result</span>
-            <TriStateButton value={secondaryInjection} onChange={setSecondaryInjection} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-eq-grey mb-1">Test settings / results notes</label>
-            <textarea
-              value={secondaryInjectionNotes}
-              onChange={e => setSecondaryInjectionNotes(e.target.value)}
-              placeholder="e.g. Long time Ir=0.8×In trip 72s, Short time Isd=5×In trip 0.3s, Instantaneous 10×In instant..."
-              rows={3}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20 resize-y"
-            />
-          </div>
-        </div>
+        <h3 className="font-medium text-eq-ink mb-4">Secondary Injection</h3>
+        <SecondaryInjectionTable
+          longTime={siLongTime}
+          shortTime={siShortTime}
+          instantaneous={siInstantaneous}
+          onChange={(fn, data) => {
+            if (fn === 'longTime') setSiLongTime(data)
+            else if (fn === 'shortTime') setSiShortTime(data)
+            else setSiInstantaneous(data)
+          }}
+        />
       </div>
 
       <div className="flex gap-2 pt-2">

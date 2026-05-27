@@ -11,6 +11,12 @@ import {
 } from '@/app/(app)/testing/acb/actions'
 import { CheckCircle2, AlertCircle, Zap, Save, ClipboardList, Eye } from 'lucide-react'
 import type { AcbTest, AcbTestReading } from '@/lib/types'
+import {
+  SecondaryInjectionTable,
+  loadSiFunction,
+  siToReadings,
+  type SiFunctionData,
+} from '@/app/(app)/testing/components/SecondaryInjectionTable'
 
 /* ─── Props ─── */
 interface AcbWorkflowProps {
@@ -592,12 +598,13 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
     return map
   })
 
-  // Secondary injection
-  const [secondaryInjection, setSecondaryInjection] = useState<'pass' | 'fail' | 'na'>(() => {
-    const r = readings.find(rd => rd.label === 'Electrical: Secondary Injection')
-    if (!r) return 'pass'
-    return r.is_pass === true ? 'pass' : r.is_pass === false ? 'fail' : 'na'
-  })
+  // Secondary injection — structured per protection function
+  const [siLongTime, setSiLongTime] = useState<SiFunctionData>(() =>
+    loadSiFunction(readings, 'SI: Long Time - ', true))
+  const [siShortTime, setSiShortTime] = useState<SiFunctionData>(() =>
+    loadSiFunction(readings, 'SI: Short Time - ', true))
+  const [siInstantaneous, setSiInstantaneous] = useState<SiFunctionData>(() =>
+    loadSiFunction(readings, 'SI: Instantaneous - ', false))
 
   // Maintenance completion
   const [greasing, setGreasing] = useState<'pass' | 'fail' | 'na'>(() => {
@@ -653,13 +660,10 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
       }
     }
 
-    // Secondary injection
-    allReadings.push({
-      label: 'Secondary Injection',
-      value: secondaryInjection.toUpperCase(),
-      unit: '',
-      is_pass: secondaryInjection === 'pass' ? true : secondaryInjection === 'fail' ? false : undefined,
-    })
+    // Secondary injection — structured per protection function
+    allReadings.push(...siToReadings(siLongTime, 'SI: Long Time - ', true))
+    allReadings.push(...siToReadings(siShortTime, 'SI: Short Time - ', true))
+    allReadings.push(...siToReadings(siInstantaneous, 'SI: Instantaneous - ', false))
 
     // Maintenance completion
     allReadings.push({
@@ -750,8 +754,17 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
 
       {/* Secondary Injection */}
       <div className="border-t pt-4">
-        <h3 className="font-medium text-eq-ink mb-3">Secondary Injection Check</h3>
-        <TriStateButton value={secondaryInjection} onChange={setSecondaryInjection} />
+        <h3 className="font-medium text-eq-ink mb-4">Secondary Injection</h3>
+        <SecondaryInjectionTable
+          longTime={siLongTime}
+          shortTime={siShortTime}
+          instantaneous={siInstantaneous}
+          onChange={(fn, data) => {
+            if (fn === 'longTime') setSiLongTime(data)
+            else if (fn === 'shortTime') setSiShortTime(data)
+            else setSiInstantaneous(data)
+          }}
+        />
       </div>
 
       {/* Maintenance Completion */}
