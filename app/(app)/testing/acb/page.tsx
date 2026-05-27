@@ -65,6 +65,10 @@ export default function AcbTestingPage() {
   const [checkFrequency, setCheckFrequency] = useState<string>('Annual')
   const [checkMonth, setCheckMonth] = useState<number>(new Date().getMonth() + 1)
   const [checkYear, setCheckYear] = useState<number>(new Date().getFullYear())
+  const [checkStartDate, setCheckStartDate] = useState<string>('')
+  const [checkDueDate, setCheckDueDate] = useState<string>('')
+  const [checkAssignedTo, setCheckAssignedTo] = useState<string>('')
+  const [tenantMembers, setTenantMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
   const [creatingCheck, setCreatingCheck] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
@@ -118,6 +122,25 @@ export default function AcbTestingPage() {
       setSites((data ?? []) as SitePick[])
     }
     loadSites()
+  }, [])
+
+  // Load tenant members for the assignee dropdown
+  useEffect(() => {
+    async function loadMembers() {
+      const { data } = await supabase
+        .from('tenant_members')
+        .select('user_id, role, profiles(id, full_name, email)')
+        .eq('is_active', true)
+        .in('role', ['super_admin', 'admin', 'supervisor', 'technician'])
+        .order('role')
+      const members = (data ?? []).flatMap((m) => {
+        const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
+        if (!p) return []
+        return [{ id: m.user_id, full_name: (p as { full_name?: string | null }).full_name ?? null, email: (p as { email?: string | null }).email ?? null }]
+      })
+      setTenantMembers(members)
+    }
+    loadMembers()
   }, [])
 
   // Load E1.25 assets when site changes
@@ -370,12 +393,10 @@ export default function AcbTestingPage() {
     URL.revokeObjectURL(url)
   }
 
-  // Create Check handler — on success, route straight to the Testing Summary
-  // with the new check auto-expanded. Previously we silently closed the form
-  // and reloaded the asset list, which looked to Simon like "nothing happened".
   async function handleCreateCheck() {
     setCreatingCheck(true)
     setCheckError(null)
+    const monthDate = new Date(checkYear, checkMonth - 1, 1).toISOString().slice(0, 10)
     try {
       const result = await createTestingCheckAction({
         site_id: selectedSite,
@@ -385,11 +406,14 @@ export default function AcbTestingPage() {
         month: checkMonth,
         year: checkYear,
         asset_ids: Array.from(selectedAssetIds),
+        start_date: checkStartDate || monthDate,
+        due_date: checkDueDate || monthDate,
+        assigned_to: checkAssignedTo || undefined,
       })
       if (result.success && result.data?.checkId) {
         setShowCreateCheck(false)
         setSelectedAssetIds(new Set())
-        router.push(`/testing/summary?created=${result.data.checkId}`)
+        router.push(`/maintenance/${result.data.checkId}`)
         return
       }
       setCheckError(result.success ? 'Failed to create check.' : result.error)
@@ -607,6 +631,41 @@ export default function AcbTestingPage() {
                 className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
               >
                 {[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Start Date</label>
+              <input
+                type="date"
+                value={checkStartDate}
+                onChange={(e) => setCheckStartDate(e.target.value)}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Due Date</label>
+              <input
+                type="date"
+                value={checkDueDate}
+                onChange={(e) => setCheckDueDate(e.target.value)}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Assigned To</label>
+              <select
+                value={checkAssignedTo}
+                onChange={(e) => setCheckAssignedTo(e.target.value)}
+                className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
+              >
+                <option value="">Unassigned</option>
+                {tenantMembers.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.full_name || m.email || m.id}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

@@ -29,6 +29,9 @@ export async function createTestingCheckAction(input: {
   year: number
   asset_ids: string[]
   notes?: string
+  start_date?: string
+  due_date?: string
+  assigned_to?: string
 }, mutationId?: string) {
   return withIdempotency(mutationId, async () => {
     const { supabase, tenantId, user, role } = await requireUser()
@@ -83,10 +86,11 @@ export async function createTestingCheckAction(input: {
         custom_name: checkName,
         kind: input.check_type,
         frequency: input.frequency,
-        start_date: monthDate,
-        due_date: monthDate,
+        start_date: input.start_date ?? monthDate,
+        due_date: input.due_date ?? monthDate,
         status: 'scheduled',
         created_by: user.id,
+        assigned_to: input.assigned_to ?? null,
         notes: input.notes || null,
       })
       .select('id')
