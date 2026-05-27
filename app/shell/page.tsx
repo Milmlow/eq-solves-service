@@ -17,6 +17,12 @@ import { createClient } from '@/lib/supabase/client'
 
 type Status = 'loading' | 'error'
 
+function signalError(code: string) {
+  // Tell Shell (the parent frame) that sign-in failed so it can surface a
+  // proper error instead of waiting for a 45s load timeout.
+  window.parent.postMessage({ type: 'EQ_SERVICE_ERROR', code }, '*')
+}
+
 export default function ShellEntryPage() {
   const router = useRouter()
   const [status, setStatus] = useState<Status>('loading')
@@ -30,6 +36,7 @@ export default function ShellEntryPage() {
     const token = match?.[1] ? decodeURIComponent(match[1]) : undefined
 
     if (!token) {
+      signalError('no-token')
       setStatus('error')
       setErrMsg('No sign-in token found. Navigate here from EQ Shell.')
       return
@@ -52,6 +59,7 @@ export default function ShellEntryPage() {
 
         if (!res.ok) {
           if (body.error === 'service-account-not-found') {
+            signalError('service-account-not-found')
             setStatus('error')
             setErrMsg(
               "Your account isn't set up in EQ Service yet. Ask your admin to provision your access.",
@@ -59,16 +67,19 @@ export default function ShellEntryPage() {
             return
           }
           if (body.error === 'invalid-token') {
+            signalError('invalid-token')
             setStatus('error')
             setErrMsg('The sign-in link has expired. Go back to EQ Shell and try again.')
             return
           }
+          signalError('auth-failed')
           setStatus('error')
           setErrMsg('Something went wrong signing you in. Please try again.')
           return
         }
 
         if (!body.email || !body.otp) {
+          signalError('bad-response')
           setStatus('error')
           setErrMsg('Unexpected response from server. Please try again.')
           return
@@ -82,6 +93,7 @@ export default function ShellEntryPage() {
         })
 
         if (otpErr) {
+          signalError('otp-failed')
           setStatus('error')
           setErrMsg('Session setup failed — the sign-in link may have expired. Try again from EQ Shell.')
           return
@@ -90,6 +102,7 @@ export default function ShellEntryPage() {
         // Session established — redirect to the main app.
         router.replace('/')
       } catch {
+        signalError('network-error')
         setStatus('error')
         setErrMsg('Network error — please check your connection and try again.')
       }

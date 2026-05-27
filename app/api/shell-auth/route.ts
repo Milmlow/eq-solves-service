@@ -12,8 +12,8 @@
 // Security notes:
 // - HMAC signed with EQ_SECRET_SALT (same secret on both deploys).
 // - Token TTL is 60s — one-shot exchange, not a long-lived credential.
-// - generateLink() fails if the email is not in Service's auth.users.
-//   Users must be provisioned in Service before iframe access is possible.
+// - generateLink() auto-provisions the user if they don't exist yet — Shell's
+//   HMAC vouches for them, so Service creates the account on first access.
 // - OTP is single-use (Supabase invalidates on first verify) and TTL-bound.
 
 import { type NextRequest, NextResponse } from 'next/server'
@@ -80,18 +80,34 @@ export async function POST(req: NextRequest) {
 
   const supabase = createAdminClient()
 
-  // Generate a one-time magic link for the user. This validates that the
-  // email exists in Service's auth.users — if not, the call returns an error
-  // and we reject. Users must be provisioned in Service before iframe access.
-  const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+    // Generate a one-time magic link for the user. If they don't exist yet,
+  // auto-provision them — Shell has already verified their identity via HMAC,
+  // so Service should trust that voucher and create the account on first access.
+  let { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
     type: 'magiclink',
     email: payload.email,
   })
 
   if (linkErr || !linkData?.properties?.email_otp) {
+    // Auto-provision: create the user then retry. Ignore "already exists" errors
+    // since the user may exist but generateLink failed for a transient reason.
+    await supabase.auth.admin.createUser({
+      email: payload.email,
+      email_confirm: true,
+      user_metadata: payload.name ? { full_name: payload.name } : {},
+    })
+    const retry = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: payload.email,
+    })
+    linkData = retry.data
+    linkErr = retry.error
+  }
+
+  if (linkErr || !linkData?.properties?.email_otp) {
     return json(403, {
       error: 'service-account-not-found',
-      detail: 'This email is not registered in EQ Service. Ask your admin to provision your account.',
+      detail: 'Could not provision access for this account. Contact support.',
     })
   }
 
