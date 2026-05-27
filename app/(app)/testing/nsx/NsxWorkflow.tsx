@@ -47,40 +47,26 @@ interface NsxWorkflowProps {
   onUpdate: () => void | Promise<void>
 }
 
-/* ─── Visual & Functional item definitions (mirrors ACB) ─── */
+/* ─── Visual & Functional item definitions (NSX/MCCB-specific) ─── */
 const VISUAL_ITEMS = [
-  // Visual Inspection (4)
+  // Visual Inspection (3) — NSX are moulded-case; no serviceable arc chutes
   { label: 'General condition / cleanliness', section: 'Visual Inspection' },
-  { label: 'Arc chute condition', section: 'Visual Inspection' },
   { label: 'Main contact condition', section: 'Visual Inspection' },
   { label: 'Auxiliary contact condition', section: 'Visual Inspection' },
-  // Service Operations (3)
-  { label: 'Mechanism lubrication', section: 'Service Operations' },
-  { label: 'Racking mechanism operation', section: 'Service Operations' },
-  { label: 'Spring charging mechanism', section: 'Service Operations' },
-  // Functional Tests — Chassis (3)
-  { label: 'Chassis earthing contact', section: 'Functional Tests Chassis' },
-  { label: 'Shutter operation', section: 'Functional Tests Chassis' },
-  { label: 'Operations counter reading', section: 'Functional Tests Chassis', numeric: true },
-  // Functional Tests — Device (11)
-  { label: 'Manual close', section: 'Functional Tests Device' },
-  { label: 'Manual open (trip free)', section: 'Functional Tests Device' },
-  { label: 'Electrical close', section: 'Functional Tests Device' },
-  { label: 'Electrical open', section: 'Functional Tests Device' },
-  { label: 'Spring charge motor operation', section: 'Functional Tests Device' },
-  { label: 'Anti-pump function', section: 'Functional Tests Device' },
-  { label: 'Undervoltage release operation', section: 'Functional Tests Device' },
-  { label: 'Shunt trip operation', section: 'Functional Tests Device' },
-  { label: 'Closing solenoid operation', section: 'Functional Tests Device' },
-  { label: 'Position indication (open/closed)', section: 'Functional Tests Device' },
-  { label: 'Auxiliary switch operation', section: 'Functional Tests Device' },
-  // Auxiliaries (2)
-  { label: 'Motor charge spring function', section: 'Auxiliaries' },
-  { label: 'Communication module check', section: 'Auxiliaries' },
+  // Functional Tests (8) — racking/spring-charge/ops-counter not applicable to NSX
+  { label: 'Chassis earthing contact', section: 'Functional Tests' },
+  { label: 'Manual close operation', section: 'Functional Tests' },
+  { label: 'Manual open / trip free', section: 'Functional Tests' },
+  { label: 'Electrical close (if fitted)', section: 'Functional Tests' },
+  { label: 'Electrical open (if fitted)', section: 'Functional Tests' },
+  { label: 'Undervoltage release (if fitted)', section: 'Functional Tests' },
+  { label: 'Shunt trip operation (if fitted)', section: 'Functional Tests' },
+  { label: 'Position indication (open/closed)', section: 'Functional Tests' },
+  { label: 'Auxiliary switch operation (if fitted)', section: 'Functional Tests' },
 ]
 
-/* ─── Electrical test item definitions (mirrors ACB) ─── */
-const CONTACT_RESISTANCE_PHASES = ['Red', 'White', 'Blue', 'Neutral'] as const
+/* ─── Electrical test item definitions (NSX-specific) ─── */
+// Contact resistance removed — not typically performed on NSX/MCCB (Royce 2026-05-27)
 const IR_CLOSED_COMBOS = [
   'R-W', 'R-B', 'W-B',
   'R-E', 'W-E', 'B-E',
@@ -550,16 +536,6 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
   onUpdate: () => void | Promise<void>
   onFailDetected: () => void
 }) {
-  // Contact resistance
-  const [contactRes, setContactRes] = useState<Record<string, string>>(() => {
-    const map: Record<string, string> = {}
-    for (const phase of CONTACT_RESISTANCE_PHASES) {
-      const r = readings.find(rd => rd.label === `Electrical: Contact Resistance ${phase}`)
-      map[phase] = r?.value || ''
-    }
-    return map
-  })
-
   // IR Closed
   const [irClosed, setIrClosed] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {}
@@ -586,46 +562,15 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
     if (!r) return 'pass'
     return r.is_pass === true ? 'pass' : r.is_pass === false ? 'fail' : 'na'
   })
-
-  // Maintenance completion
-  const [greasing, setGreasing] = useState<'pass' | 'fail' | 'na'>(() => {
-    const r = readings.find(rd => rd.label === 'Electrical: Greasing')
-    if (!r) return 'pass'
-    return r.is_pass === true ? 'pass' : r.is_pass === false ? 'fail' : 'na'
+  const [secondaryInjectionNotes, setSecondaryInjectionNotes] = useState(() => {
+    return readings.find(rd => rd.label === 'Electrical: Secondary Injection Notes')?.value || ''
   })
-  const [opCounter, setOpCounter] = useState(() => {
-    const r = readings.find(rd => rd.label === 'Electrical: Op Counter')
-    return r?.value || ''
-  })
-  const [racking, setRacking] = useState<'pass' | 'fail' | 'na'>(() => {
-    const r = readings.find(rd => rd.label === 'Electrical: Racking')
-    if (!r) return 'pass'
-    return r.is_pass === true ? 'pass' : r.is_pass === false ? 'fail' : 'na'
-  })
-
-  // 30% variance warning for contact resistance — phases only (exclude Neutral)
-  const contactValues = (['Red', 'White', 'Blue'] as const)
-    .map(p => parseFloat(contactRes[p] ?? ''))
-    .filter(v => !isNaN(v))
-  const contactVarianceWarning = useMemo(() => {
-    if (contactValues.length < 2) return false
-    const avg = contactValues.reduce((a, b) => a + b, 0) / contactValues.length
-    if (avg === 0) return false
-    return contactValues.some(v => Math.abs(v - avg) / avg > 0.3)
-  }, [contactRes])
 
   async function handleSave() {
     setError(null)
     setLoading(true)
 
     const allReadings: Array<{ label: string; value: string; unit: string; is_pass?: boolean }> = []
-
-    // Contact Resistance
-    for (const phase of CONTACT_RESISTANCE_PHASES) {
-      if (contactRes[phase]) {
-        allReadings.push({ label: `Contact Resistance ${phase}`, value: contactRes[phase], unit: 'µΩ' })
-      }
-    }
 
     // IR Closed
     for (const combo of IR_CLOSED_COMBOS) {
@@ -648,23 +593,9 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
       unit: '',
       is_pass: secondaryInjection === 'pass' ? true : secondaryInjection === 'fail' ? false : undefined,
     })
-
-    // Maintenance completion
-    allReadings.push({
-      label: 'Greasing',
-      value: greasing.toUpperCase(),
-      unit: '',
-      is_pass: greasing === 'pass' ? true : greasing === 'fail' ? false : undefined,
-    })
-    if (opCounter) {
-      allReadings.push({ label: 'Op Counter', value: opCounter, unit: '' })
+    if (secondaryInjectionNotes) {
+      allReadings.push({ label: 'Secondary Injection Notes', value: secondaryInjectionNotes, unit: '' })
     }
-    allReadings.push({
-      label: 'Racking',
-      value: racking.toUpperCase(),
-      unit: '',
-      is_pass: racking === 'pass' ? true : racking === 'fail' ? false : undefined,
-    })
 
     const result = await saveNsxElectricalReadingAction(test.id, allReadings)
     setLoading(false)
@@ -679,33 +610,8 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
 
   return (
     <Card className="p-6 space-y-6">
-      {/* Contact Resistance */}
-      <div>
-        <h3 className="font-medium text-eq-ink mb-3">Contact Resistance (µΩ)</h3>
-        <div className="grid grid-cols-4 gap-3">
-          {CONTACT_RESISTANCE_PHASES.map(phase => (
-            <InputField
-              key={phase}
-              label={phase}
-              value={contactRes[phase]}
-              onChange={v => setContactRes(prev => ({ ...prev, [phase]: v }))}
-              placeholder="µΩ"
-              type="number"
-            />
-          ))}
-        </div>
-        {contactVarianceWarning && (
-          <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-md flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-700">
-              Contact resistance readings vary by more than 30% — investigate before proceeding.
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* IR Closed */}
-      <div className="border-t pt-4">
+      <div>
         <h3 className="font-medium text-eq-ink mb-3">Insulation Resistance — Closed (MΩ)</h3>
         <div className="grid grid-cols-3 gap-3">
           {IR_CLOSED_COMBOS.map(combo => (
@@ -740,31 +646,21 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
 
       {/* Secondary Injection */}
       <div className="border-t pt-4">
-        <h3 className="font-medium text-eq-ink mb-3">Secondary Injection Check</h3>
-        <TriStateButton value={secondaryInjection} onChange={setSecondaryInjection} />
-      </div>
-
-      {/* Maintenance Completion */}
-      <div className="border-t pt-4">
-        <h3 className="font-medium text-eq-ink mb-3">Maintenance Completion</h3>
+        <h3 className="font-medium text-eq-ink mb-3">Secondary Injection</h3>
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 border border-gray-200 rounded-md">
-            <label className="text-sm font-medium text-eq-ink">Greasing completed</label>
-            <TriStateButton value={greasing} onChange={setGreasing} />
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-eq-grey w-16">Result</span>
+            <TriStateButton value={secondaryInjection} onChange={setSecondaryInjection} />
           </div>
-          <div className="flex items-center justify-between p-3 border border-gray-200 rounded-md gap-4">
-            <label className="text-sm font-medium text-eq-ink">Operations counter</label>
-            <input
-              type="text"
-              value={opCounter}
-              onChange={e => setOpCounter(e.target.value)}
-              placeholder="Counter reading"
-              className="w-32 h-8 px-2 text-sm border border-gray-200 rounded text-center"
+          <div>
+            <label className="block text-xs font-medium text-eq-grey mb-1">Test settings / results notes</label>
+            <textarea
+              value={secondaryInjectionNotes}
+              onChange={e => setSecondaryInjectionNotes(e.target.value)}
+              placeholder="e.g. Long time Ir=0.8×In trip 72s, Short time Isd=5×In trip 0.3s, Instantaneous 10×In instant..."
+              rows={3}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20 resize-y"
             />
-          </div>
-          <div className="flex items-center justify-between p-3 border border-gray-200 rounded-md">
-            <label className="text-sm font-medium text-eq-ink">Racking in/out completed</label>
-            <TriStateButton value={racking} onChange={setRacking} />
           </div>
         </div>
       </div>

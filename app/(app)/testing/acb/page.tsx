@@ -68,6 +68,8 @@ export default function AcbTestingPage() {
   const [checkStartDate, setCheckStartDate] = useState<string>('')
   const [checkDueDate, setCheckDueDate] = useState<string>('')
   const [checkAssignedTo, setCheckAssignedTo] = useState<string>('')
+  const [customCheckName, setCustomCheckName] = useState<string>('')
+  const [assetFilter, setAssetFilter] = useState<string>('')
   const [tenantMembers, setTenantMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
   const [creatingCheck, setCreatingCheck] = useState(false)
@@ -409,10 +411,13 @@ export default function AcbTestingPage() {
         start_date: checkStartDate || monthDate,
         due_date: checkDueDate || monthDate,
         assigned_to: checkAssignedTo || undefined,
+        custom_name: customCheckName.trim() || undefined,
       })
       if (result.success && result.data?.checkId) {
         setShowCreateCheck(false)
         setSelectedAssetIds(new Set())
+        setCustomCheckName('')
+        setAssetFilter('')
         router.push(`/maintenance/${result.data.checkId}`)
         return
       }
@@ -566,9 +571,16 @@ export default function AcbTestingPage() {
 
   // ── Create Check view ──
   if (showCreateCheck && selectedSite) {
-    const availableAssets = assets.filter(isAssetAvailable)
+    const allAvailableAssets = assets.filter(isAssetAvailable)
     const inProgressAssets = assets.filter(a => !isAssetAvailable(a))
     const siteName = sites.find(s => s.id === selectedSite)?.name ?? 'Site'
+    const filterLower = assetFilter.toLowerCase()
+    const availableAssets = filterLower
+      ? allAvailableAssets.filter(a =>
+          a.name.toLowerCase().includes(filterLower) ||
+          (a.serial_number ?? '').toLowerCase().includes(filterLower)
+        )
+      : allAvailableAssets
 
     return (
       <div className="space-y-6">
@@ -669,11 +681,16 @@ export default function AcbTestingPage() {
               </select>
             </div>
           </div>
-          <div className="mt-3 p-3 bg-eq-ice rounded-md">
-            <p className="text-xs text-eq-grey">Check name preview:</p>
-            <p className="text-sm font-semibold text-eq-ink">
-              {siteName} {checkFrequency} {jobPlanId ? 'E1.25' : ''} {MONTHS[checkMonth - 1]} {checkYear}
-            </p>
+          <div className="mt-4">
+            <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Check Name</label>
+            <input
+              type="text"
+              value={customCheckName}
+              onChange={(e) => setCustomCheckName(e.target.value)}
+              placeholder={`${siteName} ${checkFrequency} ${jobPlanId ? 'E1.25' : ''} ${MONTHS[checkMonth - 1]} ${checkYear}`}
+              className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            />
+            <p className="text-xs text-eq-grey mt-1">Leave blank to use the auto-generated name above.</p>
           </div>
         </Card>
 
@@ -690,6 +707,15 @@ export default function AcbTestingPage() {
               </Button>
             </div>
           </div>
+          <div className="mb-3">
+            <input
+              type="text"
+              value={assetFilter}
+              onChange={(e) => setAssetFilter(e.target.value)}
+              placeholder="Filter by asset name or serial..."
+              className="w-full h-9 px-3 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            />
+          </div>
           {availableAssets.length === 0 && inProgressAssets.length > 0 && (
             <p className="text-sm text-eq-grey mb-3">All assets at this site have an in-progress test. Finish or archive them before starting a new check.</p>
           )}
@@ -700,7 +726,7 @@ export default function AcbTestingPage() {
                   <th className="text-left py-2 px-3 w-10">
                     <input
                       type="checkbox"
-                      checked={availableAssets.length > 0 && availableAssets.every(a => selectedAssetIds.has(a.id))}
+                      checked={allAvailableAssets.length > 0 && allAvailableAssets.every(a => selectedAssetIds.has(a.id))}
                       onChange={(e) => e.target.checked ? selectAllAssets() : deselectAllAssets()}
                       className="rounded border-gray-300"
                     />

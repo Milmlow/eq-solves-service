@@ -56,6 +56,8 @@ export default function NsxTestingPage() {
   const [checkStartDate, setCheckStartDate] = useState<string>('')
   const [checkDueDate, setCheckDueDate] = useState<string>('')
   const [checkAssignedTo, setCheckAssignedTo] = useState<string>('')
+  const [customCheckName, setCustomCheckName] = useState<string>('')
+  const [assetFilter, setAssetFilter] = useState<string>('')
   const [tenantMembers, setTenantMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
   const [creatingCheck, setCreatingCheck] = useState(false)
@@ -253,10 +255,13 @@ export default function NsxTestingPage() {
         start_date: checkStartDate || monthDate,
         due_date: checkDueDate || monthDate,
         assigned_to: checkAssignedTo || undefined,
+        custom_name: customCheckName.trim() || undefined,
       })
       if (result.success && result.data?.checkId) {
         setShowCreateCheck(false)
         setSelectedAssetIds(new Set())
+        setCustomCheckName('')
+        setAssetFilter('')
         router.push(`/maintenance/${result.data.checkId}`)
         return
       }
@@ -377,9 +382,16 @@ export default function NsxTestingPage() {
 
   // ── Create Check view ──
   if (showCreateCheck && selectedSite) {
-    const availableAssets = assets.filter(isAssetAvailable)
+    const allAvailableAssets = assets.filter(isAssetAvailable)
     const inProgressAssets = assets.filter((a) => !isAssetAvailable(a))
     const siteName = sites.find((s) => s.id === selectedSite)?.name ?? 'Site'
+    const filterLower = assetFilter.toLowerCase()
+    const availableAssets = filterLower
+      ? allAvailableAssets.filter(a =>
+          a.name.toLowerCase().includes(filterLower) ||
+          (a.serial_number ?? '').toLowerCase().includes(filterLower)
+        )
+      : allAvailableAssets
 
     return (
       <div className="space-y-6">
@@ -480,11 +492,16 @@ export default function NsxTestingPage() {
               </select>
             </div>
           </div>
-          <div className="mt-3 p-3 bg-eq-ice rounded-md">
-            <p className="text-xs text-eq-grey">Check name preview:</p>
-            <p className="text-sm font-semibold text-eq-ink">
-              {siteName} {checkFrequency} NSX {MONTHS[checkMonth - 1]} {checkYear}
-            </p>
+          <div className="mt-4">
+            <label className="block text-xs font-bold text-eq-grey uppercase mb-1">Check Name</label>
+            <input
+              type="text"
+              value={customCheckName}
+              onChange={(e) => setCustomCheckName(e.target.value)}
+              placeholder={`${siteName} ${checkFrequency} NSX ${MONTHS[checkMonth - 1]} ${checkYear}`}
+              className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            />
+            <p className="text-xs text-eq-grey mt-1">Leave blank to use the auto-generated name above.</p>
           </div>
         </Card>
 
@@ -501,6 +518,15 @@ export default function NsxTestingPage() {
               </Button>
             </div>
           </div>
+          <div className="mb-3">
+            <input
+              type="text"
+              value={assetFilter}
+              onChange={(e) => setAssetFilter(e.target.value)}
+              placeholder="Filter by asset name or serial..."
+              className="w-full h-9 px-3 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            />
+          </div>
           {availableAssets.length === 0 && inProgressAssets.length > 0 && (
             <p className="text-sm text-eq-grey mb-3">All assets at this site have an in-progress test. Finish or archive them before starting a new check.</p>
           )}
@@ -511,7 +537,7 @@ export default function NsxTestingPage() {
                   <th className="text-left py-2 px-3 w-10">
                     <input
                       type="checkbox"
-                      checked={availableAssets.length > 0 && availableAssets.every((a) => selectedAssetIds.has(a.id))}
+                      checked={allAvailableAssets.length > 0 && allAvailableAssets.every((a) => selectedAssetIds.has(a.id))}
                       onChange={(e) => e.target.checked ? selectAllAssets() : deselectAllAssets()}
                       className="rounded border-gray-300"
                     />
@@ -638,10 +664,6 @@ export default function NsxTestingPage() {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="text-left py-3 px-4 font-medium text-eq-grey">Asset</th>
-                    <th className="text-left py-3 px-4 font-medium text-eq-grey">Type</th>
-                    <th className="text-center py-3 px-4 font-medium text-eq-grey">Asset Collection</th>
-                    <th className="text-center py-3 px-4 font-medium text-eq-grey">Visual &amp; Functional</th>
-                    <th className="text-center py-3 px-4 font-medium text-eq-grey">Electrical</th>
                     <th className="text-center py-3 px-4 font-medium text-eq-grey">Progress</th>
                     <th className="text-right py-3 px-4 font-medium text-eq-grey">Action</th>
                   </tr>
@@ -658,13 +680,9 @@ export default function NsxTestingPage() {
                             <p className="text-xs text-eq-grey">{asset.serial_number}</p>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-eq-grey text-xs">{asset.asset_type}</td>
-                        <td className="py-3 px-4 text-center">{statusBadge('Collection', getStepStatus(test, 'step1'))}</td>
-                        <td className="py-3 px-4 text-center">{statusBadge('V&F', getStepStatus(test, 'step2'))}</td>
-                        <td className="py-3 px-4 text-center">{statusBadge('Electrical', getStepStatus(test, 'step3'))}</td>
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="flex items-center gap-2 justify-center">
+                            <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full transition-all ${
                                   progress === 100 ? 'bg-green-500' : progress > 0 ? 'bg-eq-sky' : 'bg-gray-200'
@@ -672,7 +690,7 @@ export default function NsxTestingPage() {
                                 style={{ width: `${progress}%` }}
                               />
                             </div>
-                            <span className="text-xs text-eq-grey w-8 text-right">{progress}%</span>
+                            <span className="text-xs text-eq-grey w-8">{progress}%</span>
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right">
