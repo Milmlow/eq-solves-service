@@ -1540,7 +1540,7 @@ function buildLinkedTestsSummary(input: PmAssetReportInput): (Paragraph | Table)
     children.push(new Paragraph({
       spacing: { after: 120 },
       children: [new TextRun({
-        text: 'Per-breaker identification and recorded readings. Visual / functional pass-fail entries collapse into reading rows; numerical readings keep their original units.',
+        text: 'Per-breaker detail across all three workflow steps: asset collection (identification & protection settings), visual & functional inspection, and electrical test readings.',
         size: 16, font: FONT, color: EQ_MID_GREY, italics: true,
       })],
     }))
@@ -1827,60 +1827,80 @@ function buildBreakerTestDetail(
     }))
   }
 
-  // Separate SI readings from other readings
+  // Split readings into three buckets by prefix
   const siReadings = d.readings.filter(r => r.label.startsWith('SI: '))
-  const otherReadings = d.readings.filter(r => !r.label.startsWith('SI: '))
+  const visualReadings = d.readings.filter(r => r.label.startsWith('Visual Check: '))
+  const electricalReadings = d.readings.filter(r => !r.label.startsWith('SI: ') && !r.label.startsWith('Visual Check: '))
 
-  // Readings table (non-SI)
-  if (otherReadings.length > 0) {
-    children.push(new Paragraph({
-      spacing: { before: 160, after: 60 },
-      children: [new TextRun({
-        text: 'Test Readings',
-        bold: true, size: 16, font: FONT_HEADING, color: brand,
-      })],
-    }))
+  // Helper: renders a 4-column pass/fail readings table
+  function makeReadingsTable(rows: BreakerTestReading[], stripPrefix: string): Table {
     const rLabel = 4500
     const rValue = 1900
     const rUnit = 1100
     const rPass = CONTENT_WIDTH - (rLabel + rValue + rUnit)
     const rTw = rLabel + rValue + rUnit + rPass
-
-    const headerRow = new TableRow({
-      tableHeader: true,
-      children: [
-        makeHeaderCell('Reading', rLabel, brand),
-        makeHeaderCell('Value', rValue, brand),
-        makeHeaderCell('Unit', rUnit, brand),
-        makeHeaderCell('Pass / Fail', rPass, brand),
-      ],
-    })
-    const dataRows = otherReadings.map((r) =>
-      new TableRow({
-        children: [
-          makeCell(r.label, rLabel, { size: 14 }),
-          makeCell(r.value || '—', rValue, { size: 14, bold: true, align: AlignmentType.CENTER }),
-          makeCell(r.unit ?? '—', rUnit, { size: 14, align: AlignmentType.CENTER, color: EQ_MID_GREY }),
-          makeCell(
-            r.isPass === null ? '—' : r.isPass ? 'Pass' : 'Fail',
-            rPass,
-            {
-              size: 14,
-              bold: r.isPass !== null,
-              align: AlignmentType.CENTER,
-              shading: r.isPass === true ? 'E8F5E9' : r.isPass === false ? 'FFEBEE' : undefined,
-              color: r.isPass === true ? STATUS_PASS : r.isPass === false ? STATUS_FAIL : undefined,
-            },
-          ),
-        ],
-      }),
-    )
-    children.push(new Table({
+    return new Table({
       width: { size: rTw, type: WidthType.DXA },
       columnWidths: [rLabel, rValue, rUnit, rPass],
-      rows: [headerRow, ...dataRows],
+      rows: [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            makeHeaderCell('Item', rLabel, brand),
+            makeHeaderCell('Value', rValue, brand),
+            makeHeaderCell('Unit', rUnit, brand),
+            makeHeaderCell('Pass / Fail', rPass, brand),
+          ],
+        }),
+        ...rows.map((r) =>
+          new TableRow({
+            children: [
+              makeCell(stripPrefix ? r.label.replace(stripPrefix, '') : r.label, rLabel, { size: 14 }),
+              makeCell(r.value || '—', rValue, { size: 14, bold: true, align: AlignmentType.CENTER }),
+              makeCell(r.unit ?? '—', rUnit, { size: 14, align: AlignmentType.CENTER, color: EQ_MID_GREY }),
+              makeCell(
+                r.isPass === null ? '—' : r.isPass ? 'Pass' : 'Fail',
+                rPass,
+                {
+                  size: 14,
+                  bold: r.isPass !== null,
+                  align: AlignmentType.CENTER,
+                  shading: r.isPass === true ? 'E8F5E9' : r.isPass === false ? 'FFEBEE' : undefined,
+                  color: r.isPass === true ? STATUS_PASS : r.isPass === false ? STATUS_FAIL : undefined,
+                },
+              ),
+            ],
+          }),
+        ),
+      ],
+    })
+  }
+
+  // ── Visual & Functional Inspection (step 2) ───────────────────────────────
+  if (visualReadings.length > 0) {
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      children: [new TextRun({
+        text: 'Visual & Functional Inspection',
+        bold: true, size: 16, font: FONT_HEADING, color: brand,
+      })],
     }))
-  } else if (siReadings.length === 0) {
+    children.push(makeReadingsTable(visualReadings, 'Visual Check: '))
+  }
+
+  // ── Electrical Test Readings (step 3) ─────────────────────────────────────
+  if (electricalReadings.length > 0) {
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      children: [new TextRun({
+        text: 'Electrical Test Readings',
+        bold: true, size: 16, font: FONT_HEADING, color: brand,
+      })],
+    }))
+    children.push(makeReadingsTable(electricalReadings, 'Electrical: '))
+  }
+
+  if (visualReadings.length === 0 && electricalReadings.length === 0 && siReadings.length === 0) {
     children.push(new Paragraph({
       spacing: { before: 80, after: 80 },
       children: [new TextRun({
