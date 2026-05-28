@@ -7,7 +7,7 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import { createNotification } from '@/lib/actions/notifications'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
-import { emitEvent } from '@/lib/canonical-sync'
+import { emitEvent, syncDefect, defectExternalId, assetExternalId, siteExternalId } from '@/lib/canonical-sync'
 import { firstRow } from '@/lib/db/relation'
 import {
   CreateMaintenanceCheckSchema,
@@ -1514,6 +1514,18 @@ export async function raiseDefectAction(data: {
       severity:  input.severity,
     })
 
+    // Canonical sync — fire-and-forget defect record.
+    void syncDefect({
+      external_id:        defectExternalId(insertedRows.id),
+      external_asset_id:  input.asset_id ? assetExternalId(input.asset_id) : undefined,
+      external_site_id:   input.site_id  ? siteExternalId(input.site_id)   : undefined,
+      title:              input.title.trim(),
+      description:        input.description?.trim() || undefined,
+      severity:           input.severity,
+      status:             'open',
+      raised_date:        new Date().toISOString().split('T')[0],
+    })
+
     await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${input.title}"` })
     revalidateMaintenanceSurfaces()
     return { success: true }
@@ -1577,14 +1589,29 @@ export async function updateDefectAction(defectId: string, updates: {
       void (async () => {
         const { data: defect } = await supabase
           .from('defects')
-          .select('site_id')
+          .select('site_id, asset_id')
           .eq('id', defectId)
           .maybeSingle()
         void emitEvent('defect.resolved', {
           defect_id: defectId,
           site_id: defect?.site_id ?? undefined,
         })
+        // Canonical sync — push updated status on resolve/close.
+        void syncDefect({
+          external_id:       defectExternalId(defectId),
+          external_asset_id: defect?.asset_id ? assetExternalId(defect.asset_id) : undefined,
+          external_site_id:  defect?.site_id  ? siteExternalId(defect.site_id)   : undefined,
+          status:            input.status,
+          severity:          input.severity,
+        })
       })()
+    } else if (input.status || input.severity) {
+      // Canonical sync for non-terminal status/severity changes (fire-and-forget).
+      void syncDefect({
+        external_id: defectExternalId(defectId),
+        status:      input.status,
+        severity:    input.severity,
+      })
     }
 
     await logAuditEvent({ action: 'update', entityType: 'defect', entityId: defectId, summary: `Updated defect: ${updates.status ? `status → ${updates.status}` : 'fields updated'}` })

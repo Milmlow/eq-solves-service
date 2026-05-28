@@ -94,13 +94,54 @@ export interface SiteSyncInput {
   active?:             boolean;
 }
 
+// Writable asset fields (PPM extension).
+export interface AssetSyncInput {
+  external_id:          string;   // required, e.g. "eq-service:asset:123"
+  name?:                string;
+  asset_type?:          string;
+  external_site_id?:    string;   // e.g. "eq-service:site:99"
+  location?:            string;
+  manufacturer?:        string;
+  model?:               string;
+  serial_number?:       string;
+  install_date?:        string;   // ISO date
+  condition?:           string;
+  criticality?:         string;
+  ppm_frequency?:       string;
+  active?:              boolean;
+}
+
+// Test result sync — fired when any test (RCD, ACB, NSX, test_record) saves.
+export interface TestResultSyncInput {
+  external_id:         string;    // required, e.g. "eq-service:rcd_test:abc"
+  external_asset_id?:  string;    // e.g. "eq-service:asset:123"
+  test_type:           string;    // "rcd" | "acb" | "nsx" | "thermal" | …
+  test_date?:          string;    // ISO date
+  pass_fail?:          'pass' | 'fail' | 'pending';
+  tested_by_name?:     string;
+  notes?:              string;
+}
+
+// Defect sync — fired when a defect is raised or updated.
+export interface DefectSyncInput {
+  external_id:         string;    // required, e.g. "eq-service:defect:abc"
+  external_asset_id?:  string;    // e.g. "eq-service:asset:123"
+  external_site_id?:   string;    // e.g. "eq-service:site:99"
+  title?:              string;
+  description?:        string;
+  severity?:           string;
+  status?:             string;
+  raised_date?:        string;    // ISO date
+  estimated_cost?:     number;
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Core request helper
 // ──────────────────────────────────────────────────────────────────────
 
 async function putCanonical(
-  resource: 'customers' | 'sites',
-  payload:  CustomerSyncInput | SiteSyncInput,
+  resource: 'customers' | 'sites' | 'assets' | 'asset_test_results' | 'asset_defects',
+  payload:  CustomerSyncInput | SiteSyncInput | AssetSyncInput | TestResultSyncInput | DefectSyncInput,
 ): Promise<CanonicalSyncResult> {
   if (!API_KEY) {
     // Not configured — skip silently in dev, warn in prod (guarded above).
@@ -175,6 +216,32 @@ export async function syncSite(input: SiteSyncInput): Promise<CanonicalSyncResul
   return putCanonical('sites', input);
 }
 
+/**
+ * Push an asset upsert to canonical. Call after asset create/update.
+ * Fire-and-forget pattern: `void syncAsset({ ... })` — never throws,
+ * never blocks the caller. Failures are logged to console.
+ */
+export async function syncAsset(input: AssetSyncInput): Promise<CanonicalSyncResult> {
+  return putCanonical('assets', input);
+}
+
+/**
+ * Push a test result upsert to canonical. Call when a test is saved as
+ * complete (RCD, ACB, NSX, or generic test_record).
+ * Fire-and-forget: `void syncTestResult({ ... })`
+ */
+export async function syncTestResult(input: TestResultSyncInput): Promise<CanonicalSyncResult> {
+  return putCanonical('asset_test_results', input);
+}
+
+/**
+ * Push a defect upsert to canonical. Call when a defect is raised or
+ * status-updated. Fire-and-forget: `void syncDefect({ ... })`
+ */
+export async function syncDefect(input: DefectSyncInput): Promise<CanonicalSyncResult> {
+  return putCanonical('asset_defects', input);
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Event emission — fire-and-forget canonical activity log
 // ──────────────────────────────────────────────────────────────────────
@@ -226,4 +293,46 @@ export function customerExternalId(serviceCustomerId: string | number): string {
  */
 export function siteExternalId(serviceSiteId: string | number): string {
   return `eq-service:site:${serviceSiteId}`;
+}
+
+/**
+ * Build the standard external_id for an EQ Service asset.
+ */
+export function assetExternalId(serviceAssetId: string | number): string {
+  return `eq-service:asset:${serviceAssetId}`;
+}
+
+/**
+ * Build the standard external_id for an RCD test.
+ */
+export function rcdTestExternalId(testId: string | number): string {
+  return `eq-service:rcd_test:${testId}`;
+}
+
+/**
+ * Build the standard external_id for an ACB test.
+ */
+export function acbTestExternalId(testId: string | number): string {
+  return `eq-service:acb_test:${testId}`;
+}
+
+/**
+ * Build the standard external_id for an NSX test.
+ */
+export function nsxTestExternalId(testId: string | number): string {
+  return `eq-service:nsx_test:${testId}`;
+}
+
+/**
+ * Build the standard external_id for a generic test record.
+ */
+export function testRecordExternalId(testId: string | number): string {
+  return `eq-service:test_record:${testId}`;
+}
+
+/**
+ * Build the standard external_id for a defect.
+ */
+export function defectExternalId(defectId: string | number): string {
+  return `eq-service:defect:${defectId}`;
 }
