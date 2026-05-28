@@ -161,12 +161,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppProviders>
     <div className="flex min-h-screen bg-gray-50" style={tenantStyle}>
       <NavigationProgress />
-      <Sidebar
-        isAdmin={isAdmin}
-        role={analyticsRole as Role | null}
-        settings={settings}
-        isShellIframe={isShellIframe}
-      />
+      {/* Shell owns the nav chrome when embedded — hide Service's sidebar */}
+      {!isShellIframe && (
+        <Sidebar
+          isAdmin={isAdmin}
+          role={analyticsRole as Role | null}
+          settings={settings}
+          isShellIframe={isShellIframe}
+        />
+      )}
       <div className="flex flex-1 min-w-0 flex-col">
         {isDemoSession && <DemoBanner shareUrl={demoShareUrl} />}
         {/* MFA grace banner (PR J §B.1 / §5.4) — visible reminder during
