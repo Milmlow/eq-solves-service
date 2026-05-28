@@ -1,17 +1,25 @@
 'use client'
 
+/**
+ * ACB Testing — home screen shows all ACB checks. Create Check sub-view
+ * lets you pick a site (filtered to E1.25/LVACB plan assets), use the
+ * Import / Export / Breaker Details tools, select breakers, and create
+ * a maintenance_check + acb_test rows.
+ *
+ * Tests are worked from /maintenance/[id] (Linked Tests panel → /testing/acb/[testId]).
+ */
+
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { AcbWorkflow } from './AcbWorkflow'
+import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { AcbSiteCollection } from './AcbSiteCollection'
 import { AcbMaximoImportModal } from './AcbMaximoImportModal'
-import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { CheckCircle2, Clock, ClipboardList, Play, ChevronRight, Download, Upload, Plus } from 'lucide-react'
+import { ClipboardList, Download, Upload, Plus, ChevronRight } from 'lucide-react'
 import type { AcbTest, AcbTestReading, Asset } from '@/lib/types'
-import { createAcbTestAction, updateAcbDetailsAction, importAcbCollectionAction } from '@/app/(app)/testing/acb/actions'
+import { updateAcbDetailsAction, importAcbCollectionAction } from '@/app/(app)/testing/acb/actions'
 import {
   exportAcbCollectionXlsx,
   parseAcbCollectionXlsx,
@@ -29,30 +37,66 @@ type SitePick = {
   customers?: { name?: string | null } | { name?: string | null }[] | null
 }
 
+type CheckRow = {
+  id: string
+  name: string
+  site_name: string
+  status: string
+  total_tests: number
+  complete_tests: number
+  due_date: string | null
+}
+
 const FREQUENCIES = ['Annual', '5 Yearly', 'Semi-Annual', 'Quarterly', 'Monthly'] as const
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ] as const
 
+const STATUS_STYLES: Record<string, string> = {
+  complete:    'bg-green-100 text-green-700',
+  in_progress: 'bg-amber-100 text-amber-700',
+  scheduled:   'bg-sky-100 text-sky-700',
+  cancelled:   'bg-gray-100 text-gray-500',
+}
+
 export default function AcbTestingPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const urlSiteId = searchParams.get('site_id') ?? ''
-  const urlAssetId = searchParams.get('asset_id') ?? ''
+  const supabase = createClient()
+
+  // ── Home view ──────────────────────────────────────────────────────────────
+  const [checks, setChecks] = useState<CheckRow[]>([])
+  const [checksLoading, setChecksLoading] = useState(true)
+
+  // ── Create Check sub-view ─────────────────────────────────────────────────
+  const [showCreateCheck, setShowCreateCheck] = useState(false)
+  const [showSiteCollection, setShowSiteCollection] = useState(false)
+  const [showMaximoImport, setShowMaximoImport] = useState(false)
 
   const [sites, setSites] = useState<SitePick[]>([])
-  const [selectedSite, setSelectedSite] = useState<string>(urlSiteId)
+  const [selectedSite, setSelectedSite] = useState('')
   const [assets, setAssets] = useState<(Asset & { acb_test?: AcbTest })[]>([])
   const [readings, setReadings] = useState<Record<string, AcbTestReading[]>>({})
-  const [selectedAsset, setSelectedAsset] = useState<string | null>(null)
-  const [showSiteCollection, setShowSiteCollection] = useState(false)
-  const [showCreateCheck, setShowCreateCheck] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [creating, setCreating] = useState<string | null>(null)
+  const [assetsLoading, setAssetsLoading] = useState(false)
   const [noAssets, setNoAssets] = useState(false)
+  const [jobPlanId, setJobPlanId] = useState<string | null>(null)
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
+  const [assetFilter, setAssetFilter] = useState('')
+  const [checkFrequency, setCheckFrequency] = useState('Annual')
+  const [checkMonth, setCheckMonth] = useState(new Date().getMonth() + 1)
+  const [checkYear, setCheckYear] = useState(new Date().getFullYear())
+  const [checkStartDate, setCheckStartDate] = useState('')
+  const [checkDueDate, setCheckDueDate] = useState('')
+  const [checkAssignedTo, setCheckAssignedTo] = useState('')
+  const [customCheckName, setCustomCheckName] = useState('')
+  const [tenantMembers, setTenantMembers] = useState<
+    { id: string; full_name: string | null; email: string | null }[]
+  >([])
+  const [creatingCheck, setCreatingCheck] = useState(false)
+  const [checkError, setCheckError] = useState<string | null>(null)
+
+  // Import state
   const [importing, setImporting] = useState(false)
-  const [showMaximoImport, setShowMaximoImport] = useState(false)
   type ImportResultDetail = {
     updated: number
     failed: number
@@ -61,27 +105,73 @@ export default function AcbTestingPage() {
     siteName: string
   }
   const [importResult, setImportResult] = useState<ImportResultDetail | null>(null)
-  // Create Check form state
-  const [checkFrequency, setCheckFrequency] = useState<string>('Annual')
-  const [checkMonth, setCheckMonth] = useState<number>(new Date().getMonth() + 1)
-  const [checkYear, setCheckYear] = useState<number>(new Date().getFullYear())
-  const [checkStartDate, setCheckStartDate] = useState<string>('')
-  const [checkDueDate, setCheckDueDate] = useState<string>('')
-  const [checkAssignedTo, setCheckAssignedTo] = useState<string>('')
-  const [customCheckName, setCustomCheckName] = useState<string>('')
-  const [assetFilter, setAssetFilter] = useState<string>('')
-  const [tenantMembers, setTenantMembers] = useState<{ id: string; full_name: string | null; email: string | null }[]>([])
-  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
-  const [creatingCheck, setCreatingCheck] = useState(false)
-  const [checkError, setCheckError] = useState<string | null>(null)
-  const [jobPlanId, setJobPlanId] = useState<string | null>(null)
 
-  const supabase = createClient()
+  // ── Load checks for home list ──────────────────────────────────────────────
+  async function loadChecks() {
+    setChecksLoading(true)
 
-  // Load only sites that have at least one active E1.25 asset
+    const { data: checksData } = await supabase
+      .from('maintenance_checks')
+      .select('id, custom_name, status, due_date, site_id')
+      .eq('kind', 'acb')
+      .eq('is_active', true)
+      .order('due_date', { ascending: false, nullsFirst: false })
+
+    if (!checksData || checksData.length === 0) {
+      setChecks([])
+      setChecksLoading(false)
+      return
+    }
+
+    // Site name map
+    const siteIds = [...new Set(checksData.map((c) => c.site_id as string).filter(Boolean))]
+    const { data: sitesData } = await supabase
+      .from('sites')
+      .select('id, name')
+      .in('id', siteIds)
+    const siteMap = Object.fromEntries((sitesData ?? []).map((s) => [s.id, s.name]))
+
+    // Test counts per check
+    const checkIds = checksData.map((c) => c.id as string)
+    const { data: testData } = await supabase
+      .from('acb_tests')
+      .select('check_id, step1_status, step2_status, step3_status')
+      .in('check_id', checkIds)
+      .eq('is_active', true)
+
+    const countMap = new Map<string, { total: number; complete: number }>()
+    for (const t of testData ?? []) {
+      const cid = t.check_id as string
+      if (!countMap.has(cid)) countMap.set(cid, { total: 0, complete: 0 })
+      const entry = countMap.get(cid)!
+      entry.total++
+      if (
+        t.step1_status === 'complete' &&
+        t.step2_status === 'complete' &&
+        t.step3_status === 'complete'
+      ) entry.complete++
+    }
+
+    setChecks(
+      checksData.map((c) => ({
+        id: c.id as string,
+        name: (c.custom_name as string | null) ?? '(unnamed check)',
+        site_name: siteMap[c.site_id as string] ?? '—',
+        status: (c.status as string) ?? 'scheduled',
+        total_tests: countMap.get(c.id as string)?.total ?? 0,
+        complete_tests: countMap.get(c.id as string)?.complete ?? 0,
+        due_date: c.due_date as string | null,
+      }))
+    )
+    setChecksLoading(false)
+  }
+
+  useEffect(() => { loadChecks() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Load E1.25-filtered sites (Create Check only) ─────────────────────────
   useEffect(() => {
-    async function loadSites() {
-      // 1. Find the E1.25 / LVACB job plan
+    if (!showCreateCheck) return
+    async function loadE125Sites() {
       const { data: jobPlans } = await supabase
         .from('job_plans')
         .select('id, name, code')
@@ -90,74 +180,58 @@ export default function AcbTestingPage() {
       const e125Plans = (jobPlans ?? []).filter(
         (jp) => jp.name === 'E1.25' || jp.code === 'LVACB'
       )
+      if (!e125Plans.length) { setSites([]); return }
 
-      if (e125Plans.length === 0) {
-        setSites([])
-        return
-      }
-
-      // 2. Get distinct site_ids that have active E1.25 assets
-      // Use .in() to handle the rare case of duplicate E1.25 plan records.
       const { data: assetRows } = await supabase
         .from('assets')
         .select('site_id')
-        .in('job_plan_id', e125Plans.map(p => p.id))
+        .in('job_plan_id', e125Plans.map((p) => p.id))
         .eq('is_active', true)
 
-      const siteIds = [...new Set(
-        (assetRows ?? []).map(a => a.site_id).filter(Boolean)
-      )] as string[]
+      const siteIds = [
+        ...new Set((assetRows ?? []).map((a) => a.site_id).filter(Boolean)),
+      ] as string[]
+      if (!siteIds.length) { setSites([]); return }
 
-      if (siteIds.length === 0) {
-        setSites([])
-        return
-      }
-
-      // 3. Fetch only those sites
       const { data } = await supabase
         .from('sites')
         .select('id, name, code, customers(name)')
         .eq('is_active', true)
         .in('id', siteIds)
         .order('name')
-
       setSites((data ?? []) as SitePick[])
     }
-    loadSites()
-  }, [])
+    loadE125Sites()
+  }, [showCreateCheck])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load tenant members for the assignee dropdown
+  // Load tenant members (Create Check only)
   useEffect(() => {
+    if (!showCreateCheck) return
     async function loadMembers() {
       const { data } = await supabase
         .from('tenant_members')
         .select('user_id, role, profiles(id, full_name, email)')
         .eq('is_active', true)
         .in('role', ['super_admin', 'admin', 'supervisor', 'technician'])
-        .order('role')
       const members = (data ?? []).flatMap((m) => {
         const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
         if (!p) return []
-        return [{ id: m.user_id, full_name: (p as { full_name?: string | null }).full_name ?? null, email: (p as { email?: string | null }).email ?? null }]
+        return [{
+          id: m.user_id,
+          full_name: (p as { full_name?: string | null }).full_name ?? null,
+          email: (p as { email?: string | null }).email ?? null,
+        }]
       })
       setTenantMembers(members)
     }
     loadMembers()
-  }, [])
+  }, [showCreateCheck])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load E1.25 assets when site changes
+  // Load E1.25 assets + latest tests for selected site
   const loadSiteData = useCallback(async () => {
-    if (!selectedSite) {
-      setAssets([])
-      setReadings({})
-      setSelectedAsset(null)
-      setNoAssets(false)
-      return
-    }
+    if (!selectedSite) { setAssets([]); setReadings({}); setNoAssets(false); return }
+    setAssetsLoading(true)
 
-    setLoading(true)
-
-    // Find the E1.25 / LVACB maintenance plan (global — site_id may be null)
     const { data: jobPlans } = await supabase
       .from('job_plans')
       .select('id, name, code')
@@ -167,24 +241,22 @@ export default function AcbTestingPage() {
       (jp) => jp.name === 'E1.25' || jp.code === 'LVACB'
     )
 
-    if (e125Plans.length === 0) {
+    if (!e125Plans.length) {
       setNoAssets(true)
       setAssets([])
       setReadings({})
       setJobPlanId(null)
-      setLoading(false)
+      setAssetsLoading(false)
       return
     }
 
-    // Use first match for display (check name preview); .in() covers duplicates.
     setJobPlanId(e125Plans[0].id)
 
-    // Fetch assets for this site assigned to E1.25
     const { data: assetsData } = await supabase
       .from('assets')
       .select('*')
       .eq('site_id', selectedSite)
-      .in('job_plan_id', e125Plans.map(p => p.id))
+      .in('job_plan_id', e125Plans.map((p) => p.id))
       .eq('is_active', true)
       .order('name')
 
@@ -192,18 +264,13 @@ export default function AcbTestingPage() {
       setNoAssets(true)
       setAssets([])
       setReadings({})
-      setLoading(false)
+      setAssetsLoading(false)
       return
     }
 
     setNoAssets(false)
-    const assetIds = assetsData.map(a => a.id)
-    const testsWithAssets: (Asset & { acb_test?: AcbTest })[] = []
+    const assetIds = assetsData.map((a) => a.id)
 
-    // Fetch tests newest-first so the per-asset Map holds the latest test per
-    // breaker — previous versions picked an arbitrary row, which caused the
-    // main list to stutter between historical and current tests after an
-    // asset had been run more than once.
     const { data: testsData } = await supabase
       .from('acb_tests')
       .select('*')
@@ -213,169 +280,92 @@ export default function AcbTestingPage() {
 
     const testMap = new Map<string, AcbTest>()
     for (const t of (testsData ?? []) as AcbTest[]) {
-      // First occurrence wins thanks to desc order — keeps the latest test.
       if (!testMap.has(t.asset_id)) testMap.set(t.asset_id, t)
     }
 
-    for (const asset of assetsData) {
-      testsWithAssets.push({
-        ...asset,
-        acb_test: testMap.get(asset.id),
-      })
-    }
+    const combined = assetsData.map((a) => ({
+      ...(a as Asset),
+      acb_test: testMap.get(a.id),
+    }))
 
-    // Fetch readings
-    const testIds = (testsData ?? []).map(t => t.id)
-    if (testIds.length > 0) {
+    // Readings map
+    const testIds = Array.from(testMap.values()).map((t) => t.id)
+    if (testIds.length) {
       const { data: readingsData } = await supabase
         .from('acb_test_readings')
         .select('*')
         .in('acb_test_id', testIds)
         .order('sort_order')
-
-      const readingsMap: Record<string, AcbTestReading[]> = {}
-      for (const rdg of readingsData ?? []) {
-        const key = rdg.acb_test_id as string
-        if (!readingsMap[key]) readingsMap[key] = []
-        readingsMap[key].push(rdg as AcbTestReading)
+      const rdgMap: Record<string, AcbTestReading[]> = {}
+      for (const r of readingsData ?? []) {
+        const key = r.acb_test_id as string
+        if (!rdgMap[key]) rdgMap[key] = []
+        rdgMap[key].push(r as AcbTestReading)
       }
-      setReadings(readingsMap)
+      setReadings(rdgMap)
     } else {
       setReadings({})
     }
 
-    setAssets(testsWithAssets)
-    setLoading(false)
+    setAssets(combined)
+    setAssetsLoading(false)
   }, [selectedSite, supabase])
 
-  useEffect(() => {
-    loadSiteData()
-  }, [selectedSite])
+  useEffect(() => { loadSiteData() }, [selectedSite])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Deep-link support: if the URL has ?asset_id=… and it matches a loaded
-  // asset, auto-select it so the Open button from /testing/summary lands
-  // directly inside the ACB workflow for that breaker. Only runs once per
-  // URL param, hence the guard on selectedAsset.
-  useEffect(() => {
-    if (!urlAssetId || selectedAsset || assets.length === 0) return
-    if (assets.some(a => a.id === urlAssetId)) {
-      setSelectedAsset(urlAssetId)
-    }
-  }, [urlAssetId, assets, selectedAsset])
-
-  // If URL has ?asset_id=… but no site_id, resolve the site from the asset
-  // and populate selectedSite so loadSiteData picks up the right list.
-  useEffect(() => {
-    if (!urlAssetId || selectedSite) return
-    (async () => {
-      const { data } = await supabase
-        .from('assets')
-        .select('site_id')
-        .eq('id', urlAssetId)
-        .single()
-      if (data?.site_id) setSelectedSite(data.site_id as string)
-    })()
-  }, [urlAssetId, selectedSite, supabase])
-
-  // Create test and open workflow
-  async function handleStartTest(asset: Asset) {
-    setCreating(asset.id)
-    const fd = new FormData()
-    fd.set('asset_id', asset.id)
-    fd.set('site_id', selectedSite)
-    fd.set('test_date', new Date().toISOString().slice(0, 10))
-    fd.set('test_type', 'Routine')
-
-    const result = await createAcbTestAction(fd)
-    setCreating(null)
-    if (result.success) {
-      await loadSiteData()
-      setSelectedAsset(asset.id)
-    }
-  }
-
-  // Excel export
+  // ── Import / Export ────────────────────────────────────────────────────────
   function handleExport() {
-    const siteName = sites.find(s => s.id === selectedSite)?.name ?? 'Site'
+    const siteName = sites.find((s) => s.id === selectedSite)?.name ?? 'Site'
     exportAcbCollectionXlsx(siteName, assets)
   }
 
-  // Excel import — parse client-side, push the whole batch to the server
-  // action which validates, runs as a single audited mutation, and returns
-  // per-row results so the UI can show exactly which rows failed and why.
   async function handleImport(file: File) {
     setImporting(true)
     setImportResult(null)
     const siteName = sites.find((s) => s.id === selectedSite)?.name ?? 'Site'
     try {
-      // Defence-in-depth file-size guard — the server can't introspect the
-      // raw file size cheaply once it has the parsed rows, so we catch the
-      // pathological case (50MB+ xlsx) at the browser before parsing.
       if (file.size > 10 * 1024 * 1024) {
         setImportResult({
-          updated: 0,
-          failed: 0,
-          parseErrors: [{ rowNumber: 0, reason: 'File is over 10MB — split the workbook into smaller files.' }],
-          rowResults: [],
-          siteName,
+          updated: 0, failed: 0,
+          parseErrors: [{ rowNumber: 0, reason: 'File is over 10 MB — split the workbook.' }],
+          rowResults: [], siteName,
         })
         return
       }
-
       const { rows: parsedRows, errors: parseErrors } = await parseAcbCollectionXlsx(file)
-
-      // Assemble the payload with row numbers + asset names from the parse
-      // so the server can echo them back in its row results.
       const assetIndex = new Map(assets.map((a) => [a.id, a.name]))
       const payloadRows = parsedRows.map((r, idx) => ({
         ...r,
-        // Excel rows are 1-based with row 1 = header; parser returned them
-        // in workbook order, but doesn't currently expose the row number.
-        // We approximate: header (1) + index + 1. Parse errors carry the
-        // true row number from the parser.
         rowNumber: idx + 2,
         assetName: assetIndex.get(r.asset_id) ?? null,
       }))
-
       const result = await importAcbCollectionAction({
         rows: payloadRows,
         mutationId: typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : null,
+          ? crypto.randomUUID() : null,
       })
-
       if (!result.success) {
         setImportResult({
-          updated: 0,
-          failed: parsedRows.length,
-          parseErrors,
+          updated: 0, failed: parsedRows.length, parseErrors,
           rowResults: payloadRows.map((r) => ({
-            test_id: r.test_id,
-            rowNumber: r.rowNumber,
-            assetName: r.assetName ?? undefined,
-            ok: false,
-            reason: result.error,
+            test_id: r.test_id, rowNumber: r.rowNumber,
+            assetName: r.assetName ?? undefined, ok: false, reason: result.error,
           })),
           siteName,
         })
       } else {
-        const data = result.data ?? { updated: 0, failed: 0, rowResults: [] }
+        const d = result.data ?? { updated: 0, failed: 0, rowResults: [] }
         setImportResult({
-          updated: data.updated,
-          failed: data.failed + parseErrors.length,
-          parseErrors,
-          rowResults: data.rowResults,
-          siteName,
+          updated: d.updated, failed: d.failed + parseErrors.length,
+          parseErrors, rowResults: d.rowResults, siteName,
         })
       }
       await loadSiteData()
     } catch (e) {
       setImportResult({
-        updated: 0,
-        failed: 1,
-        parseErrors: [{ rowNumber: 0, reason: e instanceof Error ? e.message : 'Unexpected error reading the file.' }],
-        rowResults: [],
-        siteName,
+        updated: 0, failed: 1,
+        parseErrors: [{ rowNumber: 0, reason: e instanceof Error ? e.message : 'Unexpected error.' }],
+        rowResults: [], siteName,
       })
     }
     setImporting(false)
@@ -414,98 +404,34 @@ export default function AcbTestingPage() {
         custom_name: customCheckName.trim() || undefined,
       })
       if (result.success && result.data?.checkId) {
-        setShowCreateCheck(false)
-        setSelectedAssetIds(new Set())
-        setCustomCheckName('')
-        setAssetFilter('')
         router.push(`/maintenance/${result.data.checkId}`)
         return
       }
-      setCheckError(result.success ? 'Failed to create check.' : result.error)
+      setCheckError(result.success ? 'Failed to create check.' : (result.error ?? null))
     } catch {
       setCheckError('An unexpected error occurred.')
     }
     setCreatingCheck(false)
   }
 
-  // Toggle asset selection for check
-  function toggleAssetSelection(assetId: string) {
+  function toggleAsset(id: string) {
     setSelectedAssetIds((prev) => {
       const next = new Set(prev)
-      if (next.has(assetId)) next.delete(assetId)
-      else next.add(assetId)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }
 
-  // An asset is "available" for a new check when it has no active test or
-  // its latest test is fully complete — completed tests are historical and
-  // shouldn't block re-running the breaker in a fresh maintenance event.
-  // Only an actively in-progress test blocks selection to avoid duplicate WIP.
-  function isTestComplete(t: AcbTest | undefined): boolean {
-    if (!t) return false
-    return (
-      t.step1_status === 'complete' &&
-      t.step2_status === 'complete' &&
-      t.step3_status === 'complete'
-    )
+  function selectAll() {
+    setSelectedAssetIds(new Set(assets.map((a) => a.id)))
   }
 
-  function isAssetAvailable(a: Asset & { acb_test?: AcbTest }): boolean {
-    return !a.acb_test || isTestComplete(a.acb_test)
-  }
-
-  function selectAllAssets() {
-    // Select every available asset — no active test or last test is complete.
-    const available = assets.filter(isAssetAvailable).map(a => a.id)
-    setSelectedAssetIds(new Set(available))
-  }
-
-  function deselectAllAssets() {
+  function deselectAll() {
     setSelectedAssetIds(new Set())
   }
 
-  const selectedAssetData = selectedAsset ? assets.find(a => a.id === selectedAsset) : null
-  const selectedTest = selectedAssetData?.acb_test
-
-  // Progress helpers
-  const getStepStatus = (test: AcbTest | undefined, step: 'step1' | 'step2' | 'step3') => {
-    if (!test) return 'not-started'
-    const status = test[`${step}_status` as keyof AcbTest] as string
-    return status === 'complete' ? 'complete' : status === 'in_progress' ? 'in-progress' : 'not-started'
-  }
-
-  const getOverallProgress = (test: AcbTest | undefined) => {
-    if (!test) return 0
-    let done = 0
-    if (test.step1_status === 'complete') done++
-    if (test.step2_status === 'complete') done++
-    if (test.step3_status === 'complete') done++
-    return Math.round((done / 3) * 100)
-  }
-
-  const statusBadge = (label: string, status: string) => {
-    const colors =
-      status === 'complete'
-        ? 'bg-green-100 text-green-700'
-        : status === 'in-progress'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-gray-100 text-gray-500'
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${colors}`}>
-        {status === 'complete' ? (
-          <CheckCircle2 className="w-3 h-3" />
-        ) : status === 'in-progress' ? (
-          <Clock className="w-3 h-3" />
-        ) : (
-          <div className="w-2 h-2 border border-current rounded-full" />
-        )}
-        {label}
-      </span>
-    )
-  }
-
-  // ── Site Collection view ──
+  // ── Site Collection sub-view ───────────────────────────────────────────────
   if (showSiteCollection && selectedSite) {
     return (
       <div className="space-y-6">
@@ -513,74 +439,32 @@ export default function AcbTestingPage() {
           <Breadcrumb
             items={[
               { label: 'Home', href: '/dashboard' },
-              { label: 'ACB Testing', href: '#' },
+              { label: 'ACB Testing', href: '/testing/acb' },
               { label: 'Asset Collection' },
             ]}
           />
-          <h2 className="text-3xl font-bold text-eq-sky mt-2">ACB Asset Collection</h2>
+          <h2 className="text-3xl font-bold text-eq-ink mt-2">ACB Asset Collection</h2>
           <p className="text-eq-grey text-sm mt-1">Site-level breaker identification and settings</p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => setShowSiteCollection(false)}>
-          Back to Asset List
+          Back to Create Check
         </Button>
-        <AcbSiteCollection
-          assets={assets}
-          onUpdate={loadSiteData}
-        />
+        <AcbSiteCollection assets={assets} onUpdate={loadSiteData} />
       </div>
     )
   }
 
-  // ── Workflow view (per-asset) ──
-  if (selectedAsset && selectedTest) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <Breadcrumb
-            items={[
-              { label: 'Home', href: '/dashboard' },
-              { label: 'ACB Testing', href: '#' },
-              { label: selectedAssetData?.name ?? 'Asset' },
-            ]}
-          />
-          <h2 className="text-3xl font-bold text-eq-sky mt-2">{selectedAssetData?.name}</h2>
-          <p className="text-eq-grey text-sm mt-1">3-step testing workflow</p>
-        </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            // Clear local selection AND strip asset_id from the URL. Without
-            // the URL clear the deep-link useEffect re-selects the asset the
-            // moment selectedAsset flips to null, so Back does nothing.
-            setSelectedAsset(null)
-            const qs = selectedSite ? `?site_id=${selectedSite}` : ''
-            router.replace(`/testing/acb${qs}`)
-          }}
-        >
-          Back to Asset List
-        </Button>
-        <AcbWorkflow
-          test={selectedTest}
-          readings={readings[selectedTest.id] ?? []}
-          onUpdate={loadSiteData}
-        />
-      </div>
-    )
-  }
-
-  // ── Create Check view ──
-  if (showCreateCheck && selectedSite) {
-    const allAvailableAssets = assets.filter(isAssetAvailable)
-    const inProgressAssets = assets.filter(a => !isAssetAvailable(a))
-    const siteName = sites.find(s => s.id === selectedSite)?.name ?? 'Site'
+  // ── Create Check sub-view ──────────────────────────────────────────────────
+  if (showCreateCheck) {
+    const siteName = sites.find((s) => s.id === selectedSite)?.name ?? 'Site'
     const filterLower = assetFilter.toLowerCase()
-    const availableAssets = filterLower
-      ? allAvailableAssets.filter(a =>
-          a.name.toLowerCase().includes(filterLower) ||
-          (a.serial_number ?? '').toLowerCase().includes(filterLower)
+    const filtered = filterLower
+      ? assets.filter(
+          (a) =>
+            a.name.toLowerCase().includes(filterLower) ||
+            (a.serial_number ?? '').toLowerCase().includes(filterLower)
         )
-      : allAvailableAssets
+      : assets
 
     return (
       <div className="space-y-6">
@@ -588,30 +472,141 @@ export default function AcbTestingPage() {
           <Breadcrumb
             items={[
               { label: 'Home', href: '/dashboard' },
-              { label: 'ACB Testing', href: '#' },
+              { label: 'ACB Testing', href: '/testing/acb' },
               { label: 'Create Check' },
             ]}
           />
-          <h2 className="text-3xl font-bold text-eq-sky mt-2">Create ACB Check</h2>
-          <p className="text-eq-grey text-sm mt-1">Group assets under a named maintenance check for {siteName}</p>
+          <h2 className="text-3xl font-bold text-eq-ink mt-2">Create ACB Check</h2>
+          <p className="text-eq-grey text-sm mt-1">
+            Select a site, pick the assets, then confirm to create the check.
+          </p>
         </div>
 
-        {/* Sticky action bar — Royce 2026-04-28: long asset lists meant the
-            Create button at the bottom forced scrolling all the way down to
-            confirm. This bar stays visible while you scroll through assets. */}
+        {/* Sticky action bar */}
         <div className="sticky top-0 z-10 -mx-4 lg:-mx-8 px-4 lg:px-8 py-2.5 bg-white/95 backdrop-blur-sm border-b border-gray-200 flex items-center justify-between gap-3">
           <Button
             onClick={handleCreateCheck}
-            disabled={creatingCheck || selectedAssetIds.size === 0}
+            disabled={creatingCheck || selectedAssetIds.size === 0 || !selectedSite}
           >
-            {creatingCheck ? 'Creating...' : `Create Check (${selectedAssetIds.size} assets)`}
+            {creatingCheck
+              ? 'Creating…'
+              : `Create Check (${selectedAssetIds.size} asset${selectedAssetIds.size !== 1 ? 's' : ''})`}
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setShowCreateCheck(false)}>
-            Back to Asset List
+            Cancel
           </Button>
         </div>
 
-        {/* Check Details */}
+        {/* Site selector + data tools */}
+        <Card>
+          <label className="block text-xs font-bold text-eq-grey uppercase mb-2">Site</label>
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={selectedSite}
+              onChange={(e) => {
+                setSelectedSite(e.target.value)
+                setSelectedAssetIds(new Set())
+                setImportResult(null)
+                setShowSiteCollection(false)
+              }}
+              className="flex-1 min-w-48 h-10 px-3 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+            >
+              <option value="">Choose a site…</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>{formatSiteLabel(s)}</option>
+              ))}
+            </select>
+            {selectedSite && assets.length > 0 && (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => document.getElementById('acb-import-file')?.click()}
+                  disabled={importing}
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  {importing ? 'Importing…' : 'Import'}
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setShowMaximoImport(true)}>
+                  <Upload className="w-4 h-4 mr-1" />
+                  Import from Maximo
+                </Button>
+                <Button size="sm" variant="secondary" onClick={handleExport}>
+                  <Download className="w-4 h-4 mr-1" />
+                  Export
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setShowSiteCollection(true)}>
+                  <ClipboardList className="w-4 h-4 mr-1" />
+                  Breaker Details
+                </Button>
+                <input
+                  id="acb-import-file"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleImport(file)
+                    e.target.value = ''
+                  }}
+                />
+              </>
+            )}
+          </div>
+
+          {importResult && (
+            <div
+              className={`mt-2 p-3 rounded-md text-sm space-y-2 ${
+                importResult.failed > 0
+                  ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                  : 'bg-green-50 border border-green-200 text-green-700'
+              }`}
+            >
+              <div className="font-semibold">
+                Import complete: {importResult.updated} updated
+                {importResult.failed > 0 ? `, ${importResult.failed} failed` : ''}
+              </div>
+              {importResult.failed > 0 && (
+                <>
+                  <ul className="list-disc list-inside text-xs space-y-0.5 max-h-32 overflow-y-auto">
+                    {importResult.parseErrors.slice(0, 5).map((e, i) => (
+                      <li key={`pe-${i}`}>
+                        Row {e.rowNumber}
+                        {(e as AcbParseRowError & { assetName?: string }).assetName
+                          ? ` (${(e as AcbParseRowError & { assetName?: string }).assetName})`
+                          : ''}: {e.reason}
+                      </li>
+                    ))}
+                    {importResult.rowResults
+                      .filter((r) => !r.ok)
+                      .slice(0, Math.max(0, 5 - importResult.parseErrors.length))
+                      .map((r) => (
+                        <li key={`rr-${r.test_id}-${r.rowNumber}`}>
+                          Row {r.rowNumber}
+                          {r.assetName ? ` (${r.assetName})` : ''}: {r.reason ?? 'Update failed'}
+                        </li>
+                      ))}
+                  </ul>
+                  {importResult.failed > 5 && (
+                    <p className="text-xs italic">
+                      …and {importResult.failed - 5} more. Download the report for the full list.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className="text-xs font-semibold underline hover:no-underline"
+                    onClick={downloadAcbImportErrorReport}
+                  >
+                    Download error report (CSV)
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </Card>
+
+        {/* Check details */}
         <Card>
           <h3 className="text-sm font-bold text-eq-ink mb-4">Check Details</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -622,7 +617,7 @@ export default function AcbTestingPage() {
                 onChange={(e) => setCheckFrequency(e.target.value)}
                 className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
               >
-                {FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
+                {FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>
             <div>
@@ -642,7 +637,9 @@ export default function AcbTestingPage() {
                 onChange={(e) => setCheckYear(Number(e.target.value))}
                 className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
               >
-                {[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+                {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -673,7 +670,7 @@ export default function AcbTestingPage() {
                 className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white"
               >
                 <option value="">Unassigned</option>
-                {tenantMembers.map(m => (
+                {tenantMembers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.full_name || m.email || m.id}
                   </option>
@@ -690,376 +687,181 @@ export default function AcbTestingPage() {
               placeholder={`${siteName} ${checkFrequency} ${jobPlanId ? 'E1.25' : ''} ${MONTHS[checkMonth - 1]} ${checkYear}`}
               className="w-full h-10 px-3 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
             />
-            <p className="text-xs text-eq-grey mt-1">Leave blank to use the auto-generated name above.</p>
+            <p className="text-xs text-eq-grey mt-1">Leave blank to use the auto-generated name.</p>
           </div>
         </Card>
 
-        {/* Asset Selection */}
-        <Card>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-eq-ink">Select Assets</h3>
-            <div className="flex gap-2">
-              <Button size="sm" variant="secondary" onClick={selectAllAssets}>
-                Select All Available
-              </Button>
-              <Button size="sm" variant="secondary" onClick={deselectAllAssets}>
-                Deselect All
-              </Button>
+        {/* Asset selection */}
+        {selectedSite && (
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-eq-ink">Select Assets</h3>
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={selectAll}>Select All</Button>
+                <Button size="sm" variant="secondary" onClick={deselectAll}>Deselect All</Button>
+              </div>
             </div>
+            <div className="mb-3">
+              <input
+                type="text"
+                value={assetFilter}
+                onChange={(e) => setAssetFilter(e.target.value)}
+                placeholder="Filter by name or serial…"
+                className="w-full h-9 px-3 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+              />
+            </div>
+            {assetsLoading ? (
+              <p className="text-sm text-eq-grey py-4 text-center">Loading assets…</p>
+            ) : noAssets ? (
+              <p className="text-sm text-eq-grey py-4 text-center">
+                No E1.25 assets at this site. Ensure assets are assigned to the E1.25 / LVACB plan.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left py-2 px-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={assets.length > 0 && assets.every((a) => selectedAssetIds.has(a.id))}
+                          onChange={(e) => (e.target.checked ? selectAll() : deselectAll())}
+                          className="rounded border-gray-300"
+                        />
+                      </th>
+                      <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Asset</th>
+                      <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Serial</th>
+                      <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Type</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((asset) => (
+                      <tr
+                        key={asset.id}
+                        className={`border-b border-gray-100 cursor-pointer transition-colors ${
+                          selectedAssetIds.has(asset.id) ? 'bg-eq-ice' : 'hover:bg-gray-50'
+                        }`}
+                        onClick={() => toggleAsset(asset.id)}
+                      >
+                        <td className="py-2 px-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedAssetIds.has(asset.id)}
+                            onChange={() => toggleAsset(asset.id)}
+                            className="rounded border-gray-300"
+                          />
+                        </td>
+                        <td className="py-2 px-3 font-medium text-eq-ink">{asset.name}</td>
+                        <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '—'}</td>
+                        <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {checkError && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+            {checkError}
           </div>
-          <div className="mb-3">
-            <input
-              type="text"
-              value={assetFilter}
-              onChange={(e) => setAssetFilter(e.target.value)}
-              placeholder="Filter by asset name or serial..."
-              className="w-full h-9 px-3 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
-            />
+        )}
+
+        {/* Maximo import modal */}
+        {showMaximoImport && selectedSite && (
+          <AcbMaximoImportModal
+            siteId={selectedSite}
+            onClose={() => setShowMaximoImport(false)}
+            onComplete={() => {
+              setShowMaximoImport(false)
+              loadSiteData()
+            }}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // ── Home view — checks list ─────────────────────────────────────────────────
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'ACB Testing' }]} />
+          <h2 className="text-3xl font-bold text-eq-ink mt-2">ACB Testing</h2>
+          <p className="text-eq-grey text-sm mt-1">Air circuit breaker test checks — E1.25 / LVACB</p>
+        </div>
+        <Button onClick={() => setShowCreateCheck(true)}>
+          <Plus className="w-4 h-4 mr-1" />
+          Create Check
+        </Button>
+      </div>
+
+      <Card className="overflow-hidden">
+        {checksLoading ? (
+          <div className="p-8 text-center text-eq-grey">Loading…</div>
+        ) : checks.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-eq-grey">No ACB checks yet.</p>
+            <p className="text-xs text-eq-grey mt-1">
+              Create a check to start recording test results.
+            </p>
           </div>
-          {availableAssets.length === 0 && inProgressAssets.length > 0 && (
-            <p className="text-sm text-eq-grey mb-3">All assets at this site have an in-progress test. Finish or archive them before starting a new check.</p>
-          )}
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left py-2 px-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={allAvailableAssets.length > 0 && allAvailableAssets.every(a => selectedAssetIds.has(a.id))}
-                      onChange={(e) => e.target.checked ? selectAllAssets() : deselectAllAssets()}
-                      className="rounded border-gray-300"
-                    />
-                  </th>
-                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Asset</th>
-                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Serial</th>
-                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Type</th>
-                  <th className="text-left py-2 px-3 text-xs font-bold text-eq-grey uppercase">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-bold text-eq-grey uppercase">Check</th>
+                  <th className="text-left py-3 px-4 text-xs font-bold text-eq-grey uppercase">Site</th>
+                  <th className="text-left py-3 px-4 text-xs font-bold text-eq-grey uppercase">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-bold text-eq-grey uppercase">Tests</th>
+                  <th className="text-left py-3 px-4 text-xs font-bold text-eq-grey uppercase">Due</th>
+                  <th className="py-3 px-4" />
                 </tr>
               </thead>
               <tbody>
-                {availableAssets.map(asset => {
-                  const hasComplete = isTestComplete(asset.acb_test)
-                  return (
-                    <tr
-                      key={asset.id}
-                      className={`border-b border-gray-100 cursor-pointer transition-colors ${selectedAssetIds.has(asset.id) ? 'bg-eq-ice' : 'hover:bg-gray-50'}`}
-                      onClick={() => toggleAssetSelection(asset.id)}
-                    >
-                      <td className="py-2 px-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedAssetIds.has(asset.id)}
-                          onChange={() => toggleAssetSelection(asset.id)}
-                          className="rounded border-gray-300"
-                        />
-                      </td>
-                      <td className="py-2 px-3 font-medium text-eq-ink">{asset.name}</td>
-                      <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
-                      <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
-                      <td className="py-2 px-3">
-                        {hasComplete ? (
-                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-50 text-green-700">Previous: Complete</span>
-                        ) : (
-                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-600">Available</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-                {inProgressAssets.map(asset => (
-                  <tr key={asset.id} className="border-b border-gray-100 opacity-50">
-                    <td className="py-2 px-3">
-                      <input type="checkbox" disabled className="rounded border-gray-300" />
+                {checks.map((check) => (
+                  <tr
+                    key={check.id}
+                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => router.push(`/maintenance/${check.id}`)}
+                  >
+                    <td className="py-3 px-4 font-medium text-eq-ink">{check.name}</td>
+                    <td className="py-3 px-4 text-eq-grey text-sm">{check.site_name}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          STATUS_STYLES[check.status] ?? 'bg-gray-100 text-gray-500'
+                        }`}
+                      >
+                        {check.status.replace('_', ' ')}
+                      </span>
                     </td>
-                    <td className="py-2 px-3 font-medium text-eq-grey">{asset.name}</td>
-                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.serial_number || '-'}</td>
-                    <td className="py-2 px-3 text-eq-grey text-xs">{asset.asset_type}</td>
-                    <td className="py-2 px-3">
-                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-50 text-amber-600">In Progress</span>
+                    <td className="py-3 px-4 text-eq-grey text-xs">
+                      {check.complete_tests}/{check.total_tests} complete
+                    </td>
+                    <td className="py-3 px-4 text-eq-grey text-xs">
+                      {check.due_date
+                        ? new Date(check.due_date).toLocaleDateString('en-AU', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : '—'}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <ChevronRight className="w-4 h-4 text-eq-grey inline" />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </Card>
-
-        {/* Create Button */}
-        {checkError && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">{checkError}</div>
-        )}
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={handleCreateCheck}
-            disabled={creatingCheck || selectedAssetIds.size === 0}
-          >
-            {creatingCheck ? 'Creating...' : `Create Check (${selectedAssetIds.size} assets)`}
-          </Button>
-          <Button variant="secondary" onClick={() => setShowCreateCheck(false)}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  // ── Main asset list view ──
-  return (
-    <div className="space-y-6">
-      <div>
-        <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'ACB Testing' }]} />
-        <h2 className="text-3xl font-bold text-eq-sky mt-2">ACB Testing Workflow</h2>
-        <p className="text-eq-grey text-sm mt-1">Site-based circuit breaker testing — E1.25 (LVACB) assets</p>
-      </div>
-
-      {/* Site Selector */}
-      <Card className="p-4">
-        <label className="block text-xs font-bold text-eq-grey uppercase mb-2">Select Site</label>
-        <div className="flex gap-2">
-          <select
-            value={selectedSite}
-            onChange={(e) => {
-              setSelectedSite(e.target.value)
-              setSelectedAsset(null)
-              setShowSiteCollection(false)
-            }}
-            className="flex-1 h-10 px-4 border border-gray-200 rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
-          >
-            <option value="">Choose a site...</option>
-            {sites.map(s => (
-              <option key={s.id} value={s.id}>{formatSiteLabel(s)}</option>
-            ))}
-          </select>
-          {selectedSite && assets.length > 0 && (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => document.getElementById('acb-import-file')?.click()}
-                disabled={importing}
-              >
-                <Upload className="w-4 h-4 mr-1" />
-                {importing ? 'Importing...' : 'Import'}
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setShowMaximoImport(true)}
-              >
-                <Upload className="w-4 h-4 mr-1" />
-                Import from Maximo
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleExport}
-              >
-                <Download className="w-4 h-4 mr-1" />
-                Export
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setShowSiteCollection(true)}
-              >
-                <ClipboardList className="w-4 h-4 mr-1" />
-                Breaker Details
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setShowCreateCheck(true)
-                  setSelectedAssetIds(new Set())
-                  setCheckError(null)
-                }}
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Create Check
-              </Button>
-              <input
-                id="acb-import-file"
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                disabled={importing}
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) handleImport(file)
-                  e.target.value = ''
-                }}
-              />
-            </>
-          )}
-        </div>
-        {importResult && (
-          <div className={`mt-2 p-3 rounded-md text-sm space-y-2 ${
-            importResult.failed > 0
-              ? 'bg-amber-50 border border-amber-200 text-amber-800'
-              : 'bg-green-50 border border-green-200 text-green-700'
-          }`}>
-            <div className="font-semibold">
-              Import complete: {importResult.updated} updated
-              {importResult.failed > 0 ? `, ${importResult.failed} failed` : ''}
-            </div>
-            {importResult.failed > 0 && (
-              <>
-                <ul className="list-disc list-inside text-xs space-y-0.5 max-h-32 overflow-y-auto">
-                  {importResult.parseErrors.slice(0, 5).map((e, i) => (
-                    <li key={`pe-${i}`}>
-                      Row {e.rowNumber}
-                      {e.assetName ? ` (${e.assetName})` : ''}: {e.reason}
-                    </li>
-                  ))}
-                  {importResult.rowResults
-                    .filter((r) => !r.ok)
-                    .slice(0, Math.max(0, 5 - importResult.parseErrors.length))
-                    .map((r) => (
-                      <li key={`rr-${r.test_id}-${r.rowNumber}`}>
-                        Row {r.rowNumber}
-                        {r.assetName ? ` (${r.assetName})` : ''}: {r.reason ?? 'Update failed'}
-                      </li>
-                    ))}
-                </ul>
-                {importResult.failed > 5 && (
-                  <p className="text-xs italic">…and {importResult.failed - 5} more. Download the report for the full list.</p>
-                )}
-                <button
-                  type="button"
-                  className="text-xs font-semibold underline hover:no-underline"
-                  onClick={downloadAcbImportErrorReport}
-                >
-                  Download error report (CSV)
-                </button>
-              </>
-            )}
-          </div>
         )}
       </Card>
-
-      {/* No E1.25 assets message */}
-      {selectedSite && !loading && noAssets && (
-        <Card className="p-8 text-center">
-          <p className="text-eq-grey">No E1.25 (LVACB) assets found for this site.</p>
-          <p className="text-xs text-eq-grey mt-1">
-            Ensure assets are assigned to the E1.25 maintenance plan.
-          </p>
-        </Card>
-      )}
-
-      {/* Asset Table */}
-      {selectedSite && !noAssets && (
-        <div className="space-y-2">
-          {loading ? (
-            <Card className="p-8 text-center text-eq-grey">Loading...</Card>
-          ) : (
-            <Card className="overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50">
-                      <th className="text-left py-3 px-4 font-medium text-eq-grey">Asset</th>
-                      <th className="text-left py-3 px-4 font-medium text-eq-grey">Type</th>
-                      <th className="text-center py-3 px-4 font-medium text-eq-grey">Asset Collection</th>
-                      <th className="text-center py-3 px-4 font-medium text-eq-grey">Visual &amp; Functional</th>
-                      <th className="text-center py-3 px-4 font-medium text-eq-grey">Electrical</th>
-                      <th className="text-center py-3 px-4 font-medium text-eq-grey">Progress</th>
-                      <th className="text-right py-3 px-4 font-medium text-eq-grey">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assets.map(asset => {
-                      const test = asset.acb_test
-                      const progress = getOverallProgress(test)
-                      return (
-                        <tr
-                          key={asset.id}
-                          className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                        >
-                          <td className="py-3 px-4">
-                            <div>
-                              <p className="font-medium text-eq-ink">{asset.name}</p>
-                              {asset.serial_number && (
-                                <p className="text-xs text-eq-grey">{asset.serial_number}</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-eq-grey text-xs">{asset.asset_type}</td>
-                          <td className="py-3 px-4 text-center">
-                            {statusBadge('Collection', getStepStatus(test, 'step1'))}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            {statusBadge('V&F', getStepStatus(test, 'step2'))}
-                          </td>
-                          <td className="py-3 px-4 text-center">
-                            {statusBadge('Electrical', getStepStatus(test, 'step3'))}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all ${
-                                    progress === 100
-                                      ? 'bg-green-500'
-                                      : progress > 0
-                                      ? 'bg-eq-sky'
-                                      : 'bg-gray-200'
-                                  }`}
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </div>
-                              <span className="text-xs text-eq-grey w-8 text-right">{progress}%</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            {test ? (
-                              <Button
-                                size="sm"
-                                onClick={() => setSelectedAsset(asset.id)}
-                              >
-                                Continue
-                                <ChevronRight className="w-3 h-3 ml-1" />
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => handleStartTest(asset)}
-                                disabled={creating === asset.id}
-                              >
-                                {creating === asset.id ? (
-                                  'Creating...'
-                                ) : (
-                                  <>
-                                    <Play className="w-3 h-3 mr-1" />
-                                    Start Test
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Maximo import modal */}
-      {showMaximoImport && selectedSite && (
-        <AcbMaximoImportModal
-          siteId={selectedSite}
-          onClose={() => setShowMaximoImport(false)}
-          onComplete={() => {
-            setShowMaximoImport(false)
-            loadSiteData()
-          }}
-        />
-      )}
     </div>
   )
 }
