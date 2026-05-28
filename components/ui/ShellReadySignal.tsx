@@ -5,18 +5,21 @@ import { useEffect } from 'react'
 const SHELL_ORIGIN = 'https://core.eq.solutions'
 
 // Signals to the EQ Shell parent frame that Service has fully loaded and the
-// session is established. Shell listens for this to reveal the iframe
-// immediately instead of waiting for the /shell → / redirect cycle to fire
-// two onLoad events.
+// session is established. Shell listens for this to reveal the iframe.
 //
-// Only fires when running inside the shell iframe (isShellIframe prop true).
-// Target origin is locked to core.eq.solutions — never '*'.
-export function ShellReadySignal({ isShellIframe }: { isShellIframe: boolean }) {
+// Detection is client-side (window.parent !== window) so it works even when
+// the eq_shell_bridge cookie is partitioned away by Chrome's cross-site iframe
+// cookie isolation — the server-side isShellIframe prop is kept for UI chrome
+// (sidebar, footer) but must NOT gate this signal.
+//
+// Target origin is locked to core.eq.solutions — any other parent frame
+// silently drops the message, so this is safe to fire unconditionally
+// whenever Service is running inside any iframe.
+export function ShellReadySignal({ isShellIframe: _isShellIframe }: { isShellIframe: boolean }) {
   useEffect(() => {
-    if (!isShellIframe) return
-    if (window.parent === window) return
+    if (window.parent === window) return  // not embedded — skip
     window.parent.postMessage({ type: 'EQ_SERVICE_READY', v: 1 }, SHELL_ORIGIN)
-  }, [isShellIframe])
+  }, [])
 
   return null
 }
