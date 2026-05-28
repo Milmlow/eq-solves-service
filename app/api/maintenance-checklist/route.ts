@@ -230,14 +230,9 @@ export async function GET(request: NextRequest) {
           assetId: asset?.maximo_id ?? '—',
           location: asset?.location ?? '—',
           workOrderNumber: null,
-          tasks: [
-            { order: 1, description: `Breaker (Brand / Model / Serial): ${breakerLine}` },
-            { order: 2, description: 'Visual & Functional checks (record anomalies in comment)' },
-            { order: 3, description: 'Electrical readings — Contact resistance R/W/B (µΩ), IR closed/open (MΩ), temperature (°C)' },
-            { order: 4, description: 'Overall result: Pass / Fail / Defect (circle one)' },
-            { order: 5, description: 'Notes / follow-up' },
-          ],
+          tasks: [],
           notes: null,
+          testKind: kind as 'acb' | 'nsx',
         }
       })
     } else if (kind === 'rcd') {

@@ -97,6 +97,8 @@ export interface ChecklistAsset {
   workOrderNumber: string | null
   tasks: ChecklistTask[]
   notes: string | null
+  /** When set, renders a structured 3-section breaker form instead of the generic task table. */
+  testKind?: 'acb' | 'nsx'
 }
 
 export interface ChecklistTask {
@@ -376,9 +378,302 @@ function buildInfoBlock(input: MaintenanceChecklistInput): (Paragraph | Table)[]
   return children
 }
 
+// ─────────── ACB / NSX Structured Breaker Card ───────────
+
+const ACB_VISUAL_ITEMS: { label: string; section: string }[] = [
+  { label: 'General condition / cleanliness', section: 'Visual Inspection' },
+  { label: 'Arc chute condition', section: 'Visual Inspection' },
+  { label: 'Main contact condition', section: 'Visual Inspection' },
+  { label: 'Auxiliary contact condition', section: 'Visual Inspection' },
+  { label: 'Mechanism lubrication', section: 'Service Operations' },
+  { label: 'Racking mechanism operation', section: 'Service Operations' },
+  { label: 'Spring charging mechanism', section: 'Service Operations' },
+  { label: 'Chassis earthing contact', section: 'Functional Tests Chassis' },
+  { label: 'Shutter operation', section: 'Functional Tests Chassis' },
+  { label: 'Operations counter reading', section: 'Functional Tests Chassis' },
+  { label: 'Manual close', section: 'Functional Tests Device' },
+  { label: 'Manual open (trip free)', section: 'Functional Tests Device' },
+  { label: 'Electrical close', section: 'Functional Tests Device' },
+  { label: 'Electrical open', section: 'Functional Tests Device' },
+  { label: 'Spring charge motor operation', section: 'Functional Tests Device' },
+  { label: 'Anti-pump function', section: 'Functional Tests Device' },
+  { label: 'Undervoltage release operation', section: 'Functional Tests Device' },
+  { label: 'Shunt trip operation', section: 'Functional Tests Device' },
+  { label: 'Closing solenoid operation', section: 'Functional Tests Device' },
+  { label: 'Position indication (open/closed)', section: 'Functional Tests Device' },
+  { label: 'Auxiliary switch operation', section: 'Functional Tests Device' },
+  { label: 'Motor charge spring function', section: 'Auxiliaries' },
+  { label: 'Communication module check', section: 'Auxiliaries' },
+]
+
+const NSX_VISUAL_ITEMS: { label: string; section: string }[] = [
+  { label: 'General condition / cleanliness', section: 'Visual Inspection' },
+  { label: 'Main contact condition', section: 'Visual Inspection' },
+  { label: 'Auxiliary contact condition', section: 'Visual Inspection' },
+  { label: 'Chassis earthing contact', section: 'Functional Tests' },
+  { label: 'Manual close operation', section: 'Functional Tests' },
+  { label: 'Manual open / trip free', section: 'Functional Tests' },
+  { label: 'Electrical close (if fitted)', section: 'Functional Tests' },
+  { label: 'Electrical open (if fitted)', section: 'Functional Tests' },
+  { label: 'Undervoltage release (if fitted)', section: 'Functional Tests' },
+  { label: 'Shunt trip operation (if fitted)', section: 'Functional Tests' },
+  { label: 'Position indication (open/closed)', section: 'Functional Tests' },
+  { label: 'Auxiliary switch operation (if fitted)', section: 'Functional Tests' },
+]
+
+const IR_CLOSED = ['R-W', 'R-B', 'W-B', 'R-E', 'W-E', 'B-E', 'R-N', 'W-N', 'B-N']
+const IR_OPEN = ['R-R', 'W-W', 'B-B', 'N-N']
+
+function buildBreakerCard(asset: ChecklistAsset, brandHex: string, iceOverride: string | null = null): (Paragraph | Table)[] {
+  const children: (Paragraph | Table)[] = []
+  const isAcb = asset.testKind === 'acb'
+  const headerFill = tenantIce(brandHex, iceOverride)
+
+  // ── Asset heading ──────────────────────────────────────────────────────────
+  children.push(new Paragraph({
+    spacing: { before: 160, after: 80 },
+    children: [new TextRun({ text: `Breaker: ${asset.assetName}`, size: 26, font: FONT_HEADING, bold: true, color: brandHex })],
+  }))
+  const infoParts: string[] = []
+  if (asset.assetId && asset.assetId !== '—') infoParts.push(`ID: ${asset.assetId}`)
+  if (asset.location && asset.location !== '—') infoParts.push(`Location: ${asset.location}`)
+  if (infoParts.length > 0) {
+    children.push(new Paragraph({
+      spacing: { after: 120 },
+      children: [new TextRun({ text: infoParts.join('  |  '), size: 18, font: FONT, color: EQ_MID_GREY })],
+    }))
+  }
+
+  // ── Section heading helper ─────────────────────────────────────────────────
+  function sectionHeading(text: string) {
+    return new Paragraph({
+      spacing: { before: 160, after: 60 },
+      children: [new TextRun({ text, size: 20, font: FONT_HEADING, bold: true, color: brandHex })],
+    })
+  }
+
+  // ── Section 1: Asset Collection ────────────────────────────────────────────
+  children.push(sectionHeading('1  ·  Asset Collection'))
+
+  const gLabel = 1800
+  const gValue = 2400
+  const gTw = (gLabel + gValue) * 2
+
+  function gridRow(l1: string, l2: string): TableRow {
+    return new TableRow({ children: [
+      makeCell(l1, gLabel, { bold: true, size: 16, color: EQ_MID_GREY }),
+      makeCell('', gValue, { size: 16 }),
+      makeCell(l2, gLabel, { bold: true, size: 16, color: EQ_MID_GREY }),
+      makeCell('', gValue, { size: 16 }),
+    ]})
+  }
+
+  const collectionRows: TableRow[] = [
+    gridRow('Brand', 'Breaker Type'),
+    gridRow('Serial No', 'Poles'),
+    gridRow('Trip Unit Model', 'Rating IN (A)'),
+    gridRow('Fixed / Withdrawable', isAcb ? 'Performance Level' : 'Trip Unit Type'),
+  ]
+
+  if (isAcb) {
+    collectionRows.push(new TableRow({ children: [
+      makeCell('Protection Unit Fitted', gLabel, { bold: true, size: 16, color: EQ_MID_GREY }),
+      makeCell('Y  /  N  (circle one)', gValue * 3 + gLabel, { size: 16 }),
+    ]}))
+  }
+
+  children.push(new Table({
+    width: { size: gTw, type: WidthType.DXA },
+    columnWidths: [gLabel, gValue, gLabel, gValue],
+    rows: collectionRows,
+  }))
+
+  // Protection settings sub-grid
+  children.push(new Paragraph({
+    spacing: { before: 100, after: 40 },
+    children: [new TextRun({ text: 'Protection Settings', size: 16, font: FONT_HEADING, bold: true, color: EQ_MID_GREY })],
+  }))
+
+  const psRows: TableRow[] = [
+    gridRow('Long Time Ir', 'Long Time Delay tr'),
+    gridRow('Short Time Pickup Isd', 'Short Time Delay tsd'),
+    gridRow('Instantaneous Pickup', 'Earth Fault Pickup'),
+  ]
+  if (isAcb) {
+    psRows.push(gridRow('Earth Fault Delay', 'Earth Leakage Pickup'))
+    psRows.push(gridRow('Earth Leakage Delay', ''))
+  } else {
+    psRows.push(gridRow('Earth Fault Delay', ''))
+  }
+  children.push(new Table({
+    width: { size: gTw, type: WidthType.DXA },
+    columnWidths: [gLabel, gValue, gLabel, gValue],
+    rows: psRows,
+  }))
+
+  if (isAcb) {
+    children.push(new Paragraph({
+      spacing: { before: 100, after: 40 },
+      children: [new TextRun({ text: 'Accessories', size: 16, font: FONT_HEADING, bold: true, color: EQ_MID_GREY })],
+    }))
+    children.push(new Table({
+      width: { size: gTw, type: WidthType.DXA },
+      columnWidths: [gLabel, gValue, gLabel, gValue],
+      rows: [
+        gridRow('Motor Charge', 'Shunt Trip MX1'),
+        gridRow('Shunt Close XF', 'Undervoltage MN'),
+        gridRow('2nd Shunt Trip MX2', ''),
+      ],
+    }))
+  }
+
+  // ── Section 2: Visual & Functional ────────────────────────────────────────
+  children.push(sectionHeading('2  ·  Visual & Functional Inspection'))
+
+  const vItems = isAcb ? ACB_VISUAL_ITEMS : NSX_VISUAL_ITEMS
+  const vDesc = 5200
+  const vOK   = 700
+  const vFail = 900
+  const vNA   = 700
+  const vNote = CONTENT_WIDTH - vDesc - vOK - vFail - vNA
+  const vTw   = vDesc + vOK + vFail + vNA + vNote
+
+  let currentSection = ''
+  const vRows: TableRow[] = [
+    new TableRow({
+      tableHeader: true,
+      children: [
+        makeCell('Item', vDesc, { bold: true, size: 16, shading: headerFill }),
+        makeCell('OK', vOK,   { bold: true, size: 16, shading: headerFill }),
+        makeCell('Fail', vFail, { bold: true, size: 16, shading: headerFill }),
+        makeCell('N/A', vNA,  { bold: true, size: 16, shading: headerFill }),
+        makeCell('Comment', vNote, { bold: true, size: 16, shading: headerFill }),
+      ],
+    }),
+  ]
+
+  for (const item of vItems) {
+    if (item.section !== currentSection) {
+      currentSection = item.section
+      vRows.push(new TableRow({ children: [
+        new TableCell({
+          columnSpan: 5,
+          width: { size: vTw, type: WidthType.DXA },
+          shading: { fill: headerFill, type: ShadingType.CLEAR },
+          margins: { top: 60, bottom: 60, left: 120, right: 120 },
+          children: [new Paragraph({ children: [
+            new TextRun({ text: item.section, size: 16, font: FONT_HEADING, bold: true, color: brandHex }),
+          ]})],
+        }),
+      ]}))
+    }
+    vRows.push(new TableRow({ children: [
+      makeCell(item.label, vDesc, { size: 16 }),
+      makeCheckboxCell(vOK),
+      makeCheckboxCell(vFail),
+      makeCheckboxCell(vNA),
+      makeCell('', vNote, { size: 16 }),
+    ]}))
+  }
+
+  children.push(new Table({ width: { size: vTw, type: WidthType.DXA }, columnWidths: [vDesc, vOK, vFail, vNA, vNote], rows: vRows }))
+
+  // ── Section 3: Electrical Test Readings ───────────────────────────────────
+  children.push(sectionHeading('3  ·  Electrical Test Readings'))
+
+  const eLabel = 2200
+  const eVal   = Math.floor((CONTENT_WIDTH - eLabel) / 4)
+  const eTw    = eLabel + eVal * 4
+
+  function eHeaderRow(cols: string[]): TableRow {
+    return new TableRow({
+      tableHeader: true,
+      children: [
+        makeCell('', eLabel, { bold: true, size: 16, shading: headerFill }),
+        ...cols.map(c => makeCell(c, eVal, { bold: true, size: 16, shading: headerFill })),
+      ],
+    })
+  }
+  function eDataRow(label: string, cols: string[]): TableRow {
+    return new TableRow({ children: [
+      makeCell(label, eLabel, { bold: true, size: 16, color: EQ_MID_GREY }),
+      ...cols.map(c => makeCell(c, eVal, { size: 16 })),
+    ]})
+  }
+
+  if (isAcb) {
+    children.push(new Paragraph({ spacing: { before: 80, after: 40 }, children: [new TextRun({ text: 'Contact Resistance (µΩ)', size: 16, font: FONT, bold: true })] }))
+    children.push(new Table({
+      width: { size: eTw, type: WidthType.DXA }, columnWidths: [eLabel, eVal, eVal, eVal, eVal],
+      rows: [eHeaderRow(['Red', 'White', 'Blue', 'Neutral']), eDataRow('Resistance', ['', '', '', ''])],
+    }))
+  }
+
+  // IR Closed (3 per row — 9 combos = 3 rows of 3)
+  children.push(new Paragraph({ spacing: { before: 80, after: 40 }, children: [new TextRun({ text: 'Insulation Resistance — Closed (MΩ)', size: 16, font: FONT, bold: true })] }))
+  const irClosedCols = 3
+  const irClosedW = Math.floor((CONTENT_WIDTH) / (irClosedCols * 2))
+  const irClosedTw = irClosedCols * 2 * irClosedW
+  const irClosedRows: TableRow[] = []
+  for (let i = 0; i < IR_CLOSED.length; i += irClosedCols) {
+    const chunk = IR_CLOSED.slice(i, i + irClosedCols)
+    irClosedRows.push(new TableRow({ children: chunk.flatMap(combo => [
+      makeCell(combo, irClosedW, { bold: true, size: 16, color: EQ_MID_GREY }),
+      makeCell('', irClosedW, { size: 16 }),
+    ])}))
+  }
+  children.push(new Table({ width: { size: irClosedTw, type: WidthType.DXA }, columnWidths: Array(irClosedCols * 2).fill(irClosedW), rows: irClosedRows }))
+
+  // IR Open (4 combos in one row)
+  children.push(new Paragraph({ spacing: { before: 80, after: 40 }, children: [new TextRun({ text: 'Insulation Resistance — Open (MΩ)', size: 16, font: FONT, bold: true })] }))
+  const irOpenW = Math.floor(CONTENT_WIDTH / (IR_OPEN.length * 2))
+  const irOpenTw = irOpenW * IR_OPEN.length * 2
+  children.push(new Table({
+    width: { size: irOpenTw, type: WidthType.DXA },
+    columnWidths: Array(IR_OPEN.length * 2).fill(irOpenW),
+    rows: [new TableRow({ children: IR_OPEN.flatMap(combo => [
+      makeCell(combo, irOpenW, { bold: true, size: 16, color: EQ_MID_GREY }),
+      makeCell('', irOpenW, { size: 16 }),
+    ])})],
+  }))
+
+  // Temperature (°C)
+  children.push(new Paragraph({ spacing: { before: 80, after: 40 }, children: [new TextRun({ text: 'Temperature (°C)', size: 16, font: FONT, bold: true })] }))
+  const tempPhases = ['Red', 'White', 'Blue']
+  const tempW = Math.floor(CONTENT_WIDTH / (tempPhases.length * 2))
+  const tempTw = tempW * tempPhases.length * 2
+  children.push(new Table({
+    width: { size: tempTw, type: WidthType.DXA },
+    columnWidths: Array(tempPhases.length * 2).fill(tempW),
+    rows: [new TableRow({ children: tempPhases.flatMap(p => [
+      makeCell(p, tempW, { bold: true, size: 16, color: EQ_MID_GREY }),
+      makeCell('', tempW, { size: 16 }),
+    ])})],
+  }))
+
+  // ── Overall result + notes ─────────────────────────────────────────────────
+  children.push(new Paragraph({
+    spacing: { before: 160, after: 60 },
+    children: [new TextRun({ text: 'Overall Result:  Pass  /  Fail  /  Defect  (circle one)', size: 18, font: FONT, bold: true })],
+  }))
+  children.push(new Paragraph({
+    spacing: { before: 80, after: 40 },
+    children: [new TextRun({ text: 'Notes / Follow-up:', size: 16, font: FONT, bold: true })],
+  }))
+  children.push(new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: ' ', size: 18 })] }))
+  children.push(new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: ' ', size: 18 })] }))
+  children.push(spacer(80))
+
+  return children
+}
+
 // ─────────── Asset Checklist Section ───────────
 
 function buildAssetSection(asset: ChecklistAsset, brandHex: string, iceOverride: string | null = null): (Paragraph | Table)[] {
+  if (asset.testKind === 'acb' || asset.testKind === 'nsx') {
+    return buildBreakerCard(asset, brandHex, iceOverride)
+  }
+
   const children: (Paragraph | Table)[] = []
   const headerFill = tenantIce(brandHex, iceOverride)
 
