@@ -6,6 +6,7 @@ import { isAdmin, canWrite } from '@/lib/utils/roles'
 import { CreateAssetSchema, UpdateAssetSchema } from '@/lib/validations/asset'
 import { zodToErrorMap } from '@/lib/utils/zodErrors'
 import { logAuditEvent } from '@/lib/actions/audit'
+import { syncAsset, assetExternalId, siteExternalId } from '@/lib/canonical-sync'
 
 export async function createAssetAction(formData: FormData) {
   try {
@@ -29,11 +30,28 @@ export async function createAssetAction(formData: FormData) {
     const parsed = CreateAssetSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from('assets')
       .insert({ ...parsed.data, tenant_id: tenantId })
+      .select('id')
+      .single()
 
     if (error) return { success: false, error: error.message }
+
+    // Fire-and-forget canonical sync — never blocks the action, never throws.
+    if (inserted?.id) {
+      void syncAsset({
+        external_id:       assetExternalId(inserted.id),
+        name:              parsed.data.name,
+        asset_type:        parsed.data.asset_type,
+        external_site_id:  parsed.data.site_id ? siteExternalId(parsed.data.site_id) : undefined,
+        location:          parsed.data.location ?? undefined,
+        manufacturer:      parsed.data.manufacturer ?? undefined,
+        model:             parsed.data.model ?? undefined,
+        serial_number:     parsed.data.serial_number ?? undefined,
+        install_date:      parsed.data.install_date ?? undefined,
+      })
+    }
 
     await logAuditEvent({ action: 'create', entityType: 'asset', summary: `Created asset "${parsed.data.name}"` })
     revalidatePath('/assets')
@@ -71,6 +89,19 @@ export async function updateAssetAction(id: string, formData: FormData) {
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
+
+    // Fire-and-forget canonical sync.
+    void syncAsset({
+      external_id:       assetExternalId(id),
+      name:              parsed.data.name,
+      asset_type:        parsed.data.asset_type,
+      external_site_id:  parsed.data.site_id ? siteExternalId(parsed.data.site_id) : undefined,
+      location:          parsed.data.location ?? undefined,
+      manufacturer:      parsed.data.manufacturer ?? undefined,
+      model:             parsed.data.model ?? undefined,
+      serial_number:     parsed.data.serial_number ?? undefined,
+      install_date:      parsed.data.install_date ?? undefined,
+    })
 
     await logAuditEvent({ action: 'update', entityType: 'asset', entityId: id, summary: 'Updated asset' })
     revalidatePath('/assets')

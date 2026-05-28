@@ -10,6 +10,7 @@ import {
   UpdateRcdTestHeaderSchema,
 } from '@/lib/validations/rcd-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
+import { syncTestResult, rcdTestExternalId, assetExternalId } from '@/lib/canonical-sync'
 
 interface ActionOk {
   success: true
@@ -241,6 +242,25 @@ export async function saveRcdTestCompleteAction(
       await propagateCheckCompletionIfReady(supabase, checkId)
       revalidatePath(`/maintenance/${checkId}`)
       revalidatePath('/maintenance')
+    }
+
+    // Canonical sync — fire-and-forget when test reaches complete status.
+    // Reads the test's asset_id so the canonical record can be linked.
+    if (parsed.data.markComplete) {
+      void (async () => {
+        const { data: test } = await supabase
+          .from('rcd_tests')
+          .select('asset_id, test_date')
+          .eq('id', testId)
+          .maybeSingle()
+        void syncTestResult({
+          external_id:        rcdTestExternalId(testId),
+          external_asset_id:  test?.asset_id ? assetExternalId(test.asset_id) : undefined,
+          test_type:          'rcd',
+          test_date:          test?.test_date ?? undefined,
+          pass_fail:          'pass',   // RCD complete = all readings saved; overall pass/fail is per-circuit
+        })
+      })()
     }
 
     await logAuditEvent({

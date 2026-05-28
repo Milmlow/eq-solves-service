@@ -11,6 +11,7 @@ import {
   CreateTestReadingSchema,
   UpdateTestReadingSchema,
 } from '@/lib/validations/test-record'
+import { syncTestResult, testRecordExternalId, assetExternalId } from '@/lib/canonical-sync'
 
 /**
  * Create a test record. Idempotent when called with a mutationId — safe
@@ -44,6 +45,21 @@ export async function createTestRecordAction(formData: FormData, mutationId?: st
 
     if (error) return { success: false, error: error.message }
 
+    // Canonical sync — fire-and-forget on creation.
+    if (record?.id) {
+      void syncTestResult({
+        external_id:       testRecordExternalId(record.id),
+        external_asset_id: parsed.data.asset_id ? assetExternalId(parsed.data.asset_id) : undefined,
+        test_type:         parsed.data.test_type,
+        test_date:         parsed.data.test_date ?? undefined,
+        pass_fail:         parsed.data.result === 'pass' ? 'pass'
+                         : parsed.data.result === 'fail' ? 'fail'
+                         : 'pending',
+        tested_by_name:    parsed.data.tested_by ?? undefined,
+        notes:             parsed.data.notes ?? undefined,
+      })
+    }
+
     await logAuditEvent({
       action: 'create',
       entityType: 'test_record',
@@ -75,6 +91,18 @@ export async function updateTestRecordAction(id: string, formData: FormData) {
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
+
+    // Canonical sync — fire-and-forget on update.
+    void syncTestResult({
+      external_id: testRecordExternalId(id),
+      test_type:   parsed.data.test_type ?? 'unknown',
+      test_date:   parsed.data.test_date ?? undefined,
+      pass_fail:   parsed.data.result === 'pass' ? 'pass'
+                 : parsed.data.result === 'fail' ? 'fail'
+                 : 'pending',
+      tested_by_name: parsed.data.tested_by ?? undefined,
+      notes:          parsed.data.notes ?? undefined,
+    })
 
     await logAuditEvent({ action: 'update', entityType: 'test_record', entityId: id, summary: 'Updated test record' })
     revalidatePath('/testing')
