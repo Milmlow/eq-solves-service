@@ -1573,6 +1573,20 @@ export async function updateDefectAction(defectId: string, updates: {
 
     if (error) return { success: false, error: error.message }
 
+    if (input.status === 'resolved' || input.status === 'closed') {
+      void (async () => {
+        const { data: defect } = await supabase
+          .from('defects')
+          .select('site_id')
+          .eq('id', defectId)
+          .maybeSingle()
+        void emitEvent('defect.resolved', {
+          defect_id: defectId,
+          site_id: defect?.site_id ?? undefined,
+        })
+      })()
+    }
+
     await logAuditEvent({ action: 'update', entityType: 'defect', entityId: defectId, summary: `Updated defect: ${updates.status ? `status → ${updates.status}` : 'fields updated'}` })
     revalidateMaintenanceSurfaces()
     revalidatePath('/defects')

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { MaintenanceList } from './MaintenanceList'
 import { isAdmin, canWrite } from '@/lib/utils/roles'
+import { emitEvent } from '@/lib/canonical-sync'
 import type { Role, MaintenanceCheckItem } from '@/lib/types'
 
 const PER_PAGE = 25
@@ -187,6 +188,19 @@ export default async function MaintenancePage({
   const { data: checksRaw, count } = await query
   const total = count ?? 0
   const totalPages = Math.ceil(total / PER_PAGE)
+
+  // Emit overdue events — fire-and-forget, non-blocking
+  const now2 = new Date()
+  const overdueChecks = (checksRaw ?? []).filter(
+    (c) => c.due_date && new Date(c.due_date) < now2 && c.status !== 'complete' && c.status !== 'cancelled',
+  )
+  overdueChecks.forEach((c) => {
+    void emitEvent('maintenance_check.overdue', {
+      check_id: c.id,
+      site_id: (c.site_id as string | null) ?? undefined,
+      days_overdue: Math.floor((now2.getTime() - new Date(c.due_date!).getTime()) / 86_400_000),
+    })
+  })
 
   // Map item counts and resolve assignee names
   const assigneeIds = [...new Set((checksRaw ?? []).map((c) => c.assigned_to).filter((id): id is string => Boolean(id)))]
