@@ -250,7 +250,9 @@ export function DataTable<T extends Record<string, unknown>>({
                   onClick={() => onRowClick?.(row)}
                 >
                   {selectable && (
-                    <td className="w-10 px-3 py-3">
+                    // stopPropagation so clicking the checkbox doesn't also
+                    // fire the row's onRowClick (navigation) handler.
+                    <td className="w-10 px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={!!isSelected}

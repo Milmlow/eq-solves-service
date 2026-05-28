@@ -201,17 +201,17 @@ export async function GET(request: NextRequest) {
       // which entry path created the row. Migration 0094 backfills new
       // from legacy where missing; writes are dual-write so future rows
       // populate both. Read prefers NEW with LEGACY fallback below.
-      .select(
-        'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, brand, breaker_type, current_in, trip_unit_model, performance_level, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
-      )
+      // Protection settings + accessories pulled here so the Customer Report
+      // can render a full "Asset Collection" section per breaker. Single
+      // string literal required — Supabase type inference breaks on + concat.
+      .select('id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, brand, breaker_type, current_in, trip_unit_model, performance_level, fixed_withdrawable, protection_unit_fitted, long_time_ir, long_time_delay_tr, short_time_pickup_isd, short_time_delay_tsd, instantaneous_pickup, earth_fault_pickup, earth_fault_delay, earth_leakage_pickup, earth_leakage_delay, motor_charge, shunt_trip_mx1, shunt_close_xf, undervoltage_mn, second_shunt_trip, step1_status, step2_status, step3_status, overall_result, assets(name)')
       .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
       .from('nsx_tests')
       // Refs #101: same dual-column read as ACB above.
-      .select(
-        'id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, brand, breaker_type, current_in, trip_unit_model, fixed_withdrawable, step1_status, step2_status, step3_status, overall_result, assets(name)',
-      )
+      // Protection settings pulled for NSX too (no accessories on NSX).
+      .select('id, test_date, test_type, cb_make, cb_model, cb_serial, cb_rating, cb_poles, trip_unit, brand, breaker_type, current_in, trip_unit_model, fixed_withdrawable, long_time_ir, long_time_delay_tr, short_time_pickup_isd, short_time_delay_tsd, instantaneous_pickup, earth_fault_pickup, earth_fault_delay, step1_status, step2_status, step3_status, overall_result, assets(name)')
       .eq('check_id', checkId)
       .eq('is_active', true),
     supabase
@@ -257,18 +257,72 @@ export async function GET(request: NextRequest) {
   // for the canonical helper. NEW workflow columns preferred over LEGACY;
   // the helper is the single place to update when legacy columns get dropped.
   type BreakerCols = BreakerIdentityRow & { id: string }
+  type AcbStep1Cols = {
+    protection_unit_fitted?: boolean | null
+    long_time_ir?: string | null
+    long_time_delay_tr?: string | null
+    short_time_pickup_isd?: string | null
+    short_time_delay_tsd?: string | null
+    instantaneous_pickup?: string | null
+    earth_fault_pickup?: string | null
+    earth_fault_delay?: string | null
+    earth_leakage_pickup?: string | null
+    earth_leakage_delay?: string | null
+    motor_charge?: string | null
+    shunt_trip_mx1?: string | null
+    shunt_close_xf?: string | null
+    undervoltage_mn?: string | null
+    second_shunt_trip?: string | null
+  }
+
   function buildAcbDetail(t: typeof acbLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
-    const r = t as unknown as BreakerCols
+    const r = t as unknown as BreakerCols & AcbStep1Cols
     return {
       ...resolveBreakerIdentity(r, { includePerformanceLevel: true }),
       readings: acbReadingsByTest.get(r.id) ?? [],
+      // Protection settings (step 1)
+      protectionUnitFitted: r.protection_unit_fitted ?? null,
+      longTimeIr: r.long_time_ir ?? null,
+      longTimeDelayTr: r.long_time_delay_tr ?? null,
+      shortTimePickupIsd: r.short_time_pickup_isd ?? null,
+      shortTimeDelayTsd: r.short_time_delay_tsd ?? null,
+      instantaneousPickup: r.instantaneous_pickup ?? null,
+      earthFaultPickup: r.earth_fault_pickup ?? null,
+      earthFaultDelay: r.earth_fault_delay ?? null,
+      earthLeakagePickup: r.earth_leakage_pickup ?? null,
+      earthLeakageDelay: r.earth_leakage_delay ?? null,
+      // Accessories (ACB only)
+      motorCharge: r.motor_charge ?? null,
+      shuntTripMx1: r.shunt_trip_mx1 ?? null,
+      shuntCloseXf: r.shunt_close_xf ?? null,
+      undervoltageMn: r.undervoltage_mn ?? null,
+      secondShuntTrip: r.second_shunt_trip ?? null,
     }
   }
+
+  type NsxStep1Cols = {
+    long_time_ir?: string | null
+    long_time_delay_tr?: string | null
+    short_time_pickup_isd?: string | null
+    short_time_delay_tsd?: string | null
+    instantaneous_pickup?: string | null
+    earth_fault_pickup?: string | null
+    earth_fault_delay?: string | null
+  }
+
   function buildNsxDetail(t: typeof nsxLinkedRes.data extends Array<infer U> | null ? U : never): AcbTestDetail {
-    const r = t as unknown as BreakerCols
+    const r = t as unknown as BreakerCols & NsxStep1Cols
     return {
       ...resolveBreakerIdentity(r, { includePerformanceLevel: false }),
       readings: nsxReadingsByTest.get(r.id) ?? [],
+      // Protection settings (NSX — no protectionUnitFitted or earth leakage)
+      longTimeIr: r.long_time_ir ?? null,
+      longTimeDelayTr: r.long_time_delay_tr ?? null,
+      shortTimePickupIsd: r.short_time_pickup_isd ?? null,
+      shortTimeDelayTsd: r.short_time_delay_tsd ?? null,
+      instantaneousPickup: r.instantaneous_pickup ?? null,
+      earthFaultPickup: r.earth_fault_pickup ?? null,
+      earthFaultDelay: r.earth_fault_delay ?? null,
     }
   }
 

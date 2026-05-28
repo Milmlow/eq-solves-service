@@ -214,6 +214,26 @@ export interface AcbTestDetail {
   fixedWithdrawable: string | null
   /** Numerical readings (Visual + Electrical entries on acb_test_readings). */
   readings: BreakerTestReading[]
+
+  // Step 1 — Protection settings (conditional on protection unit fitted).
+  // NSX omits protectionUnitFitted; ACB sets it explicitly.
+  protectionUnitFitted?: boolean | null
+  longTimeIr?: string | null
+  longTimeDelayTr?: string | null
+  shortTimePickupIsd?: string | null
+  shortTimeDelayTsd?: string | null
+  instantaneousPickup?: string | null
+  earthFaultPickup?: string | null
+  earthFaultDelay?: string | null
+  earthLeakagePickup?: string | null   // ACB only
+  earthLeakageDelay?: string | null    // ACB only
+
+  // Step 1 — Accessories (ACB only; NSX has no accessory columns).
+  motorCharge?: string | null
+  shuntTripMx1?: string | null
+  shuntCloseXf?: string | null
+  undervoltageMn?: string | null
+  secondShuntTrip?: string | null
 }
 
 export interface AcbTestSummary {
@@ -1697,6 +1717,115 @@ function buildBreakerTestDetail(
       }),
     ),
   }))
+
+  // ── Protection Settings (step 1 — conditional on protection unit fitted) ──
+  // Render when ACB has explicitly set protectionUnitFitted = true, OR when
+  // NSX has any protection field populated (NSX omits the fitted boolean).
+  const hasProtection =
+    d.protectionUnitFitted === true ||
+    (d.protectionUnitFitted == null &&
+      [d.longTimeIr, d.longTimeDelayTr, d.shortTimePickupIsd, d.shortTimeDelayTsd,
+       d.instantaneousPickup, d.earthFaultPickup, d.earthFaultDelay,
+       d.earthLeakagePickup, d.earthLeakageDelay].some((v) => v))
+
+  if (hasProtection) {
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      children: [new TextRun({
+        text: 'Protection Settings',
+        bold: true, size: 16, font: FONT_HEADING, color: brand,
+      })],
+    }))
+
+    const psLabel = 1700
+    const psValue = 3119
+    const psTw = (psLabel + psValue) * 2
+    // Build rows — only include earth leakage if either field is populated
+    const psRows: Array<[string, string | null, string, string | null]> = [
+      ['Long Time Ir',        d.longTimeIr ?? '—',           'Long Time Delay tr',      d.longTimeDelayTr ?? '—'],
+      ['Short Time Pickup Isd', d.shortTimePickupIsd ?? '—', 'Short Time Delay tsd',    d.shortTimeDelayTsd ?? '—'],
+      ['Instantaneous Pickup', d.instantaneousPickup ?? '—', 'Earth Fault Pickup',      d.earthFaultPickup ?? '—'],
+    ]
+    if (d.earthFaultDelay || d.earthLeakagePickup) {
+      psRows.push([
+        'Earth Fault Delay',   d.earthFaultDelay ?? '—',
+        'Earth Leakage Pickup', d.earthLeakagePickup ?? '—',
+      ])
+    }
+    if (d.earthLeakageDelay) {
+      psRows.push([
+        'Earth Leakage Delay', d.earthLeakageDelay ?? '—',
+        '', null,
+      ])
+    }
+
+    children.push(new Table({
+      width: { size: psTw, type: WidthType.DXA },
+      columnWidths: [psLabel, psValue, psLabel, psValue],
+      rows: psRows.map(([l1, v1, l2, v2]) =>
+        new TableRow({
+          children: [
+            makeCell(l1, psLabel, { bold: true, color: EQ_MID_GREY, size: 14 }),
+            makeCell(v1 ?? '—', psValue, { size: 16, bold: true }),
+            makeCell(l2, psLabel, { bold: true, color: EQ_MID_GREY, size: 14 }),
+            makeCell(v2 ?? '—', psValue, { size: 16, bold: true }),
+          ],
+        }),
+      ),
+    }))
+  }
+
+  // ── Accessories (ACB only — NSX has no accessory columns) ─────────────────
+  // Only render the section when at least one accessory has a real value (i.e.
+  // not null and not the "Not installed" default that ACB workflow stores when
+  // the accessory is absent).
+  const accessoryRows: Array<[string, string | null]> = [
+    ['Motor Charge',      d.motorCharge],
+    ['Shunt Trip MX1',    d.shuntTripMx1],
+    ['Shunt Close XF',    d.shuntCloseXf],
+    ['Undervoltage MN',   d.undervoltageMn],
+    ['2nd Shunt Trip MX2', d.secondShuntTrip],
+  ].filter(([, v]) => v != null) as Array<[string, string]>
+
+  const hasAccessories = accessoryRows.length > 0
+
+  if (hasAccessories) {
+    children.push(new Paragraph({
+      spacing: { before: 160, after: 60 },
+      children: [new TextRun({
+        text: 'Accessories',
+        bold: true, size: 16, font: FONT_HEADING, color: brand,
+      })],
+    }))
+
+    const acLabel = 2000
+    const acValue = CONTENT_WIDTH - acLabel
+    const acTw = acLabel + acValue
+
+    // Pair accessories into 2-column rows
+    const paired: Array<[string, string | null, string, string | null]> = []
+    for (let i = 0; i < accessoryRows.length; i += 2) {
+      const [l1, v1] = accessoryRows[i]
+      const [l2, v2] = i + 1 < accessoryRows.length ? accessoryRows[i + 1] : ['', null]
+      paired.push([l1, v1, l2, v2])
+    }
+
+    const half = Math.floor(acTw / 2)
+    children.push(new Table({
+      width: { size: acTw, type: WidthType.DXA },
+      columnWidths: [Math.floor(half * 0.4), Math.floor(half * 0.6), Math.floor(half * 0.4), Math.floor(half * 0.6)],
+      rows: paired.map(([l1, v1, l2, v2]) =>
+        new TableRow({
+          children: [
+            makeCell(l1, Math.floor(half * 0.4), { bold: true, color: EQ_MID_GREY, size: 14 }),
+            makeCell(v1 ?? '—', Math.floor(half * 0.6), { size: 16, bold: true }),
+            makeCell(l2, Math.floor(half * 0.4), { bold: true, color: EQ_MID_GREY, size: 14 }),
+            makeCell(v2 ?? '—', Math.floor(half * 0.6), { size: 16, bold: true }),
+          ],
+        }),
+      ),
+    }))
+  }
 
   // Separate SI readings from other readings
   const siReadings = d.readings.filter(r => r.label.startsWith('SI: '))
