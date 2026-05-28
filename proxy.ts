@@ -5,7 +5,11 @@
  * Proprietary and confidential. All rights reserved.
  */
 import { NextResponse, type NextRequest } from 'next/server'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import { updateSession } from '@/lib/supabase/middleware'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { createServerClient } from '@supabase/ssr'
+import { publicEnv } from '@/lib/env'
 import { trackServer } from '@/lib/analytics-server'
 import {
   PUBLIC_PATHS,
@@ -14,6 +18,53 @@ import {
   isPublicPath,
   isAalExempt,
 } from '@/lib/auth/mfa-routing'
+
+// ---------------------------------------------------------------------------
+// Shell cookie verification
+// ---------------------------------------------------------------------------
+
+interface ShellCookiePayload {
+  user_id: string
+  tenant_id: string
+  active_tenant_id: string
+  role: string
+  is_platform_admin: boolean
+  memberships: Array<{ tenant_id: string; role: string }>
+  email?: string
+  name?: string | null
+  exp: number
+}
+
+/**
+ * Parse and HMAC-verify the `eq_shell_session` cookie.
+ * Returns the payload if valid; null otherwise (missing, tampered, expired,
+ * or `email` absent — old cookies pre-2026-05-28 don't carry it).
+ */
+function verifyShellCookie(raw: string): ShellCookiePayload | null {
+  const salt = process.env.EQ_SECRET_SALT
+  if (!salt) return null
+  const dot = raw.lastIndexOf('.')
+  if (dot === -1) return null
+  const b64 = raw.slice(0, dot)
+  const sig = raw.slice(dot + 1)
+  try {
+    const json = Buffer.from(b64, 'base64').toString('utf8')
+    const expected = createHmac('sha256', salt).update(json).digest('hex')
+    // timingSafeEqual requires equal-length buffers
+    const expectedBuf = Buffer.from(expected, 'hex')
+    const sigBuf = Buffer.from(sig, 'hex')
+    if (expectedBuf.length !== sigBuf.length) return null
+    if (!timingSafeEqual(expectedBuf, sigBuf)) return null
+    const data = JSON.parse(json) as Partial<ShellCookiePayload>
+    if (typeof data.exp !== 'number' || data.exp < Date.now()) return null
+    if (!data.email || typeof data.email !== 'string') return null
+    return data as ShellCookiePayload
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 // Next.js 16 renamed `middleware.ts` → `proxy.ts` with a `proxy()` export.
 // This file refreshes the Supabase session on every request, enforces
@@ -34,6 +85,119 @@ const MFA_GRACE_MS = MFA_GRACE_DAYS * 24 * 60 * 60 * 1000
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // ---------------------------------------------------------------------------
+  // Fast path: cookie-based Shell SSO
+  //
+  // If the request carries a valid `eq_shell_session` cookie AND there is no
+  // existing `eq_shell_bridge` flag, attempt to establish a Supabase session
+  // server-side without the 5-step /shell → shell-auth round-trip.
+  //
+  // Conditions that skip this path (fall through to token flow):
+  //   • `eq_shell_bridge=1` already set  → session already bootstrapped
+  //   • `eq_shell_session` absent or HMAC-invalid
+  //   • Cookie `exp` has lapsed
+  //   • `email` field absent (old cookies minted before 2026-05-28)
+  //   • `EQ_SECRET_SALT` not configured on this deploy
+  // ---------------------------------------------------------------------------
+  const alreadyBridged = request.cookies.get('eq_shell_bridge')?.value === '1'
+  if (!alreadyBridged) {
+    const rawShellCookie = request.cookies.get('eq_shell_session')?.value
+    if (rawShellCookie) {
+      const shellPayload = verifyShellCookie(rawShellCookie)
+      if (shellPayload) {
+        // Build a mutable response so we can set cookies while still
+        // forwarding the request to the Next.js render pipeline.
+        let cookieResponse = NextResponse.next({ request })
+        const sameSiteOpts =
+          process.env.NODE_ENV === 'production'
+            ? ({ sameSite: 'none' as const, secure: true } as const)
+            : {}
+
+        const supabaseAdmin = createAdminClient()
+
+        // Generate a magic-link OTP. Auto-provision if the user doesn't exist.
+        let { data: linkData, error: linkErr } =
+          await supabaseAdmin.auth.admin.generateLink({
+            type: 'magiclink',
+            email: shellPayload.email!,
+          })
+
+        if (linkErr || !linkData?.properties?.hashed_token) {
+          await supabaseAdmin.auth.admin.createUser({
+            email: shellPayload.email!,
+            email_confirm: true,
+            user_metadata: shellPayload.name ? { full_name: shellPayload.name } : {},
+          })
+          const retry = await supabaseAdmin.auth.admin.generateLink({
+            type: 'magiclink',
+            email: shellPayload.email!,
+          })
+          linkData = retry.data
+          linkErr = retry.error
+        }
+
+        if (!linkErr && linkData?.properties?.hashed_token) {
+          // Exchange the OTP server-side using an SSR client that writes
+          // the resulting Supabase auth cookies directly onto `cookieResponse`.
+          const ssrClient = createServerClient(
+            publicEnv.NEXT_PUBLIC_SUPABASE_URL,
+            publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+            {
+              cookies: {
+                getAll() {
+                  return request.cookies.getAll()
+                },
+                setAll(cookiesToSet) {
+                  cookiesToSet.forEach(({ name, value }) =>
+                    request.cookies.set(name, value)
+                  )
+                  cookieResponse = NextResponse.next({ request })
+                  cookiesToSet.forEach(({ name, value, options }) =>
+                    cookieResponse.cookies.set(name, value, {
+                      ...options,
+                      ...sameSiteOpts,
+                    })
+                  )
+                },
+              },
+            }
+          )
+
+          const { error: otpErr } = await ssrClient.auth.verifyOtp({
+            type: 'magiclink',
+            token_hash: linkData.properties.hashed_token,
+            email: shellPayload.email!,
+          })
+
+          if (!otpErr) {
+            // Session established — stamp the bridge cookie and continue.
+            cookieResponse.cookies.set('eq_shell_bridge', '1', {
+              httpOnly: true,
+              secure: true,
+              sameSite: 'none',
+              path: '/',
+              maxAge: 60 * 60 * 4, // 4 hours
+            })
+            // Redirect public/auth pages to dashboard now that we have a session.
+            if (isPublicPath(pathname)) {
+              const url = request.nextUrl.clone()
+              url.pathname = '/dashboard'
+              const redirectRes = NextResponse.redirect(url)
+              cookieResponse.cookies.getAll().forEach(({ name, value, ...opts }) =>
+                redirectRes.cookies.set(name, value, opts)
+              )
+              return redirectRes
+            }
+            return cookieResponse
+          }
+          // OTP exchange failed — fall through to standard flow.
+        }
+        // generateLink failed — fall through to standard flow.
+      }
+    }
+  }
+
   const { response, supabase, user, aal } = await updateSession(request)
 
   const isPublic = isPublicPath(pathname)
