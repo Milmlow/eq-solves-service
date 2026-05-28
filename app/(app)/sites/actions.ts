@@ -140,7 +140,7 @@ export async function updateSiteAction(id: string, formData: FormData) {
     })
     if (sync.canonical_id) {
       await supabase.from('sites')
-        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() })
+        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() } as never)
         .eq('id', id)
     }
 
