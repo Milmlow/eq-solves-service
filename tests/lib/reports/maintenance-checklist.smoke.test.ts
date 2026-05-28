@@ -29,50 +29,34 @@ import type {
 
 const OUT_DIR = resolve(process.cwd(), 'tmp', 'smoke')
 
-// Three SY3-shaped breakers — enough to see the master-register row count
-// + per-asset card pagination work the way you expect.
+// Three SY3-shaped breakers using the new structured testKind cards.
 const assets: ChecklistAsset[] = [
   {
     assetName: 'SY3-M1-MSB-01-ACB-CB5-Gen Supply',
     assetId: '2719',
     location: 'SY3-LG31 — Lower Ground Floor LV Switchroom MSB M1',
     workOrderNumber: 'WO-100345',
-    tasks: [
-      { order: 1, description: 'Breaker (Brand / Model / Serial): _______________________________________________' },
-      { order: 2, description: 'Visual & Functional checks (record anomalies in comment)' },
-      { order: 3, description: 'Electrical readings — Contact resistance R/W/B (µΩ), IR closed/open (MΩ), temperature (°C)' },
-      { order: 4, description: 'Overall result: Pass / Fail / Defect (circle one)' },
-      { order: 5, description: 'Notes / follow-up' },
-    ],
+    tasks: [],
     notes: null,
+    testKind: 'acb',
   },
   {
     assetName: 'SY3-M1-GSB-01, ACB-CB2-Feeder',
     assetId: '2638',
     location: 'SY3-GF-PR — Ground Floor Plant Room',
     workOrderNumber: null,
-    tasks: [
-      { order: 1, description: 'Breaker (Brand / Model / Serial): _______________________________________________' },
-      { order: 2, description: 'Visual & Functional checks (record anomalies in comment)' },
-      { order: 3, description: 'Electrical readings — Contact resistance R/W/B (µΩ), IR closed/open (MΩ), temperature (°C)' },
-      { order: 4, description: 'Overall result: Pass / Fail / Defect (circle one)' },
-      { order: 5, description: 'Notes / follow-up' },
-    ],
+    tasks: [],
     notes: null,
+    testKind: 'acb',
   },
   {
-    assetName: 'SY3-B3-MSB-03-ACB-CB14-B3-MSB-02',
-    assetId: '2822',
-    location: 'SY3-GF56 — Ground Floor UPS Room B3',
+    assetName: 'PBB-DB-A-A3-NSX160N',
+    assetId: '3041',
+    location: 'SYD11 — LV Switchroom B3',
     workOrderNumber: null,
-    tasks: [
-      { order: 1, description: 'Breaker (Brand / Model / Serial): _______________________________________________' },
-      { order: 2, description: 'Visual & Functional checks (record anomalies in comment)' },
-      { order: 3, description: 'Electrical readings — Contact resistance R/W/B (µΩ), IR closed/open (MΩ), temperature (°C)' },
-      { order: 4, description: 'Overall result: Pass / Fail / Defect (circle one)' },
-      { order: 5, description: 'Notes / follow-up' },
-    ],
+    tasks: [],
     notes: null,
+    testKind: 'nsx',
   },
 ]
 
