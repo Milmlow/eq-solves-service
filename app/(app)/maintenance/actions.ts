@@ -7,6 +7,7 @@ import { logAuditEvent } from '@/lib/actions/audit'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import { createNotification } from '@/lib/actions/notifications'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
+import { emitEvent } from '@/lib/canonical-sync'
 import { firstRow } from '@/lib/db/relation'
 import {
   CreateMaintenanceCheckSchema,
@@ -941,6 +942,8 @@ export async function completeCheckAction(id: string) {
 
     if (error) return { success: false, error: error.message }
 
+    void emitEvent('maintenance_check.completed', { check_id: id })
+
     // Create notification to assigned technician's supervisor (if assigned)
     if (existing.assigned_to && existing.assigned_to !== user.id) {
       const jpData = firstRow(existing.job_plans as { name: string } | { name: string }[] | null)
@@ -1501,6 +1504,14 @@ export async function raiseDefectAction(data: {
       title: input.title.trim(),
       description: input.description?.trim() ?? null,
       severity: input.severity,
+    })
+
+    void emitEvent('defect.created', {
+      defect_id: insertedRows.id,
+      check_id:  input.check_id,
+      asset_id:  input.asset_id ?? null,
+      title:     input.title.trim(),
+      severity:  input.severity,
     })
 
     await logAuditEvent({ action: 'create', entityType: 'defect', summary: `Raised defect: "${input.title}"` })
