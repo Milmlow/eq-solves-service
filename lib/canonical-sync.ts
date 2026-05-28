@@ -175,6 +175,44 @@ export async function syncSite(input: SiteSyncInput): Promise<CanonicalSyncResul
   return putCanonical('sites', input);
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Event emission — fire-and-forget canonical activity log
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Emit a canonical activity event. Fire-and-forget — never throws, never
+ * blocks the caller. Failures are logged but swallowed so EQ Service
+ * continues working even if canonical is unreachable.
+ *
+ * Events emitted from EQ Service:
+ *   defect.created              — when a defect is raised
+ *   maintenance_check.completed — when a check is marked complete
+ */
+export async function emitEvent(
+  event:   string,
+  payload: Record<string, unknown> = {},
+): Promise<void> {
+  if (!API_KEY) return;
+
+  try {
+    await fetch(`${API_URL}/.netlify/functions/canonical-api`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+        'X-Tenant':      TENANT,
+      },
+      body: JSON.stringify({ resource: 'events', event, payload }),
+    });
+  } catch (e) {
+    console.error('[canonical-sync] emitEvent failed', { event, error: (e as Error).message });
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// External-ID helpers
+// ──────────────────────────────────────────────────────────────────────
+
 /**
  * Build the standard external_id for an EQ Service customer.
  * Always prefix with "eq-service:" to avoid collisions with EQ Quotes IDs.
