@@ -35,3 +35,10 @@
 # bearer token so the route authenticates it.
 [functions."supervisor-digest-scheduler"]
   schedule = "0 21 * * *"
+
+# Overdue events — fires daily at 22:00 UTC (08:00 AEST / 09:00 AEDT).
+# Queries open defects older than 24h and maintenance checks with
+# status='overdue', emits defect.overdue + maintenance_check.overdue
+# canonical events for the AI morning briefing.
+[functions."overdue-events-scheduler"]
+  schedule = "0 22 * * *"
