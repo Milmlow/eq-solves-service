@@ -1,7 +1,7 @@
-/* Design tokens — vendored from @eq-solutions/tokens v1.0.0.
-   To update: copy the new tokens.css from the eq-design-tokens repo into
-   lib/tokens/tokens.css. See https://github.com/eq-solutions/eq-design-tokens. */
-@import "../lib/tokens/tokens.css";
+/* Design tokens — consumed from @eq-solutions/tokens (git dep, pinned v1.0.0),
+   the single source of truth. No longer vendored. The old copy at
+   lib/tokens/tokens.css is now unused and slated for deletion. */
+@import "@eq-solutions/tokens/tokens.css";
 @import "tailwindcss";
 
 /* Plus Jakarta Sans is loaded via next/font/google in app/layout.tsx,
