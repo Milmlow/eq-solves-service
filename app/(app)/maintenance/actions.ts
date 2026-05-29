@@ -1508,10 +1508,12 @@ export async function raiseDefectAction(data: {
 
     void emitEvent('defect.created', {
       defect_id: insertedRows.id,
+      reference: `DEF-${insertedRows.id.slice(0, 8).toUpperCase()}`,
       check_id:  input.check_id,
       asset_id:  input.asset_id ?? null,
       title:     input.title.trim(),
       severity:  input.severity,
+      site_id:   input.site_id ?? null,
     })
 
     // Canonical sync — fire-and-forget defect record.
@@ -1589,12 +1591,16 @@ export async function updateDefectAction(defectId: string, updates: {
       void (async () => {
         const { data: defect } = await supabase
           .from('defects')
-          .select('site_id, asset_id')
+          .select('site_id, asset_id, title, defect_number')
           .eq('id', defectId)
           .maybeSingle()
         void emitEvent('defect.resolved', {
-          defect_id: defectId,
-          site_id: defect?.site_id ?? undefined,
+          defect_id:   defectId,
+          reference:   defect?.defect_number ?? `DEF-${defectId.slice(0, 8).toUpperCase()}`,
+          title:       defect?.title ?? undefined,
+          site_id:     defect?.site_id ?? undefined,
+          resolved_by: user.email ?? user.id,
+          resolution:  input.resolution_notes ?? undefined,
         })
         // Canonical sync — push updated status on resolve/close.
         void syncDefect({
