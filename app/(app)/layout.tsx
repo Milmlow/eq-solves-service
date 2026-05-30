@@ -160,6 +160,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <AppProviders>
     <div className="flex min-h-screen bg-gray-50" style={tenantStyle}>
+      {/* Skip-navigation link (WCAG 2.4.1 — Q-W2-1/A5). Visually hidden
+          until focused, then surfaces as the first tab stop so keyboard
+          users can jump straight past the sidebar to the page content
+          instead of tabbing through all 12 nav items on every load. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-md focus:bg-eq-deep focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-eq-sky focus:ring-offset-2"
+      >
+        Skip to content
+      </a>
       <NavigationProgress />
       {/* Shell owns the nav chrome when embedded — hide Service's sidebar */}
       {!isShellIframe && (
@@ -183,7 +193,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             hasFactor={mfaHasFactor}
           />
         )}
-        <main className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8">
+        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8 focus:outline-none">
           {children}
         </main>
         {!isShellIframe && <EqFooter />}

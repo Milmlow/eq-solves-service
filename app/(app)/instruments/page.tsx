@@ -9,14 +9,26 @@ const PER_PAGE = 25
 export default async function InstrumentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; instrument_type?: string; page?: string; show_archived?: string }>
+  searchParams: Promise<{ search?: string; status?: string; instrument_type?: string; cal?: string; page?: string; show_archived?: string }>
 }) {
   const params = await searchParams
   const search = params.search ?? ''
   const statusFilter = params.status ?? ''
   const typeFilter = params.instrument_type ?? ''
+  // Calibration filter (S-W2-5): 'due_soon' = due within 30 days (incl.
+  // overdue); 'overdue' = calibration_due already past. Applied server-side
+  // against calibration_due so it works across the full register, not just
+  // the current page.
+  const calFilter = params.cal ?? ''
   const page = Math.max(1, parseInt(params.page ?? '1', 10))
   const showArchived = params.show_archived === '1'
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const soonStr = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 30)
+    return d.toISOString().slice(0, 10)
+  })()
 
   const supabase = await createClient()
 
@@ -58,6 +70,11 @@ export default async function InstrumentsPage({
 
   if (statusFilter) query = query.eq('status', statusFilter)
   if (typeFilter) query = query.eq('instrument_type', typeFilter)
+  if (calFilter === 'overdue') {
+    query = query.not('calibration_due', 'is', null).lt('calibration_due', todayStr)
+  } else if (calFilter === 'due_soon') {
+    query = query.not('calibration_due', 'is', null).lte('calibration_due', soonStr)
+  }
 
   const from = (page - 1) * PER_PAGE
   const to = from + PER_PAGE - 1

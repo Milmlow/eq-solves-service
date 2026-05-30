@@ -38,9 +38,17 @@ import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { runSupervisorDigests } from '@/lib/calendar/supervisor-digest'
 import { sendCustomerMonthlySummaryEmail } from '@/lib/email/send-customer-monthly-summary'
 import { sendCustomerUpcomingVisitEmail } from '@/lib/email/send-customer-upcoming-visit'
+import { sendCalibrationDueEmail } from '@/lib/email/send-calibration-due'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+
+// Instrument calibration reminder window — instruments whose calibration_due
+// falls within this many days (or already lapsed) trigger a reminder.
+const CALIBRATION_REMINDER_DAYS = 30
+// Re-remind cadence — a still-due instrument nudges at most once per this
+// many days per recipient (so the cron doesn't notify every 15-minute tick).
+const CALIBRATION_RENOTIFY_DAYS = 7
 
 function resolveAppUrl(req: NextRequest): string {
   return (
@@ -132,6 +140,7 @@ export async function POST(req: NextRequest) {
       preDueReminders: { eligible: 0, sent: 0, errors: 0 },
       customerMonthly: { eligible: 0, sent: 0, errors: 0 },
       customerUpcoming: { eligible: 0, sent: 0, errors: 0 },
+      instrumentCalibration: { eligible: 0, notified: 0, emailed: 0, errors: 0 },
     },
   }
 
@@ -611,6 +620,161 @@ export async function POST(req: NextRequest) {
     const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number }>
     sec.customerUpcoming.errors++
     summary['customerUpcomingError'] = (err as Error).message
+  }
+
+  // ── 5. Instrument calibration-due reminders (S-W2-5) ─────────────────
+  // Scan active instruments whose calibration_due is within the reminder
+  // window (or already lapsed). Each is routed to the user it's assigned
+  // to, falling back to the tenant's supervisors/admins when unassigned.
+  // A bell is always written (deduped to once per CALIBRATION_RENOTIFY_DAYS
+  // per recipient so it nudges weekly while still due); a digest email is
+  // best-effort and Resend-gated. An out-of-cal instrument used on-site
+  // invalidates test results — this closes that compliance gap.
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    const windowEnd = new Date()
+    windowEnd.setDate(windowEnd.getDate() + CALIBRATION_REMINDER_DAYS)
+    const windowEndStr = windowEnd.toISOString().slice(0, 10)
+
+    const { data: dueInstruments, error: instErr } = await supabase
+      .from('instruments')
+      .select('id, tenant_id, name, instrument_type, serial_number, calibration_due, assigned_to')
+      .eq('is_active', true)
+      .eq('status', 'Active')
+      .not('calibration_due', 'is', null)
+      .lte('calibration_due', windowEndStr)
+    if (instErr) throw new Error(`scan instruments: ${instErr.message}`)
+
+    type InstrumentRow = {
+      id: string; tenant_id: string; name: string; instrument_type: string
+      serial_number: string | null; calibration_due: string; assigned_to: string | null
+    }
+    const instruments = (dueInstruments ?? []) as InstrumentRow[]
+    const sec = summary.sections as Record<string, { eligible: number; notified: number; emailed: number; errors: number }>
+    sec.instrumentCalibration.eligible = instruments.length
+
+    // Resolve recipients per instrument: assigned_to, else the tenant's
+    // active supervisors/admins. Build recipient → instruments[] so each
+    // person gets ONE email covering all their due instruments. Supervisor
+    // sets are cached per tenant to avoid refetching per instrument.
+    const supervisorCache = new Map<string, string[]>()
+    async function tenantSupervisors(tenantId: string): Promise<string[]> {
+      const cached = supervisorCache.get(tenantId)
+      if (cached) return cached
+      const { data: ups } = await supabase
+        .from('tenant_members')
+        .select('user_id')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .in('role', ['super_admin', 'admin', 'supervisor'])
+      const ids = (ups ?? []).map((r) => (r as { user_id: string }).user_id)
+      supervisorCache.set(tenantId, ids)
+      return ids
+    }
+
+    // Map keyed by `${tenantId}:${userId}` → { tenantId, userId, instruments }.
+    const byRecipient = new Map<string, { tenantId: string; userId: string; items: InstrumentRow[] }>()
+    for (const inst of instruments) {
+      const recipients = inst.assigned_to
+        ? [inst.assigned_to]
+        : await tenantSupervisors(inst.tenant_id)
+      for (const uid of recipients) {
+        const key = `${inst.tenant_id}:${uid}`
+        const entry = byRecipient.get(key) ?? { tenantId: inst.tenant_id, userId: uid, items: [] }
+        entry.items.push(inst)
+        byRecipient.set(key, entry)
+      }
+    }
+
+    // Cutoff for the re-notify dedupe window.
+    const renotifyCutoff = new Date()
+    renotifyCutoff.setDate(renotifyCutoff.getDate() - CALIBRATION_RENOTIFY_DAYS)
+    const renotifyCutoffIso = renotifyCutoff.toISOString()
+
+    for (const { tenantId, userId, items } of byRecipient.values()) {
+      try {
+        // Respect opt-out (reuse the same prefs cascade as the other sections).
+        const { data: prefRows } = await supabase
+          .rpc('get_effective_notification_prefs', { p_tenant_id: tenantId, p_user_id: userId })
+        const prefs = (prefRows ?? [])[0] as PrefRow | undefined
+        if (prefs?.event_type_opt_outs.includes('instrument_calibration_due')) continue
+
+        // Per-instrument bell, deduped: skip an instrument we've already
+        // notified this user about within the re-notify window.
+        const emailItems: InstrumentRow[] = []
+        for (const inst of items) {
+          const { data: existing } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('type', 'instrument_calibration_due')
+            .eq('entity_id', inst.id)
+            .gte('created_at', renotifyCutoffIso)
+            .limit(1)
+            .maybeSingle()
+          if (existing) continue
+
+          const overdue = inst.calibration_due < today
+          const dueLabel = new Date(inst.calibration_due).toLocaleDateString('en-AU', {
+            day: '2-digit', month: 'short', year: 'numeric',
+          })
+          const { error: nErr } = await supabase.from('notifications').insert({
+            tenant_id: tenantId,
+            user_id: userId,
+            type: 'instrument_calibration_due',
+            title: overdue
+              ? `Calibration overdue: ${inst.name}`
+              : `Calibration due soon: ${inst.name}`,
+            body: [inst.instrument_type, inst.serial_number, `Due ${dueLabel}`].filter(Boolean).join(' · '),
+            entity_type: 'instrument',
+            entity_id: inst.id,
+          })
+          if (nErr) {
+            sec.instrumentCalibration.errors++
+          } else {
+            sec.instrumentCalibration.notified++
+            emailItems.push(inst)
+          }
+        }
+
+        // One digest email covering the instruments we just (re)notified
+        // about. Best-effort + Resend-gated — bells above are the reliable
+        // signal; email is the optional add-on. Skip if email disabled.
+        if (emailItems.length === 0) continue
+        if (prefs && prefs.email_enabled === false) continue
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', userId)
+          .maybeSingle()
+        if (!profile?.email) continue
+
+        const ts = await getCachedTenantSettings(tenantId)
+        const result = await sendCalibrationDueEmail({
+          to: profile.email,
+          recipientName: profile.full_name,
+          tenantName: ts?.report_company_name ?? ts?.product_name ?? 'EQ Solves',
+          instruments: emailItems.map((i) => ({
+            name: i.name,
+            instrumentType: i.instrument_type,
+            serialNumber: i.serial_number,
+            calibrationDue: i.calibration_due,
+            overdue: i.calibration_due < today,
+          })),
+          appUrl,
+          primaryColour: ts?.primary_colour ?? undefined,
+        })
+        if ('id' in result) sec.instrumentCalibration.emailed++
+      } catch (err) {
+        sec.instrumentCalibration.errors++
+        console.error(`[cron] calibration reminder failed for user ${userId}:`, err)
+      }
+    }
+  } catch (err) {
+    const sec = summary.sections as Record<string, { eligible: number; notified: number; emailed: number; errors: number }>
+    sec.instrumentCalibration.errors++
+    summary['instrumentCalibrationError'] = (err as Error).message
   }
 
   if (debugFlag) {
