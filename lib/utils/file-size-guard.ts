@@ -14,7 +14,7 @@
  */
 
 /** Max import file size in bytes. 10 MB. */
-export const IMPORT_FILE_SIZE_LIMIT = 10 * 1024 * 1024
+const IMPORT_FILE_SIZE_LIMIT = 10 * 1024 * 1024
 
 /** Pretty-print bytes for error messages and previews. */
 export function formatBytes(bytes: number): string {

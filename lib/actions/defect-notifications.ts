@@ -24,8 +24,8 @@ import { sendDefectAlertEmail } from '@/lib/email/send-defect-alert'
  * Errors are swallowed — defect creation must not be blocked by a
  * notification failure. Used by:
  *   - app/(app)/maintenance/actions.ts → raiseDefectAction
- *   - app/(app)/acb-testing/actions.ts → raiseDefectFromAcbAction
- *   - app/(app)/nsx-testing/actions.ts → raiseDefectFromNsxAction
+ *   - app/(app)/testing/acb/actions.ts → raiseTestDefectAction
+ *   - app/(app)/testing/nsx/actions.ts → raiseNsxTestDefectAction
  */
 export async function notifyDefectRaised(opts: {
   tenantId: string

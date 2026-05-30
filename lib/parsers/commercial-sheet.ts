@@ -125,7 +125,7 @@ function text(v: unknown): string {
  * pattern matches. In that case, entries get count=0 (the structural
  * shape is preserved; the actual count needs SOW review).
  */
-export function parseDueYears(comment: string): Record<string, number> {
+function parseDueYears(comment: string): Record<string, number> {
   const out: Record<string, number> = {}
   if (!comment) return out
   const countPattern = /(\d+)\s+(?:asset[s]?\s+)?due\s+in\s+(\d{4})/gi
@@ -147,7 +147,7 @@ export function parseDueYears(comment: string): Record<string, number> {
  * Pull "site code" out of the filename. Equinix template is:
  *   DELTA ELCOM_<SITE> Elec[trical] Maintenance_Commercial Sheet[s] JPs <date>.xlsx
  */
-export function extractSiteHint(filename: string): string | null {
+function extractSiteHint(filename: string): string | null {
   const m = filename.match(/^DELTA ELCOM_([A-Z0-9]+)\s/i)
   return m ? m[1].toUpperCase() : null
 }

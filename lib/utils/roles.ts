@@ -64,10 +64,3 @@ export function isSuperAdmin(role: Role | null): boolean {
 //   * Commercial-sheet is wipe-and-replace at the customer-FY level
 //     and pivots multi-year cost numbers. Admin-only — the audit-log
 //     pre-wipe snapshot is the recovery path if it goes sideways.
-//
-// `canImport` is an alias for the common case (everything except ACB
-// + commercial-sheet) so new importers default to the right gate
-// without having to re-derive the reasoning.
-export function canImport(role: Role | null): boolean {
-  return canWrite(role)
-}

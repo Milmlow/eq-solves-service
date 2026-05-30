@@ -111,7 +111,7 @@ The page-level routes remain:
 
 **Sticky Create Check button** — on `/testing/acb` and `/testing/nsx` Create Check views (PR #37), the Create button sits in a sticky bar pinned to the top of the panel so it stays visible while scrolling through 100-row asset lists.
 
-**Legacy URLs `/acb-testing` and `/nsx-testing` 308-redirect** to the canonical `/testing/{acb,nsx}` routes via `next.config.ts`. The route folders only contain `actions.ts` (still imported by the new pages) — old `page.tsx` + List/Form/Detail components were dropped in PR #33.
+**Legacy URLs `/acb-testing` and `/nsx-testing` 308-redirect** to the canonical `/testing/{acb,nsx}` routes via `next.config.ts`. The redirect is config-only — the old `/acb-testing` and `/nsx-testing` route folders were removed entirely; their `actions.ts` now lives at `/testing/{acb,nsx}/actions.ts` (old `page.tsx` + List/Form/Detail components were dropped in PR #33).
 
 ## ACB Testing Module
 

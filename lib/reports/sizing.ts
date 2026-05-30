@@ -29,12 +29,3 @@ export const SITE_PHOTO_COVER = { maxWidth: 600, maxHeight: 300 } as const
 
 // Default for fetchLogoImage callers that don't know the surface yet.
 export const LOGO_DEFAULT = { maxWidth: 180, maxHeight: 60 } as const
-
-// Clear-space spacing in twips (docx's spacing unit; 1 inch = 1440 twips).
-// Approximation of "equal to logo height" — using the maxHeight as the
-// pixel-to-twip mapping. 80px logo height ≈ 60 points ≈ 1200 twips.
-//
-// These are conservative defaults used by buildMasthead / buildCover.
-// Generators that want tighter packing can override per-paragraph.
-export const SPACING_LOGO_AFTER = 400 // ≈ 0.28 inch
-export const SPACING_LOGO_BEFORE = 200

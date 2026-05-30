@@ -20,7 +20,6 @@ import {
   ImageRun,
 } from 'docx'
 import { FONT_BODY } from './typography'
-import { EQ_MID_GREY } from './colours'
 
 export interface LogoImage {
   data: Buffer
@@ -176,37 +175,5 @@ export function buildMasthead(opts: {
     alignment: AlignmentType.JUSTIFIED,
     spacing: { after: 400 },
     children,
-  })
-}
-
-/**
- * Build a 2-column footer with company name (left) and page numbering (right).
- * Format: `{companyName} — {reportType} — rev 3.1` | `Page X of Y`
- */
-export function buildFooterParagraph(opts: {
-  companyName: string
-  reportType: string
-}): Paragraph {
-  const { companyName, reportType } = opts
-
-  return new Paragraph({
-    alignment: AlignmentType.JUSTIFIED,
-    children: [
-      new TextRun({
-        text: `${companyName} — ${reportType} — rev 3.1`,
-        size: 16,
-        font: FONT_BODY,
-        color: EQ_MID_GREY,
-      }),
-      new TextRun({
-        text: '\t',
-      }),
-      new TextRun({
-        text: 'Page ',
-        size: 16,
-        font: FONT_BODY,
-        color: EQ_MID_GREY,
-      }),
-    ],
   })
 }
