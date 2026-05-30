@@ -34,7 +34,7 @@ import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 const ASSET_TABLE_COLLAPSE_THRESHOLD = 10
 const ATTACHMENTS_COLLAPSE_THRESHOLD = 5
 import type { MaintenanceCheck, MaintenanceCheckItem, CheckAsset, CheckStatus, CheckItemResult, Attachment } from '@/lib/types'
-import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Send, Trash2 } from 'lucide-react'
+import { CheckCircle, XCircle, MinusCircle, Download, ChevronDown, ChevronRight, ClipboardPaste, CheckCheck, ArrowLeft, Send, Trash2, Calendar, Mail, Pencil, Check, X as XIcon } from 'lucide-react'
 import Link from 'next/link'
 import { events as analyticsEvents } from '@/lib/analytics'
 import { SendReportModal } from './SendReportModal'
@@ -43,6 +43,7 @@ import type { ReportComplexity } from '@/components/ui/ReportDownloadDialog'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { PrintBlankButton } from './components/PrintBlankButton'
 import { PrintReportSplit } from './components/PrintReportSplit'
+import { updateCheckScheduledStartAction, sendTechBriefAction } from './tech-brief-actions'
 
 interface CheckAssetWithDetails extends CheckAsset {
   assets?: { name: string; maximo_id: string | null; location: string | null; job_plans?: { name: string } | null } | null
@@ -143,6 +144,13 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, assetF
   const [showSendReport, setShowSendReport] = useState(false)
   const [showReportDialog, setShowReportDialog] = useState(false)
   const [deleteStatus, setDeleteStatus] = useState<'idle' | 'deleting' | 'deleted'>('idle')
+  // Pre-visit tech brief: inline scheduled_start_at editor state
+  const rawScheduledStart = (check as unknown as { scheduled_start_at?: string | null }).scheduled_start_at
+  const [scheduledStart, setScheduledStart] = useState<string | null>(rawScheduledStart ?? null)
+  const [editingStart, setEditingStart] = useState(false)
+  const [startDraft, setStartDraft] = useState<string>('')
+  const [briefSending, setBriefSending] = useState(false)
+  const [briefResult, setBriefResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const confirm = useConfirm()
 
   async function handleDownloadReport(complexity: ReportComplexity) {
@@ -533,6 +541,45 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, assetF
     setPasteText('')
   }
 
+  // Pre-visit tech brief handlers
+  function handleEditStart() {
+    // Convert stored ISO (with timezone) to datetime-local format (YYYY-MM-DDTHH:mm)
+    let initial = ''
+    if (scheduledStart) {
+      try {
+        const d = new Date(scheduledStart)
+        // datetime-local requires YYYY-MM-DDTHH:mm in local time
+        const pad = (n: number) => String(n).padStart(2, '0')
+        initial = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+      } catch { /* ignore */ }
+    }
+    setStartDraft(initial)
+    setEditingStart(true)
+  }
+
+  async function handleSaveStart() {
+    const isoValue = startDraft ? new Date(startDraft).toISOString() : null
+    const result = await updateCheckScheduledStartAction(check.id, isoValue)
+    if (!result.success) {
+      setError(result.error ?? 'Failed to save start time.')
+    } else {
+      setScheduledStart(isoValue)
+      setEditingStart(false)
+    }
+  }
+
+  async function handleSendBrief() {
+    setBriefResult(null)
+    setBriefSending(true)
+    const result = await sendTechBriefAction(check.id)
+    setBriefSending(false)
+    if (result.success) {
+      setBriefResult({ ok: true, msg: result.message })
+    } else {
+      setBriefResult({ ok: false, msg: result.error })
+    }
+  }
+
   const completedCount = items.filter(i => i.result !== null).length
   const totalCount = items.length
   const completedAssets = sortedAssets.filter(ca => ca.status === 'completed').length
@@ -571,6 +618,60 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, assetF
               )}
             </div>
           </div>
+
+          {/* Scheduled start — inline editor (pre-visit tech brief, Phase 1) */}
+          {canWriteRole && (
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <dt className="text-xs font-bold text-eq-grey uppercase flex items-center gap-1.5">
+                <Calendar className="w-3 h-3" /> Visit start time
+              </dt>
+              {editingStart ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="datetime-local"
+                    value={startDraft}
+                    onChange={(e) => setStartDraft(e.target.value)}
+                    className="h-8 px-2 border border-gray-200 rounded text-sm text-eq-ink bg-white focus:outline-none focus:border-eq-deep focus:ring-2 focus:ring-eq-sky/20"
+                  />
+                  <button
+                    onClick={handleSaveStart}
+                    className="p-1.5 rounded bg-eq-sky text-white hover:bg-eq-deep transition-colors"
+                    aria-label="Save start time"
+                    title="Save"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setEditingStart(false)}
+                    className="p-1.5 rounded border border-gray-200 text-eq-grey hover:bg-gray-100 transition-colors"
+                    aria-label="Cancel editing start time"
+                    title="Cancel"
+                  >
+                    <XIcon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-1">
+                  <dd className="text-eq-ink text-sm">
+                    {scheduledStart
+                      ? new Date(scheduledStart).toLocaleString('en-AU', {
+                          weekday: 'short', day: 'numeric', month: 'short',
+                          hour: 'numeric', minute: '2-digit', hour12: true,
+                        })
+                      : <span className="text-eq-grey italic">Not set</span>}
+                  </dd>
+                  <button
+                    onClick={handleEditStart}
+                    className="p-1 rounded text-eq-grey hover:text-eq-ink hover:bg-gray-100 transition-colors"
+                    aria-label="Edit visit start time"
+                    title="Edit"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Action buttons */}
@@ -663,11 +764,34 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, assetF
               <PrintReportSplit checkId={check.id} />
             </>
           )}
+          {/* Send brief — admin/supervisor, only when a tech is assigned */}
+          {canWriteRole && check.assigned_to && check.status !== 'cancelled' && (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={briefSending}
+              onClick={handleSendBrief}
+              title="Email the assigned tech a visit brief with site access notes and an .ics calendar invite"
+            >
+              <Mail className="w-3.5 h-3.5 mr-1.5" />
+              Send brief
+            </Button>
+          )}
           {isAdmin && (
             <Button size="sm" variant="danger" onClick={handleDelete} loading={loading}>Delete</Button>
           )}
         </div>
       </div>
+
+      {/* Brief result feedback */}
+      {briefResult && (
+        <div className={`flex items-start gap-2 text-xs px-4 py-2.5 rounded-lg border ${briefResult.ok ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
+          {briefResult.ok
+            ? <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            : <XIcon className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+          <span>{briefResult.msg}</span>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg">{error}</p>}
 
