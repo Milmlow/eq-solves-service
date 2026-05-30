@@ -16,6 +16,10 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
+  // @eq-solutions/ui ships TypeScript source directly (no pre-build step).
+  // transpilePackages tells both Turbopack and Webpack to compile this package
+  // through the app's own transpiler so the .ts/.tsx source files are handled.
+  transpilePackages: ['@eq-solutions/ui'],
   turbopack: {
     root: projectRoot,
   },
