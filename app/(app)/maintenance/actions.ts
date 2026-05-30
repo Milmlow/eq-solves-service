@@ -1591,12 +1591,12 @@ export async function updateDefectAction(defectId: string, updates: {
       void (async () => {
         const { data: defect } = await supabase
           .from('defects')
-          .select('site_id, asset_id, title, defect_number')
+          .select('site_id, asset_id, title')
           .eq('id', defectId)
           .maybeSingle()
         void emitEvent('defect.resolved', {
           defect_id:   defectId,
-          reference:   defect?.defect_number ?? `DEF-${defectId.slice(0, 8).toUpperCase()}`,
+          reference:   `DEF-${defectId.slice(0, 8).toUpperCase()}`,
           title:       defect?.title ?? undefined,
           site_id:     defect?.site_id ?? undefined,
           resolved_by: user.email ?? user.id,
