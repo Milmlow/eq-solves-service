@@ -4,7 +4,7 @@
 export type CsvCell = string | number | boolean | null | undefined
 
 /** Escape a single CSV cell per RFC 4180. */
-export function escapeCsvCell(value: CsvCell): string {
+function escapeCsvCell(value: CsvCell): string {
   if (value === null || value === undefined) return ''
   const s = String(value)
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`

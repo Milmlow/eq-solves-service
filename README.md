@@ -50,8 +50,8 @@ npm run dev
 | Document | Purpose |
 |----------|---------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Stack, schema, auth flow, key decisions |
-| [SPEC.md](SPEC.md) | Feature spec with acceptance criteria |
-| [ROADMAP.md](ROADMAP.md) | Sprint progress and migration log |
+| [SPEC.md](archive/SPEC.md) | Feature spec with acceptance criteria _(archived — frozen at Sprint 27; current behaviour in CLAUDE.md)_ |
+| [ROADMAP.md](archive/ROADMAP.md) | Sprint progress and migration log _(archived — source of truth is `supabase/migrations/`)_ |
 | [CHANGELOG.md](CHANGELOG.md) | Per-session change log |
 | [LOCAL_DEV.md](LOCAL_DEV.md) | Local development setup and testing guide |
 | [AI_STRATEGY.md](AI_STRATEGY.md) | Phased AI feature roadmap |
@@ -81,4 +81,4 @@ auto-creation from failed items/readings, and contract-scope asset
 linkage. Look at the `supabase/migrations/` directory for the current
 list and any new additions.
 
-See [ROADMAP.md](ROADMAP.md) for the full migration table (note: the table in ROADMAP.md is currently behind — source of truth is `supabase/migrations/`).
+See [ROADMAP.md](archive/ROADMAP.md) (archived) for the historical migration table — the source of truth is `supabase/migrations/`.

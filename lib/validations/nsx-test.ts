@@ -28,9 +28,6 @@ export const CreateNsxReadingSchema = z.object({
   sort_order: z.coerce.number().int().min(0).default(0),
 })
 
-export const UpdateNsxReadingSchema = CreateNsxReadingSchema.partial()
-
 export type CreateNsxTestInput = z.infer<typeof CreateNsxTestSchema>
 export type UpdateNsxTestInput = z.infer<typeof UpdateNsxTestSchema>
 export type CreateNsxReadingInput = z.infer<typeof CreateNsxReadingSchema>
-export type UpdateNsxReadingInput = z.infer<typeof UpdateNsxReadingSchema>

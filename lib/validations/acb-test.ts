@@ -32,9 +32,6 @@ export const CreateAcbReadingSchema = z.object({
   sort_order: z.coerce.number().int().min(0).default(0),
 })
 
-export const UpdateAcbReadingSchema = CreateAcbReadingSchema.partial()
-
 export type CreateAcbTestInput = z.infer<typeof CreateAcbTestSchema>
 export type UpdateAcbTestInput = z.infer<typeof UpdateAcbTestSchema>
 export type CreateAcbReadingInput = z.infer<typeof CreateAcbReadingSchema>
-export type UpdateAcbReadingInput = z.infer<typeof UpdateAcbReadingSchema>

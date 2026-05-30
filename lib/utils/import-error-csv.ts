@@ -27,7 +27,7 @@ export interface ImportErrorRow {
   reason: string
 }
 
-export function buildImportErrorCsv(rows: ImportErrorRow[]): string {
+function buildImportErrorCsv(rows: ImportErrorRow[]): string {
   const header = 'Reference,Context,Reason'
   const lines = [header]
   for (const r of rows) {
