@@ -234,10 +234,18 @@ export function DefectRow({ defect, team, canWrite, currentUserId }: DefectRowPr
           )}
 
           {/* Read-only metadata */}
-          <div className="flex items-center gap-4 text-xs text-eq-grey">
+          <div className="flex flex-wrap items-center gap-4 text-xs text-eq-grey">
             <span>Raised: {formatDate(defect.created_at)}</span>
             {defect.resolved_at && <span>Resolved: {formatDate(defect.resolved_at)}</span>}
             {defect.work_order_date && <span>WO date: {formatDate(defect.work_order_date)}</span>}
+            {/* S-W2-1 — shareable detail page with photo evidence. */}
+            <a
+              href={`/defects/${defect.id}`}
+              className="ml-auto font-medium text-eq-sky hover:text-eq-deep transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Open full page ↗
+            </a>
           </div>
         </div>
       )}

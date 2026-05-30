@@ -107,9 +107,19 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <StatusBadge status={asset!.is_active ? 'active' : 'inactive'} />
-            {canWriteRole && (
-              <Button size="sm" onClick={() => setEditMode(true)}>Edit</Button>
-            )}
+            <div className="flex items-center gap-3">
+              {/* S-W2-4 — deep link to the full asset history page (checks,
+                  tests, defects, attachments, calibration). */}
+              <a
+                href={`/assets/${asset!.id}`}
+                className="text-sm font-medium text-eq-sky hover:text-eq-deep transition-colors"
+              >
+                View full history →
+              </a>
+              {canWriteRole && (
+                <Button size="sm" onClick={() => setEditMode(true)}>Edit</Button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm">

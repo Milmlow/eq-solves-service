@@ -147,6 +147,16 @@ export function InstrumentList({
           filters={[
             { key: 'status', label: 'All Statuses', options: statusOptions },
             { key: 'instrument_type', label: 'All Types', options: typeOptions },
+            // S-W2-5 — surface instruments whose calibration is lapsing so a
+            // tech doesn't take an out-of-cal meter on-site.
+            {
+              key: 'cal',
+              label: 'All Calibration',
+              options: [
+                { value: 'due_soon', label: 'Calibration Due Soon' },
+                { value: 'overdue', label: 'Calibration Overdue' },
+              ],
+            },
           ]}
         />
         <div className="flex items-center gap-2 ml-4 shrink-0">

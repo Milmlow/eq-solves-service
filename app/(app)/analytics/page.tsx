@@ -1,10 +1,52 @@
 ﻿import { createClient } from '@/lib/supabase/server'
 import { Card } from '@/components/ui/Card'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { AnalyticsFilters } from './AnalyticsFilters'
 import { AnalyticsCharts } from './AnalyticsCharts'
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ customer_id?: string; from?: string; to?: string }>
+}) {
+  const params = await searchParams
+  const customerId = params.customer_id ?? ''
+  // Date-range filter (S-W2-2). Applied to maintenance_checks.due_date and
+  // the test tables' test_date. Empty = all-time (existing behaviour).
+  const fromDate = params.from ?? ''
+  const toDate = params.to ?? ''
+
   const supabase = await createClient()
+
+  // Resolve the customer filter to a set of site IDs up front — the check
+  // and test tables don't carry customer_id, so we scope them by site.
+  // Empty customerId = tenant-wide (no site scoping).
+  let customerSiteIds: string[] | null = null
+  if (customerId) {
+    const { data: custSites } = await supabase
+      .from('sites')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('is_active', true)
+      .limit(10000)
+    customerSiteIds = (custSites ?? []).map((s) => s.id as string)
+    // No sites for this customer → force an empty result set everywhere.
+    if (customerSiteIds.length === 0) customerSiteIds = ['00000000-0000-0000-0000-000000000000']
+  }
+
+  // Helper to apply the shared site + date-range scoping to a query builder.
+  // `dateCol` differs per table (checks use due_date, tests use test_date).
+  function scope<T extends { in: (c: string, v: string[]) => T; gte: (c: string, v: string) => T; lte: (c: string, v: string) => T }>(
+    q: T,
+    dateCol: string,
+    siteCol: string | null,
+  ): T {
+    let out = q
+    if (customerSiteIds && siteCol) out = out.in(siteCol, customerSiteIds)
+    if (fromDate) out = out.gte(dateCol, fromDate)
+    if (toDate) out = out.lte(dateCol, toDate)
+    return out
+  }
 
   // ── Fetch raw data in parallel ──
   const [
@@ -15,14 +57,16 @@ export default async function AnalyticsPage() {
     { data: nsxTests },
     { data: instruments },
     { data: sites },
+    { data: customers },
   ] = await Promise.all([
     supabase.from('assets').select('id', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('maintenance_checks').select('id, status, due_date, completed_at, created_at').eq('is_active', true).limit(10000),
-    supabase.from('test_records').select('id, result, test_date, created_at').eq('is_active', true).limit(10000),
-    supabase.from('acb_tests').select('id, overall_result, test_date, created_at').eq('is_active', true).limit(10000),
-    supabase.from('nsx_tests').select('id, overall_result, test_date, created_at').eq('is_active', true).limit(10000),
+    scope(supabase.from('maintenance_checks').select('id, status, due_date, completed_at, created_at, assigned_to, site_id').eq('is_active', true), 'due_date', 'site_id').limit(10000),
+    scope(supabase.from('test_records').select('id, result, test_date, created_at, site_id').eq('is_active', true), 'test_date', 'site_id').limit(10000),
+    scope(supabase.from('acb_tests').select('id, overall_result, test_date, created_at, site_id').eq('is_active', true), 'test_date', 'site_id').limit(10000),
+    scope(supabase.from('nsx_tests').select('id, overall_result, test_date, created_at, site_id').eq('is_active', true), 'test_date', 'site_id').limit(10000),
     supabase.from('instruments').select('id, status, calibration_due, is_active').eq('is_active', true).limit(10000),
     supabase.from('sites').select('id, name').eq('is_active', true).limit(10000),
+    supabase.from('customers').select('id, name').eq('is_active', true).order('name').limit(10000),
   ])
 
   // ── Monthly test volume (last 12 months) ──
@@ -135,13 +179,87 @@ export default async function AnalyticsPage() {
     { label: 'NSX Tests', pass: nsxPass, total: nsxTotal },
   ]
 
+  // ── Per-technician cut (S-W2-2) ──
+  // Aggregate the (already customer + date scoped) checks by assigned_to:
+  // total / completed / overdue / avg days-to-complete. Answers "who is our
+  // slowest tech?" — the question every account review asks.
+  type TechAgg = { total: number; completed: number; overdue: number; sumDays: number; daysCount: number }
+  const techAgg = new Map<string, TechAgg>()
+  for (const c of checks ?? []) {
+    const uid = c.assigned_to as string | null
+    if (!uid) continue
+    const a = techAgg.get(uid) ?? { total: 0, completed: 0, overdue: 0, sumDays: 0, daysCount: 0 }
+    a.total++
+    if (c.status === 'complete') {
+      a.completed++
+      if (c.completed_at && c.created_at) {
+        const days = (new Date(c.completed_at).getTime() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24)
+        if (Number.isFinite(days) && days >= 0) { a.sumDays += days; a.daysCount++ }
+      }
+    }
+    if (c.status === 'overdue') a.overdue++
+    techAgg.set(uid, a)
+  }
+
+  // Resolve technician display names for the rows we actually have.
+  const techIds = [...techAgg.keys()]
+  const techNameById = new Map<string, string>()
+  if (techIds.length > 0) {
+    const { data: techProfiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', techIds)
+    for (const p of techProfiles ?? []) {
+      techNameById.set(p.id, p.full_name ?? p.email ?? 'Unknown')
+    }
+  }
+
+  const technicianRows = techIds
+    .map((uid) => {
+      const a = techAgg.get(uid)!
+      return {
+        id: uid,
+        name: techNameById.get(uid) ?? 'Unknown',
+        total: a.total,
+        completed: a.completed,
+        overdue: a.overdue,
+        completionRate: a.total > 0 ? Math.round((a.completed / a.total) * 100) : 0,
+        avgDays: a.daysCount > 0 ? Math.round(a.sumDays / a.daysCount) : null,
+      }
+    })
+    // Busiest first, then slowest as the tiebreak.
+    .sort((x, y) => y.total - x.total || (y.avgDays ?? 0) - (x.avgDays ?? 0))
+
+  const customerOptions = (customers ?? []).map((c) => ({ value: c.id as string, label: c.name as string }))
+  const selectedCustomerName = customerId
+    ? (customers ?? []).find((c) => c.id === customerId)?.name ?? null
+    : null
+  const rangeLabel = fromDate || toDate
+    ? `${fromDate || '…'} → ${toDate || '…'}`
+    : null
+
   return (
     <div className="space-y-6">
       <div>
         <Breadcrumb items={[{ label: 'Home', href: '/dashboard' }, { label: 'Analytics' }]} />
         <h1 className="text-3xl font-bold text-eq-sky mt-2">Analytics</h1>
-        <p className="text-sm text-eq-grey mt-1">Platform-wide usage trends and performance metrics</p>
+        <p className="text-sm text-eq-grey mt-1">
+          {selectedCustomerName || rangeLabel ? (
+            <>
+              Showing
+              {selectedCustomerName ? <span className="font-medium text-eq-ink"> {selectedCustomerName}</span> : ' all customers'}
+              {rangeLabel ? <span className="font-medium text-eq-ink"> · {rangeLabel}</span> : ''}
+            </>
+          ) : (
+            'Platform-wide usage trends and performance metrics'
+          )}
+        </p>
       </div>
+
+      {/* Customer + date-range cut (S-W2-2) */}
+      <Card>
+        <AnalyticsFilters customers={customerOptions} />
+      </Card>
 
       {/* Top KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -261,6 +379,44 @@ export default async function AnalyticsPage() {
           </div>
         </Card>
       </div>
+
+      {/* Per-technician cut (S-W2-2) — checks completed / overdue / avg
+          time-to-complete, honouring the customer + date-range filter. */}
+      <Card>
+        <h2 className="text-sm font-bold text-eq-ink mb-4">By Technician</h2>
+        {technicianRows.length === 0 ? (
+          <p className="text-sm text-eq-grey">
+            No assigned maintenance checks{selectedCustomerName ? ` for ${selectedCustomerName}` : ''}{rangeLabel ? ` in ${rangeLabel}` : ''}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] font-bold text-eq-grey uppercase tracking-wide border-b border-gray-100">
+                  <th className="py-2 pr-4 font-bold">Technician</th>
+                  <th className="py-2 px-4 font-bold text-right">Assigned</th>
+                  <th className="py-2 px-4 font-bold text-right">Completed</th>
+                  <th className="py-2 px-4 font-bold text-right">Overdue</th>
+                  <th className="py-2 px-4 font-bold text-right">Completion</th>
+                  <th className="py-2 pl-4 font-bold text-right">Avg days</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {technicianRows.map((t) => (
+                  <tr key={t.id}>
+                    <td className="py-2.5 pr-4 text-eq-ink font-medium">{t.name}</td>
+                    <td className="py-2.5 px-4 text-right text-eq-ink">{t.total}</td>
+                    <td className="py-2.5 px-4 text-right text-eq-ink">{t.completed}</td>
+                    <td className={`py-2.5 px-4 text-right ${t.overdue > 0 ? 'text-red-600 font-medium' : 'text-eq-ink'}`}>{t.overdue}</td>
+                    <td className={`py-2.5 px-4 text-right font-medium ${t.completionRate >= 80 ? 'text-green-600' : t.completionRate >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{t.completionRate}%</td>
+                    <td className="py-2.5 pl-4 text-right text-eq-ink">{t.avgDays ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   )
 }

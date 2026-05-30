@@ -577,6 +577,260 @@ const exportAcbTest: EntityExporter = async (supabase, tenantId) => {
   };
 };
 
+/**
+ * NSX tests — same shape as ACB minus the readings child split. The
+ * nsx_tests table carries the full collection + result fields inline
+ * (no separate nsx_test_readings table), so this is a flat reshape.
+ */
+const exportNsxTest: EntityExporter = async (supabase, tenantId) => {
+  const { data, error } = await supabase
+    .from('nsx_tests')
+    .select('*')
+    .eq('tenant_id', tenantId)
+  if (error) throw error
+
+  const rows = asRows(data).map((t) => {
+    const out: Row = {
+      nsx_test_id: t.id,
+      tenant_id: tenantId,
+      asset_id: t.asset_id,
+      site_id: t.site_id,
+      check_id: t.check_id,
+      test_date: t.test_date,
+      tested_by_user_id: t.tested_by,
+      assigned_to_user_id: t.assigned_to,
+      test_type: t.test_type,
+      brand: t.brand,
+      breaker_type: t.breaker_type,
+      name_location: t.name_location,
+      protection_unit_fitted: t.protection_unit_fitted,
+      trip_unit_model: t.trip_unit_model,
+      current_in: t.current_in,
+      fixed_withdrawable: t.fixed_withdrawable,
+      cb_make: t.cb_make,
+      cb_model: t.cb_model,
+      cb_serial: t.cb_serial,
+      cb_rating: t.cb_rating,
+      cb_poles: t.cb_poles,
+      trip_unit: t.trip_unit,
+      long_time_ir: t.long_time_ir,
+      long_time_delay_tr: t.long_time_delay_tr,
+      short_time_pickup_isd: t.short_time_pickup_isd,
+      short_time_delay_tsd: t.short_time_delay_tsd,
+      instantaneous_pickup: t.instantaneous_pickup,
+      earth_fault_pickup: t.earth_fault_pickup,
+      earth_fault_delay: t.earth_fault_delay,
+      motor_charge: t.motor_charge,
+      shunt_trip_mx1: t.shunt_trip_mx1,
+      shunt_close_xf: t.shunt_close_xf,
+      undervoltage_mn: t.undervoltage_mn,
+      overall_result: t.overall_result,
+      step1_status: t.step1_status,
+      step2_status: t.step2_status,
+      step3_status: t.step3_status,
+      active: t.is_active,
+      notes: t.notes,
+    }
+    return out
+  })
+
+  return {
+    schema_id: schemaId('service', 'nsx-test'),
+    schema_version: '1.0.0',
+    count: rows.length,
+    rows,
+  }
+}
+
+/**
+ * RCD tests with their child per-circuit timing rows. Mirrors the ACB
+ * parent+child pattern: rcd_test_circuits are grouped under their parent
+ * rcd_test_id and emitted as a nested `circuits` array. AS/NZS 3760
+ * per-circuit timing is the compliance-grade payload here.
+ */
+const exportRcdTest: EntityExporter = async (supabase, tenantId) => {
+  const { data: tests, error: testsErr } = await supabase
+    .from('rcd_tests')
+    .select('*')
+    .eq('tenant_id', tenantId)
+  if (testsErr) throw testsErr
+
+  const testIds = asRows(tests).map((t) => t.id as string)
+  let circuits: Row[] = []
+  if (testIds.length > 0) {
+    const { data: circuitData, error: circuitErr } = await supabase
+      .from('rcd_test_circuits')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .in('rcd_test_id', testIds)
+    if (circuitErr) throw circuitErr
+    circuits = asRows(circuitData)
+  }
+
+  // Group circuits by parent test id.
+  const circuitsByTest = new Map<string, Row[]>()
+  for (const c of circuits) {
+    const tid = c.rcd_test_id as string
+    const canonical: Row = {
+      circuit_id: c.id,
+      tenant_id: tenantId,
+      rcd_test_id: tid,
+      section_label: c.section_label,
+      circuit_no: c.circuit_no,
+      normal_trip_current_ma: c.normal_trip_current_ma,
+      jemena_circuit_asset_id: c.jemena_circuit_asset_id,
+      is_critical_load: c.is_critical_load,
+      x1_no_trip_0_ms: c.x1_no_trip_0_ms,
+      x1_no_trip_180_ms: c.x1_no_trip_180_ms,
+      x1_trip_0_ms: c.x1_trip_0_ms,
+      x1_trip_180_ms: c.x1_trip_180_ms,
+      x5_fast_0_ms: c.x5_fast_0_ms,
+      x5_fast_180_ms: c.x5_fast_180_ms,
+      trip_test_button_ok: c.trip_test_button_ok,
+      action_taken: c.action_taken,
+      sort_order: c.sort_order ?? 0,
+    }
+    if (!circuitsByTest.has(tid)) circuitsByTest.set(tid, [])
+    circuitsByTest.get(tid)!.push(canonical)
+  }
+
+  const rows = asRows(tests).map((t) => {
+    const out: Row = {
+      rcd_test_id: t.id,
+      tenant_id: tenantId,
+      asset_id: t.asset_id,
+      site_id: t.site_id,
+      customer_id: t.customer_id,
+      check_id: t.check_id,
+      test_date: t.test_date,
+      tested_by_user_id: t.technician_user_id,
+      technician_name: t.technician_name_snapshot,
+      technician_initials: t.technician_initials,
+      site_rep_name: t.site_rep_name,
+      equipment_used: t.equipment_used,
+      status: t.status,
+      active: t.is_active,
+      notes: t.notes,
+      circuits: circuitsByTest.get(t.id as string) ?? [],
+    }
+    return out
+  })
+
+  return {
+    schema_id: schemaId('service', 'rcd-test'),
+    schema_version: '1.0.0',
+    count: rows.length,
+    rows,
+  }
+}
+
+/**
+ * Contract scope — included/excluded scope register per customer per FY.
+ * Carries the commercial costing JSON (cycle_costs, year_totals,
+ * labour_hours_per_asset, due_years) through verbatim; the canonical
+ * schema treats these as opaque structured payloads.
+ */
+const exportContractScope: EntityExporter = async (supabase, tenantId) => {
+  const { data, error } = await supabase
+    .from('contract_scopes')
+    .select('*')
+    .eq('tenant_id', tenantId)
+  if (error) throw error
+
+  const rows = asRows(data).map((r) => {
+    const out: Row = {
+      contract_scope_id: r.id,
+      tenant_id: tenantId,
+      customer_id: r.customer_id,
+      site_id: r.site_id,
+      asset_id: r.asset_id,
+      job_plan_id: r.job_plan_id,
+      jp_code: r.jp_code,
+      financial_year: r.financial_year,
+      scope_item: r.scope_item,
+      is_included: r.is_included,
+      billing_basis: r.billing_basis,
+      asset_qty: r.asset_qty,
+      unit_rate_per_asset: r.unit_rate_per_asset,
+      labour_hours_per_asset: r.labour_hours_per_asset,
+      cycle_costs: r.cycle_costs,
+      year_totals: r.year_totals,
+      due_years: r.due_years,
+      intervals_text: r.intervals_text,
+      has_bundled_scope: r.has_bundled_scope,
+      commercial_gap: r.commercial_gap,
+      period_status: r.period_status,
+      status: r.status,
+      notes: r.notes,
+    }
+    return out
+  })
+
+  return {
+    schema_id: schemaId('service', 'contract-scope'),
+    schema_version: '1.0.0',
+    count: rows.length,
+    rows,
+  }
+}
+
+/**
+ * PM calendar — planned maintenance visit schedule. Only active rows are
+ * exported (the calendar uses is_active soft-delete). Carries the
+ * scheduling + approval + contractor-coordination fields; the commercial
+ * cost breakdown JSON is passed through opaque.
+ */
+const exportPmCalendar: EntityExporter = async (supabase, tenantId) => {
+  const { data, error } = await supabase
+    .from('pm_calendar')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+  if (error) throw error
+
+  const rows = asRows(data).map((r) => {
+    const out: Row = {
+      pm_calendar_id: r.id,
+      tenant_id: tenantId,
+      site_id: r.site_id,
+      contract_scope_id: r.contract_scope_id,
+      assigned_to_user_id: r.assigned_to,
+      title: r.title,
+      description: r.description,
+      category: r.category,
+      status: r.status,
+      draft_status: r.draft_status,
+      financial_year: r.financial_year,
+      quarter: r.quarter,
+      period_type: r.period_type,
+      period_label: r.period_label,
+      block_or_zone: r.block_or_zone,
+      location: r.location,
+      start_time: r.start_time,
+      end_time: r.end_time,
+      hours: r.hours,
+      recurrence_rule: r.recurrence_rule,
+      recurrence_parent_id: r.recurrence_parent_id,
+      reminder_days_before: r.reminder_days_before,
+      scope_in_words: r.scope_in_words,
+      site_access_notes: r.site_access_notes,
+      tech_notes: r.tech_notes,
+      customer_approved_at: r.customer_approved_at,
+      customer_approver_name: r.customer_approver_name,
+      customer_approver_email: r.customer_approver_email,
+      active: r.is_active,
+    }
+    return out
+  })
+
+  return {
+    schema_id: schemaId('service', 'pm-calendar'),
+    schema_version: '1.0.0',
+    count: rows.length,
+    rows,
+  }
+}
+
 // ── Registry ────────────────────────────────────────────────────────
 
 /**
@@ -597,11 +851,11 @@ export const ENTITY_EXPORTERS: Record<string, EntityExporter> = {
   maintenance_check: exportMaintenanceCheck,
   check_asset: exportCheckAsset,
   check_item: exportCheckItem,
-  contract_scope: async () => stub("service", "contract-scope"),
-  pm_calendar: async () => stub("service", "pm-calendar"),
+  contract_scope: exportContractScope,
+  pm_calendar: exportPmCalendar,
   acb_test: exportAcbTest,
-  nsx_test: async () => stub("service", "nsx-test"),
-  rcd_test: async () => stub("service", "rcd-test"),
+  nsx_test: exportNsxTest,
+  rcd_test: exportRcdTest,
   defect: exportDefect,
 };
 
