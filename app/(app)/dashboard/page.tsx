@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { AlertTriangle, Check } from 'lucide-react'
 import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { Card } from '@/components/ui/Card'
 import Link from 'next/link'
@@ -380,7 +381,7 @@ export default async function DashboardPage({
         <Link href="/maintenance?status=overdue" className="block">
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 hover:border-amber-300 transition-colors">
             <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-              <span className="text-lg">⚠️</span>
+              <AlertTriangle className="w-5 h-5 text-amber-600" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-amber-800">
@@ -486,7 +487,7 @@ export default async function DashboardPage({
           {defectCounts.total === 0 ? (
             <div className="text-center py-6">
               <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-2">
-                <span className="text-green-500 text-lg">✓</span>
+                <Check className="w-5 h-5 text-green-500" aria-hidden="true" />
               </div>
               <p className="text-sm text-eq-grey">{effectiveView === 'mine' ? 'No defects raised by you' : 'No open defects'}</p>
             </div>

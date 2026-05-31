@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { FormInput } from '@/components/ui/FormInput'
 import { updateCompanyDetailsAction, createFirstSiteAction, completeOnboardingAction, skipOnboardingAction } from './actions'
-import { Building2, MapPin, Rocket, ChevronRight, X } from 'lucide-react'
+import { Building2, MapPin, Rocket, ChevronRight, X, Check } from 'lucide-react'
 
 const AU_STATES = ['ACT', 'NSW', 'NT', 'QLD', 'SA', 'TAS', 'VIC', 'WA']
 
@@ -97,7 +97,7 @@ export function OnboardingWizard({ userName, companyName }: OnboardingWizardProp
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
                     isActive ? 'bg-eq-sky text-white' : isDone ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-eq-grey'
                   }`}>
-                    {isDone ? '✓' : i + 1}
+                    {isDone ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : i + 1}
                   </div>
                   <span className="hidden sm:inline">{s.label}</span>
                 </div>

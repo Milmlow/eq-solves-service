@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { createCheckAction, previewCheckAssetsAction, getPlansWithFrequencyAction } from './actions'
 import type { JobPlan, Site } from '@/lib/types'
 import { formatSiteLabel } from '@/lib/utils/format'
-import { CheckCircle2, XCircle, Scale } from 'lucide-react'
+import { CheckCircle2, XCircle, Scale, AlertTriangle } from 'lucide-react'
 import { events as analyticsEvents } from '@/lib/analytics'
 import { ScopeContextChip } from '@/components/ui/ScopeContextChip'
 
@@ -570,7 +570,7 @@ export function CreateCheckForm({ open, onClose, jobPlans, sites, customers, tec
                             </span>
                           ) : (
                             <span className="text-amber-700">
-                              ⚠ no previous test — circuits will need to be entered onsite
+                              <AlertTriangle className="inline-block w-3.5 h-3.5 mr-1 -mt-0.5" aria-hidden="true" />no previous test — circuits will need to be entered onsite
                             </span>
                           )}
                         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 
 /**
  * Customer portal login — magic-link only.
@@ -46,7 +47,7 @@ export default function PortalLoginPage() {
     return (
       <div className="max-w-md mx-auto text-center py-16">
         <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
-          <span className="text-green-500 text-2xl">✓</span>
+          <Check className="w-8 h-8 text-green-500" aria-hidden="true" />
         </div>
         <h1 className="text-xl font-bold text-eq-ink mb-2">Check your email</h1>
         <p className="text-sm text-eq-grey">
