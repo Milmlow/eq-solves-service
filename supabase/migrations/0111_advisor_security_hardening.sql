@@ -65,9 +65,20 @@ REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authentic
 -- ---------------------------------------------------------------------------
 -- 3. Maintenance / cron-only functions — service_role only. No client role
 --    should reach these via /rpc.
+--    purge_expired_archives() and rls_auto_enable() were created out-of-band
+--    on the live project (no migration file), so a from-scratch apply (CI /
+--    supabase db reset) won't have them. Guard with to_regprocedure() so each
+--    REVOKE no-ops when the function is absent and still runs on the live DB.
 -- ---------------------------------------------------------------------------
-REVOKE EXECUTE ON FUNCTION public.purge_expired_archives() FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.rls_auto_enable()        FROM PUBLIC, anon, authenticated;
+DO $$
+BEGIN
+  IF to_regprocedure('public.purge_expired_archives()') IS NOT NULL THEN
+    REVOKE EXECUTE ON FUNCTION public.purge_expired_archives() FROM PUBLIC, anon, authenticated;
+  END IF;
+  IF to_regprocedure('public.rls_auto_enable()') IS NOT NULL THEN
+    REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;
+  END IF;
+END $$;
 
 -- list_active_supervisors() is invoked only by the dispatch-notifications
 -- cron route, which uses the service-role client (granted in 0057).
@@ -101,8 +112,14 @@ GRANT  EXECUTE ON FUNCTION public.get_user_role(uuid)      TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.get_user_tenant_ids()    FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.get_user_tenant_ids()    TO authenticated;
 
-REVOKE EXECUTE ON FUNCTION public.is_admin()               FROM PUBLIC, anon;
-GRANT  EXECUTE ON FUNCTION public.is_admin()               TO authenticated;
+-- is_admin() is also created out-of-band (no migration file) — guard it too.
+DO $$
+BEGIN
+  IF to_regprocedure('public.is_admin()') IS NOT NULL THEN
+    REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC, anon;
+    GRANT  EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+  END IF;
+END $$;
 
 REVOKE EXECUTE ON FUNCTION public.is_super_admin()         FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.is_super_admin()         TO authenticated;
