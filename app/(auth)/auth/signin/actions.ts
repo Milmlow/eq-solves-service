@@ -4,10 +4,16 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { DEMO_EMAIL, DEMO_PASSWORD } from '@/lib/utils/demo'
 
+/** Allow only same-origin redirects: must start with / but not //. */
+function safeNext(raw: string): string {
+  const trimmed = raw.trim()
+  return trimmed.startsWith('/') && !trimmed.startsWith('//') ? trimmed : '/dashboard'
+}
+
 export async function signInAction(formData: FormData) {
   const email = String(formData.get('email') || '').trim()
   const password = String(formData.get('password') || '')
-  const next = String(formData.get('next') || '/dashboard')
+  const next = safeNext(String(formData.get('next') || ''))
 
   if (!email || !password) {
     return { error: 'Email and password are required.' }

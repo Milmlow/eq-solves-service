@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get('code')
   const tokenHash = url.searchParams.get('token_hash')
   const rawType = url.searchParams.get('type')
-  const next = url.searchParams.get('next') || '/dashboard'
+  // Reject protocol-relative or absolute URLs — same-origin only.
+  const rawNext = url.searchParams.get('next') || '/dashboard'
+  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard'
 
   const supabase = await createClient()
 
