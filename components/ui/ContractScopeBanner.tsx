@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { ShieldCheck, ShieldAlert, Info } from 'lucide-react'
+import { ShieldCheck, ShieldAlert, Info, Check, X } from 'lucide-react'
 
 interface ContractScopeBannerProps {
   /** Site this check is at — used to scope the lookup. */
@@ -146,7 +146,7 @@ export async function ContractScopeBanner({
                     : 'bg-amber-50 text-amber-700 border-amber-200')
                 }
               >
-                {s.is_included ? '✓' : '✕'} {s.scope_item}
+                {s.is_included ? <Check className="inline-block w-3.5 h-3.5 -mt-0.5" aria-hidden="true" /> : <X className="inline-block w-3.5 h-3.5 -mt-0.5" aria-hidden="true" />} {s.scope_item}
               </span>
             ))}
           </div>

@@ -537,7 +537,7 @@ export function CommercialSheetImporter() {
               </button>
             </div>
             <ul className="text-xs text-amber-700 space-y-1">
-              {preview.parsed.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
+              {preview.parsed.warnings.map((w, i) => <li key={i} className="flex items-start gap-1"><AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" aria-hidden="true" />{w}</li>)}
             </ul>
           </div>
         )}
@@ -746,7 +746,7 @@ export function CommercialSheetImporter() {
                           : dbCount === undefined
                             ? '?'
                             : isMatch
-                              ? `✓ ${dbCount}`
+                              ? <><CheckCircle2 className="inline-block w-3 h-3 mr-0.5 text-green-700" aria-hidden="true" />{dbCount}</>
                               : dbCount}
                       </td>
                       <td className="px-2 py-1.5 text-eq-grey">{s.intervals_text || '—'}</td>
@@ -762,7 +762,7 @@ export function CommercialSheetImporter() {
             </table>
           </div>
           <p className="mt-2 text-xs text-eq-grey">
-            <span className="text-green-700 font-semibold">✓ green</span> = matches the xlsx · {' '}
+            <span className="text-green-700 font-semibold inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" aria-hidden="true" />green</span> = matches the xlsx · {' '}
             <span className="text-eq-grey">grey 0</span> = no assets linked to this maintenance plan yet · {' '}
             <span className="text-amber-700 font-semibold">amber</span> = mismatch (asset register out of sync with the xlsx).
           </p>

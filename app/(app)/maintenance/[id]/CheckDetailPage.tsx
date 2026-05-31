@@ -803,7 +803,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, assetF
       )}
       {deleteStatus === 'deleted' && (
         <div className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-          ✓ Check deleted. Returning to Maintenance…
+          <Check className="w-4 h-4 shrink-0" aria-hidden="true" />Check deleted. Returning to Maintenance…
         </div>
       )}
 

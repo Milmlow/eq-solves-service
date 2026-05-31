@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { MediaPicker } from '@/components/ui/MediaPicker'
 import { updateReportSettingsAction } from './actions'
 import type { TenantSettings } from '@/lib/types'
-import { Eye, EyeOff, Plus, Trash2, GripVertical, Image, FileText } from 'lucide-react'
+import { Eye, EyeOff, Plus, Trash2, GripVertical, Image, FileText, Check } from 'lucide-react'
 
 interface Props {
   settings: TenantSettings
@@ -391,10 +391,10 @@ export function ReportSettingsForm({ settings }: Props) {
 
               {/* Hidden sections indicator */}
               <div className="text-gray-400 text-[8px] mt-2">
-                {!showCover && <p>✓ Cover Page (hidden)</p>}
-                {!showContents && <p>✓ Table of Contents (hidden)</p>}
-                {!showSummary && <p>✓ Executive Summary (hidden)</p>}
-                {!showSignOff && <p>✓ Sign-off Page (hidden)</p>}
+                {!showCover && <p className="flex items-center gap-1"><Check className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />Cover Page (hidden)</p>}
+                {!showContents && <p className="flex items-center gap-1"><Check className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />Table of Contents (hidden)</p>}
+                {!showSummary && <p className="flex items-center gap-1"><Check className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />Executive Summary (hidden)</p>}
+                {!showSignOff && <p className="flex items-center gap-1"><Check className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />Sign-off Page (hidden)</p>}
               </div>
             </div>
           </div>

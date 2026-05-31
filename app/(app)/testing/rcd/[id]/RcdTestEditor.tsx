@@ -517,7 +517,7 @@ function SectionGroup({
                   />
                 )
               ) : c.trip_test_button_ok ? (
-                '✓'
+                <Check className="w-3.5 h-3.5 inline-block text-green-600" aria-hidden="true" />
               ) : (
                 '—'
               )}
