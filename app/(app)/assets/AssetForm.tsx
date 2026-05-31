@@ -106,7 +106,7 @@ export function AssetForm({ open, onClose, asset, sites, jobPlans = [], isAdmin,
       <SlidePanel open={open} onClose={handleClose} title={asset!.name}>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <StatusBadge status={asset!.is_active ? 'active' : 'inactive'} />
+            <StatusBadge status={asset!.is_active ? 'in-progress' : 'await'} />
             <div className="flex items-center gap-3">
               {/* S-W2-4 — deep link to the full asset history page (checks,
                   tests, defects, attachments, calibration). */}

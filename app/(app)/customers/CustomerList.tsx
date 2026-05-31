@@ -93,7 +93,7 @@ export function CustomerList({ customers, page, totalPages, isAdmin }: CustomerL
     {
       key: 'is_active',
       header: 'Status',
-      render: (row) => <StatusBadge status={row.is_active ? 'active' : 'inactive'} />,
+      render: (row) => <StatusBadge status={row.is_active ? 'in-progress' : 'await'} />,
     },
   ]
 

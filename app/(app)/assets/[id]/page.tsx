@@ -19,12 +19,12 @@ import type { Role, Attachment } from '@/lib/types'
  * change. Prerequisite for QR-label scanning (a scan resolves to this URL).
  */
 
-const CHECK_STATUS_BADGE: Record<string, 'not-started' | 'in-progress' | 'complete' | 'overdue' | 'cancelled'> = {
-  scheduled: 'not-started',
+const CHECK_STATUS_BADGE: Record<string, import('@eq-solutions/ui').StatusKind> = {
+  scheduled: 'open',
   in_progress: 'in-progress',
-  complete: 'complete',
+  complete: 'closed',
   overdue: 'overdue',
-  cancelled: 'cancelled',
+  cancelled: 'await',
 }
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -196,7 +196,7 @@ export default async function AssetDetailPage({
         ]} />
         <div className="flex items-center gap-3 mt-3">
           <h1 className="text-3xl font-bold text-eq-ink tracking-tight">{asset.name as string}</h1>
-          {!assetActive && <StatusBadge status="inactive" label="Archived" />}
+          {!assetActive && <StatusBadge status="await" label="Archived" />}
         </div>
         <p className="text-sm text-eq-grey mt-1">
           {customer?.name ? `${customer.name} · ` : ''}
@@ -263,7 +263,7 @@ export default async function AssetDetailPage({
             {recentChecks.map((c) => {
               const jp = one(c.job_plans)
               const name = c.custom_name ?? jp?.name ?? 'Maintenance check'
-              const badge = CHECK_STATUS_BADGE[c.status] ?? 'not-started'
+              const badge = CHECK_STATUS_BADGE[c.status] ?? 'open'
               return (
                 <Link
                   key={c.id}

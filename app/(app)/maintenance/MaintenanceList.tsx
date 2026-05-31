@@ -71,12 +71,12 @@ interface MaintenanceListProps {
   view: 'mine' | 'all'
 }
 
-function statusToBadge(status: CheckStatus) {
-  const map: Record<CheckStatus, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
-    scheduled: 'not-started',
+function statusToBadge(status: CheckStatus): import('@eq-solutions/ui').StatusKind {
+  const map: Record<CheckStatus, import('@eq-solutions/ui').StatusKind> = {
+    scheduled: 'open',
     in_progress: 'in-progress',
-    complete: 'complete',
-    cancelled: 'cancelled',
+    complete: 'closed',
+    cancelled: 'await',
     overdue: 'overdue',
   }
   return map[status]

@@ -130,7 +130,7 @@ export function JobPlanList({ jobPlans, sites, customers, itemsMap, page, totalP
     {
       key: 'is_active',
       header: 'Status',
-      render: (row) => <StatusBadge status={(row as JobPlanWithSite).is_active ? 'active' : 'inactive'} />,
+      render: (row) => <StatusBadge status={(row as JobPlanWithSite).is_active ? 'in-progress' : 'await'} />,
     },
   ]
 

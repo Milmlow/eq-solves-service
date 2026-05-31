@@ -36,12 +36,12 @@ interface TestRecordDetailProps {
   onEdit: () => void
 }
 
-function resultToBadge(result: TestResult): 'not-started' | 'complete' | 'blocked' | 'in-progress' {
-  const map: Record<TestResult, 'not-started' | 'complete' | 'blocked' | 'in-progress'> = {
-    pending: 'not-started',
-    pass: 'complete',
-    fail: 'blocked',
-    defect: 'blocked',
+function resultToBadge(result: TestResult): import('@eq-solutions/ui').StatusKind {
+  const map: Record<TestResult, import('@eq-solutions/ui').StatusKind> = {
+    pending: 'open',
+    pass: 'closed',
+    fail: 'await',
+    defect: 'await',
   }
   return map[result]
 }
@@ -98,7 +98,7 @@ export function TestRecordDetail({
         <div className="flex items-center justify-between">
           <StatusBadge status={resultToBadge(record.result)} label={formatTestResult(record.result)} />
           <div className="flex items-center gap-2">
-            <StatusBadge status={record.is_active ? 'active' : 'inactive'} />
+            <StatusBadge status={record.is_active ? 'in-progress' : 'await'} />
             {canWriteRole && (
               <Button size="sm" onClick={onEdit}>Edit</Button>
             )}

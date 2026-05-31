@@ -183,7 +183,7 @@ export function SiteList({ sites, customers, page, totalPages, isAdmin }: SiteLi
     {
       key: 'is_active',
       header: 'Status',
-      render: (row) => <StatusBadge status={(row as SiteWithCustomer).is_active ? 'active' : 'inactive'} />,
+      render: (row) => <StatusBadge status={(row as SiteWithCustomer).is_active ? 'in-progress' : 'await'} />,
     },
   ]
 

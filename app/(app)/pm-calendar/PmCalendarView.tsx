@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { DataTable } from '@/components/ui/DataTable'
 import type { DataTableColumn } from '@/components/ui/DataTable'
@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { SearchFilter } from '@/components/ui/SearchFilter'
+import { Tabs } from '@/components/ui/Tabs'
 import { PmCalendarForm } from './PmCalendarForm'
 import { PmCalendarDetail } from './PmCalendarDetail'
 import { ClearFilteredDialog } from './ClearFilteredDialog'
@@ -22,7 +23,7 @@ import {
   movePmCalendarEntryAction,
 } from './actions'
 import type { SupervisorRunResult } from '@/lib/calendar/supervisor-digest'
-import { CalendarDays, List, LayoutGrid, Loader2, Archive, Upload, Mail, Eye, Trash2 } from 'lucide-react'
+import { Loader2, Archive, Upload, Mail, Eye, Trash2 } from 'lucide-react'
 import { CsvExportButton } from '@/components/ui/CsvExportButton'
 import { parseCsv } from '@/lib/utils/csv'
 import { events as analyticsEvents } from '@/lib/analytics'
@@ -50,6 +51,8 @@ interface PmCalendarViewProps {
   viewMode: 'list' | 'calendar' | 'quarterly'
   isAdmin: boolean
   canWrite: boolean
+  /** Deep-link event ID from ?id= param — opens detail drawer on mount. */
+  deepLinkId?: string | null
 }
 
 // Category colour mapping
@@ -142,14 +145,14 @@ function DigestStatusBadge({ status, error }: { status: SupervisorRunResult['sta
   )
 }
 
-function statusToBadge(status: string): 'active' | 'not-started' | 'complete' | 'inactive' {
-  const map: Record<string, 'active' | 'not-started' | 'complete' | 'inactive'> = {
-    scheduled: 'not-started',
-    in_progress: 'active',
-    completed: 'complete',
-    cancelled: 'inactive',
+function statusToBadge(status: string): import('@eq-solutions/ui').StatusKind {
+  const map: Record<string, import('@eq-solutions/ui').StatusKind> = {
+    scheduled: 'open',
+    in_progress: 'in-progress',
+    completed: 'closed',
+    cancelled: 'await',
   }
-  return map[status] ?? 'not-started'
+  return map[status] ?? 'open'
 }
 
 function formatDate(dateStr: string) {
@@ -195,6 +198,7 @@ export function PmCalendarView({
   entries, sites, categories, financialYears, technicians,
   notificationRecipients, siteLocations,
   page, totalPages, viewMode, isAdmin, canWrite: canWriteRole,
+  deepLinkId,
 }: PmCalendarViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -202,6 +206,15 @@ export function PmCalendarView({
   const [createOpen, setCreateOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<EntryRow | null>(null)
   const [detailEntry, setDetailEntry] = useState<EntryRow | null>(null)
+
+  // Deep-link: open detail drawer for ?id= param on mount (D3.3c)
+  useEffect(() => {
+    if (!deepLinkId) return
+    const entry = entries.find((e) => e.id === deepLinkId)
+    if (entry) setDetailEntry(entry)
+    // Run once per deepLinkId — entries is stable on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkId])
   const [seeding, setSeeding] = useState(false)
   const [seedMsg, setSeedMsg] = useState<string | null>(null)
   const [clearOpen, setClearOpen] = useState(false)
@@ -578,30 +591,17 @@ export function PmCalendarView({
             ]}
           />
           <div className="flex items-center gap-2 ml-4 shrink-0">
-            {/* View toggle */}
-            <div className="flex items-center border border-gray-200 rounded-md overflow-hidden">
-              <button
-                onClick={() => setView('list')}
-                className={`p-2 ${viewMode === 'list' ? 'bg-eq-sky text-white' : 'text-eq-grey hover:bg-gray-50'}`}
-                title="List view"
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setView('calendar')}
-                className={`p-2 ${viewMode === 'calendar' ? 'bg-eq-sky text-white' : 'text-eq-grey hover:bg-gray-50'}`}
-                title="Calendar view"
-              >
-                <CalendarDays className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setView('quarterly')}
-                className={`p-2 ${viewMode === 'quarterly' ? 'bg-eq-sky text-white' : 'text-eq-grey hover:bg-gray-50'}`}
-                title="Quarterly summary"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-            </div>
+            {/* View toggle — Direction D Tabs */}
+            <Tabs
+              aria-label="Calendar view"
+              value={viewMode}
+              onChange={(v) => setView(v as 'list' | 'calendar' | 'quarterly')}
+              items={[
+                { key: 'calendar', label: 'Month' },
+                { key: 'list',     label: 'List' },
+                { key: 'quarterly', label: 'Quarterly' },
+              ]}
+            />
             <button
               onClick={toggleArchived}
               className={`inline-flex items-center h-8 px-3 text-xs font-medium rounded-md border transition-colors ${

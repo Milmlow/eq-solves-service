@@ -173,7 +173,7 @@ export default async function SiteDetailPage({
           <div>
             <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Status</p>
             <div className="mt-1">
-              <StatusBadge status={site.is_active ? 'active' : 'inactive'} />
+              <StatusBadge status={site.is_active ? 'in-progress' : 'await'} />
             </div>
           </div>
           <div>

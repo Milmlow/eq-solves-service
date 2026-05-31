@@ -181,7 +181,7 @@ function JobPlanGroup({ node, onAssetClick, canWrite }: { node: GroupNode; onAss
                     <p className="text-xs text-red-500 mt-1">Failed to archive.</p>
                   )}
                 </button>
-                <StatusBadge status={asset.is_active ? 'active' : 'inactive'} />
+                <StatusBadge status={asset.is_active ? 'in-progress' : 'await'} />
                 {canWrite && asset.is_active && (
                   <button
                     type="button"

@@ -120,13 +120,13 @@ function VisitRow({ v, kind }: {
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm font-medium text-eq-ink truncate">{v.custom_name ?? jpName ?? 'Maintenance check'}</p>
           {kind === 'recent' ? (
-            <StatusBadge status="complete" label="Done" />
+            <StatusBadge status="closed" label="Done" />
           ) : isOverdue ? (
             <StatusBadge status="overdue" />
           ) : v.status === 'in_progress' ? (
             <StatusBadge status="in-progress" label="In progress" />
           ) : (
-            <StatusBadge status="active" label="Scheduled" />
+            <StatusBadge status="open" label="Scheduled" />
           )}
         </div>
         <p className="text-xs text-eq-grey mt-0.5 flex items-center gap-1.5">

@@ -253,9 +253,9 @@ function CheckRowItem({ check, who, highlight }: { check: CheckRow; who: string;
             <StatusBadge status={
               check.status === 'in_progress' ? 'in-progress' :
               check.status === 'overdue' ? 'overdue' :
-              check.status === 'complete' ? 'complete' :
-              'not-started'
-            } size="sm" />
+              check.status === 'complete' ? 'closed' :
+              'open'
+            } />
             {hasGps && (
               <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
                 <MapPin className="w-2.5 h-2.5" />
