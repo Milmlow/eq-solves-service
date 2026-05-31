@@ -127,7 +127,6 @@ export async function POST(req: NextRequest) {
 
   const url = new URL(req.url)
   const debugFlag = url.searchParams.get('debug') === '1'
-  const forceUserId = url.searchParams.get('force_user_id')  // bypass time-match for testing
   const appUrl = resolveAppUrl(req)
   const supabase = createAdminClient()
 
@@ -252,10 +251,7 @@ export async function POST(req: NextRequest) {
       const prefs = (prefRows ?? [])[0] as PrefRow | undefined
       if (!prefs) continue
 
-      const matches = forceUserId
-        ? sup.user_id === forceUserId
-        : isUserDigestSlot(prefs)
-      if (!matches) continue
+      if (!isUserDigestSlot(prefs)) continue
 
       const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number; errorDetails?: unknown[] }>
       sec.supervisorDigest.eligible++
@@ -322,10 +318,7 @@ export async function POST(req: NextRequest) {
       if (!prefs) continue
       if (prefs.event_type_opt_outs.includes('check_due_soon')) continue
 
-      const matches = forceUserId
-        ? user_id === forceUserId
-        : isUserDigestSlot(prefs)  // reminders ride the same slot
-      if (!matches) continue
+      if (!isUserDigestSlot(prefs)) continue  // reminders ride the same slot
 
       const sec = summary.sections as Record<string, { eligible: number; sent: number; errors: number }>
       sec.preDueReminders.eligible++
@@ -787,7 +780,7 @@ export async function GET() {
   return NextResponse.json(
     {
       ok: false,
-      hint: 'POST with Authorization: Bearer $CRON_SECRET to dispatch scheduled notifications. Add ?debug=1 for verbose output, ?force_user_id=<uuid> to bypass time-matching for one user (testing only).',
+      hint: 'POST with Authorization: Bearer $CRON_SECRET to dispatch scheduled notifications. Add ?debug=1 for verbose output.',
     },
     { status: 405 },
   )
