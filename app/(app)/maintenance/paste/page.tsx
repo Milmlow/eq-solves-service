@@ -216,7 +216,7 @@ export default function PastePage() {
     } finally {
       setLooking(false)
     }
-  }, [parsed])
+  }, [parsed, siteId])
 
   // ── Commit ───────────────────────────────────────────────────────────
 
