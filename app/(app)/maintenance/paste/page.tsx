@@ -336,12 +336,11 @@ export default function PastePage() {
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             onPaste={(e) => {
-              // Let the paste land, then auto-advance
+              // Capture the DOM node synchronously — e.currentTarget is nulled
+              // by React after the handler returns, so it can't be read inside setTimeout.
+              const textarea = e.currentTarget
               setTimeout(() => {
-                const text = e.currentTarget.value
-                if (text.trim()) {
-                  setRawText(text)
-                }
+                if (textarea.value.trim()) setRawText(textarea.value)
               }, 0)
             }}
           />

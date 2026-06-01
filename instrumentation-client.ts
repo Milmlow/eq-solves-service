@@ -31,6 +31,10 @@ Sentry.init({
     // Network errors that aren't actionable (user disconnected mid-request)
     'NetworkError when attempting to fetch resource.',
     'Failed to fetch',
+    // Password-manager / autofill extension noise on sign-in forms.
+    // Chrome's built-in credential manager and extensions (Bitwarden, LastPass)
+    // fire this when they try to update a form field that's already unmounted.
+    /Object Not Found Matching Id:\d+, MethodName:update/,
   ],
 })
 
