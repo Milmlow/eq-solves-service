@@ -4,10 +4,33 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { DEMO_EMAIL, DEMO_PASSWORD } from '@/lib/utils/demo'
 
-/** Allow only same-origin redirects: must start with / but not //. */
+const ALLOWED_ORIGINS = [
+  'https://core.eq.solutions',
+  'https://service.eq.solutions',
+  'https://eq-solves-service.netlify.app',
+]
+
+/**
+ * Validate the post-sign-in redirect destination.
+ *
+ * Safe values:
+ *   - Relative paths starting with / (but not //, which is protocol-relative)
+ *   - Absolute HTTPS URLs whose origin is in ALLOWED_ORIGINS
+ *
+ * Everything else falls back to / to prevent open-redirect attacks.
+ */
 function safeNext(raw: string): string {
   const trimmed = raw.trim()
-  return trimmed.startsWith('/') && !trimmed.startsWith('//') ? trimmed : '/dashboard'
+  // Relative path — safe as long as it's not protocol-relative (//).
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed
+  // Absolute URL — only allow known origins.
+  try {
+    const parsed = new URL(trimmed)
+    if (ALLOWED_ORIGINS.includes(parsed.origin)) return trimmed
+  } catch {
+    // Not a valid URL — fall through.
+  }
+  return '/'
 }
 
 export async function signInAction(formData: FormData) {
