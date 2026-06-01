@@ -14,7 +14,7 @@
  * Flow: Paste → Configure → Review → Done
  */
 
-import { useState, useCallback, useId } from 'react'
+import { useState, useCallback, useEffect, useId } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, AlertTriangle, ClipboardPaste, ArrowRight, Loader2, ExternalLink } from 'lucide-react'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
@@ -24,6 +24,7 @@ import { FREQUENCY_OPTIONS } from '@/lib/import/paste-constants'
 import {
   lookupPasteRowsAction,
   commitPasteImportAction,
+  fetchSitesAction,
   type PasteInputRow,
   type ResolvedRow,
   type UnresolvedRow,
@@ -145,6 +146,11 @@ export default function PastePage() {
   const [targetDate, setTargetDate] = useState(todayISO)
   const [frequency, setFrequency]   = useState<string>('annual')
   const [customName, setCustomName] = useState('')
+  const [siteId, setSiteId]         = useState<string>('')
+
+  // Sites list for the site filter — loaded once on mount
+  const [sites, setSites] = useState<{ id: string; name: string; code: string | null }[]>([])
+  useEffect(() => { fetchSitesAction().then(setSites).catch(() => {}) }, [])
 
   // Review step
   const [looking, setLooking]       = useState(false)
@@ -200,7 +206,7 @@ export default function PastePage() {
     setLooking(true)
     setLookupError(null)
     try {
-      const result = await lookupPasteRowsAction(parsed.rows)
+      const result = await lookupPasteRowsAction(parsed.rows, siteId || undefined)
       if (!result.success) { setLookupError(result.error); setLooking(false); return }
       setResolved(result.resolved)
       setUnresolved(result.unresolved)
@@ -264,6 +270,7 @@ export default function PastePage() {
     setTargetDate(todayISO())
     setFrequency('annual')
     setCustomName('')
+    setSiteId('')
   }, [])
 
   // ── Derived ──────────────────────────────────────────────────────────
@@ -451,6 +458,25 @@ export default function PastePage() {
           {/* Date + frequency */}
           <Card className="space-y-4">
             <p className="text-sm font-semibold text-eq-ink">Configure the check</p>
+
+            {/* Site filter — prevents Maximo ID collisions across sites */}
+            <label className="block space-y-1">
+              <span className="text-xs font-semibold text-eq-grey uppercase tracking-wider">
+                Site <span className="font-normal normal-case">(optional — set this when the same asset ID exists at multiple sites)</span>
+              </span>
+              <select
+                value={siteId}
+                onChange={(e) => setSiteId(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-eq-ink focus:outline-none focus:ring-2 focus:ring-eq-sky"
+              >
+                <option value="">All sites</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}{s.code ? ` (${s.code})` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="block space-y-1">

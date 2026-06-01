@@ -75,13 +75,39 @@ export interface LookupResult {
 
 export type LookupActionResult = LookupResult | { success: false; error: string }
 
+// ── Sites list ────────────────────────────────────────────────────────────
+
+/**
+ * Returns all active sites for the tenant — used to populate the site filter
+ * on the paste import configure step.
+ */
+export async function fetchSitesAction(): Promise<{ id: string; name: string; code: string | null }[]> {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!canWrite(role)) return []
+    const { data } = await supabase
+      .from('sites')
+      .select('id, name, code')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .order('name')
+    return (data ?? []) as { id: string; name: string; code: string | null }[]
+  } catch {
+    return []
+  }
+}
+
 /**
  * Read-only lookup — resolves each (maximoAssetId, workOrder) pair against
  * the current tenant's assets, sites, and job plans. Returns matched and
  * unmatched rows so the UI can show a review before committing.
+ *
+ * Pass siteId to narrow the asset search to a single site — prevents Maximo
+ * ID collisions when the same asset number exists at multiple sites.
  */
 export async function lookupPasteRowsAction(
   rows: PasteInputRow[],
+  siteId?: string,
 ): Promise<LookupActionResult> {
   try {
     const { supabase, tenantId, role } = await requireUser()
@@ -92,13 +118,15 @@ export async function lookupPasteRowsAction(
     const maximoIds = [...new Set(rows.map((r) => r.maximoAssetId).filter(Boolean))]
     const workOrders = [...new Set(rows.map((r) => r.workOrder).filter(Boolean))]
 
-    // Assets
-    const { data: assetData } = await supabase
+    // Assets — optionally scoped to a single site to prevent ID collisions
+    let assetQuery = supabase
       .from('assets')
       .select('id, name, site_id, maximo_id, job_plan_id')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
       .in('maximo_id', maximoIds)
+    if (siteId) assetQuery = assetQuery.eq('site_id', siteId)
+    const { data: assetData } = await assetQuery
 
     // Sites + job plans in parallel
     const siteIds = [...new Set((assetData ?? []).map((a) => a.site_id))]
