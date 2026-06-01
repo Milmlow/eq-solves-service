@@ -5,6 +5,9 @@ import { requireUser } from '@/lib/actions/auth'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
 import type { MediaCategory } from '@/lib/types'
+import type { Database } from '@/lib/supabase/database.types'
+
+type MediaLibraryUpdate = Database['public']['Tables']['media_library']['Update']
 
 const MEDIA_MAX_SIZE = 2 * 1024 * 1024 // 2 MB
 const MEDIA_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']
@@ -129,7 +132,7 @@ export async function updateMediaAction(
     const { supabase, role } = await requireUser()
     if (!canWrite(role)) return { success: false, error: 'Insufficient permissions.' }
 
-    const update: Record<string, unknown> = {}
+    const update: MediaLibraryUpdate = {}
     if (typeof data.name === 'string') update.name = data.name
     if (data.entity_type !== undefined) update.entity_type = data.entity_type
     if (data.entity_id !== undefined) update.entity_id = data.entity_id

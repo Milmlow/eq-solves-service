@@ -369,7 +369,7 @@ export async function commitPasteImportAction(
           kind:           'maintenance',
           job_plan_id:    null,
           frequency:      frequency,
-          frequency_tags: [frequency],
+          frequency_tags: [frequency] as never,
           start_date:     targetDate,
           due_date:       targetDate,
           custom_name:    checkName,

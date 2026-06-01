@@ -11,7 +11,10 @@ import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
 import { z } from 'zod'
 import exceljs from 'exceljs'
+import type { Database } from '@/lib/supabase/database.types'
 const { Workbook } = exceljs
+
+type AcbTestUpdate = Database['public']['Tables']['acb_tests']['Update']
 
 // Parser ships AcbImportRowSchema separately to avoid pulling exceljs into
 // the server bundle. Re-declare the shape here (server-side trust boundary).
@@ -261,10 +264,10 @@ export async function updateAcbDetailsAction(testId: string, data: {
     const { supabase, role } = await requireUser()
     if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
 
-    const updateData: Record<string, unknown> = {}
+    const updateData: AcbTestUpdate = {}
     for (const key of Object.keys(data)) {
       if (data[key as keyof typeof data] !== undefined) {
-        updateData[key] = data[key as keyof typeof data]
+        (updateData as Record<string, unknown>)[key] = data[key as keyof typeof data]
       }
     }
     if (Object.keys(updateData).length === 0) {
@@ -277,7 +280,7 @@ export async function updateAcbDetailsAction(testId: string, data: {
     // form (AcbBulkDetails) writes legacy (cb_make/cb_model/cb_rating/
     // trip_unit). Either side reaching this action gets its sibling
     // populated so the report renders the same value via either read path.
-    const dualWrite = mirrorBreakerColumns(updateData)
+    const dualWrite = mirrorBreakerColumns(updateData) as AcbTestUpdate
 
     const { error } = await supabase
       .from('acb_tests')
@@ -365,12 +368,12 @@ export async function importAcbCollectionAction(input: AcbImportPayload) {
       }
 
       const { rowNumber: _rn, assetName: _an, asset_id: _aid, test_id: _tid, ...fields } = row
-      const updateData: Record<string, unknown> = {}
+      const updateData: AcbTestUpdate = {}
       for (const [k, v] of Object.entries(fields)) {
-        if (v !== undefined) updateData[k] = v
+        if (v !== undefined) (updateData as Record<string, unknown>)[k] = v
       }
       updateData.step1_status = 'complete'
-      const dualWrite = mirrorBreakerColumns(updateData)
+      const dualWrite = mirrorBreakerColumns(updateData) as AcbTestUpdate
 
       const { error } = await supabase
         .from('acb_tests')

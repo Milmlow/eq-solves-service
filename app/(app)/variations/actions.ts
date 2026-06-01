@@ -6,6 +6,9 @@ import { requireUser } from '@/lib/actions/auth'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
 import type { ContractVariationStatus } from '@/lib/types'
+import type { Database } from '@/lib/supabase/database.types'
+
+type ContractVariationUpdate = Database['public']['Tables']['contract_variations']['Update']
 
 /**
  * Phase 4 of the contract-scope bridge plan — variations register.
@@ -209,7 +212,7 @@ export async function setVariationStatusAction(
 
     const { data: existing, error: readErr } = await supabase
       .from('contract_variations')
-      .select('id, status, variation_number')
+      .select('id, status, variation_number, approved_at')
       .eq('id', id)
       .maybeSingle()
     if (readErr || !existing) {
@@ -219,8 +222,8 @@ export async function setVariationStatusAction(
 
     // Stamp the lifecycle timestamps the UI shows in the row detail.
     const now = new Date().toISOString()
-    const update: Record<string, unknown> = { status: newStatus }
-    if (newStatus === 'approved' && !((existing as unknown) as Record<string, unknown>).approved_at) update.approved_at = now
+    const update: ContractVariationUpdate = { status: newStatus }
+    if (newStatus === 'approved' && !existing.approved_at) update.approved_at = now
     if (newStatus === 'rejected') update.rejected_at = now
     if (newStatus === 'billed') update.billed_at = now
 

@@ -1199,7 +1199,7 @@ export async function commitDeltaImportAction(
           site_id: firstGroup.siteId,
           job_plan_id: null,
           frequency: null,
-          frequency_tags: siteFrequencyTags,
+          frequency_tags: siteFrequencyTags as never,
           start_date: startIso,
           due_date: startIso,
           custom_name: customName,

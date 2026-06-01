@@ -16,6 +16,11 @@ import {
 } from '@/lib/validations/maintenance-check'
 import { RaiseDefectSchema, UpdateDefectSchema } from '@/lib/validations/defect'
 import { zodToErrorMap } from '@/lib/utils/zodErrors'
+import type { Database } from '@/lib/supabase/database.types'
+
+type MaintenanceCheckUpdate = Database['public']['Tables']['maintenance_checks']['Update']
+type MaintenanceCheckItemUpdate = Database['public']['Tables']['maintenance_check_items']['Update']
+type DefectUpdate = Database['public']['Tables']['defects']['Update']
 
 /**
  * Every page that surfaces maintenance_checks counts/lists. Any mutation to a
@@ -870,7 +875,7 @@ export async function startCheckAction(
       Number.isFinite(gps.lng) &&
       Math.abs(gps.lat) <= 90 &&
       Math.abs(gps.lng) <= 180
-    const update: Record<string, unknown> = {
+    const update: MaintenanceCheckUpdate = {
       status: 'in_progress',
       started_at: new Date().toISOString(),
     }
@@ -1127,7 +1132,7 @@ export async function updateCheckItemAction(
     const parsed = UpdateCheckItemResultSchema.safeParse(raw)
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message, errors: zodToErrorMap(parsed.error.issues) }
 
-    const updateData: Record<string, unknown> = { ...parsed.data }
+    const updateData: MaintenanceCheckItemUpdate = { ...parsed.data }
     if (parsed.data.result) {
       updateData.completed_at = new Date().toISOString()
       updateData.completed_by = user.id
@@ -1565,7 +1570,7 @@ export async function updateDefectAction(defectId: string, updates: {
       }
     }
 
-    const updateData: Record<string, unknown> = {}
+    const updateData: DefectUpdate = {}
     if (input.status) updateData.status = input.status
     if (input.severity) updateData.severity = input.severity
     if (input.assigned_to !== undefined) updateData.assigned_to = input.assigned_to
@@ -1751,7 +1756,7 @@ export async function updateCheckItemResultAction(
     if (!canWrite(role) && !isAssigned) return { success: false, error: 'Insufficient permissions.' }
 
     // Build the update payload
-    const updateData: Record<string, unknown> = {}
+    const updateData: MaintenanceCheckItemUpdate = {}
 
     if (result === null) {
       updateData.result = null
