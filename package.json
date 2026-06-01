@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@eq-solutions/tokens": "github:eq-solutions/eq-design-tokens#v1.1.0",
-    "@eq-solutions/ui": "github:eq-solutions/eq-ui#v1.1.0",
+    "@eq-solutions/ui": "github:eq-solutions/eq-ui#v1.1.1",
     "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
