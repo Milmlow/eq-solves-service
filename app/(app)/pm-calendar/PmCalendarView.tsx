@@ -220,7 +220,7 @@ export function PmCalendarView({
   const [clearOpen, setClearOpen] = useState(false)
   const [bucketOpen, setBucketOpen] = useState<'overdue' | 'this_week' | 'looking_ahead' | 'completed' | null>(null)
   const confirm = useConfirm()
-  const toast = useToast()
+  const { toast } = useToast()
 
   // Supervisor digest state
   const [digestBusy, setDigestBusy] = useState<'preview' | 'send' | null>(null)
@@ -264,10 +264,10 @@ export function PmCalendarView({
       analyticsEvents.archivedCheckToggled({ new_state: false })
       router.refresh()
     } else if ('stale' in result && result.stale) {
-      toast.info('This entry was changed by someone else. Refreshing to show their changes.')
+      toast({ tone: 'info', title: 'This entry was changed by someone else. Refreshing to show their changes.' })
       router.refresh()
     } else {
-      toast.error(`Error: ${result.error}`)
+      toast({ tone: 'err', title: `Error: ${result.error}` })
     }
   }
 
@@ -299,13 +299,13 @@ export function PmCalendarView({
       const parsed = parseCsv(text)
       const result = await importPmCalendarCsvAction(parsed)
       if (result.success) {
-        toast.success(`Imported ${(result as { success: true; count: number }).count} entries.${(result as { success: true; skipped: number }).skipped ? ` Skipped ${(result as { success: true; skipped: number }).skipped} invalid rows.` : ''}`)
+        toast({ tone: 'ok', title: `Imported ${(result as { success: true; count: number }).count} entries.${(result as { success: true; skipped: number }).skipped ? ` Skipped ${(result as { success: true; skipped: number }).skipped} invalid rows.` : ''}` })
         router.refresh()
       } else {
-        toast.error(`Import failed: ${result.error}`)
+        toast({ tone: 'err', title: `Import failed: ${result.error}` })
       }
     } catch (err) {
-      toast.error(`Import failed: ${(err as Error).message}`)
+      toast({ tone: 'err', title: `Import failed: ${(err as Error).message}` })
     } finally {
       setImporting(false)
       e.target.value = ''

@@ -179,7 +179,7 @@ export function SetupChecklist({
       </div>
 
       {/* Checklist */}
-      <Card className="p-0">
+      <Card padding="none">
         <div className="divide-y divide-gray-100">
           {steps.map((step, i) => (
             <StepRow

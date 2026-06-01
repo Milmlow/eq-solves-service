@@ -117,14 +117,14 @@ export function CheckSummaryTable({
 
   if (checks.length === 0) {
     return (
-      <Card className="p-8 text-center text-eq-grey text-sm">
+      <Card padding="lg" className="text-center text-eq-grey text-sm">
         No testing checks found. Create a check from the ACB or NSX testing page.
       </Card>
     )
   }
 
   return (
-    <Card className="overflow-hidden p-0">
+    <Card padding="none">
       {showCreatedBanner && createdCheck && (
         <div className="px-4 py-3 bg-green-50 border-b border-green-200 flex items-start gap-3">
           <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />

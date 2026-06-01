@@ -199,7 +199,7 @@ export default async function TestingSummaryPage({
       </div>
 
       {/* Filters */}
-      <Card className="p-4">
+      <Card padding="md">
         <form className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-eq-grey uppercase">Site</label>
