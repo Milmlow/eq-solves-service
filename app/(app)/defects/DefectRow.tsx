@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { updateDefectAction } from '@/app/(app)/maintenance/actions'
 import { formatDate } from '@/lib/utils/format'
 
@@ -88,13 +89,15 @@ export function DefectRow({ defect, team, canWrite, currentUserId }: DefectRowPr
 
   return (
     <div className="py-3 px-2">
-      {/* Summary row — click to expand */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 text-left hover:bg-gray-50 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
-      >
+      {/* Summary row — title links to detail page; chevron toggles inline edit */}
+      <div className="flex items-center gap-3 hover:bg-gray-50 rounded-lg px-2 py-1.5 -mx-2 transition-colors">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-eq-ink truncate">{defect.title}</p>
+          <Link
+            href={`/defects/${defect.id}`}
+            className="text-sm font-medium text-eq-ink truncate hover:text-eq-sky transition-colors block"
+          >
+            {defect.title}
+          </Link>
           <p className="text-xs text-eq-grey mt-0.5">{assetName}{siteName ? ` · ${siteName}` : ''}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -108,9 +111,15 @@ export function DefectRow({ defect, team, canWrite, currentUserId }: DefectRowPr
             {localStatus.replace('_', ' ')}
           </span>
           <span className="text-xs text-eq-grey">{formatDate(defect.created_at)}</span>
-          <span className="text-eq-grey text-sm">{expanded ? '▾' : '▸'}</span>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-eq-grey text-sm p-0.5 rounded hover:bg-gray-200 transition-colors"
+            aria-label={expanded ? 'Collapse' : 'Expand inline edit'}
+          >
+            {expanded ? '▾' : '▸'}
+          </button>
         </div>
-      </button>
+      </div>
 
       {/* Expanded detail */}
       {expanded && (
@@ -238,14 +247,6 @@ export function DefectRow({ defect, team, canWrite, currentUserId }: DefectRowPr
             <span>Raised: {formatDate(defect.created_at)}</span>
             {defect.resolved_at && <span>Resolved: {formatDate(defect.resolved_at)}</span>}
             {defect.work_order_date && <span>WO date: {formatDate(defect.work_order_date)}</span>}
-            {/* S-W2-1 — shareable detail page with photo evidence. */}
-            <a
-              href={`/defects/${defect.id}`}
-              className="ml-auto font-medium text-eq-sky hover:text-eq-deep transition-colors"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Open full page ↗
-            </a>
           </div>
         </div>
       )}
