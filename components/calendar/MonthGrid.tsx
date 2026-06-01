@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, CalendarX2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/Skeleton'
 import type { PmCalendarEntry } from '@/lib/types'
 
 type EntryRow = PmCalendarEntry & { site_name: string }
@@ -11,6 +12,8 @@ interface MonthGridProps {
   onEntryClick: (entry: EntryRow) => void
   onMoveEntry?: (id: string, newDate: string) => Promise<void> | void
   initialMonth?: Date
+  /** True when any search/filter is active — changes the empty-state hint */
+  filtersActive?: boolean
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -35,14 +38,24 @@ function pillClass(category: string): string {
   return CATEGORY_PILL[category] ?? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
 }
 
-function statusRing(status: string, startTimeIso: string): string {
-  if (status === 'completed') return 'ring-1 ring-green-400/60'
-  if (status === 'cancelled') return 'opacity-50 line-through'
+/**
+ * Direction D status colour mapping — left border on event chips.
+ * open/scheduled:  sky   (#3DA8D8)
+ * in-progress:     deep  (#2986B4)
+ * overdue:         error (#B91C1C)
+ * completed:       success (#15803D)
+ * cancelled:       muted
+ */
+function statusBorderClass(status: string, startTimeIso: string): string {
+  if (status === 'completed') return 'border-l-2 border-l-[#15803D] opacity-75'
+  if (status === 'cancelled') return 'border-l-2 border-l-gray-300 opacity-50 line-through'
+  if (status === 'in_progress') return 'border-l-2 border-l-[var(--eq-sky-deep,#2986B4)]'
   const start = new Date(startTimeIso)
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  if (start < todayStart) return 'ring-1 ring-red-400'
-  return ''
+  if (start < todayStart) return 'border-l-2 border-l-[#B91C1C]'
+  // scheduled / default — sky
+  return 'border-l-2 border-l-[var(--eq-sky,#3DA8D8)]'
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -60,7 +73,7 @@ function formatDateKey(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
-export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: MonthGridProps) {
+export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth, filtersActive }: MonthGridProps) {
   const [cursor, setCursor] = useState<Date>(() => {
     const base = initialMonth ?? new Date()
     return new Date(base.getFullYear(), base.getMonth(), 1)
@@ -240,6 +253,19 @@ export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: 
         ))}
       </div>
 
+      {/* Empty state — shown when no events exist for the visible month */}
+      {monthEntryCount === 0 && (
+        <div className="py-12 flex flex-col items-center gap-3 text-center border-b border-gray-100">
+          <CalendarX2 className="w-6 h-6 text-eq-grey" aria-hidden />
+          <p className="text-sm text-eq-grey">
+            No events scheduled for {MONTH_FULL[month]} {year}.
+          </p>
+          {filtersActive && (
+            <p className="text-xs text-eq-grey">Try clearing your filters.</p>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-7 grid-rows-6">
         {cells.map((cell, idx) => {
           const inMonth = cell.getMonth() === month
@@ -302,7 +328,7 @@ export function MonthGrid({ entries, onEntryClick, onMoveEntry, initialMonth }: 
                         setDragOverKey(null)
                       } : undefined}
                       onClick={() => onEntryClick(e)}
-                      className={`w-full text-left px-1.5 py-0.5 rounded text-[10.5px] font-medium truncate ${pillClass(e.category)} ${statusRing(e.status, e.start_time)} ${
+                      className={`w-full text-left px-1.5 py-0.5 rounded text-[10.5px] font-medium truncate ${pillClass(e.category)} ${statusBorderClass(e.status, e.start_time)} ${
                         isDragging ? 'opacity-40' : ''
                       } ${isPendingMove ? 'opacity-70 animate-pulse' : ''} ${dndEnabled ? 'cursor-grab active:cursor-grabbing' : ''}`}
                       title={`${e.title} — ${e.site_name}${isPendingMove ? ' (saving...)' : dndEnabled ? ' (drag to move)' : ''}`}

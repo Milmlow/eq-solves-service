@@ -623,7 +623,7 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, assetF
           {canWriteRole && (
             <div className="mt-4 pt-3 border-t border-gray-100">
               <dt className="text-xs font-bold text-eq-grey uppercase flex items-center gap-1.5">
-                <Calendar className="w-3 h-3" /> Visit start time
+                <Calendar className="w-3 h-3" /> Scheduled visit
               </dt>
               {editingStart ? (
                 <div className="flex items-center gap-2 mt-1">

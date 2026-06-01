@@ -15,15 +15,17 @@ export default async function DefectsPage({
   // Get current user for role check
   const { data: { user } } = await supabase.auth.getUser()
   let userRole = 'read_only'
+  let tenantId: string | null = null
   if (user) {
     const { data: membership } = await supabase
       .from('tenant_members')
-      .select('role')
+      .select('role, tenant_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .limit(1)
       .maybeSingle()
     userRole = membership?.role ?? 'read_only'
+    tenantId = (membership as { role?: string; tenant_id?: string } | null)?.tenant_id ?? null
   }
 
   // Build query with filters
@@ -53,23 +55,23 @@ export default async function DefectsPage({
     query = query.ilike('title', `%${params.search}%`)
   }
 
-  const [{ data: defects, error }, { data: sites }, countsRes] = await Promise.all([
+  const [{ data: defects, error }, { data: sites }, countsRpc] = await Promise.all([
     query.limit(200),
     supabase
       .from('sites')
       .select('id, name, customers(name)')
       .eq('is_active', true)
       .order('name'),
-    Promise.all([
-      supabase.from('defects').select('*', { count: 'exact', head: true }),
-      supabase.from('defects').select('*', { count: 'exact', head: true }).eq('status', 'open'),
-      supabase.from('defects').select('*', { count: 'exact', head: true }).eq('status', 'in_progress'),
-      supabase.from('defects').select('*', { count: 'exact', head: true }).eq('status', 'resolved'),
-      supabase.from('defects').select('*', { count: 'exact', head: true }).eq('status', 'closed'),
-    ]),
+    tenantId
+      ? (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
+          .rpc('get_defect_counts', { p_tenant_id: tenantId })
+      : Promise.resolve({ data: null, error: null }),
   ])
 
-  const [totalRes, openRes, inProgressRes, resolvedRes, closedRes] = countsRes
+  type DefectCountRow = { total: number; open: number; in_progress: number; resolved: number; closed: number }
+  const countsRow = tenantId
+    ? ((countsRpc as { data: DefectCountRow[] | null }).data?.[0] ?? null)
+    : null
 
   // Fetch team members for assignment dropdown
   const { data: teamMembers } = await supabase
@@ -91,11 +93,11 @@ export default async function DefectsPage({
   }
 
   const counts = {
-    total: totalRes.count ?? 0,
-    open: openRes.count ?? 0,
-    inProgress: inProgressRes.count ?? 0,
-    resolved: resolvedRes.count ?? 0,
-    closed: closedRes.count ?? 0,
+    total: countsRow?.total ?? 0,
+    open: countsRow?.open ?? 0,
+    inProgress: countsRow?.in_progress ?? 0,
+    resolved: countsRow?.resolved ?? 0,
+    closed: countsRow?.closed ?? 0,
   }
 
   const canWrite = ['super_admin', 'admin', 'supervisor'].includes(userRole)
