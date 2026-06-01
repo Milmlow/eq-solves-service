@@ -20,10 +20,10 @@ import { CheckCircle2, AlertTriangle, ClipboardPaste, ArrowRight, Loader2, Exter
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { FREQUENCY_OPTIONS } from '@/lib/import/paste-constants'
 import {
   lookupPasteRowsAction,
   commitPasteImportAction,
-  FREQUENCY_OPTIONS,
   type PasteInputRow,
   type ResolvedRow,
   type UnresolvedRow,
