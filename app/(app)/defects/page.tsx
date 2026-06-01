@@ -111,9 +111,9 @@ export default async function DefectsPage({
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'Total', count: counts.total, href: '/defects', bg: 'bg-gray-50', text: 'text-eq-ink', active: !params.status },
-          { label: 'Open', count: counts.open, href: '/defects?status=open', bg: 'bg-red-50', text: 'text-red-700', active: params.status === 'open' },
-          { label: 'In Progress', count: counts.inProgress, href: '/defects?status=in_progress', bg: 'bg-amber-50', text: 'text-amber-700', active: params.status === 'in_progress' },
-          { label: 'Resolved', count: counts.resolved, href: '/defects?status=resolved', bg: 'bg-green-50', text: 'text-green-700', active: params.status === 'resolved' },
+          { label: 'Open', count: counts.open, href: '/defects?status=open', bg: 'bg-eq-error-bg', text: 'text-eq-error-text', active: params.status === 'open' },
+          { label: 'In Progress', count: counts.inProgress, href: '/defects?status=in_progress', bg: 'bg-eq-warning-bg', text: 'text-eq-warning-text', active: params.status === 'in_progress' },
+          { label: 'Resolved', count: counts.resolved, href: '/defects?status=resolved', bg: 'bg-eq-success-bg', text: 'text-eq-success-text', active: params.status === 'resolved' },
           { label: 'Closed', count: counts.closed, href: '/defects?status=closed', bg: 'bg-gray-50', text: 'text-eq-grey', active: params.status === 'closed' },
         ].map(({ label, count, href, bg, text, active }) => (
           <Link key={label} href={href}>

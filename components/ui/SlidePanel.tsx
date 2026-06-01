@@ -134,7 +134,7 @@ export function SlidePanel({ open, onClose, title, children, className, wide, fo
         tabIndex={-1}
         className={cn(
           'absolute right-0 top-0 h-full w-full bg-white shadow-xl transition-transform duration-200 flex flex-col focus:outline-none',
-          wide ? 'max-w-4xl' : 'max-w-md',
+          wide ? 'w-full max-w-4xl' : 'w-full max-w-md',
           open ? 'translate-x-0' : 'translate-x-full',
           className,
         )}
