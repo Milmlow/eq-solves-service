@@ -175,7 +175,7 @@ export default async function CustomerDetailPage({
           <div>
             <p className="text-xs font-bold text-eq-grey uppercase tracking-wide mb-1">Status</p>
             <div className="mt-1">
-              <StatusBadge status={customer.is_active ? 'active' : 'inactive'} />
+              <StatusBadge status={customer.is_active ? 'in-progress' : 'await'} />
             </div>
           </div>
         </div>

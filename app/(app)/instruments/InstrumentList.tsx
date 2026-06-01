@@ -30,12 +30,12 @@ interface InstrumentListProps {
   canWrite: boolean
 }
 
-function statusToBadge(status: InstrumentStatus): 'active' | 'inactive' | 'not-started' | 'blocked' {
-  const map: Record<InstrumentStatus, 'active' | 'inactive' | 'not-started' | 'blocked'> = {
-    Active: 'active',
-    'Out for Cal': 'not-started',
-    Retired: 'inactive',
-    Lost: 'blocked',
+function statusToBadge(status: InstrumentStatus): import('@eq-solutions/ui').StatusKind {
+  const map: Record<InstrumentStatus, import('@eq-solutions/ui').StatusKind> = {
+    Active: 'in-progress',
+    'Out for Cal': 'open',
+    Retired: 'await',
+    Lost: 'await',
   }
   return map[status]
 }

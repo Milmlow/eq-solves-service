@@ -223,7 +223,7 @@ export function UsersTable({
                     </span>
                   ) : (
                     <StatusBadge
-                      status={u.is_active ? 'active' : 'inactive'}
+                      status={u.is_active ? 'in-progress' : 'await'}
                       label={u.is_active ? 'Active' : 'Disabled'}
                     />
                   )}

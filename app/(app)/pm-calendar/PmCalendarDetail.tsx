@@ -34,14 +34,14 @@ function resolveCustomer(site: SiteLookup | null | undefined): { id?: string | n
   return Array.isArray(site.customers) ? (site.customers[0] ?? null) : site.customers
 }
 
-function statusToBadge(status: string): 'active' | 'not-started' | 'complete' | 'inactive' {
-  const map: Record<string, 'active' | 'not-started' | 'complete' | 'inactive'> = {
-    scheduled: 'not-started',
-    in_progress: 'active',
-    completed: 'complete',
-    cancelled: 'inactive',
+function statusToBadge(status: string): import('@eq-solutions/ui').StatusKind {
+  const map: Record<string, import('@eq-solutions/ui').StatusKind> = {
+    scheduled: 'open',
+    in_progress: 'in-progress',
+    completed: 'closed',
+    cancelled: 'await',
   }
-  return map[status] ?? 'not-started'
+  return map[status] ?? 'open'
 }
 
 function formatDateTime(dateStr: string | null) {

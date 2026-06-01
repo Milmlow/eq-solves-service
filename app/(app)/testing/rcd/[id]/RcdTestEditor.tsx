@@ -49,9 +49,9 @@ type CircuitDraft = RcdTestEditorCircuit & {
   override?: boolean
 }
 
-function statusToTone(status: string): 'active' | 'inactive' | 'in-progress' {
-  if (status === 'complete') return 'active'
-  if (status === 'archived') return 'inactive'
+function statusToTone(status: string): import('@eq-solutions/ui').StatusKind {
+  if (status === 'complete') return 'closed'
+  if (status === 'archived') return 'await'
   return 'in-progress'
 }
 

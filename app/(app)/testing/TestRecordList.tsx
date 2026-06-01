@@ -35,12 +35,12 @@ interface TestRecordListProps {
   canWrite: boolean
 }
 
-function resultToBadge(result: TestResult): 'not-started' | 'complete' | 'blocked' | 'in-progress' {
-  const map: Record<TestResult, 'not-started' | 'complete' | 'blocked' | 'in-progress'> = {
-    pending: 'not-started',
-    pass: 'complete',
-    fail: 'blocked',
-    defect: 'blocked',
+function resultToBadge(result: TestResult): import('@eq-solutions/ui').StatusKind {
+  const map: Record<TestResult, import('@eq-solutions/ui').StatusKind> = {
+    pending: 'open',
+    pass: 'closed',
+    fail: 'await',
+    defect: 'await',
   }
   return map[result]
 }

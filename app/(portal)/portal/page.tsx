@@ -80,7 +80,7 @@ export default async function PortalPage() {
                       {customerName}{siteName ? ` · ${siteName}` : ''}
                       {delivery.revision > 1 && (
                         <span className="ml-2 inline-block align-middle">
-                          <StatusBadge status="overdue" label={`Revision ${delivery.revision}`} dot={false} />
+                          <StatusBadge status="overdue" label={`Revision ${delivery.revision}`} />
                         </span>
                       )}
                     </p>
@@ -94,9 +94,9 @@ export default async function PortalPage() {
                   <div className="text-right shrink-0 space-y-1">
                     <p className="text-xs text-eq-grey">{formatDate(delivery.delivered_at)}</p>
                     {isExpired ? (
-                      <StatusBadge status="inactive" label="Link expired" />
+                      <StatusBadge status="await" label="Link expired" />
                     ) : (
-                      <StatusBadge status="active" label="Available" />
+                      <StatusBadge status="in-progress" label="Available" />
                     )}
                   </div>
                 </div>

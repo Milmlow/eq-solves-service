@@ -78,12 +78,12 @@ export function SiteMaintenanceChecksTable({ checks }: SiteMaintenanceChecksTabl
           key: 'status',
           header: 'Status',
           render: (row) => {
-            const statusMap: Record<string, 'not-started' | 'in-progress' | 'complete' | 'cancelled' | 'overdue'> = {
-              scheduled: 'not-started', in_progress: 'in-progress', complete: 'complete', cancelled: 'cancelled', overdue: 'overdue',
+            const statusMap: Record<string, import('@eq-solutions/ui').StatusKind> = {
+              scheduled: 'open', in_progress: 'in-progress', complete: 'closed', cancelled: 'await', overdue: 'overdue',
             }
             return (
               <StatusBadge
-                status={statusMap[row.status] ?? 'not-started'}
+                status={statusMap[row.status] ?? 'open'}
                 label={formatCheckStatus(row.status)}
               />
             )
@@ -135,7 +135,7 @@ export function SiteTestRecordsTable({ tests }: SiteTestRecordsTableProps) {
           header: 'Result',
           render: (row) => (
             <StatusBadge
-              status={row.result === 'pass' ? 'complete' : row.result === 'fail' ? 'blocked' : 'not-started'}
+              status={row.result === 'pass' ? 'closed' : row.result === 'fail' ? 'await' : 'open'}
               label={formatTestResult(row.result)}
             />
           ),

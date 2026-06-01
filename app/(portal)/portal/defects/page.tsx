@@ -157,7 +157,7 @@ export default async function PortalDefectsPage() {
                       <p className="text-sm text-eq-ink truncate">{d.title}</p>
                       <p className="text-xs text-eq-grey">{siteName ?? '—'} · resolved {formatDate(d.resolved_at)}</p>
                     </div>
-                    <StatusBadge status="complete" label="Resolved" />
+                    <StatusBadge status="closed" label="Resolved" />
                   </div>
                 )
               })}

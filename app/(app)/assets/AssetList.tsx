@@ -115,7 +115,7 @@ export function AssetList({ assets, allAssets, sites, customers, assetTypes, all
         { value: 'Active', label: 'Active' },
         { value: 'Inactive', label: 'Inactive' },
       ],
-      render: (row) => <StatusBadge status={(row as AssetWithSite).is_active ? 'active' : 'inactive'} />,
+      render: (row) => <StatusBadge status={(row as AssetWithSite).is_active ? 'in-progress' : 'await'} />,
     },
   ]
 

@@ -20,6 +20,7 @@ export default async function CalendarPage({
     page?: string
     show_archived?: string
     view?: string
+    id?: string
   }>
 }) {
   const params = await searchParams
@@ -35,6 +36,8 @@ export default async function CalendarPage({
   // Royce: "calendar-feeling" — leads with the visual that looks most like a
   // calendar. Users can switch to list/quarterly via the toolbar toggle.
   const viewMode = (params.view ?? 'calendar') as 'list' | 'calendar' | 'quarterly'
+  // Deep-link from notifications: ?id=<entry-id> → open detail drawer on mount
+  const deepLinkId = params.id ?? null
 
   const supabase = await createClient()
 
@@ -209,6 +212,7 @@ export default async function CalendarPage({
         viewMode={viewMode}
         isAdmin={isAdmin(userRole)}
         canWrite={canWrite(userRole)}
+        deepLinkId={deepLinkId}
       />
     </div>
   )

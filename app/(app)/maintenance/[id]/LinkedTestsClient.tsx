@@ -73,9 +73,9 @@ function resultTone(display: string) {
   return 'bg-gray-50 text-gray-600 border-gray-200'
 }
 
-function rcdStatusTone(status: string): 'active' | 'inactive' | 'in-progress' {
-  if (status === 'complete') return 'active'
-  if (status === 'archived' || status === 'cancelled') return 'inactive'
+function rcdStatusTone(status: string): import('@eq-solutions/ui').StatusKind {
+  if (status === 'complete') return 'closed'
+  if (status === 'archived' || status === 'cancelled') return 'await'
   return 'in-progress'
 }
 

@@ -122,7 +122,7 @@ export default async function PortalSitesPage() {
                   {openDefects > 0 ? (
                     <StatusBadge status="overdue" label={`${openDefects} defect${openDefects === 1 ? '' : 's'}`} />
                   ) : (
-                    <StatusBadge status="active" label="Healthy" />
+                    <StatusBadge status="in-progress" label="Healthy" />
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">

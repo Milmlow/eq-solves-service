@@ -196,7 +196,7 @@ export function TechDashboard({
                     <p className="text-xs text-eq-grey">{siteName}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-3">
-                    <StatusBadge status="complete" label="Done" />
+                    <StatusBadge status="closed" label="Done" />
                     <span className="text-xs text-eq-grey">{check.completed_at ? formatDate(check.completed_at) : ''}</span>
                   </div>
                 </Link>
@@ -234,8 +234,8 @@ export function TechDashboard({
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-3">
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-gray-100 text-eq-grey">{test.kind}</span>
-                    {isDefect && <StatusBadge status="blocked" label="Defect" />}
-                    {isPending && <StatusBadge status="not-started" label="Pending" />}
+                    {isDefect && <StatusBadge status="await" label="Defect" />}
+                    {isPending && <StatusBadge status="open" label="Not started" />}
                     <span className="text-xs text-eq-grey">{formatDate(test.test_date)}</span>
                   </div>
                 </Link>

@@ -74,7 +74,7 @@ export function UserSettingsForm({ email, fullName, role, lastLogin, createdAt }
           <div>
             <span className="text-xs font-bold text-eq-grey uppercase tracking-wide">Role</span>
             <div className="mt-1">
-              <StatusBadge status="active" label={roleLabel[role]} />
+              <StatusBadge status="in-progress" label={roleLabel[role]} />
             </div>
           </div>
           <div>
