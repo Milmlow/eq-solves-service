@@ -5,6 +5,9 @@ import { requireUser } from '@/lib/actions/auth'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { canWrite, isAdmin } from '@/lib/utils/roles'
 import type { MediaCategory } from '@/lib/types'
+import type { Database } from '@/lib/supabase/database.types'
+
+type MediaLibraryUpdate = Database['public']['Tables']['media_library']['Update']
 
 const MEDIA_MAX_SIZE = 2 * 1024 * 1024 // 2 MB
 const MEDIA_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']
@@ -160,7 +163,7 @@ export async function updateMediaAction(
 
     const { error } = await supabase
       .from('media_library')
-      .update(update)
+      .update(update as unknown as MediaLibraryUpdate)
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }

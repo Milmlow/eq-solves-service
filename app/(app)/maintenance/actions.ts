@@ -16,6 +16,11 @@ import {
 } from '@/lib/validations/maintenance-check'
 import { RaiseDefectSchema, UpdateDefectSchema } from '@/lib/validations/defect'
 import { zodToErrorMap } from '@/lib/utils/zodErrors'
+import type { Database } from '@/lib/supabase/database.types'
+
+type MaintenanceCheckUpdate = Database['public']['Tables']['maintenance_checks']['Update']
+type CheckItemUpdate        = Database['public']['Tables']['maintenance_check_items']['Update']
+type DefectUpdate           = Database['public']['Tables']['defects']['Update']
 
 /**
  * Every page that surfaces maintenance_checks counts/lists. Any mutation to a
@@ -881,7 +886,7 @@ export async function startCheckAction(
 
     const { error } = await supabase
       .from('maintenance_checks')
-      .update(update)
+      .update(update as unknown as MaintenanceCheckUpdate)
       .eq('id', id)
 
     if (error) return { success: false, error: error.message }
@@ -1138,7 +1143,7 @@ export async function updateCheckItemAction(
 
     const { error } = await supabase
       .from('maintenance_check_items')
-      .update(updateData)
+      .update(updateData as unknown as CheckItemUpdate)
       .eq('id', itemId)
       .eq('check_id', checkId)
 
@@ -1580,7 +1585,7 @@ export async function updateDefectAction(defectId: string, updates: {
 
     const { error } = await supabase
       .from('defects')
-      .update(updateData)
+      .update(updateData as unknown as DefectUpdate)
       .eq('id', defectId)
 
     if (error) return { success: false, error: error.message }
@@ -1780,7 +1785,7 @@ export async function updateCheckItemResultAction(
     // Update the item
     const { error: itemErr } = await supabase
       .from('maintenance_check_items')
-      .update(updateData)
+      .update(updateData as unknown as CheckItemUpdate)
       .eq('id', itemId)
       .eq('check_id', checkId)
 

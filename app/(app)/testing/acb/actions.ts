@@ -9,6 +9,9 @@ import { CreateAcbTestSchema, UpdateAcbTestSchema, CreateAcbReadingSchema } from
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
+import type { Database } from '@/lib/supabase/database.types'
+
+type AcbTestUpdate = Database['public']['Tables']['acb_tests']['Update']
 import { z } from 'zod'
 import exceljs from 'exceljs'
 const { Workbook } = exceljs
@@ -281,7 +284,7 @@ export async function updateAcbDetailsAction(testId: string, data: {
 
     const { error } = await supabase
       .from('acb_tests')
-      .update(dualWrite)
+      .update(dualWrite as AcbTestUpdate)
       .eq('id', testId)
 
     if (error) return { success: false, error: error.message }
@@ -374,7 +377,7 @@ export async function importAcbCollectionAction(input: AcbImportPayload) {
 
       const { error } = await supabase
         .from('acb_tests')
-        .update(dualWrite)
+        .update(dualWrite as AcbTestUpdate)
         .eq('id', row.test_id)
         .eq('tenant_id', tenantId)
 

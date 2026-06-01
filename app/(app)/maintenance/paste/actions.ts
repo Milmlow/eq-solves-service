@@ -363,18 +363,21 @@ export async function commitPasteImportAction(
 
       const { data: check, error: checkErr } = await supabase
         .from('maintenance_checks')
-        .insert({
-          tenant_id:      tenantId,
-          site_id:        siteId,
-          kind:           'maintenance',
-          job_plan_id:    null,
-          frequency:      frequency,
-          frequency_tags: [frequency],
-          start_date:     targetDate,
-          due_date:       targetDate,
-          custom_name:    checkName,
-          status:         'scheduled',
-        })
+        .insert((() => {
+          // frequency_tags is not in the generated types (column post-dates last regen).
+          const base = {
+            tenant_id:   tenantId,
+            site_id:     siteId,
+            kind:        'maintenance' as const,
+            job_plan_id: null,
+            frequency:   frequency,
+            start_date:  targetDate,
+            due_date:    targetDate,
+            custom_name: checkName,
+            status:      'scheduled' as const,
+          }
+          return { ...base, frequency_tags: [frequency] } as typeof base
+        })())
         .select('id')
         .single()
 

@@ -51,7 +51,7 @@ export async function updateCheckScheduledStartAction(
 
     const { error } = await supabase
       .from('maintenance_checks')
-      .update({ scheduled_start_at: scheduledStartAt } as Record<string, unknown>)
+      .update({ scheduled_start_at: scheduledStartAt })
       .eq('id', checkId)
 
     if (error) return { success: false, error: error.message }

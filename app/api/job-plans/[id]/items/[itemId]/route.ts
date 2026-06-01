@@ -83,7 +83,7 @@ export async function DELETE(
     const { supabase } = await getApiUser()
     const { error } = await supabase
       .from('job_plan_items')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .delete()
       .eq('id', itemId)
       .eq('job_plan_id', id)
       .eq('tenant_id', tenantId)

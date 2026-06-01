@@ -190,7 +190,7 @@ export async function updateNsxDetailsAction(
     // set (brand/breaker_type/current_in/trip_unit_model); legacy bulk
     // forms write the LEGACY set. Mirror so the customer report renders
     // the same value via either read path.
-    const dualWrite = mirrorBreakerColumns(data as Record<string, unknown>)
+    const dualWrite = mirrorBreakerColumns(data)
 
     const { error } = await supabase
       .from('nsx_tests')

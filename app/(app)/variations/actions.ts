@@ -209,7 +209,7 @@ export async function setVariationStatusAction(
 
     const { data: existing, error: readErr } = await supabase
       .from('contract_variations')
-      .select('id, status, variation_number')
+      .select('id, status, variation_number, approved_at')
       .eq('id', id)
       .maybeSingle()
     if (readErr || !existing) {
@@ -219,14 +219,14 @@ export async function setVariationStatusAction(
 
     // Stamp the lifecycle timestamps the UI shows in the row detail.
     const now = new Date().toISOString()
-    const update: Record<string, unknown> = { status: newStatus }
-    if (newStatus === 'approved' && !((existing as unknown) as Record<string, unknown>).approved_at) update.approved_at = now
-    if (newStatus === 'rejected') update.rejected_at = now
-    if (newStatus === 'billed') update.billed_at = now
-
     const { error } = await supabase
       .from('contract_variations')
-      .update(update)
+      .update({
+        status: newStatus,
+        ...(newStatus === 'approved' && !existing.approved_at ? { approved_at: now } : {}),
+        ...(newStatus === 'rejected' ? { rejected_at: now } : {}),
+        ...(newStatus === 'billed' ? { billed_at: now } : {}),
+      })
       .eq('id', id)
     if (error) return { success: false, error: error.message }
 

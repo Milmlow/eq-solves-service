@@ -1194,18 +1194,23 @@ export async function commitDeltaImportAction(
       const siteFrequencyTags = Array.from(new Set(siteGroups.map((g) => g.frequency as string)))
       const { data: check, error: checkErr } = await supabase
         .from('maintenance_checks')
-        .insert({
-          tenant_id: tenantId,
-          site_id: firstGroup.siteId,
-          job_plan_id: null,
-          frequency: null,
-          frequency_tags: siteFrequencyTags,
-          start_date: startIso,
-          due_date: startIso,
-          custom_name: customName,
-          status: 'scheduled',
-          assigned_to: assignedTo,
-        })
+        .insert((() => {
+          // frequency_tags is not in the generated types (column post-dates last regen).
+          // Build the typed base first, then spread the untyped column so the resulting
+          // expression type doesn't expose it to RejectExcessProperties.
+          const base = {
+            tenant_id: tenantId,
+            site_id: firstGroup.siteId,
+            job_plan_id: null,
+            frequency: null,
+            start_date: startIso,
+            due_date: startIso,
+            custom_name: customName,
+            status: 'scheduled' as const,
+            assigned_to: assignedTo,
+          }
+          return { ...base, frequency_tags: siteFrequencyTags } as typeof base
+        })())
         .select('id')
         .single()
 
