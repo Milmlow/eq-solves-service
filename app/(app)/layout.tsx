@@ -5,6 +5,7 @@
  * Proprietary and confidential. All rights reserved.
  */
 import { cookies, headers } from 'next/headers'
+import Link from 'next/link'
 import { Sidebar } from '@/components/ui/Sidebar'
 import { HelpWidget } from '@/components/ui/HelpWidget'
 import { EqFooter } from '@/components/ui/EqFooter'
@@ -193,7 +194,31 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             hasFactor={mfaHasFactor}
           />
         )}
-        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 px-4 py-4 pt-18 lg:pt-8 lg:px-8 lg:py-8 focus:outline-none">
+        {/* Shell nav bar — replaces the hidden sidebar when Service is embedded
+            in core.eq.solutions. Makes the action hub (/do) and key pages
+            reachable without the sidebar. Only shown for non-read_only roles. */}
+        {isShellIframe && analyticsRole && analyticsRole !== 'read_only' && (
+          <nav className="shrink-0 flex items-center gap-1 px-4 py-2 bg-white border-b border-gray-100">
+            <Link
+              href="/do"
+              className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-semibold text-eq-deep bg-eq-ice hover:bg-eq-sky hover:text-white transition-colors"
+            >
+              Do
+            </Link>
+            <Link href="/dashboard" className="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+              Dashboard
+            </Link>
+            <Link href="/maintenance" className="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+              Maintenance
+            </Link>
+            {analyticsRole !== 'technician' && (
+              <Link href="/records" className="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+                Records
+              </Link>
+            )}
+          </nav>
+        )}
+        <main id="main-content" tabIndex={-1} className={`flex-1 min-w-0 px-4 py-4 lg:pt-8 lg:px-8 lg:py-8 focus:outline-none${isShellIframe ? '' : ' pt-18'}`}>
           {children}
         </main>
         {!isShellIframe && <EqFooter />}
