@@ -17,7 +17,7 @@ interface GenerateReportButtonProps {
 
 export function GenerateReportButton({ customerId, siteId, from, to, filterDescription }: GenerateReportButtonProps) {
   const [showDialog, setShowDialog] = useState(false)
-  const toast = useToast()
+  const { toast } = useToast()
 
   async function handleDownload(complexity: ReportComplexity) {
     const params = new URLSearchParams()
@@ -30,7 +30,7 @@ export function GenerateReportButton({ customerId, siteId, from, to, filterDescr
     const res = await fetch(`/api/compliance-report?${params.toString()}`)
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Download failed' }))
-      toast.error(err.error ?? 'Report generation failed')
+      toast({ tone: 'err', title: err.error ?? 'Report generation failed' })
       throw new Error(err.error)
     }
     const blob = await res.blob()

@@ -691,7 +691,7 @@ function CycleChildRow({
 }) {
   const [pending, startTransition] = useTransition()
   const confirm = useConfirm()
-  const toast = useToast()
+  const { toast } = useToast()
 
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation()
@@ -708,7 +708,7 @@ function CycleChildRow({
         // Surface the error so the user isn't left clicking a dead button.
         // archiveCheckAction returns { success, error } — previously we
         // discarded the result and the user saw zero feedback on failure.
-        toast.error(res?.error ?? 'Could not delete this check. Please try again.')
+        toast({ tone: 'err', title: res?.error ?? 'Could not delete this check. Please try again.' })
         return
       }
       onArchived()

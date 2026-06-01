@@ -799,7 +799,7 @@ export default function AcbTestingPage() {
         </Button>
       </div>
 
-      <Card className="overflow-hidden">
+      <Card>
         {checksLoading ? (
           <div className="p-8 text-center text-eq-grey">Loading…</div>
         ) : checks.length === 0 ? (

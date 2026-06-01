@@ -349,7 +349,7 @@ function Step1AssetCollection({
   }
 
   return (
-    <Card className="p-6">
+    <Card padding="lg">
       <h3 className="text-sm font-bold text-eq-ink mb-4">Asset Collection — NSX Breaker Identification</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -459,7 +459,7 @@ function Step2VisualFunctional({ test, readings, loading, setLoading, setError, 
   const hasFails = items.some(i => i.result === 'fail')
 
   return (
-    <Card className="p-6 space-y-6">
+    <Card padding="lg" className="space-y-6">
       {Array.from(sections.entries()).map(([sectionName, indices]) => (
         <div key={sectionName}>
           <h3 className="font-medium text-eq-ink mb-3 text-sm uppercase tracking-wide">{sectionName}</h3>
@@ -607,7 +607,7 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
   }
 
   return (
-    <Card className="p-6 space-y-6">
+    <Card padding="lg" className="space-y-6">
       {/* IR Closed */}
       <div>
         <h3 className="font-medium text-eq-ink mb-3">Insulation Resistance — Closed (MΩ)</h3>

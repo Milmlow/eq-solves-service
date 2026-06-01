@@ -81,7 +81,7 @@ export function AcbBulkDetails({ assets, onUpdate }: AcbBulkDetailsProps) {
   }
 
   return (
-    <Card className="p-6">
+    <Card padding="lg">
       <h3 className="text-lg font-medium text-eq-ink mb-4">Bulk Edit Circuit Breaker Details</h3>
 
       {error && (

@@ -179,7 +179,7 @@ function AssetCollectionCard({
   const hasTest = !!asset.acb_test
 
   return (
-    <Card className="overflow-hidden">
+    <Card>
       {/* Header — always visible */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -310,7 +310,7 @@ function AssetCollectionCard({
 export function AcbSiteCollection({ assets, onUpdate }: AcbSiteCollectionProps) {
   if (assets.length === 0) {
     return (
-      <Card className="p-8 text-center text-eq-grey">
+      <Card padding="lg" className="text-center text-eq-grey">
         No E1.25 assets found for this site
       </Card>
     )

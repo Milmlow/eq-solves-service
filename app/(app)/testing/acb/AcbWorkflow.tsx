@@ -349,7 +349,7 @@ function Step1AssetCollection({ test, loading, setLoading, setError, onUpdate }:
   }
 
   return (
-    <Card className="p-6 space-y-6">
+    <Card padding="lg" className="space-y-6">
       {/* Breaker Identification */}
       <div>
         <h3 className="font-medium text-eq-ink mb-3">Breaker Identification</h3>
@@ -489,7 +489,7 @@ function Step2VisualFunctional({ test, readings, loading, setLoading, setError, 
   const hasFails = items.some(i => i.result === 'fail')
 
   return (
-    <Card className="p-6 space-y-6">
+    <Card padding="lg" className="space-y-6">
       {Array.from(sections.entries()).map(([sectionName, indices]) => (
         <div key={sectionName}>
           <h3 className="font-medium text-eq-ink mb-3 text-sm uppercase tracking-wide">{sectionName}</h3>
@@ -694,7 +694,7 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
   }
 
   return (
-    <Card className="p-6 space-y-6">
+    <Card padding="lg" className="space-y-6">
       {/* Contact Resistance */}
       <div>
         <h3 className="font-medium text-eq-ink mb-3">Contact Resistance (µΩ)</h3>

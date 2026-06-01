@@ -60,7 +60,7 @@ export function KanbanBoard({ checks, itemsMap, onCheckClick, isAdmin = false }:
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const confirm = useConfirm()
-  const toast = useToast()
+  const { toast } = useToast()
 
   async function handleDelete(e: React.MouseEvent, checkId: string) {
     // Stop propagation synchronously — the click bubbles to the card click
@@ -79,7 +79,7 @@ export function KanbanBoard({ checks, itemsMap, onCheckClick, isAdmin = false }:
         // archiveCheckAction returns { success, error }. Previously we
         // discarded the result and the card stayed put with no feedback
         // on failure — admin-only check or DB error went unnoticed.
-        toast.error(res?.error ?? 'Could not delete this check. Please try again.')
+        toast({ tone: 'err', title: res?.error ?? 'Could not delete this check. Please try again.' })
         return
       }
       // router.refresh() pulls the freshly-revalidated server data
