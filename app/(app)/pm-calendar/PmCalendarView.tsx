@@ -786,6 +786,7 @@ export function PmCalendarView({
           entries={entries}
           onEntryClick={(e) => setDetailEntry(e as EntryRow)}
           onMoveEntry={canWriteRole ? handleMoveEntry : undefined}
+          filtersActive={!!(searchParams.get('search') || searchParams.get('site') || searchParams.get('category') || searchParams.get('quarter') || searchParams.get('status'))}
         />
       )}
 
