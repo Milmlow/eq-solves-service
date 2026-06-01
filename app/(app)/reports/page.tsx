@@ -257,6 +257,10 @@ export default async function ReportsPage({
         />
       </div>
 
+      {mTotal === 0 && tTotal === 0 && (
+        <p className="text-sm text-gray-400 text-center py-8">No data yet</p>
+      )}
+
       {/* Top-level KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
