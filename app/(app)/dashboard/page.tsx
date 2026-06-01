@@ -99,7 +99,16 @@ export default async function DashboardPage({
   // verified tenant_id via the membership lookup above). When filterByUser
   // is on, the RPC applies assigned_to/raised_by filters at the SQL layer.
   if (!tenantId) {
-    // No tenant context = no useful dashboard. Render with zeros.
+    const isAdmin = userRole === 'super_admin' || userRole === 'admin'
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 text-center">
+        <p className="text-sm text-gray-500">Your workspace isn&apos;t set up yet.</p>
+        {isAdmin
+          ? <p className="text-xs text-gray-400">No workspace is linked to your account. Check your invitation or contact support.</p>
+          : <p className="text-xs text-gray-400">Contact your administrator to complete setup.</p>
+        }
+      </div>
+    )
   }
   // RPC signature expects string | undefined; use undefined (not null) when
   // we want the tenant-wide path (no user filter).
