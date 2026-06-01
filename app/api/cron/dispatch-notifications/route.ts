@@ -126,6 +126,17 @@ export async function POST(req: NextRequest) {
   }
 
   const url = new URL(req.url)
+
+  // Cron endpoints must never target individual users. Reject any attempt to
+  // pass user-scoping params — if this logic is ever needed for ops it must
+  // require is_platform_admin in addition to CRON_SECRET.
+  if (url.searchParams.has('force_user_id') || url.searchParams.has('user_id') || url.searchParams.has('target_user')) {
+    return NextResponse.json(
+      { ok: false, error: 'User-targeting params are not permitted on cron endpoints.' },
+      { status: 400 },
+    )
+  }
+
   const debugFlag = url.searchParams.get('debug') === '1'
   const appUrl = resolveAppUrl(req)
   const supabase = createAdminClient()

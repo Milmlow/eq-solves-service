@@ -7,6 +7,29 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
+const ALLOWED_ORIGINS = [
+  'https://core.eq.solutions',
+  'https://service.eq.solutions',
+  'https://eq-solves-service.netlify.app',
+]
+
+/**
+ * Validate the post-auth redirect destination.
+ * Accepts relative paths (not protocol-relative) and absolute HTTPS URLs
+ * whose origin is in the allowlist. Everything else falls back to /.
+ */
+function validateNext(raw: string): string {
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed
+  try {
+    const parsed = new URL(trimmed)
+    if (ALLOWED_ORIGINS.includes(parsed.origin)) return trimmed
+  } catch {
+    // Not a valid URL — fall through.
+  }
+  return '/'
+}
+
 /**
  * Auth callback.
  *
@@ -35,9 +58,8 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get('code')
   const tokenHash = url.searchParams.get('token_hash')
   const rawType = url.searchParams.get('type')
-  // Reject protocol-relative or absolute URLs — same-origin only.
-  const rawNext = url.searchParams.get('next') || '/dashboard'
-  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard'
+  const rawNext = url.searchParams.get('next') || '/'
+  const next = validateNext(rawNext)
 
   const supabase = await createClient()
 
