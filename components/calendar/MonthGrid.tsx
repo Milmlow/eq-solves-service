@@ -47,13 +47,13 @@ function pillClass(category: string): string {
  * cancelled:       muted
  */
 function statusBorderClass(status: string, startTimeIso: string): string {
-  if (status === 'completed') return 'border-l-2 border-l-[#15803D] opacity-75'
-  if (status === 'cancelled') return 'border-l-2 border-l-gray-300 opacity-50 line-through'
-  if (status === 'in_progress') return 'border-l-2 border-l-[var(--eq-sky-deep,#2986B4)]'
+  if (status === 'completed') return 'border-l-2 border-l-[var(--eq-success-text,#15803D)] opacity-75'
+  if (status === 'cancelled') return 'border-l-2 border-l-[var(--eq-gray-300,#D4CCBE)] opacity-50 line-through'
+  if (status === 'in_progress') return 'border-l-2 border-l-[var(--eq-deep,#2986B4)]'
   const start = new Date(startTimeIso)
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  if (start < todayStart) return 'border-l-2 border-l-[#B91C1C]'
+  if (start < todayStart) return 'border-l-2 border-l-[var(--eq-error-text,#B91C1C)]'
   // scheduled / default — sky
   return 'border-l-2 border-l-[var(--eq-sky,#3DA8D8)]'
 }

@@ -62,7 +62,7 @@ export function ReportDownloadDialog({
                 type="button"
                 onClick={() => setComplexity(opt.value)}
                 className="flex flex-col items-start p-3 rounded-lg border transition-colors text-left hover:bg-gray-50"
-                style={{ borderColor: complexity === opt.value ? 'var(--eq-sky, #3DA8D8)' : '#e5e7eb' }}
+                style={{ borderColor: complexity === opt.value ? 'var(--eq-sky, #3DA8D8)' : 'var(--eq-border-color, #E4DDD2)' }}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <FileText className={`w-3.5 h-3.5 ${complexity === opt.value ? 'text-eq-sky' : 'text-gray-300'}`} />

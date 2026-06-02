@@ -115,8 +115,8 @@ export function RouteProgress() {
           height: 2px;
           width: 0%;
           z-index: 9999;
-          background: linear-gradient(90deg, #0ea5e9 0%, #3b82f6 50%, #6366f1 100%);
-          box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+          background: var(--eq-sky, #3DA8D8);
+          box-shadow: 0 0 8px rgba(61, 168, 216, 0.5);
           transition: width 0.2s ease-out, opacity 0.2s ease-out;
           opacity: 0;
           pointer-events: none;
