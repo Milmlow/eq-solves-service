@@ -8,6 +8,7 @@ import { CreateNsxTestSchema, UpdateNsxTestSchema, CreateNsxReadingSchema } from
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
+import { syncTestResult, nsxTestExternalId, assetExternalId } from '@/lib/canonical-sync'
 
 export async function createNsxTestAction(formData: FormData) {
   try {
@@ -328,12 +329,25 @@ export async function saveNsxElectricalReadingAction(testId: string, readings: A
     // sibling tests are now done. Best-effort; failures are swallowed.
     const { data: testRow } = await supabase
       .from('nsx_tests')
-      .select('check_id')
+      .select('check_id, asset_id, test_date, tested_by, overall_result')
       .eq('id', testId)
       .maybeSingle()
     if (testRow?.check_id) {
       await propagateCheckCompletionIfReady(supabase, testRow.check_id)
     }
+
+    // Canonical sync — push NSX test result to canonical, fire-and-forget.
+    // overall_result values: 'Pass' | 'Fail' | 'Pending' → canonical: 'pass' | 'fail' | 'pending'
+    void syncTestResult({
+      external_id:        nsxTestExternalId(testId),
+      external_asset_id:  testRow?.asset_id ? assetExternalId(testRow.asset_id) : undefined,
+      test_type:          'nsx',
+      test_date:          testRow?.test_date ?? undefined,
+      pass_fail:          testRow?.overall_result?.toLowerCase() === 'pass' ? 'pass'
+                          : testRow?.overall_result?.toLowerCase() === 'fail' ? 'fail'
+                          : 'pending',
+      tested_by_name:     testRow?.tested_by ?? undefined,
+    })
 
     revalidatePath('/testing/nsx')
     revalidatePath('/maintenance')

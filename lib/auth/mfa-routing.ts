@@ -59,6 +59,12 @@ export const PUBLIC_PATHS = [
   // Shell auth API — validates the HMAC token and returns a one-time OTP.
   // Called by /shell (client-side fetch) before any session exists.
   '/api/shell-auth',
+  // Shell bridge — Option B redirect flow. Shell mints a 60s HMAC token and
+  // redirects the full browser here (not an iframe). This route validates the
+  // token, generates a magic link, and redirects through /auth/callback to
+  // land a Supabase session. Must be public — no session exists on arrival.
+  // Gated by EQ_SHELL_BRIDGE_SECRET; returns 404 when the secret is unset.
+  '/auth/shell-bridge',
 ] as const
 
 export const MFA_PATHS = [

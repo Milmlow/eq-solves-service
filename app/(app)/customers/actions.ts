@@ -54,7 +54,7 @@ export async function createCustomerAction(formData: FormData) {
     })
     if (sync.canonical_id) {
       await supabase.from('customers')
-        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() } as never)
+        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() })
         .eq('id', inserted.id)
     }
 
@@ -108,7 +108,7 @@ export async function updateCustomerAction(id: string, formData: FormData) {
     })
     if (sync.canonical_id) {
       await supabase.from('customers')
-        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() } as never)
+        .update({ canonical_id: sync.canonical_id, canonical_synced_at: new Date().toISOString() })
         .eq('id', id)
     }
 

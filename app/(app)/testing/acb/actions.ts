@@ -9,6 +9,7 @@ import { CreateAcbTestSchema, UpdateAcbTestSchema, CreateAcbReadingSchema } from
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
+import { syncTestResult, acbTestExternalId, assetExternalId } from '@/lib/canonical-sync'
 import type { Database } from '@/lib/supabase/database.types'
 
 type AcbTestUpdate = Database['public']['Tables']['acb_tests']['Update']
@@ -513,12 +514,25 @@ export async function saveAcbElectricalReadingAction(testId: string, readings: A
     // — failures don't surface to the user.
     const { data: testRow } = await supabase
       .from('acb_tests')
-      .select('check_id')
+      .select('check_id, asset_id, test_date, tested_by, overall_result')
       .eq('id', testId)
       .maybeSingle()
     if (testRow?.check_id) {
       await propagateCheckCompletionIfReady(supabase, testRow.check_id)
     }
+
+    // Canonical sync — push ACB test result to canonical, fire-and-forget.
+    // overall_result values: 'Pass' | 'Fail' | 'Pending' → canonical: 'pass' | 'fail' | 'pending'
+    void syncTestResult({
+      external_id:        acbTestExternalId(testId),
+      external_asset_id:  testRow?.asset_id ? assetExternalId(testRow.asset_id) : undefined,
+      test_type:          'acb',
+      test_date:          testRow?.test_date ?? undefined,
+      pass_fail:          testRow?.overall_result?.toLowerCase() === 'pass' ? 'pass'
+                          : testRow?.overall_result?.toLowerCase() === 'fail' ? 'fail'
+                          : 'pending',
+      tested_by_name:     testRow?.tested_by ?? undefined,
+    })
 
     revalidatePath('/testing/acb')
     revalidatePath('/maintenance')

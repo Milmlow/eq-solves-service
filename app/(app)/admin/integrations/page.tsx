@@ -13,7 +13,13 @@ export default async function IntegrationsPage() {
   // automatically — no manual tenant_id filter needed.
   const supabase = await createClient()
 
-  const [{ count: totalSites }, { count: syncedSites }] = await Promise.all([
+  const [
+    { count: totalSites },
+    { count: syncedSites },
+    { count: totalCustomers },
+    { count: canonicalCustomers },
+    { count: canonicalSites },
+  ] = await Promise.all([
     supabase
       .from('sites')
       .select('*', { count: 'exact', head: true })
@@ -23,6 +29,21 @@ export default async function IntegrationsPage() {
       .select('*', { count: 'exact', head: true })
       .eq('is_active', true)
       .not('canonical_field_id', 'is', null),
+    supabase
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true),
+    // canonical_id added in migration 0113 — types regenerated separately.
+    supabase
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true)
+      .not('canonical_id', 'is', null),
+    supabase
+      .from('sites')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true)
+      .not('canonical_id', 'is', null),
   ])
 
   return (
@@ -45,6 +66,9 @@ export default async function IntegrationsPage() {
         fieldConfigured={fieldConfigured}
         totalSites={totalSites ?? 0}
         syncedSites={syncedSites ?? 0}
+        totalCustomers={totalCustomers ?? 0}
+        canonicalCustomers={canonicalCustomers ?? 0}
+        canonicalSites={canonicalSites ?? 0}
       />
     </div>
   )
