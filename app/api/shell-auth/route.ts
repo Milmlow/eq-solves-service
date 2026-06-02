@@ -1,28 +1,78 @@
 // POST /api/shell-auth
 //
-// Validates a Shell-minted HMAC token (kind='service-token') and returns a
-// one-time OTP the browser can exchange for a Supabase session via verifyOtp.
+// Validates a Shell-minted HMAC token and returns a one-time OTP the browser
+// can exchange for a Supabase session via verifyOtp.
+//
+// Accepts two token formats (transition window — drop LEGACY once Shell PRs
+// #128/#130 are deployed and EQ_SHELL_BRIDGE_SECRET is set on both deploys):
+//
+// BRIDGE FORMAT (preferred — minted by mint-iframe-token?aud=service, PR #130):
+//   base64url(JSON) + '.' + hex(HMAC-SHA256(EQ_SHELL_BRIDGE_SECRET))
+//   Payload: { iss: 'eq-shell', aud: 'service', email, tenant_slug, exp }
+//   Uses a dedicated secret scoped to Shell↔Service — EQ_SECRET_SALT is
+//   shared with Field and must not be treated as Service-specific.
+//
+// LEGACY FORMAT (fallback — minted by mint-service-iframe-token):
+//   base64(JSON) + '.' + hex(HMAC-SHA256(EQ_SECRET_SALT))
+//   Payload: { kind: 'service-token', email, name, eq_role, is_platform_admin, shell_tenant_id, exp }
+//   Remove once Shell is fully deployed on the new format.
 //
 // Flow:
-//   Shell mints token (mint-service-iframe-token) → embeds Service at
-//   https://eq-solves-service.netlify.app/#sh=<token> → Service's /shell
+//   Shell mints token → embeds Service at /shell#sh=<token> → Service's /shell
 //   page POSTs here → we validate + call admin.generateLink() → return OTP →
 //   client calls supabase.auth.verifyOtp() → session established → redirect.
 //
 // Security notes:
-// - HMAC signed with EQ_SECRET_SALT (same secret on both deploys).
+// - HMAC signed; bridge token uses EQ_SHELL_BRIDGE_SECRET (not shared with Field).
 // - Token TTL is 60s — one-shot exchange, not a long-lived credential.
 // - generateLink() auto-provisions the user if they don't exist yet — Shell's
-//   HMAC vouches for them, so Service creates the account on first access.
+//   HMAC vouches for their identity, so Service creates the account on first access.
 // - OTP is single-use (Supabase invalidates on first verify) and TTL-bound.
 
 import { type NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+const EQ_SHELL_BRIDGE_SECRET = process.env.EQ_SHELL_BRIDGE_SECRET ?? ''
 const EQ_SECRET_SALT = process.env.EQ_SECRET_SALT ?? ''
 
-interface ServiceTokenPayload {
+// ── Bridge token (preferred) ──────────────────────────────────────────────────
+
+interface BridgeTokenPayload {
+  iss: 'eq-shell'
+  aud: 'service'
+  email: string
+  tenant_slug: string
+  exp: number
+}
+
+function validateBridgeToken(raw: string): BridgeTokenPayload | null {
+  if (!EQ_SHELL_BRIDGE_SECRET) return null
+  const dot = raw.indexOf('.')
+  if (dot === -1) return null
+  const b64url = raw.slice(0, dot)
+  const sig = raw.slice(dot + 1)
+  try {
+    const json = Buffer.from(b64url, 'base64url').toString('utf8')
+    const expected = createHmac('sha256', EQ_SHELL_BRIDGE_SECRET).update(json).digest('hex')
+    if (expected.length !== sig.length) return null
+    if (!timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(sig, 'hex'))) return null
+    const data = JSON.parse(json) as Partial<BridgeTokenPayload>
+    if (data.iss !== 'eq-shell' || data.aud !== 'service') return null
+    if (typeof data.exp !== 'number' || data.exp < Date.now()) return null
+    if (!data.email || typeof data.email !== 'string') return null
+    if (!data.tenant_slug || typeof data.tenant_slug !== 'string') return null
+    return data as BridgeTokenPayload
+  } catch {
+    return null
+  }
+}
+
+// ── Legacy token (fallback) ───────────────────────────────────────────────────
+// TODO: remove once Shell PRs #128/#130 are deployed and EQ_SHELL_BRIDGE_SECRET
+// is confirmed set on both Shell and Service Netlify environments.
+
+interface LegacyServiceTokenPayload {
   kind: 'service-token'
   email: string
   name: string | null
@@ -32,7 +82,7 @@ interface ServiceTokenPayload {
   exp: number
 }
 
-function validateShellToken(raw: string): ServiceTokenPayload | null {
+function validateLegacyToken(raw: string): LegacyServiceTokenPayload | null {
   if (!EQ_SECRET_SALT) return null
   const dot = raw.indexOf('.')
   if (dot === -1) return null
@@ -43,23 +93,25 @@ function validateShellToken(raw: string): ServiceTokenPayload | null {
     const expected = createHmac('sha256', EQ_SECRET_SALT).update(json).digest('hex')
     if (expected.length !== sig.length) return null
     if (!timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(sig, 'hex'))) return null
-    const data = JSON.parse(json) as Partial<ServiceTokenPayload>
+    const data = JSON.parse(json) as Partial<LegacyServiceTokenPayload>
     if (data.kind !== 'service-token') return null
     if (typeof data.exp !== 'number' || data.exp < Date.now()) return null
     if (!data.email || typeof data.email !== 'string') return null
-    return data as ServiceTokenPayload
+    return data as LegacyServiceTokenPayload
   } catch {
     return null
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function json(status: number, body: unknown) {
   return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function POST(req: NextRequest) {
-  if (!EQ_SECRET_SALT) {
-    return json(500, { error: 'misconfigured', detail: 'EQ_SECRET_SALT not set on this deploy' })
+  if (!EQ_SHELL_BRIDGE_SECRET && !EQ_SECRET_SALT) {
+    return json(500, { error: 'misconfigured', detail: 'No shell token secret configured on this deploy' })
   }
 
   let body: { token?: unknown }
@@ -73,32 +125,36 @@ export async function POST(req: NextRequest) {
     return json(400, { error: 'bad-request', detail: 'token must be a string' })
   }
 
-  const payload = validateShellToken(body.token)
-  if (!payload) {
+  // Bridge format preferred; fall back to legacy during the migration window.
+  const bridge = validateBridgeToken(body.token)
+  const legacy = bridge ? null : validateLegacyToken(body.token)
+  const email = bridge?.email ?? legacy?.email
+
+  if (!email) {
     return json(401, { error: 'invalid-token' })
   }
 
   const supabase = createAdminClient()
 
-    // Generate a one-time magic link for the user. If they don't exist yet,
-  // auto-provision them — Shell has already verified their identity via HMAC,
-  // so Service should trust that voucher and create the account on first access.
+  // Generate a one-time magic link. If the user doesn't exist yet, auto-provision
+  // them — Shell's HMAC vouches for their identity.
   let { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
     type: 'magiclink',
-    email: payload.email,
+    email,
   })
 
   if (linkErr || !linkData?.properties?.email_otp) {
     // Auto-provision: create the user then retry. Ignore "already exists" errors
     // since the user may exist but generateLink failed for a transient reason.
+    const displayName = legacy?.name ?? null
     await supabase.auth.admin.createUser({
-      email: payload.email,
+      email,
       email_confirm: true,
-      user_metadata: payload.name ? { full_name: payload.name } : {},
+      user_metadata: displayName ? { full_name: displayName } : {},
     })
     const retry = await supabase.auth.admin.generateLink({
       type: 'magiclink',
-      email: payload.email,
+      email,
     })
     linkData = retry.data
     linkErr = retry.error
@@ -118,7 +174,7 @@ export async function POST(req: NextRequest) {
   // for this session — Shell already verified the user's identity via HMAC.
   // HttpOnly prevents JS manipulation; 4-hour TTL covers a normal work session.
   const resp = NextResponse.json(
-    { email: payload.email, otp: linkData.properties.email_otp },
+    { email, otp: linkData.properties.email_otp },
     { status: 200, headers: { 'Cache-Control': 'no-store' } },
   )
   resp.cookies.set('eq_shell_bridge', '1', {
