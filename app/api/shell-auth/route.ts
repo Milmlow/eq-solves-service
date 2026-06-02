@@ -3,14 +3,17 @@
 // Validates a Shell-minted HMAC token and returns a one-time OTP the browser
 // can exchange for a Supabase session via verifyOtp.
 //
-// Accepts two token formats (transition window — drop LEGACY once Shell PRs
-// #128/#130 are deployed and EQ_SHELL_BRIDGE_SECRET is set on both deploys):
+// Accepts three token formats (transition window):
 //
 // BRIDGE FORMAT (preferred — minted by mint-iframe-token?aud=service, PR #130):
 //   base64url(JSON) + '.' + hex(HMAC-SHA256(EQ_SHELL_BRIDGE_SECRET))
 //   Payload: { iss: 'eq-shell', aud: 'service', email, tenant_slug, exp }
 //   Uses a dedicated secret scoped to Shell↔Service — EQ_SECRET_SALT is
 //   shared with Field and must not be treated as Service-specific.
+//
+// SUPABASE JWT FORMAT (Phase 3 — direct Supabase session token):
+//   Standard HS256 JWT signed with SUPABASE_JWT_SECRET
+//   Payload: { sub, exp, app_metadata: { tenant_id, eq_role, is_platform_admin, email } }
 //
 // LEGACY FORMAT (fallback — minted by mint-service-iframe-token):
 //   base64(JSON) + '.' + hex(HMAC-SHA256(EQ_SECRET_SALT))
@@ -35,6 +38,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 const EQ_SHELL_BRIDGE_SECRET = process.env.EQ_SHELL_BRIDGE_SECRET ?? ''
 const EQ_SECRET_SALT = process.env.EQ_SECRET_SALT ?? ''
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? ''
 
 // ── Bridge token (preferred) ──────────────────────────────────────────────────
 
@@ -103,6 +107,50 @@ function validateLegacyToken(raw: string): LegacyServiceTokenPayload | null {
   }
 }
 
+// ── Supabase JWT (Phase 3) ────────────────────────────────────────────────────
+
+function isJwt(token: string): boolean {
+  const parts = token.split('.')
+  if (parts.length !== 3) return false
+  try {
+    const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'))
+    return header.alg === 'HS256'
+  } catch {
+    return false
+  }
+}
+
+interface SupabaseJwtPayload {
+  sub: string
+  exp: number
+  app_metadata: {
+    tenant_id?: string
+    eq_role?: string
+    is_platform_admin?: boolean
+    email?: string
+  }
+}
+
+function validateSupabaseJwt(raw: string): SupabaseJwtPayload | null {
+  if (!SUPABASE_JWT_SECRET) return null
+  const parts = raw.split('.')
+  if (parts.length !== 3) return null
+  try {
+    const signingInput = `${parts[0]}.${parts[1]}`
+    const expected = createHmac('sha256', SUPABASE_JWT_SECRET).update(signingInput).digest('base64url')
+    const sig = parts[2]
+    if (expected.length !== sig.length) return null
+    if (!timingSafeEqual(Buffer.from(expected, 'base64url'), Buffer.from(sig, 'base64url'))) return null
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Partial<SupabaseJwtPayload>
+    if (typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null
+    if (!payload.sub || typeof payload.sub !== 'string') return null
+    if (!payload.app_metadata || typeof payload.app_metadata !== 'object') return null
+    return payload as SupabaseJwtPayload
+  } catch {
+    return null
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function json(status: number, body: unknown) {
@@ -125,10 +173,11 @@ export async function POST(req: NextRequest) {
     return json(400, { error: 'bad-request', detail: 'token must be a string' })
   }
 
-  // Bridge format preferred; fall back to legacy during the migration window.
+  // Bridge format preferred; Supabase JWT second; fall back to legacy during the migration window.
   const bridge = validateBridgeToken(body.token)
-  const legacy = bridge ? null : validateLegacyToken(body.token)
-  const email = bridge?.email ?? legacy?.email
+  const jwtClaims = (!bridge && isJwt(body.token)) ? validateSupabaseJwt(body.token) : null
+  const legacy = (!bridge && !jwtClaims) ? validateLegacyToken(body.token) : null
+  const email = bridge?.email ?? jwtClaims?.app_metadata?.email ?? legacy?.email
 
   if (!email) {
     return json(401, { error: 'invalid-token' })
