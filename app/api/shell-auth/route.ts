@@ -151,6 +151,38 @@ function validateSupabaseJwt(raw: string): SupabaseJwtPayload | null {
   }
 }
 
+// ── EQ canonical → Service role mapping (C6) ─────────────────────────────────
+//
+// EQ canonical roles (from @eq-solutions/roles):
+//   manager | supervisor | employee | apprentice | labour_hire
+//   + is_platform_admin override (cross-tenant EQ staff)
+//
+// Service internal roles (lib/types/index.ts):
+//   super_admin | admin | supervisor | technician | read_only
+//
+// Mapping rationale:
+//   manager      → admin       (full tenant admin; super_admin reserved for EQ staff)
+//   supervisor   → supervisor  (same concept — oversees technicians, creates work orders)
+//   employee     → technician  (does test/maintenance work on-site)
+//   apprentice   → read_only   (view-only until accredited)
+//   labour_hire  → read_only   (scoped — no write permissions in Service)
+//   is_platform_admin → super_admin (cross-tenant; EQ internal staff only)
+
+type ServiceRole = 'super_admin' | 'admin' | 'supervisor' | 'technician' | 'read_only'
+
+const EQ_TO_SERVICE_ROLE: Record<string, ServiceRole> = {
+  manager:     'admin',
+  supervisor:  'supervisor',
+  employee:    'technician',
+  apprentice:  'read_only',
+  labour_hire: 'read_only',
+}
+
+function mapEqRoleToServiceRole(eqRole: string, isPlatformAdmin: boolean): ServiceRole {
+  if (isPlatformAdmin) return 'super_admin'
+  return EQ_TO_SERVICE_ROLE[eqRole] ?? 'read_only'
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function json(status: number, body: unknown) {
@@ -183,6 +215,18 @@ export async function POST(req: NextRequest) {
     return json(401, { error: 'invalid-token' })
   }
 
+  // Extract role claims from whichever token format validated.
+  // Bridge token does NOT carry role claims (design gap — slug only).
+  // JWT (active Phase 3 path) and legacy both carry eq_role + is_platform_admin.
+  const rawEqRole = jwtClaims?.app_metadata?.eq_role ?? legacy?.eq_role ?? null
+  const isPlatformAdmin = jwtClaims?.app_metadata?.is_platform_admin ?? legacy?.is_platform_admin ?? false
+  const serviceRole: ServiceRole | null = rawEqRole
+    ? mapEqRoleToServiceRole(rawEqRole, isPlatformAdmin)
+    : null
+
+  // For bridge tokens, tenant_slug is available — needed for tenant_members upsert.
+  const tenantSlug = bridge?.tenant_slug ?? null
+
   const supabase = createAdminClient()
 
   // Generate a one-time magic link. If the user doesn't exist yet, auto-provision
@@ -214,6 +258,51 @@ export async function POST(req: NextRequest) {
       error: 'service-account-not-found',
       detail: 'Could not provision access for this account. Contact support.',
     })
+  }
+
+  // ── Post-provisioning: sync role into Service's profile ───────────────────
+  //
+  // The handle_new_user() trigger creates a profiles row defaulting to
+  // role='technician'. If we have role claims from the token, override with
+  // the correctly-mapped Service role so the user lands with the right access.
+  //
+  // profiles.role is the "global" role; per-tenant access also requires a
+  // tenant_members row. For bridge-token paths (tenant_slug available) we
+  // upsert tenant_members too. For JWT paths, tenant_members provisioning
+  // is deferred until slug is added to the iframe JWT (Sprint 6 — requires
+  // token-exchange.ts to include tenant_slug for aud=service).
+  const userId = linkData.user?.id
+  if (userId && serviceRole) {
+    void (async () => {
+      try {
+        await supabase.from('profiles').update({ role: serviceRole }).eq('id', userId)
+
+        if (tenantSlug) {
+          // Look up the Service tenant by slug, then upsert tenant_members.
+          const { data: tenant } = await supabase
+            .from('tenants')
+            .select('id')
+            .eq('slug', tenantSlug)
+            .eq('is_active', true)
+            .maybeSingle()
+
+          if (tenant?.id) {
+            await supabase.from('tenant_members').upsert(
+              {
+                user_id: userId,
+                tenant_id: tenant.id,
+                role: serviceRole,
+                is_active: true,
+              },
+              { onConflict: 'user_id,tenant_id', ignoreDuplicates: false },
+            )
+          }
+        }
+      } catch (err) {
+        // Non-blocking: provisioning failure doesn't break the OTP exchange.
+        console.error('[shell-auth] post-provision role sync failed:', err)
+      }
+    })()
   }
 
   // Return the OTP for the client to exchange via supabase.auth.verifyOtp.
