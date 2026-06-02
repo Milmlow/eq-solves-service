@@ -329,6 +329,8 @@ export type Database = {
           asset_type: string
           block_or_zone: string | null
           building: string | null
+          canonical_id: string | null
+          canonical_synced_at: string | null
           commissioned_date: string | null
           created_at: string
           cycle_anchor_notes: string | null
@@ -359,6 +361,8 @@ export type Database = {
           asset_type: string
           block_or_zone?: string | null
           building?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           commissioned_date?: string | null
           created_at?: string
           cycle_anchor_notes?: string | null
@@ -389,6 +393,8 @@ export type Database = {
           asset_type?: string
           block_or_zone?: string | null
           building?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           commissioned_date?: string | null
           created_at?: string
           cycle_anchor_notes?: string | null
@@ -690,6 +696,58 @@ export type Database = {
           },
           {
             foreignKeyName: "check_assets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      check_comments: {
+        Row: {
+          body: string
+          check_id: string
+          created_at: string
+          created_by: string
+          id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          check_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          check_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "check_comments_check_id_fkey"
+            columns: ["check_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_checks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_comments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_tier_view"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "check_comments_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1279,6 +1337,8 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
+          canonical_id: string | null
+          canonical_synced_at: string | null
           code: string | null
           contract_options: string | null
           contract_template: string | null
@@ -1328,6 +1388,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           code?: string | null
           contract_options?: string | null
           contract_template?: string | null
@@ -1377,6 +1439,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           code?: string | null
           contract_options?: string | null
           contract_template?: string | null
@@ -1968,6 +2032,7 @@ export type Database = {
           freq_2yr: boolean
           freq_3yr: boolean
           freq_5yr: boolean
+          freq_6yr: boolean
           freq_8yr: boolean
           freq_annual: boolean
           freq_monthly: boolean
@@ -1990,6 +2055,7 @@ export type Database = {
           freq_2yr?: boolean
           freq_3yr?: boolean
           freq_5yr?: boolean
+          freq_6yr?: boolean
           freq_8yr?: boolean
           freq_annual?: boolean
           freq_monthly?: boolean
@@ -2012,6 +2078,7 @@ export type Database = {
           freq_2yr?: boolean
           freq_3yr?: boolean
           freq_5yr?: boolean
+          freq_6yr?: boolean
           freq_8yr?: boolean
           freq_annual?: boolean
           freq_monthly?: boolean
@@ -2240,6 +2307,7 @@ export type Database = {
           deleted_at: string | null
           due_date: string
           frequency: string | null
+          frequency_tags: string[] | null
           gps_lat: number | null
           gps_lng: number | null
           id: string
@@ -2270,6 +2338,7 @@ export type Database = {
           deleted_at?: string | null
           due_date: string
           frequency?: string | null
+          frequency_tags?: string[] | null
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
@@ -2300,6 +2369,7 @@ export type Database = {
           deleted_at?: string | null
           due_date?: string
           frequency?: string | null
+          frequency_tags?: string[] | null
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
@@ -3660,6 +3730,8 @@ export type Database = {
           address: string | null
           after_hours_phone: string | null
           canonical_field_id: string | null
+          canonical_id: string | null
+          canonical_synced_at: string | null
           city: string | null
           code: string | null
           country: string
@@ -3688,6 +3760,8 @@ export type Database = {
           address?: string | null
           after_hours_phone?: string | null
           canonical_field_id?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           city?: string | null
           code?: string | null
           country?: string
@@ -3716,6 +3790,8 @@ export type Database = {
           address?: string | null
           after_hours_phone?: string | null
           canonical_field_id?: string | null
+          canonical_id?: string | null
+          canonical_synced_at?: string | null
           city?: string | null
           code?: string | null
           country?: string
@@ -4563,6 +4639,16 @@ export type Database = {
       get_dashboard_counts: {
         Args: { p_tenant_id: string; p_user_id?: string }
         Returns: Json
+      }
+      get_defect_counts: {
+        Args: { p_tenant_id: string }
+        Returns: {
+          closed: number
+          in_progress: number
+          open: number
+          resolved: number
+          total: number
+        }[]
       }
       get_distinct_asset_types: {
         Args: never

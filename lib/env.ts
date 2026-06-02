@@ -53,6 +53,10 @@ export const publicEnv = validatePublicEnv()
 
 const serverSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
+  // Shell bridge — Option B redirect SSO. 256-bit random hex, must match the
+  // secret used by eq-shell's mint-iframe-token function. Optional so the
+  // app boots without it; /auth/shell-bridge returns 404 when unset.
+  EQ_SHELL_BRIDGE_SECRET: z.string().optional(),
 })
 
 let _serverEnv: z.infer<typeof serverSchema> | null = null

@@ -26,6 +26,12 @@ import { createHmac } from 'node:crypto'
 import { requireUser } from '@/lib/actions/auth'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { isAdmin } from '@/lib/utils/roles'
+import {
+  syncCustomer,
+  syncSite,
+  customerExternalId,
+  siteExternalId,
+} from '@/lib/canonical-sync'
 
 const FIELD_API_URL = process.env.FIELD_API_URL ?? ''
 const EQ_SECRET_SALT = process.env.EQ_SECRET_SALT ?? ''
@@ -192,6 +198,136 @@ export async function syncSitesFromFieldAction(): Promise<
     revalidatePath('/sites')
 
     return { success: true, created, updated }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// backfillCanonicalAction
+//
+// One-shot admin action. Iterates all active customers and sites that have
+// no canonical_id yet, pushes each to the EQ canonical API, and stamps the
+// returned UUID back. Already-synced records are skipped.
+//
+// Returns per-entity counts so the UI can show "Synced 12 customers, 34 sites".
+// Partial failures are tracked separately — if canonical is down for 2 sites
+// the rest still get synced.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BackfillResult {
+  success: true
+  customers: { synced: number; skipped: number; failed: number }
+  sites: { synced: number; skipped: number; failed: number }
+}
+
+export async function backfillCanonicalAction(): Promise<
+  BackfillResult | { success: false; error: string }
+> {
+  try {
+    const { supabase, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    const now = new Date().toISOString()
+
+    // ── 1. Back-fill customers ─────────────────────────────────────────────
+    const { data: customers, error: cErr } = await supabase
+      .from('customers')
+      .select('id, name, email, phone')
+      .eq('is_active', true)
+      .is('canonical_id', null)
+
+    if (cErr) throw new Error(`Failed to load customers: ${cErr.message}`)
+
+    let customersSynced = 0
+    let customersSkipped = 0
+    let customersFailed = 0
+
+    for (const c of customers ?? []) {
+      const result = await syncCustomer({
+        external_id:   customerExternalId(c.id),
+        company_name:  c.name,
+        email:         c.email ?? undefined,
+        primary_phone: c.phone ?? undefined,
+        active:        true,
+      })
+
+      if (!result.canonical_id) {
+        customersFailed++
+        continue
+      }
+
+      const { error: stampErr } = await supabase
+        .from('customers')
+        .update({ canonical_id: result.canonical_id, canonical_synced_at: now })
+        .eq('id', c.id)
+
+      if (stampErr) {
+        console.error('[backfill] failed to stamp customer', c.id, stampErr.message)
+        customersFailed++
+      } else {
+        customersSynced++
+      }
+    }
+
+    // ── 2. Back-fill sites ─────────────────────────────────────────────────
+    const { data: sites, error: sErr } = await supabase
+      .from('sites')
+      .select('id, name, customer_id, address, city, state, postcode, country')
+      .eq('is_active', true)
+      .is('canonical_id', null)
+
+    if (sErr) throw new Error(`Failed to load sites: ${sErr.message}`)
+
+    let sitesSynced = 0
+    let sitesSkipped = 0
+    let sitesFailed = 0
+
+    for (const s of sites ?? []) {
+      const result = await syncSite({
+        external_id:          siteExternalId(s.id),
+        name:                 s.name,
+        external_customer_id: s.customer_id ? customerExternalId(s.customer_id) : undefined,
+        address_line_1:       s.address ?? undefined,
+        suburb:               s.city ?? undefined,
+        state:                s.state ?? undefined,
+        postcode:             s.postcode ?? undefined,
+        country:              s.country ?? undefined,
+        active:               true,
+      })
+
+      if (!result.canonical_id) {
+        sitesFailed++
+        continue
+      }
+
+      const { error: stampErr } = await supabase
+        .from('sites')
+        .update({ canonical_id: result.canonical_id, canonical_synced_at: now })
+        .eq('id', s.id)
+
+      if (stampErr) {
+        console.error('[backfill] failed to stamp site', s.id, stampErr.message)
+        sitesFailed++
+      } else {
+        sitesSynced++
+      }
+    }
+
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'customer',
+      summary: `Canonical back-fill — ${customersSynced} customers synced, ${sitesSynced} sites synced`,
+    })
+
+    // Revalidate the integrations page so coverage bars update immediately.
+    revalidatePath('/admin/integrations')
+
+    return {
+      success: true,
+      customers: { synced: customersSynced, skipped: customersSkipped, failed: customersFailed },
+      sites:     { synced: sitesSynced,     skipped: sitesSkipped,     failed: sitesFailed     },
+    }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
   }
