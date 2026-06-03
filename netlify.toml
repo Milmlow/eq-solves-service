@@ -1,12 +1,7 @@
 [build]
-  # Skip Netlify's auto-install (it runs npm ci before our git URL rewrites are
-  # configured, causing SSH clone failures for github: deps in the lockfile).
-  # The build command below handles the full install + build in one shell session.
-  #
-  # GITHUB_TOKEN: set as a Netlify env var (builds scope only) to authenticate
-  # private @eq-solutions/* git deps. If unset, the rewrite falls back to plain
-  # https://github.com/ which works for public repos without a token.
-  install = "echo '--- install handled by build command ---'"
+  # Lockfile resolved URLs use HTTPS codeload tarball format so npm ci
+  # doesn't need SSH access to GitHub. GITHUB_TOKEN env var is kept for
+  # any future private deps — when unset the rewrite targets plain HTTPS.
   command = """
     GHBASE="https://${GITHUB_TOKEN:+${GITHUB_TOKEN}@}github.com/" && \
     git config --global --add url."${GHBASE}".insteadOf "https://github.com/" && \
