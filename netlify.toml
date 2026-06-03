@@ -1,22 +1,18 @@
 [build]
-  # The `git config --add url.<base>.insteadOf` lines rewrite EVERY github.com
-  # clone URL (HTTPS, SSH shorthand `git@github.com:`, and SSH explicit
-  # `ssh://git@github.com/`) into an HTTPS URL embedding GITHUB_TOKEN as the
-  # auth credential. This lets `npm install` clone the private
-  # `@eq-solutions/tokens` dep (and any future private @eq-solutions/* git-URL
-  # dep) during the build, regardless of which form the lockfile pins.
+  # Skip Netlify's auto-install (it runs npm ci before our git URL rewrites are
+  # configured, causing SSH clone failures for github: deps in the lockfile).
+  # The build command below handles the full install + build in one shell session.
   #
-  # GITHUB_TOKEN must be a fine-grained PAT scoped to the eq-solutions org
-  # with read-only access to the dep repo(s). Set it as a Netlify site env
-  # var with scope "Builds" only — never expose it to runtime / bundled code.
-  # The rewrite has no effect locally because GITHUB_TOKEN is unset there;
-  # local installs use the developer's existing git/SSH credentials, so this
-  # is invisible outside Netlify.
+  # GITHUB_TOKEN: set as a Netlify env var (builds scope only) to authenticate
+  # private @eq-solutions/* git deps. If unset, the rewrite falls back to plain
+  # https://github.com/ which works for public repos without a token.
+  install = "echo '--- install handled by build command ---'"
   command = """
-    git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && \
-    git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git@github.com:" && \
-    git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/" && \
-    git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "git+ssh://git@github.com/" && \
+    GHBASE="https://${GITHUB_TOKEN:+${GITHUB_TOKEN}@}github.com/" && \
+    git config --global --add url."${GHBASE}".insteadOf "https://github.com/" && \
+    git config --global --add url."${GHBASE}".insteadOf "git@github.com:" && \
+    git config --global --add url."${GHBASE}".insteadOf "ssh://git@github.com/" && \
+    git config --global --add url."${GHBASE}".insteadOf "git+ssh://git@github.com/" && \
     npm ci && \
     npm run build
     """
