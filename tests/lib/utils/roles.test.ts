@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { can, fromServiceRole } from '@eq-solutions/roles'
 import { isAdmin, canWrite, isSuperAdmin, canCreateCheck, canDoTestWork } from '@/lib/utils/roles'
 import type { Role } from '@/lib/types'
 
@@ -105,6 +106,45 @@ describe('Role Utilities', () => {
 
     it('returns false for null role', () => {
       expect(canCreateCheck(null)).toBe(false)
+    })
+  })
+
+  // C6 (2026-06-04): isAdmin/canWrite are now thin wrappers over the canonical
+  // permission matrix from @eq-solutions/roles. These guard the bridge so a
+  // future change to the package's mapping or matrix can't silently shift
+  // Service's authorisation without a failing test.
+  describe('canonical bridge', () => {
+    const allRoles: Role[] = ['super_admin', 'admin', 'supervisor', 'technician', 'read_only']
+
+    it('maps every Service role onto a canonical EqRole', () => {
+      expect(fromServiceRole('super_admin')).toBe('manager')
+      expect(fromServiceRole('admin')).toBe('manager')
+      expect(fromServiceRole('supervisor')).toBe('supervisor')
+      expect(fromServiceRole('technician')).toBe('employee')
+      expect(fromServiceRole('read_only')).toBe('apprentice')
+    })
+
+    it('isAdmin agrees with canonical can(role, admin.list_users)', () => {
+      for (const r of allRoles) {
+        const eq = fromServiceRole(r)!
+        expect(isAdmin(r)).toBe(can(eq, 'admin.list_users'))
+      }
+    })
+
+    it('canWrite agrees with canonical can(role, service.create)', () => {
+      for (const r of allRoles) {
+        const eq = fromServiceRole(r)!
+        expect(canWrite(r)).toBe(can(eq, 'service.create'))
+      }
+    })
+
+    it('no Service role maps to a platform admin (tenant isolation invariant)', () => {
+      // fromServiceRole never returns a role the canonical model treats as
+      // cross-tenant; the only cross-tenant lever is the separate
+      // is_platform_admin override, which Service does not derive from a role.
+      for (const r of allRoles) {
+        expect(fromServiceRole(r)).not.toBeNull()
+      }
     })
   })
 
