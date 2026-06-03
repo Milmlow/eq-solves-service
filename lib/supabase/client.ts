@@ -1,20 +1,20 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { publicEnv } from '@/lib/env'
+import { shellCookieOptions } from '@/lib/auth/shell-cookies'
 import type { Database } from './database.types'
 
 export function createClient() {
-  // SameSite=None required in production: Service is embedded cross-site inside
-  // Shell (core.eq.solutions ≠ eq-solves-service.netlify.app). Lax cookies set
-  // by verifyOtp / signIn are not sent in cross-site sub-frame navigation
-  // requests, so the server-side session would be invisible to the proxy on
-  // every iframe navigation. Netlify is always HTTPS; None+Secure is valid.
-  const cookieOptions = process.env.NODE_ENV === 'production'
-    ? { sameSite: 'none' as const, secure: true }
-    : undefined
+  // SameSite policy depends on the deploy host (see lib/auth/shell-cookies):
+  // Lax under *.eq.solutions (same-site iframe with Shell — the Cards/Field
+  // pattern, survives Safari/Chrome third-party-cookie blocking), None as a
+  // cutover fallback while still on *.netlify.app.
+  const cookieOptions = shellCookieOptions(
+    typeof window !== 'undefined' ? window.location.hostname : null
+  )
 
   return createBrowserClient<Database>(
     publicEnv.NEXT_PUBLIC_SUPABASE_URL,
     publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    cookieOptions ? { cookieOptions } : {}
+    Object.keys(cookieOptions).length > 0 ? { cookieOptions } : {}
   )
 }

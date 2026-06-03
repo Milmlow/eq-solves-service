@@ -35,6 +35,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { shellCookieOptions } from '@/lib/auth/shell-cookies'
 
 const EQ_SHELL_BRIDGE_SECRET = process.env.EQ_SHELL_BRIDGE_SECRET ?? ''
 const EQ_SECRET_SALT = process.env.EQ_SECRET_SALT ?? ''
@@ -315,17 +316,14 @@ export async function POST(req: NextRequest) {
     { email, otp: linkData.properties.email_otp },
     { status: 200, headers: { 'Cache-Control': 'no-store' } },
   )
+  // SameSite/Secure follow the deploy host (see lib/auth/shell-cookies):
+  // Lax under *.eq.solutions (same-site iframe with Shell — proxy.ts can read
+  // this flag without third-party-cookie blocking), None fallback on netlify.app.
   resp.cookies.set('eq_shell_bridge', '1', {
     httpOnly: true,
-    secure: true,
-    // SameSite=None required: Service is embedded cross-site inside Shell
-    // (core.eq.solutions ≠ eq-solves-service.netlify.app). SameSite=Lax cookies
-    // are not sent in cross-site sub-frame requests, so the MFA bypass in
-    // proxy.ts would never see this flag. Secure is already true; Netlify is
-    // always HTTPS so the None+Secure combination is valid in production.
-    sameSite: 'none',
     path: '/',
     maxAge: 60 * 60 * 4, // 4 hours
+    ...shellCookieOptions(req.nextUrl.host),
   })
   return resp
 }

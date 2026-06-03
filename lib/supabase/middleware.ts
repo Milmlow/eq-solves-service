@@ -7,6 +7,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { publicEnv } from '@/lib/env'
+import { shellCookieOptions } from '@/lib/auth/shell-cookies'
 import type { Database } from './database.types'
 
 /**
@@ -31,14 +32,10 @@ export async function updateSession(request: NextRequest) {
             request.cookies.set(name, value)
           )
           response = NextResponse.next({ request })
-          // SameSite=None required in production: Service is embedded cross-site
-          // inside Shell (core.eq.solutions ≠ eq-solves-service.netlify.app).
-          // Lax cookies are not forwarded in cross-site sub-frame requests, so
-          // the session would be invisible to the proxy on every iframe navigation.
-          // Netlify is always HTTPS, so None+Secure is valid in production.
-          const sameSiteOverride = process.env.NODE_ENV === 'production'
-            ? { sameSite: 'none' as const, secure: true }
-            : {}
+          // SameSite policy depends on the deploy host (see lib/auth/shell-cookies):
+          // Lax when served under *.eq.solutions (same-site iframe with Shell —
+          // the Cards/Field pattern), None as a cutover fallback on *.netlify.app.
+          const sameSiteOverride = shellCookieOptions(request.nextUrl.host)
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, { ...options, ...sameSiteOverride })
           )
