@@ -1,4 +1,4 @@
--- Advisor cleanup for the safe-provisioning migrations (0115-0117).
+-- Advisor cleanup for the safe-provisioning migrations (0116-0118).
 --
 -- enforce_slug_immutability is a TRIGGER function — it never needs to be callable
 -- as an RPC. Revoke EXECUTE so PostgREST doesn't expose it (the trigger still

@@ -6,7 +6,7 @@
 ## Why this exists
 
 A user authenticated in Shell who opens Service with **no `tenant_members` row**
-hits the access gate. They can now lodge a request (migration 0116), but on
+hits the access gate. They can now lodge a request (migration 0117), but on
 go-live day you don't want techs waiting on a manual approval — and the **first
 admin of a tenant can't self-provision** because `/admin/users` sits behind the
 same gate (bootstrap deadlock). Auto-provisioning is **not** relied on for
@@ -78,7 +78,7 @@ where lower(u.email) = any (array['...roster...'])
 - For a straggler who hits the gate: have the **section 3 seed** ready — add their
   email to the roster VALUES and re-run (takes seconds). Or attach via
   `/admin/users` as an existing SKS admin (`repairUserTenantAction`).
-- **Never** attach a tech to the demo tenant by mistake. After migration 0117 the
+- **Never** attach a tech to the demo tenant by mistake. After migration 0118 the
   demo slug is `demo-trades`; SKS is `sks`. Attach by the **SKS tenant id above**,
   not by guessing a slug.
 
@@ -93,7 +93,7 @@ Then re-run the seed with the correct tenant.
 
 ## Notes
 - This is the **manual** go-live path. Automatic SSO provisioning
-  (`allow_sso_autoprovision`, migration 0115) stays **off** for go-live and is a
+  (`allow_sso_autoprovision`, migration 0116) stays **off** for go-live and is a
   later, per-tenant, approval-gated step that also needs the Shell cookie slug.
 - All seed writes are service-role; they bypass RLS by design. Keep the roster
   out of the repo (PII).

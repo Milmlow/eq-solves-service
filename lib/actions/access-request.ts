@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase/server'
  * "No tenant assigned" gate). These deliberately do NOT use requireUser() —
  * that resolves a tenant + role, which a tenant-less user does not have. They
  * authenticate the user directly and operate only on the user's OWN request
- * row, which RLS (migration 0116) permits without any tenant context.
+ * row, which RLS (migration 0117) permits without any tenant context.
  *
  * `access_requests` is newer than the committed database.types.ts, so the typed
  * client doesn't know the table yet — we narrow to an untyped client handle for
