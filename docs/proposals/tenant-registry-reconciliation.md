@@ -84,16 +84,53 @@ app-local and must never cross the boundary.**
 4. Service: rework #236 to map by slug; verify with a pilot user; then enable.
 5. Audit + fix any raw `tenant_id` cross-boundary usage.
 
-## Open questions
+## DECISIONS (2026-06-04, after a 10-agent steelman of A/B/C/D)
 
-- **Registry source of truth.** Is canonical the master tenant registry the
-  whole suite should mirror (Service tenants become projections keyed by slug)?
-  Or do apps keep independent registries joined only by slug? This decides
-  whether Service should also adopt canonical ids over time (and retire the
-  collision) vs. just mapping by slug forever.
-- **Demo naming.** `demo-trades` vs `demo-electrical` — which wins?
-- **EQ tenant scope.** Is the Service `eq` tenant a dogfooding/dev sandbox for
-  EQ staff (recommended), and should it be excluded from customer-facing
-  metrics/reports?
-- **Should `is_platform_admin` ever grant Service access?** Current answer (C6):
-  no — cross-tenant power is the service-role channel. Confirm this holds.
+The steelman's load-bearing finding: the twice-reverted auto-routing was an
+**access** failure (silent auto-grant from cross-app claims), not an **identity**
+failure. Conflating the two is the trap. So the decision splits on two axes,
+chosen independently:
+
+**1 — Identity mechanism → SLUG as the cross-app join key.**
+`sks` and `eq` already match across both systems; only `demo` drifts. Slug
+dissolves the collision and *finishes* the already-merged `shell-provision.ts`
+rather than replacing it with the riskier `canonical_tenant_id` column. Resolve
+canonical→Service **once** at provision time and store Service's own local id;
+the cookie is never a per-request authorization key. (The `canonical_tenant_id`
+column and a live directory service are **deferred** — neither is needed now and
+both add irreversible coupling. The "is canonical the master registry" question
+is intentionally left open.)
+
+**2 — Access policy → EXPLICIT/INVITE by default, with a per-tenant opt-in.**
+Honours the revert. Auto-provision is **off** by default; it becomes a
+per-tenant opt-in (`tenant_settings.allow_sso_autoprovision`) enabled only for
+verified-1:1 tenants (`sks`, `eq`), never for the colliding/demo tenants, and
+only after the safety hardening below.
+
+**Supporting decisions:**
+- **Dead gate → replaced** with a "Request access to <resolved tenant>" screen
+  that creates a *pending request*, not a membership.
+- **Demo slug → align Service to canonical `demo-trades`** (canonical is upstream).
+- **Slug immutability → enforced** (rename-lockout + tombstone) as part of the
+  reconciliation, before any manual-attach campaign or auto-provision.
+- **Shell cookie slug → sequenced last**, under explicit Royce approval (auth change).
+- **SKS go-live (2026-06-21) → service-role seed runbook + pre-attach known techs.**
+- **`is_platform_admin` → still never grants tenant access** (C6 holds).
+- **EQ tenant → a dogfooding/dev sandbox** for EQ staff.
+
+### Hardening required BEFORE `allow_sso_autoprovision` can be enabled
+The merged `shell-provision.ts` is a safe no-op today but is NOT activation-ready:
+- It swallows all errors and writes **no `audit_logs`** row — violates the repo's
+  "audit every mutation" invariant. Add provenance (`source='shell_sso'` + `mutation_id`).
+- It takes the **role verbatim** from the cookie (`manager`/admin would pass).
+  Clamp to a Service-side allowlist; never auto-grant admin from a claim; default lowest.
+- Gate the whole writer behind `tenant_settings.allow_sso_autoprovision` (default false).
+
+### Build order (minimum-first)
+1. **Now:** EQ tenant (done) + EQ staff invited; replace the dead gate with the
+   request-access screen; harden the provisioning code (inert, but review-ready).
+2. Reconcile the `demo` slug + add slug immutability guard.
+3. Audit Field/Quotes/Shell for any raw cookie-`tenant_id` vs local-`tenants.id` use.
+4. SKS go-live seed runbook + pre-attach.
+5. **Last, with approval:** Shell adds slug to `eq_shell_session`; enable
+   `allow_sso_autoprovision` for `sks`/`eq` only after a soak.
