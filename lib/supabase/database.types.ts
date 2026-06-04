@@ -303,6 +303,42 @@ export type Database = {
           },
         ]
       }
+      access_requests: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          note: string | null
+          requested_slug: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          note?: string | null
+          requested_slug?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          note?: string | null
+          requested_slug?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           description: string | null
@@ -3969,6 +4005,7 @@ export type Database = {
       }
       tenant_settings: {
         Row: {
+          allow_sso_autoprovision: boolean
           analytics_enabled: boolean
           archive_grace_period_days: number
           calendar_enabled: boolean
@@ -4003,6 +4040,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allow_sso_autoprovision?: boolean
           analytics_enabled?: boolean
           archive_grace_period_days?: number
           calendar_enabled?: boolean
@@ -4037,6 +4075,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allow_sso_autoprovision?: boolean
           analytics_enabled?: boolean
           archive_grace_period_days?: number
           calendar_enabled?: boolean
@@ -4096,6 +4135,39 @@ export type Database = {
             foreignKeyName: "tenant_settings_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_slug_tombstones: {
+        Row: {
+          retired_at: string
+          slug: string
+          tenant_id: string
+        }
+        Insert: {
+          retired_at?: string
+          slug: string
+          tenant_id: string
+        }
+        Update: {
+          retired_at?: string
+          slug?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_slug_tombstones_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_tier_view"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_slug_tombstones_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
@@ -4674,7 +4746,6 @@ export type Database = {
       get_user_role: { Args: { p_tenant_id: string }; Returns: string }
       get_user_tenant_ids: { Args: never; Returns: string[] }
       is_admin: { Args: never; Returns: boolean }
-      is_super_admin: { Args: never; Returns: boolean }
       is_tenant_admin: { Args: { p_tenant_id: string }; Returns: boolean }
       list_active_supervisors: {
         Args: never
