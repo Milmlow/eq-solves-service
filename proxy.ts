@@ -18,6 +18,7 @@ import {
   isPublicPath,
   isAalExempt,
 } from '@/lib/auth/mfa-routing'
+import { shellCookieOptions } from '@/lib/auth/shell-cookies'
 
 // ---------------------------------------------------------------------------
 // Shell cookie verification
@@ -109,10 +110,9 @@ export async function proxy(request: NextRequest) {
         // Build a mutable response so we can set cookies while still
         // forwarding the request to the Next.js render pipeline.
         let cookieResponse = NextResponse.next({ request })
-        const sameSiteOpts =
-          process.env.NODE_ENV === 'production'
-            ? ({ sameSite: 'none' as const, secure: true } as const)
-            : {}
+        // Lax under *.eq.solutions (same-site iframe), None fallback on
+        // *.netlify.app — see lib/auth/shell-cookies.
+        const sameSiteOpts = shellCookieOptions(request.nextUrl.host)
 
         const supabaseAdmin = createAdminClient()
 
@@ -164,20 +164,25 @@ export async function proxy(request: NextRequest) {
             }
           )
 
+          // Verify by token_hash — GoTrue rejects the call with
+          // "400: Only the token_hash and type should be provided" if `email`
+          // is also passed (email belongs to the {email, token} OTP variant,
+          // NOT the {token_hash} variant). Passing it here was silently failing
+          // every Shell SSO exchange → no session → bounce to /auth/signin =
+          // the "double login". Verified against live auth logs 2026-06-04.
           const { error: otpErr } = await ssrClient.auth.verifyOtp({
             type: 'magiclink',
             token_hash: linkData.properties.hashed_token,
-            email: shellPayload.email!,
           })
 
           if (!otpErr) {
             // Session established — stamp the bridge cookie and continue.
+            // SameSite/Secure follow the deploy host (see shellCookieOptions).
             cookieResponse.cookies.set('eq_shell_bridge', '1', {
               httpOnly: true,
-              secure: true,
-              sameSite: 'none',
               path: '/',
               maxAge: 60 * 60 * 4, // 4 hours
+              ...sameSiteOpts,
             })
             // Redirect public/auth pages to dashboard now that we have a session.
             if (isPublicPath(pathname)) {
