@@ -497,7 +497,7 @@ export async function setRoleAction(formData: FormData) {
 /**
  * PERMANENTLY delete a user.
  *
- * Reserved for super_admin only. This:
+ * Manager-only (super_admin + admin — collapsed in Sprint C6). This:
  *   1. Deletes the user from auth.users (Supabase Admin API).
  *   2. profiles + tenant_members + audit_log rows are preserved with the user
  *      reference intact — historical data isn't rewritten. Foreign keys to
@@ -519,13 +519,14 @@ export async function hardDeleteUserAction(formData: FormData) {
   } catch (e) {
     return { error: (e as Error).message }
   }
-  const { user: actor, role: actorRole } = ctx
+  const { user: actor } = ctx
 
-  // Super-admin gate. Even regular admins cannot trigger a hard delete —
-  // archive is the right tool for the job 95% of the time.
-  if (actorRole !== 'super_admin') {
-    return { error: 'Only super_admin users can permanently delete accounts. Archive instead.' }
-  }
+  // Manager gate (Sprint C6). `requireTenantAdmin()` above already enforces
+  // isAdmin (= canonical tenant `manager`: super_admin + admin). The old
+  // extra super_admin-only restriction was a within-tenant elevation that no
+  // longer exists once super_admin collapses into manager — hard delete is
+  // canonically `entity.delete`, manager-only. Archive remains the right tool
+  // 95% of the time; the UI double-confirms before calling.
   if (userId === actor.id) {
     return { error: 'You cannot permanently delete yourself.' }
   }

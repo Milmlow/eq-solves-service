@@ -1,6 +1,42 @@
 import { describe, it, expect } from 'vitest'
-import { isAdmin, canWrite, isSuperAdmin, canCreateCheck, canDoTestWork } from '@/lib/utils/roles'
+import { isAdmin, canWrite, canCreateCheck, canDoTestWork } from '@/lib/utils/roles'
+import { SERVICE_ROLES } from '@/lib/types'
 import type { Role } from '@/lib/types'
+
+// ── Behaviour-equivalence matrix (Sprint C6) ───────────────────────────
+//
+// The predicate bodies moved from hand-rolled string-array checks to the
+// canonical @eq-solutions/roles `can()` matrix. This table is the EXACT
+// before-state (captured from the old ADMIN_ROLES / WRITE_ROLES /
+// CHECK_CREATOR_ROLES sets) and must still hold after the refactor — proof
+// that the migration is behaviour-preserving. `isSuperAdmin` is intentionally
+// gone: super_admin collapses into the canonical tenant `manager`.
+const LEGACY_OUTCOMES: Record<Role, { isAdmin: boolean; canWrite: boolean; canCreateCheck: boolean; canDoTestWork: boolean }> = {
+  super_admin: { isAdmin: true,  canWrite: true,  canCreateCheck: true,  canDoTestWork: true },
+  admin:       { isAdmin: true,  canWrite: true,  canCreateCheck: true,  canDoTestWork: true },
+  supervisor:  { isAdmin: false, canWrite: true,  canCreateCheck: true,  canDoTestWork: true },
+  technician:  { isAdmin: false, canWrite: false, canCreateCheck: true,  canDoTestWork: true },
+  read_only:   { isAdmin: false, canWrite: false, canCreateCheck: false, canDoTestWork: false },
+}
+
+describe('Role predicate equivalence (C6 — canonical matrix vs legacy sets)', () => {
+  for (const role of SERVICE_ROLES) {
+    const expected = LEGACY_OUTCOMES[role]
+    it(`${role}: isAdmin=${expected.isAdmin} canWrite=${expected.canWrite} canCreateCheck=${expected.canCreateCheck} canDoTestWork=${expected.canDoTestWork}`, () => {
+      expect(isAdmin(role)).toBe(expected.isAdmin)
+      expect(canWrite(role)).toBe(expected.canWrite)
+      expect(canCreateCheck(role)).toBe(expected.canCreateCheck)
+      expect(canDoTestWork(role)).toBe(expected.canDoTestWork)
+    })
+  }
+
+  it('null role is false across every predicate', () => {
+    expect(isAdmin(null)).toBe(false)
+    expect(canWrite(null)).toBe(false)
+    expect(canCreateCheck(null)).toBe(false)
+    expect(canDoTestWork(null)).toBe(false)
+  })
+})
 
 describe('Role Utilities', () => {
   describe('isAdmin', () => {
@@ -108,29 +144,4 @@ describe('Role Utilities', () => {
     })
   })
 
-  describe('isSuperAdmin', () => {
-    it('returns true for super_admin role', () => {
-      expect(isSuperAdmin('super_admin')).toBe(true)
-    })
-
-    it('returns false for admin role', () => {
-      expect(isSuperAdmin('admin')).toBe(false)
-    })
-
-    it('returns false for supervisor role', () => {
-      expect(isSuperAdmin('supervisor')).toBe(false)
-    })
-
-    it('returns false for technician role', () => {
-      expect(isSuperAdmin('technician')).toBe(false)
-    })
-
-    it('returns false for null role', () => {
-      expect(isSuperAdmin(null)).toBe(false)
-    })
-
-    it('returns false for read_only role', () => {
-      expect(isSuperAdmin('read_only')).toBe(false)
-    })
-  })
 })

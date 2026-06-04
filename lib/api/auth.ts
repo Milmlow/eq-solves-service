@@ -26,17 +26,11 @@ export async function getApiUser() {
   }
 }
 
-const ADMIN_ROLES: Role[] = ['super_admin', 'admin']
-const WRITE_ROLES: Role[] = ['super_admin', 'admin', 'supervisor']
-
-export function isAdmin(role: Role | null): boolean {
-  return role !== null && ADMIN_ROLES.includes(role)
-}
-
-export function canWrite(role: Role | null): boolean {
-  return role !== null && WRITE_ROLES.includes(role)
-}
-
-export function isSuperAdmin(role: Role | null): boolean {
-  return role === 'super_admin'
-}
+// Role predicates live in a single canonical source — re-exported here so
+// API routes keep importing them from '@/lib/api/auth' (Sprint C6). The old
+// duplicated string-array matrix is gone; `lib/utils/roles` decides via the
+// @eq-solutions/roles `can()` matrix. `isSuperAdmin` was removed: the
+// canonical model has no tier above `manager`, and the only former
+// consumers — the /api/tenants* platform endpoints — now gate out-of-band
+// on EQ_PLATFORM_ADMIN_KEY (see lib/api/platform.ts), not a tenant role.
+export { isAdmin, canWrite } from '@/lib/utils/roles'

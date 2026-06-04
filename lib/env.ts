@@ -57,6 +57,11 @@ const serverSchema = z.object({
   // secret used by eq-shell's mint-iframe-token function. Optional so the
   // app boots without it; /auth/shell-bridge returns 404 when unset.
   EQ_SHELL_BRIDGE_SECRET: z.string().optional(),
+  // Out-of-band platform-admin key (Sprint C6). Gates the /api/tenants*
+  // platform endpoints — tenant management lives OUTSIDE any tenant role.
+  // Optional so the app boots without it; requirePlatformAdmin() fails CLOSED
+  // (403) when unset, so an unset key can never accidentally open the surface.
+  EQ_PLATFORM_ADMIN_KEY: z.string().optional(),
 })
 
 let _serverEnv: z.infer<typeof serverSchema> | null = null
@@ -65,6 +70,8 @@ export function serverEnv() {
   if (_serverEnv) return _serverEnv
   const result = serverSchema.safeParse({
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    EQ_SHELL_BRIDGE_SECRET: process.env.EQ_SHELL_BRIDGE_SECRET,
+    EQ_PLATFORM_ADMIN_KEY: process.env.EQ_PLATFORM_ADMIN_KEY,
   })
   if (!result.success) {
     const formatted = result.error.issues.map((i) => `  • ${i.path.join('.')}: ${i.message}`).join('\n')

@@ -2,6 +2,21 @@
 
 export type Role = 'super_admin' | 'admin' | 'supervisor' | 'technician' | 'read_only'
 
+/**
+ * Runtime mirror of the `Role` union and the `tenant_members.role` DB CHECK
+ * (migration 0002). The drift guard in `tests/lib/roles-drift.test.ts` pins
+ * this against the package's `SERVICE_ROLE_MAP` keys and against the SQL
+ * CHECK constraint, so the Service role vocabulary can't silently diverge
+ * from the canonical `@eq-solutions/roles` adapter (Sprint C6).
+ */
+export const SERVICE_ROLES = [
+  'super_admin',
+  'admin',
+  'supervisor',
+  'technician',
+  'read_only',
+] as const satisfies readonly Role[]
+
 export type ProfileRole = Role | 'user'
 
 export type Frequency = 'weekly' | 'monthly' | 'quarterly' | 'biannual' | 'annual' | 'ad_hoc'

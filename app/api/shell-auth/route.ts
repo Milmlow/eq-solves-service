@@ -35,6 +35,8 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { EQ_TO_SERVICE_ROLE } from '@/lib/utils/roles'
+import type { ServiceRole } from '@eq-solutions/roles'
 
 const EQ_SHELL_BRIDGE_SECRET = process.env.EQ_SHELL_BRIDGE_SECRET ?? ''
 const EQ_SECRET_SALT = process.env.EQ_SECRET_SALT ?? ''
@@ -168,19 +170,16 @@ function validateSupabaseJwt(raw: string): SupabaseJwtPayload | null {
 //   labour_hire  → read_only   (scoped — no write permissions in Service)
 //   is_platform_admin → super_admin (cross-tenant; EQ internal staff only)
 
-type ServiceRole = 'super_admin' | 'admin' | 'supervisor' | 'technician' | 'read_only'
-
-const EQ_TO_SERVICE_ROLE: Record<string, ServiceRole> = {
-  manager:     'admin',
-  supervisor:  'supervisor',
-  employee:    'technician',
-  apprentice:  'read_only',
-  labour_hire: 'read_only',
-}
-
+// ServiceRole + the inverse EQ_TO_SERVICE_ROLE map are the canonical Service
+// role vocabulary (Sprint C6): the type comes from @eq-solutions/roles and the
+// map lives in lib/utils/roles (co-located with the forward adapter, drift-
+// guarded by tests/lib/roles-drift.test.ts). Behaviour here is unchanged —
+// a platform admin is still stamped super_admin, manager still maps to admin.
 function mapEqRoleToServiceRole(eqRole: string, isPlatformAdmin: boolean): ServiceRole {
   if (isPlatformAdmin) return 'super_admin'
-  return EQ_TO_SERVICE_ROLE[eqRole] ?? 'read_only'
+  // EQ_TO_SERVICE_ROLE is keyed by the canonical EqRole union; eqRole arrives
+  // as a raw string from the token, so widen the lookup and fall back.
+  return (EQ_TO_SERVICE_ROLE as Record<string, ServiceRole>)[eqRole] ?? 'read_only'
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

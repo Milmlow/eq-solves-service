@@ -11,6 +11,8 @@ import {
 } from './actions'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { isAdmin } from '@/lib/utils/roles'
+import type { Role } from '@/lib/types'
 
 interface Profile {
   id: string
@@ -59,7 +61,12 @@ export function UsersTable({
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const confirm = useConfirm()
 
-  const isSuperAdmin = callerRole === 'super_admin'
+  // Permanent (hard) user deletion is the most dangerous action on this page.
+  // Sprint C6 collapses super_admin into the canonical tenant `manager`, so
+  // this gates on isAdmin (= manager: super_admin + admin) rather than the raw
+  // super_admin string. Canonically a hard delete is `entity.delete`,
+  // manager-only.
+  const canHardDelete = isAdmin(callerRole as Role)
 
   function show(kind: 'ok' | 'err', text: string) {
     setNotice({ kind, text })
@@ -275,7 +282,7 @@ export function UsersTable({
                         Archive
                       </button>
                     )}
-                    {isSuperAdmin && (
+                    {canHardDelete && (
                       <button
                         type="button"
                         onClick={() => hardDelete(u.id, label)}

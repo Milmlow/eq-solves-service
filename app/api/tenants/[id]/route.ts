@@ -1,19 +1,22 @@
 import { NextRequest } from 'next/server'
-import { getApiUser, isSuperAdmin } from '@/lib/api/auth'
-import { ok, err, unauthorized, forbidden, notFound } from '@/lib/api/response'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { isPlatformAdminRequest } from '@/lib/api/platform'
+import { ok, err, forbidden, notFound } from '@/lib/api/response'
 import { UpdateTenantSchema } from '@/lib/validations/tenant'
 
+// Single-tenant management is a PLATFORM operation (Sprint C6) — gated
+// out-of-band on EQ_PLATFORM_ADMIN_KEY, not a tenant role, and run via the
+// service-role client. No super_admin in another tenant can reach it.
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!isPlatformAdminRequest(request)) return forbidden()
     const { id } = await params
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
 
-    const { supabase } = await getApiUser()
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('tenants')
       .select('*')
@@ -35,15 +38,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!isPlatformAdminRequest(request)) return forbidden()
     const { id } = await params
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
 
     const body = await request.json()
     const validated = UpdateTenantSchema.parse(body)
 
-    const { supabase } = await getApiUser()
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('tenants')
       .update({ ...validated, updated_at: new Date().toISOString() })
@@ -65,16 +66,14 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!isPlatformAdminRequest(request)) return forbidden()
     const { id } = await params
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
 
-    const { supabase } = await getApiUser()
+    const supabase = createAdminClient()
     const { error } = await supabase
       .from('tenants')
       .update({ is_active: false, updated_at: new Date().toISOString() })

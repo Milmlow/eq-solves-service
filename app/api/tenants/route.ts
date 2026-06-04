@@ -1,15 +1,20 @@
 import { NextRequest } from 'next/server'
-import { getApiUser, isSuperAdmin } from '@/lib/api/auth'
-import { ok, created, err, unauthorized, forbidden } from '@/lib/api/response'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { isPlatformAdminRequest } from '@/lib/api/platform'
+import { ok, created, err, forbidden } from '@/lib/api/response'
 import { CreateTenantSchema } from '@/lib/validations/tenant'
 
-export async function GET() {
-  try {
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
+// Tenant management is a PLATFORM operation (Sprint C6) — it spans every
+// tenant, so it lives OUT-OF-BAND, gated on EQ_PLATFORM_ADMIN_KEY rather than
+// a tenant-held role. A super_admin sitting inside one tenant can no longer
+// reach this surface. Requests use the service-role client (RLS-bypass);
+// RLS no longer grants tenant CRUD to any authenticated tenant session.
 
-    const { supabase } = await getApiUser()
+export async function GET(request: NextRequest) {
+  try {
+    if (!isPlatformAdminRequest(request)) return forbidden()
+
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('tenants')
       .select('*')
@@ -25,14 +30,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
+    if (!isPlatformAdminRequest(request)) return forbidden()
 
     const body = await request.json()
     const validated = CreateTenantSchema.parse(body)
 
-    const { supabase } = await getApiUser()
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('tenants')
       .insert([{ ...validated, is_active: true }])
