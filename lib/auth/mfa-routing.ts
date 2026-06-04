@@ -59,6 +59,13 @@ export const PUBLIC_PATHS = [
   // Shell auth API — validates the HMAC token and returns a one-time OTP.
   // Called by /shell (client-side fetch) before any session exists.
   '/api/shell-auth',
+  // Out-of-band tenant-provisioning API (migration 0114). Called server-to-
+  // server by EQ-internal tooling with NO Supabase session — auth is the
+  // `x-eq-platform-key` header checked inside the handler (lib/api/platform-
+  // admin). Must be public or the proxy 307-redirects the caller to
+  // /auth/signin before the platform-key gate ever runs. Returns 503 when
+  // EQ_PLATFORM_ADMIN_KEY is unset, 403 on a wrong key.
+  '/api/tenants',
   // Shell bridge — Option B redirect flow. Shell mints a 60s HMAC token and
   // redirects the full browser here (not an iframe). This route validates the
   // token, generates a magic link, and redirects through /auth/callback to
