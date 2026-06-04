@@ -221,7 +221,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <ShellReadySignal isShellIframe={isShellIframe} />
       {user && analyticsTenantId && analyticsRole && (
         <AnalyticsIdentify
-          userId={user.id}
+          // Cross-app PostHog distinct_id is the lowercased email. Service's
+          // user.id is a GoTrue id from its own Supabase — a different
+          // namespace from Shell's canonical UUID — so email is the only key
+          // the same human can share across Shell / Field / Service. Falls
+          // back to user.id if email is somehow missing.
+          userId={user.email ? user.email.toLowerCase() : user.id}
           tenantId={isDemoSession ? 'demo-fixture' : analyticsTenantId}
           role={analyticsRole}
           appEnv={isDemoSession ? 'demo' : (process.env.NEXT_PUBLIC_APP_ENV ?? 'beta')}
