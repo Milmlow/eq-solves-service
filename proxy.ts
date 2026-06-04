@@ -31,7 +31,7 @@ interface ShellCookiePayload {
   active_tenant_id: string
   role: string
   is_platform_admin: boolean
-  memberships: Array<{ tenant_id: string; role: string }>
+  memberships: Array<{ tenant_id: string; role: string; slug?: string }>
   email?: string
   name?: string | null
   exp: number
