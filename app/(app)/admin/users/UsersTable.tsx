@@ -59,7 +59,7 @@ export function UsersTable({
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const confirm = useConfirm()
 
-  const isSuperAdmin = callerRole === 'super_admin'
+  const isManager = callerRole === 'manager'
 
   function show(kind: 'ok' | 'err', text: string) {
     setNotice({ kind, text })
@@ -130,7 +130,7 @@ export function UsersTable({
     setNotice(null)
     const fd = new FormData()
     fd.set('user_id', userId)
-    fd.set('role', role || 'technician')
+    fd.set('role', role || 'employee')
     startTransition(async () => {
       const res = await repairUserTenantAction(fd)
       if (res && 'error' in res && res.error) show('err', res.error)
@@ -209,11 +209,11 @@ export function UsersTable({
                     className="h-8 px-2 border border-gray-200 rounded text-xs text-eq-ink bg-white disabled:opacity-50"
                     title={removedFromTenant ? 'Add this user to your workspace first' : undefined}
                   >
-                    <option value="super_admin">Super Admin</option>
-                    <option value="admin">Admin</option>
+                    <option value="manager">Manager</option>
                     <option value="supervisor">Supervisor</option>
-                    <option value="technician">Technician</option>
-                    <option value="read_only">Read Only</option>
+                    <option value="employee">Employee</option>
+                    <option value="apprentice">Apprentice</option>
+                    <option value="labour_hire">Labour Hire</option>
                   </select>
                 </td>
                 <td className="px-4 py-3">
@@ -275,13 +275,13 @@ export function UsersTable({
                         Archive
                       </button>
                     )}
-                    {isSuperAdmin && (
+                    {isManager && (
                       <button
                         type="button"
                         onClick={() => hardDelete(u.id, label)}
                         disabled={pending || isSelf}
                         className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-                        title="PERMANENTLY delete this user's login. Cannot be undone. Top-level admins only."
+                        title="PERMANENTLY delete this user's login. Cannot be undone. Managers only."
                       >
                         Delete permanently
                       </button>

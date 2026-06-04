@@ -143,7 +143,7 @@ export default async function CalendarPage({
   const memberIds = (members ?? []).map((m) => m.user_id)
   const adminUserIds = new Set(
     (members ?? [])
-      .filter((m) => ['super_admin', 'admin', 'supervisor'].includes(m.role as string))
+      .filter((m) => ['manager', 'supervisor'].includes(m.role as string))
       .map((m) => m.user_id),
   )
   let technicians: { id: string; email: string; full_name: string | null }[] = []

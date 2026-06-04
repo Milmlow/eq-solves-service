@@ -14,7 +14,7 @@ export default async function DefectsPage({
 
   // Get current user for role check
   const { data: { user } } = await supabase.auth.getUser()
-  let userRole = 'read_only'
+  let userRole = 'apprentice'
   let tenantId: string | null = null
   if (user) {
     const { data: membership } = await supabase
@@ -24,7 +24,7 @@ export default async function DefectsPage({
       .eq('is_active', true)
       .limit(1)
       .maybeSingle()
-    userRole = membership?.role ?? 'read_only'
+    userRole = membership?.role ?? 'apprentice'
     tenantId = (membership as { role?: string; tenant_id?: string } | null)?.tenant_id ?? null
   }
 
@@ -100,7 +100,7 @@ export default async function DefectsPage({
     closed: countsRow?.closed ?? 0,
   }
 
-  const canWrite = ['super_admin', 'admin', 'supervisor'].includes(userRole)
+  const canWrite = ['manager', 'supervisor'].includes(userRole)
 
   return (
     <div className="space-y-6">

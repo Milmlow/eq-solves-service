@@ -54,11 +54,11 @@ export function UserSettingsForm({ email, fullName, role, lastLogin, createdAt }
   }
 
   const roleLabel: Record<Role, string> = {
-    super_admin: 'Super Admin',
-    admin: 'Admin',
+    manager: 'Manager',
     supervisor: 'Supervisor',
-    technician: 'Technician',
-    read_only: 'Read Only',
+    employee: 'Employee',
+    apprentice: 'Apprentice',
+    labour_hire: 'Labour Hire',
   }
 
   return (

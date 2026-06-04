@@ -33,7 +33,7 @@ describe('RLS — only admin can DELETE a maintenance_check', () => {
   let adminCheckId: string
 
   beforeAll(async () => {
-    tenant = await seedTenantWithUser('aod', 'admin')
+    tenant = await seedTenantWithUser('aod', 'manager')
     adminUser = tenant.user
     supervisor = await addUserToTenant(tenant, 'supervisor', 'aod-sup')
 

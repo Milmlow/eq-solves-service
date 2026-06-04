@@ -1,136 +1,69 @@
 import { describe, it, expect } from 'vitest'
-import { isAdmin, canWrite, isSuperAdmin, canCreateCheck, canDoTestWork } from '@/lib/utils/roles'
+import { can } from '@eq-solutions/roles'
+import { isAdmin, canWrite, canCreateCheck, canDoTestWork } from '@/lib/utils/roles'
 import type { Role } from '@/lib/types'
 
-describe('Role Utilities', () => {
-  describe('isAdmin', () => {
-    it('returns true for super_admin role', () => {
-      expect(isAdmin('super_admin')).toBe(true)
-    })
+// Service stores canonical EQ roles directly (migration 0114). These helpers
+// are thin wrappers over the canonical permission matrix from
+// @eq-solutions/roles. There is no cross-tenant / super-admin predicate —
+// platform power is out-of-band, never a tenant role.
 
-    it('returns true for admin role', () => {
-      expect(isAdmin('admin')).toBe(true)
-    })
+const ALL_ROLES: Role[] = ['manager', 'supervisor', 'employee', 'apprentice', 'labour_hire']
 
-    it('returns false for supervisor role', () => {
-      expect(isAdmin('supervisor')).toBe(false)
-    })
-
-    it('returns false for technician role', () => {
-      expect(isAdmin('technician')).toBe(false)
-    })
-
-    it('returns false for null role', () => {
-      expect(isAdmin(null)).toBe(false)
-    })
-
-    it('returns false for read_only role', () => {
-      expect(isAdmin('read_only')).toBe(false)
-    })
+describe('Role Utilities (canonical)', () => {
+  describe('isAdmin — manager only', () => {
+    it('true for manager', () => expect(isAdmin('manager')).toBe(true))
+    it('false for supervisor', () => expect(isAdmin('supervisor')).toBe(false))
+    it('false for employee', () => expect(isAdmin('employee')).toBe(false))
+    it('false for apprentice', () => expect(isAdmin('apprentice')).toBe(false))
+    it('false for labour_hire', () => expect(isAdmin('labour_hire')).toBe(false))
+    it('false for null', () => expect(isAdmin(null)).toBe(false))
   })
 
-  describe('canWrite', () => {
-    it('returns true for super_admin role', () => {
-      expect(canWrite('super_admin')).toBe(true)
-    })
-
-    it('returns true for admin role', () => {
-      expect(canWrite('admin')).toBe(true)
-    })
-
-    it('returns true for supervisor role', () => {
-      expect(canWrite('supervisor')).toBe(true)
-    })
-
-    it('returns false for technician role', () => {
-      expect(canWrite('technician')).toBe(false)
-    })
-
-    it('returns false for read_only role', () => {
-      expect(canWrite('read_only')).toBe(false)
-    })
-
-    it('returns false for null role', () => {
-      expect(canWrite(null)).toBe(false)
-    })
+  describe('canWrite — manager + supervisor', () => {
+    it('true for manager', () => expect(canWrite('manager')).toBe(true))
+    it('true for supervisor', () => expect(canWrite('supervisor')).toBe(true))
+    it('false for employee', () => expect(canWrite('employee')).toBe(false))
+    it('false for apprentice', () => expect(canWrite('apprentice')).toBe(false))
+    it('false for labour_hire', () => expect(canWrite('labour_hire')).toBe(false))
+    it('false for null', () => expect(canWrite(null)).toBe(false))
   })
 
-  describe('canDoTestWork', () => {
-    // On-site test execution — saving ACB/NSX wizard steps, editing RCD
-    // circuit timings, marking a test complete. Loosened in PR A (2026-05-19)
-    // to include technician, mirroring the RLS layer (migrations 0069 + 0080
-    // + 0081). Without this gate, RLS would allow the write but the app
-    // layer blocks it — leaving the tech stuck on-site.
-    it('returns true for super_admin role', () => {
-      expect(canDoTestWork('super_admin')).toBe(true)
+  describe('canCreateCheck / canDoTestWork — manager + supervisor + employee', () => {
+    it('true for manager', () => {
+      expect(canCreateCheck('manager')).toBe(true)
+      expect(canDoTestWork('manager')).toBe(true)
     })
-
-    it('returns true for admin role', () => {
-      expect(canDoTestWork('admin')).toBe(true)
-    })
-
-    it('returns true for supervisor role', () => {
+    it('true for supervisor', () => {
+      expect(canCreateCheck('supervisor')).toBe(true)
       expect(canDoTestWork('supervisor')).toBe(true)
     })
-
-    it('returns true for technician role (the whole point)', () => {
-      expect(canDoTestWork('technician')).toBe(true)
+    it('true for employee (the on-site point)', () => {
+      expect(canCreateCheck('employee')).toBe(true)
+      expect(canDoTestWork('employee')).toBe(true)
     })
-
-    it('returns false for read_only role', () => {
-      expect(canDoTestWork('read_only')).toBe(false)
+    it('false for apprentice', () => {
+      expect(canCreateCheck('apprentice')).toBe(false)
+      expect(canDoTestWork('apprentice')).toBe(false)
     })
-
-    it('returns false for null role', () => {
+    it('false for labour_hire', () => {
+      expect(canCreateCheck('labour_hire')).toBe(false)
+      expect(canDoTestWork('labour_hire')).toBe(false)
+    })
+    it('false for null', () => {
+      expect(canCreateCheck(null)).toBe(false)
       expect(canDoTestWork(null)).toBe(false)
     })
   })
 
-  describe('canCreateCheck', () => {
-    // Parity check — canDoTestWork and canCreateCheck currently share the
-    // same role set, but they exist as separate predicates because they
-    // gate different surfaces. If they diverge, both should still let
-    // technicians through (that's the contract).
-    it('returns true for super_admin role', () => {
-      expect(canCreateCheck('super_admin')).toBe(true)
+  // Guard the bridge: a future change to the canonical matrix can't silently
+  // shift Service's authorisation without a failing test.
+  describe('canonical matrix agreement', () => {
+    it('isAdmin agrees with can(role, admin.list_users)', () => {
+      for (const r of ALL_ROLES) expect(isAdmin(r)).toBe(can(r, 'admin.list_users'))
     })
-
-    it('returns true for technician role', () => {
-      expect(canCreateCheck('technician')).toBe(true)
-    })
-
-    it('returns false for read_only role', () => {
-      expect(canCreateCheck('read_only')).toBe(false)
-    })
-
-    it('returns false for null role', () => {
-      expect(canCreateCheck(null)).toBe(false)
-    })
-  })
-
-  describe('isSuperAdmin', () => {
-    it('returns true for super_admin role', () => {
-      expect(isSuperAdmin('super_admin')).toBe(true)
-    })
-
-    it('returns false for admin role', () => {
-      expect(isSuperAdmin('admin')).toBe(false)
-    })
-
-    it('returns false for supervisor role', () => {
-      expect(isSuperAdmin('supervisor')).toBe(false)
-    })
-
-    it('returns false for technician role', () => {
-      expect(isSuperAdmin('technician')).toBe(false)
-    })
-
-    it('returns false for null role', () => {
-      expect(isSuperAdmin(null)).toBe(false)
-    })
-
-    it('returns false for read_only role', () => {
-      expect(isSuperAdmin('read_only')).toBe(false)
+    it('canWrite agrees with can(role, service.create)', () => {
+      for (const r of ALL_ROLES) expect(canWrite(r)).toBe(can(r, 'service.create'))
     })
   })
 })

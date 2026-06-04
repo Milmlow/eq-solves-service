@@ -1,19 +1,33 @@
 import { NextRequest } from 'next/server'
-import { getApiUser, isSuperAdmin } from '@/lib/api/auth'
-import { ok, err, unauthorized, forbidden, notFound } from '@/lib/api/response'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { checkPlatformKey } from '@/lib/api/platform-admin'
+import { ok, err, notFound } from '@/lib/api/response'
 import { UpdateTenantSchema } from '@/lib/validations/tenant'
 
+// Out-of-band platform-provisioning endpoint — gated by the platform secret
+// and executed with the service role (migration 0114). No tenant role reaches
+// this; cross-tenant power is not derived from a tenant membership.
+
+function gate(request: NextRequest) {
+  const status = checkPlatformKey(request)
+  if (status === 'unconfigured') {
+    return err('Tenant provisioning is not configured on this deploy', 503)
+  }
+  if (status === 'denied') {
+    return err('Forbidden', 403)
+  }
+  return null
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const blocked = gate(request)
+  if (blocked) return blocked
   try {
     const { id } = await params
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
-
-    const { supabase } = await getApiUser()
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('tenants')
       .select('*')
@@ -34,16 +48,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const blocked = gate(request)
+  if (blocked) return blocked
   try {
     const { id } = await params
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
-
     const body = await request.json()
     const validated = UpdateTenantSchema.parse(body)
 
-    const { supabase } = await getApiUser()
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('tenants')
       .update({ ...validated, updated_at: new Date().toISOString() })
@@ -65,16 +77,14 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const blocked = gate(request)
+  if (blocked) return blocked
   try {
     const { id } = await params
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
-
-    const { supabase } = await getApiUser()
+    const supabase = createAdminClient()
     const { error } = await supabase
       .from('tenants')
       .update({ is_active: false, updated_at: new Date().toISOString() })

@@ -1,22 +1,45 @@
+import { can, type PermKey } from '@eq-solutions/roles'
 import type { Role } from '@/lib/types'
 
-const ADMIN_ROLES: Role[] = ['super_admin', 'admin']
-const WRITE_ROLES: Role[] = ['super_admin', 'admin', 'supervisor']
-const CHECK_CREATOR_ROLES: Role[] = ['super_admin', 'admin', 'supervisor', 'technician']
+// On-site check-creation / test-execution roles: manager, supervisor, employee.
+const CHECK_CREATOR_ROLES: Role[] = ['manager', 'supervisor', 'employee']
 
-export function isAdmin(role: Role | null): boolean {
-  return role !== null && ADMIN_ROLES.includes(role)
+// ── Canonical permission checks (task C6) ────────────────────────────────
+//
+// Service's tenant_members.role IS a canonical EqRole (migration 0114), so we
+// check it directly against the canonical permission matrix with `can()`. The
+// canonical model is the single source of truth across every EQ surface
+// (Shell, Field, Service, Cards, Quotes), so authorisation stays consistent
+// app-to-app. There is no cross-tenant role: platform power lives only in the
+// out-of-band service-role channel, never in a tenant-held role.
+function hasPerm(role: Role | null, perm: PermKey): boolean {
+  if (!role) return false
+  return can(role, perm)
 }
 
+// Tenant admin. Canonical `admin.list_users` is manager-only.
+export function isAdmin(role: Role | null): boolean {
+  return hasPerm(role, 'admin.list_users')
+}
+
+// Manager + supervisor. Canonical `service.create` is granted to exactly
+// {manager, supervisor}; employee and apprentice are excluded.
 export function canWrite(role: Role | null): boolean {
-  return role !== null && WRITE_ROLES.includes(role)
+  return hasPerm(role, 'service.create')
 }
 
 // Narrow allowance for spinning up a maintenance_check on-site. Mirrors the
-// RLS policy "Writers can create checks" from migration 0080, which includes
-// technician — broader than canWrite() so a tech can start an ad-hoc check
-// without flagging down a supervisor. Use this ONLY for the check-creation
-// path; other mutations should keep using canWrite().
+// RLS policy "Writers can create checks" (migration 0080 → 0114), which
+// includes employee — broader than canWrite() so an on-site employee can
+// start an ad-hoc check without flagging down a supervisor. Use this ONLY for
+// the check-creation path; other mutations should keep using canWrite().
+//
+// NOT backed by canonical can(): this gate covers {manager, supervisor,
+// employee}, and the canonical matrix has no permission granted to exactly
+// that set — `service.create` excludes employee, while `service.view` also
+// includes apprentice. This is a Service-local policy (an employee may create
+// on-site work) deliberately broader than canonical `service.create`, so it
+// stays a string-set predicate rather than a lossy can() mapping.
 export function canCreateCheck(role: Role | null): boolean {
   return role !== null && CHECK_CREATOR_ROLES.includes(role)
 }
@@ -36,9 +59,10 @@ export function canDoTestWork(role: Role | null): boolean {
   return role !== null && CHECK_CREATOR_ROLES.includes(role)
 }
 
-export function isSuperAdmin(role: Role | null): boolean {
-  return role === 'super_admin'
-}
+// NOTE: there is intentionally no `isSuperAdmin` / cross-tenant predicate.
+// Cross-tenant power is removed (migration 0114) — genuine EQ-internal
+// platform ops run through the out-of-band service-role channel, never a
+// tenant-held role. Tenant-admin actions use `isAdmin` (manager).
 
 // ── Import permissions ──────────────────────────────────────────────
 //

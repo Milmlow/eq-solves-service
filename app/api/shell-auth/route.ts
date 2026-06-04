@@ -34,6 +34,7 @@
 
 import { type NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { isEqRole, type EqRole } from '@eq-solutions/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { shellCookieOptions } from '@/lib/auth/shell-cookies'
 
@@ -152,36 +153,18 @@ function validateSupabaseJwt(raw: string): SupabaseJwtPayload | null {
   }
 }
 
-// ── EQ canonical → Service role mapping (C6) ─────────────────────────────────
+// ── Shell role handling (C6 / migration 0114) ────────────────────────────────
 //
-// EQ canonical roles (from @eq-solutions/roles):
-//   manager | supervisor | employee | apprentice | labour_hire
-//   + is_platform_admin override (cross-tenant EQ staff)
+// Service now stores the canonical EQ role vocabulary directly
+// (manager | supervisor | employee | apprentice | labour_hire), so a Shell
+// `eq_role` claim IS the Service role — no translation table.
 //
-// Service internal roles (lib/types/index.ts):
-//   super_admin | admin | supervisor | technician | read_only
-//
-// Mapping rationale:
-//   manager      → admin       (full tenant admin; super_admin reserved for EQ staff)
-//   supervisor   → supervisor  (same concept — oversees technicians, creates work orders)
-//   employee     → technician  (does test/maintenance work on-site)
-//   apprentice   → read_only   (view-only until accredited)
-//   labour_hire  → read_only   (scoped — no write permissions in Service)
-//   is_platform_admin → super_admin (cross-tenant; EQ internal staff only)
-
-type ServiceRole = 'super_admin' | 'admin' | 'supervisor' | 'technician' | 'read_only'
-
-const EQ_TO_SERVICE_ROLE: Record<string, ServiceRole> = {
-  manager:     'admin',
-  supervisor:  'supervisor',
-  employee:    'technician',
-  apprentice:  'read_only',
-  labour_hire: 'read_only',
-}
-
-function mapEqRoleToServiceRole(eqRole: string, isPlatformAdmin: boolean): ServiceRole {
-  if (isPlatformAdmin) return 'super_admin'
-  return EQ_TO_SERVICE_ROLE[eqRole] ?? 'read_only'
+// `is_platform_admin` is deliberately NOT honoured here. Cross-tenant power is
+// never derived from a tenant-held role (tenants are isolated); an EQ platform
+// admin who signs into Service gets only their canonical tenant role, if any.
+// Genuine cross-tenant ops run through the out-of-band service-role channel.
+function asCanonicalRole(eqRole: string | null | undefined): EqRole | null {
+  return eqRole && isEqRole(eqRole) ? eqRole : null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -216,14 +199,12 @@ export async function POST(req: NextRequest) {
     return json(401, { error: 'invalid-token' })
   }
 
-  // Extract role claims from whichever token format validated.
+  // Extract the role claim from whichever token format validated.
   // Bridge token does NOT carry role claims (design gap — slug only).
-  // JWT (active Phase 3 path) and legacy both carry eq_role + is_platform_admin.
+  // JWT (active Phase 3 path) and legacy both carry eq_role. is_platform_admin
+  // is intentionally ignored (see asCanonicalRole above).
   const rawEqRole = jwtClaims?.app_metadata?.eq_role ?? legacy?.eq_role ?? null
-  const isPlatformAdmin = jwtClaims?.app_metadata?.is_platform_admin ?? legacy?.is_platform_admin ?? false
-  const serviceRole: ServiceRole | null = rawEqRole
-    ? mapEqRoleToServiceRole(rawEqRole, isPlatformAdmin)
-    : null
+  const serviceRole: EqRole | null = asCanonicalRole(rawEqRole)
 
   // For bridge tokens, tenant_slug is available — needed for tenant_members upsert.
   const tenantSlug = bridge?.tenant_slug ?? null
@@ -264,8 +245,8 @@ export async function POST(req: NextRequest) {
   // ── Post-provisioning: sync role into Service's profile ───────────────────
   //
   // The handle_new_user() trigger creates a profiles row defaulting to
-  // role='technician'. If we have role claims from the token, override with
-  // the correctly-mapped Service role so the user lands with the right access.
+  // role='employee'. If we have a role claim from the token, override with the
+  // canonical role so the user lands with the right access.
   //
   // profiles.role is the "global" role; per-tenant access also requires a
   // tenant_members row. For bridge-token paths (tenant_slug available) we
