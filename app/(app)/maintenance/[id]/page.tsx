@@ -266,7 +266,7 @@ export default async function MaintenanceCheckPage({
         isAdmin={isAdmin(userRole)}
         canWrite={canWrite(userRole)}
         isAssigned={check.assigned_to === user?.id}
-        isTechnician={userRole === 'technician'}
+        isTechnician={userRole === 'employee'}
       />
     </div>
   )

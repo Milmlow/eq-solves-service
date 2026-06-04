@@ -62,7 +62,7 @@ function buildNavSections(flags: ModuleFlags, role: Role | null): NavSection[] {
   // scope) are admin/supervisor concerns and add cognitive noise for a
   // tech whose entire day lives under Maintenance. Non-technician roles
   // see the full sidebar.
-  const isTechnician = role === 'technician'
+  const isTechnician = role === 'employee'
 
   // Operations section — Maintenance is always-on core; Calendar +
   // Defects are togglable per tenant (migration 0097).
@@ -86,7 +86,7 @@ function buildNavSections(flags: ModuleFlags, role: Role | null): NavSection[] {
   // they can't actually do any of the things on offer; they get the
   // status-reading dashboard.
   const topItems: NavItem[] = []
-  if (role !== 'read_only') {
+  if (role !== 'apprentice') {
     topItems.push({ label: 'Do', href: '/do', icon: Zap })
   }
   topItems.push({ label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard })

@@ -41,11 +41,11 @@ describe('RLS — technician update gating on maintenance_checks', () => {
   beforeAll(async () => {
     // Seed tenant with an admin user (used as a control to prove the test
     // setup isn't blocking the happy path).
-    tenant = await seedTenantWithUser('tech-update', 'admin')
+    tenant = await seedTenantWithUser('tech-update', 'manager')
     adminUser = tenant.user
 
-    techAssigned = await addUserToTenant(tenant, 'technician', 'tech-update-assigned')
-    techOther = await addUserToTenant(tenant, 'technician', 'tech-update-other')
+    techAssigned = await addUserToTenant(tenant, 'employee', 'tech-update-assigned')
+    techOther = await addUserToTenant(tenant, 'employee', 'tech-update-other')
 
     const admin = adminClient()
 

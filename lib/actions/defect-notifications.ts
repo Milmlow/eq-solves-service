@@ -36,9 +36,9 @@ export async function notifyDefectRaised(opts: {
 }) {
   try {
     const isHighOrCritical = opts.severity === 'critical' || opts.severity === 'high'
-    const recipientRoles: string[] = isHighOrCritical
-      ? ['super_admin', 'admin', 'supervisor']
-      : ['admin', 'supervisor']
+    // Post-0114 the two former admin tiers (super_admin/admin) are a single
+    // 'manager' role, so both severity buckets resolve to the same recipients.
+    const recipientRoles: string[] = ['manager', 'supervisor']
 
     // We use the admin client to fan-out — these notifications are
     // system-generated, not user-attributable. The notifications RLS

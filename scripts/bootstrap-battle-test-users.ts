@@ -71,7 +71,7 @@ async function ensureAdminMembership(admin: SupabaseClient, userId: string) {
       {
         tenant_id: DEMO_TENANT,
         user_id: userId,
-        role: 'super_admin',
+        role: 'manager',
         is_active: true,
       },
       { onConflict: 'tenant_id,user_id' },

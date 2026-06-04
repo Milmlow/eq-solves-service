@@ -135,7 +135,7 @@ export default async function AdminUsersPage({
         <UsersTable
           users={rows}
           currentUserId={currentUser?.id ?? ''}
-          callerRole={callerRole ?? 'admin'}
+          callerRole={callerRole ?? 'apprentice'}
           showArchived={showArchived}
         />
       </div>

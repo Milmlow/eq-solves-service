@@ -1,15 +1,30 @@
 import { NextRequest } from 'next/server'
-import { getApiUser, isSuperAdmin } from '@/lib/api/auth'
-import { ok, created, err, unauthorized, forbidden } from '@/lib/api/response'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { checkPlatformKey } from '@/lib/api/platform-admin'
+import { ok, created, err } from '@/lib/api/response'
 import { CreateTenantSchema } from '@/lib/validations/tenant'
 
-export async function GET() {
-  try {
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
+// Tenant provisioning is an EQ-internal, out-of-band operation (migration
+// 0114): no tenant user holds a role that can reach it. Gated by the platform
+// secret (x-eq-platform-key) and executed with the service-role client, which
+// bypasses RLS. There is no tenant-scoped session involved.
 
-    const { supabase } = await getApiUser()
+function gate(request: NextRequest) {
+  const status = checkPlatformKey(request)
+  if (status === 'unconfigured') {
+    return err('Tenant provisioning is not configured on this deploy', 503)
+  }
+  if (status === 'denied') {
+    return err('Forbidden', 403)
+  }
+  return null
+}
+
+export async function GET(request: NextRequest) {
+  const blocked = gate(request)
+  if (blocked) return blocked
+  try {
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('tenants')
       .select('*')
@@ -24,15 +39,13 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = gate(request)
+  if (blocked) return blocked
   try {
-    const { user, role } = await getApiUser()
-    if (!user) return unauthorized()
-    if (!isSuperAdmin(role)) return forbidden()
-
     const body = await request.json()
     const validated = CreateTenantSchema.parse(body)
 
-    const { supabase } = await getApiUser()
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('tenants')
       .insert([{ ...validated, is_active: true }])

@@ -1,22 +1,21 @@
-import { fromServiceRole, type EqRole } from '@eq-solutions/roles'
 import { createClient } from '@/lib/supabase/server'
 import type { Role } from '@/lib/types'
 
-// Re-export the canonical-backed role helpers from the single source
-// (lib/utils/roles) so callers importing from '@/lib/api/auth' and from
-// '@/lib/utils/roles' share one implementation — no drift (C6, 2026-06-04).
-export { isAdmin, canWrite, isSuperAdmin } from '@/lib/utils/roles'
+// Re-export the canonical role helpers from the single source (lib/utils/roles)
+// so callers importing from '@/lib/api/auth' and from '@/lib/utils/roles' share
+// one implementation — no drift (C6). There is no isSuperAdmin: cross-tenant
+// power is removed (migration 0114).
+export { isAdmin, canWrite } from '@/lib/utils/roles'
 
 /**
  * Resolves the current user, their tenant membership, and role.
  * Returns null values if not authenticated or not a member of any tenant.
  *
- * `role` is Service's own tenant_members.role (super_admin | admin |
- * supervisor | technician | read_only). `canonicalRole` is that role mapped
- * onto the canonical EqRole via `fromServiceRole()` so app code can run
- * canonical permission checks, e.g. `can(canonicalRole, 'service.create')`
- * (from @eq-solutions/roles). It is null when there is no membership or the
- * raw role is unrecognised.
+ * `role` is the tenant_members.role, which is a canonical EqRole (migration
+ * 0114): manager | supervisor | employee | apprentice | labour_hire. App code
+ * can run canonical permission checks directly, e.g. `can(role, 'service.create')`
+ * (from @eq-solutions/roles). `canonicalRole` is kept as an alias of `role`
+ * for callers that read it explicitly.
  */
 export async function getApiUser() {
   const supabase = await createClient()
@@ -32,13 +31,12 @@ export async function getApiUser() {
     .maybeSingle()
 
   const role = (membership?.role as Role) ?? null
-  const canonicalRole: EqRole | null = role ? fromServiceRole(role) : null
 
   return {
     supabase,
     user,
     tenantId: (membership?.tenant_id as string) ?? null,
     role,
-    canonicalRole,
+    canonicalRole: role,
   }
 }

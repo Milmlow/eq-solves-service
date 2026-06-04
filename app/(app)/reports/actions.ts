@@ -41,7 +41,7 @@ export async function issueMaintenanceReportAction(data: {
   return withIdempotency(data.mutationId, async () => {
     try {
       const { supabase, tenantId, role, user } = await requireUser()
-      if (!canWrite(role) && role !== 'technician') {
+      if (!canWrite(role) && role !== 'employee') {
         return { success: false, error: 'Insufficient permissions.' }
       }
 

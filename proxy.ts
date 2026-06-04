@@ -294,7 +294,7 @@ export async function proxy(request: NextRequest) {
       .select('role')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .in('role', ['super_admin', 'admin'])
+      .eq('role', 'manager')
       .limit(1)
       .maybeSingle()
 

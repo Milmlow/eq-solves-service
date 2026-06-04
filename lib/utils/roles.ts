@@ -1,54 +1,45 @@
-import { can, fromServiceRole, type PermKey } from '@eq-solutions/roles'
+import { can, type PermKey } from '@eq-solutions/roles'
 import type { Role } from '@/lib/types'
 
-const CHECK_CREATOR_ROLES: Role[] = ['super_admin', 'admin', 'supervisor', 'technician']
+// On-site check-creation / test-execution roles: manager, supervisor, employee.
+const CHECK_CREATOR_ROLES: Role[] = ['manager', 'supervisor', 'employee']
 
-// ── Canonical permission bridge (task C6, 2026-06-04) ────────────────────
+// ── Canonical permission checks (task C6) ────────────────────────────────
 //
-// Service's tenant_members.role is mapped onto the canonical EqRole via
-// `fromServiceRole()` (from @eq-solutions/roles), then checked against the
-// canonical permission matrix with `can()`. The canonical model is the
-// single source of truth across every EQ surface (Shell, Field, Service,
-// Cards, Quotes), so authorisation decisions stay consistent app-to-app.
-//
-// Mapping (SERVICE_ROLE_MAP): super_admin/admin → manager, supervisor →
-// supervisor, technician → employee, read_only → apprentice. No Service
-// role maps to is_platform_admin — cross-tenant power is never derived from
-// a tenant-held role, so tenants stay isolated.
+// Service's tenant_members.role IS a canonical EqRole (migration 0114), so we
+// check it directly against the canonical permission matrix with `can()`. The
+// canonical model is the single source of truth across every EQ surface
+// (Shell, Field, Service, Cards, Quotes), so authorisation stays consistent
+// app-to-app. There is no cross-tenant role: platform power lives only in the
+// out-of-band service-role channel, never in a tenant-held role.
 function hasPerm(role: Role | null, perm: PermKey): boolean {
   if (!role) return false
-  const eqRole = fromServiceRole(role)
-  return eqRole !== null && can(eqRole, perm)
+  return can(role, perm)
 }
 
-// super_admin / admin only. Canonical `admin.list_users` is manager-only,
-// and both super_admin and admin map to manager — a clean 1:1 with the
-// previous ['super_admin','admin'] check.
+// Tenant admin. Canonical `admin.list_users` is manager-only.
 export function isAdmin(role: Role | null): boolean {
   return hasPerm(role, 'admin.list_users')
 }
 
-// super_admin / admin / supervisor. Canonical `service.create` is granted to
-// exactly {manager, supervisor}; technician (→ employee) and read_only
-// (→ apprentice) are excluded — a clean 1:1 with the previous
-// ['super_admin','admin','supervisor'] check.
+// Manager + supervisor. Canonical `service.create` is granted to exactly
+// {manager, supervisor}; employee and apprentice are excluded.
 export function canWrite(role: Role | null): boolean {
   return hasPerm(role, 'service.create')
 }
 
 // Narrow allowance for spinning up a maintenance_check on-site. Mirrors the
-// RLS policy "Writers can create checks" from migration 0080, which includes
-// technician — broader than canWrite() so a tech can start an ad-hoc check
-// without flagging down a supervisor. Use this ONLY for the check-creation
-// path; other mutations should keep using canWrite().
+// RLS policy "Writers can create checks" (migration 0080 → 0114), which
+// includes employee — broader than canWrite() so an on-site employee can
+// start an ad-hoc check without flagging down a supervisor. Use this ONLY for
+// the check-creation path; other mutations should keep using canWrite().
 //
-// NOT backed by canonical can() (C6): this gate covers {super_admin, admin,
-// supervisor, technician} = {manager, supervisor, employee}, and the
-// canonical matrix has no permission granted to exactly that set —
-// `service.create` excludes employee, while `service.view` also includes
-// apprentice. This is a Service-local policy (a tech may create on-site work)
-// that's deliberately broader than canonical `service.create`, so it stays a
-// string-set predicate rather than a lossy can() mapping.
+// NOT backed by canonical can(): this gate covers {manager, supervisor,
+// employee}, and the canonical matrix has no permission granted to exactly
+// that set — `service.create` excludes employee, while `service.view` also
+// includes apprentice. This is a Service-local policy (an employee may create
+// on-site work) deliberately broader than canonical `service.create`, so it
+// stays a string-set predicate rather than a lossy can() mapping.
 export function canCreateCheck(role: Role | null): boolean {
   return role !== null && CHECK_CREATOR_ROLES.includes(role)
 }
@@ -68,9 +59,10 @@ export function canDoTestWork(role: Role | null): boolean {
   return role !== null && CHECK_CREATOR_ROLES.includes(role)
 }
 
-export function isSuperAdmin(role: Role | null): boolean {
-  return role === 'super_admin'
-}
+// NOTE: there is intentionally no `isSuperAdmin` / cross-tenant predicate.
+// Cross-tenant power is removed (migration 0114) — genuine EQ-internal
+// platform ops run through the out-of-band service-role channel, never a
+// tenant-held role. Tenant-admin actions use `isAdmin` (manager).
 
 // ── Import permissions ──────────────────────────────────────────────
 //

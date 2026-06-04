@@ -29,7 +29,7 @@ export default async function DashboardPage({
   // ── Resolve user, role, profile ──
   const { data: { user } } = await supabase.auth.getUser()
   let userName = 'there'
-  let userRole: Role = 'read_only'
+  let userRole: Role = 'apprentice'
   let userId: string | null = null
 
   let tenantId: string | null = null
@@ -62,7 +62,7 @@ export default async function DashboardPage({
       tech_onboarded_at?: string | null
       setup_checklist_dismissed_at?: string | null
     } | null
-    userRole = (memberRow?.role as Role) ?? 'read_only'
+    userRole = (memberRow?.role as Role) ?? 'apprentice'
     tenantId = memberRow?.tenant_id ?? null
     techOnboardedAt = memberRow?.tech_onboarded_at ?? null
     setupChecklistDismissedAt = memberRow?.setup_checklist_dismissed_at ?? null
@@ -78,8 +78,8 @@ export default async function DashboardPage({
   }
 
   // ── Determine effective view based on role + param ──
-  const canToggle = userRole !== 'technician' && userRole !== 'read_only'
-  const defaultView: View = userRole === 'super_admin' || userRole === 'admin' ? 'all' : 'mine'
+  const canToggle = userRole !== 'employee' && userRole !== 'apprentice'
+  const defaultView: View = userRole === 'manager' ? 'all' : 'mine'
   const effectiveView: View = canToggle && (params.view === 'mine' || params.view === 'all')
     ? params.view
     : canToggle
@@ -99,7 +99,7 @@ export default async function DashboardPage({
   // verified tenant_id via the membership lookup above). When filterByUser
   // is on, the RPC applies assigned_to/raised_by filters at the SQL layer.
   if (!tenantId) {
-    const isAdmin = userRole === 'super_admin' || userRole === 'admin'
+    const isAdmin = userRole === 'manager'
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 text-center">
         <p className="text-sm text-gray-500">Your workspace isn&apos;t set up yet.</p>
@@ -194,7 +194,7 @@ export default async function DashboardPage({
   //
   // Technicians and read_only users never see either surface; they're not
   // the audience for tenant setup.
-  const isSetupRole = userRole === 'super_admin' || userRole === 'admin'
+  const isSetupRole = userRole === 'manager'
   const hasAnyCompletedCheck = counts.checks.complete > 0
   const inSetupMode = isSetupRole && !hasAnyCompletedCheck
   const forceShowChecklist = params.setup === 'show'
@@ -274,7 +274,7 @@ export default async function DashboardPage({
   // Completed second, optional In-Progress Tests, status bar at the
   // bottom. Skips the tenant-wide entity KPIs, defect summary, and
   // site map — those are admin/supervisor surfaces.
-  if (userRole === 'technician') {
+  if (userRole === 'employee') {
     return (
       <TechDashboard
         userName={userName}

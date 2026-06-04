@@ -15,7 +15,7 @@ import { zodToErrorMap } from '@/lib/utils/zodErrors'
 // Helpers
 // -----------------------------------------------------------------------------
 
-const VALID_ROLES = ['super_admin', 'admin', 'supervisor', 'technician', 'read_only'] as const
+const VALID_ROLES = ['manager', 'supervisor', 'employee', 'apprentice', 'labour_hire'] as const
 type AppRole = typeof VALID_ROLES[number]
 
 const InviteSchema = z.object({
@@ -25,7 +25,7 @@ const InviteSchema = z.object({
 })
 
 /**
- * Requires the caller to be a super_admin or admin OF THE CURRENT TENANT.
+ * Requires the caller to be a manager (tenant admin) OF THE CURRENT TENANT.
  * Returns their supabase client, user, tenantId, role.
  *
  * Uses requireUser() so the tenant_id we operate on is always the tenant the
@@ -322,7 +322,7 @@ export async function resendInviteAction(formData: FormData) {
  */
 export async function repairUserTenantAction(formData: FormData) {
   const userId = String(formData.get('user_id') || '')
-  const role = (String(formData.get('role') || 'technician') as AppRole)
+  const role = (String(formData.get('role') || 'employee') as AppRole)
   if (!userId) return { error: 'Missing user.' }
   if (!VALID_ROLES.includes(role)) return { error: 'Invalid role.' }
 
@@ -519,13 +519,12 @@ export async function hardDeleteUserAction(formData: FormData) {
   } catch (e) {
     return { error: (e as Error).message }
   }
-  const { user: actor, role: actorRole } = ctx
+  const { user: actor } = ctx
 
-  // Super-admin gate. Even regular admins cannot trigger a hard delete —
-  // archive is the right tool for the job 95% of the time.
-  if (actorRole !== 'super_admin') {
-    return { error: 'Only super_admin users can permanently delete accounts. Archive instead.' }
-  }
+  // Hard delete is a tenant-admin (manager) action — requireTenantAdmin above
+  // already enforces that. Archive is the right tool 95% of the time; the UI
+  // double-confirms before reaching here. (Pre-0114 this additionally required
+  // the cross-tenant super_admin, which no longer exists.)
   if (userId === actor.id) {
     return { error: 'You cannot permanently delete yourself.' }
   }
