@@ -49,7 +49,7 @@ const SECTIONS: DoSection[] = [
   {
     label: 'Import data',
     description: 'Bring whole tables in at once — scope items, work orders, RCD circuits — via spreadsheet or contract upload.',
-    priorityFor: { super_admin: 3, admin: 3, supervisor: 2, technician: 0 },
+    priorityFor: { manager: 3, supervisor: 2, employee: 0 },
     tiles: [
       {
         label: 'Import scope items from Excel',
@@ -84,7 +84,7 @@ const SECTIONS: DoSection[] = [
   {
     label: 'Add a record',
     description: 'Manual one-at-a-time creation for customers, sites, assets, and the maintenance plans that bind them.',
-    priorityFor: { super_admin: 2, admin: 2, supervisor: 2, technician: 0 },
+    priorityFor: { manager: 2, supervisor: 2, employee: 0 },
     tiles: [
       {
         label: 'Add a customer',
@@ -119,7 +119,7 @@ const SECTIONS: DoSection[] = [
   {
     label: 'Create a check or test',
     description: 'Start the actual work — schedule a visit or open a test workflow on-site.',
-    priorityFor: { super_admin: 1, admin: 1, supervisor: 3, technician: 3 },
+    priorityFor: { manager: 1, supervisor: 3, employee: 3 },
     tiles: [
       {
         label: 'Schedule a maintenance check',

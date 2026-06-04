@@ -102,7 +102,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       const completed = rows.find((m) => m.tenants?.setup_completed_at)
       const membership = completed ?? rows[0]
 
-      isAdmin = membership.role === 'super_admin' || membership.role === 'admin'
+      isAdmin = membership.role === 'manager'
       analyticsTenantId = membership.tenant_id
       analyticsRole = membership.role
 
@@ -196,8 +196,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
         {/* Shell nav bar — replaces the hidden sidebar when Service is embedded
             in core.eq.solutions. Makes the action hub (/do) and key pages
-            reachable without the sidebar. Only shown for non-read_only roles. */}
-        {isShellIframe && analyticsRole && analyticsRole !== 'read_only' && (
+            reachable without the sidebar. Only shown for non-apprentice roles. */}
+        {isShellIframe && analyticsRole && analyticsRole !== 'apprentice' && (
           <nav className="shrink-0 flex items-center gap-1 px-4 py-2 bg-white border-b border-gray-100">
             <Link
               href="/do"
@@ -211,7 +211,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link href="/maintenance" className="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 transition-colors">
               Maintenance
             </Link>
-            {analyticsRole !== 'technician' && (
+            {analyticsRole !== 'employee' && (
               <Link href="/records" className="px-3 py-1.5 rounded-md text-sm text-gray-600 hover:bg-gray-100 transition-colors">
                 Records
               </Link>

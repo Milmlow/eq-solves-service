@@ -246,10 +246,10 @@ export async function setContractScopePeriodStatusAction(
     const oldStatus = scopeRes.data.period_status as 'draft' | 'committed' | 'locked' | 'archived'
     if (oldStatus === newStatus) return { success: true } // no-op
 
-    // App-layer guard for non-super_admin trying to leave 'locked' state —
+    // App-layer guard for non-manager trying to leave 'locked' state —
     // the DB trigger will block, but we'd rather not issue a doomed UPDATE.
-    if (oldStatus === 'locked' && role !== 'super_admin') {
-      return { success: false, error: 'Only super_admin can unlock a locked period. Contact your system owner.' }
+    if (oldStatus === 'locked' && role !== 'manager') {
+      return { success: false, error: 'Only a manager can unlock a locked period. Contact your system owner.' }
     }
 
     const { error } = await supabase

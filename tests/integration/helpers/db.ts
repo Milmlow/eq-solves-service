@@ -34,7 +34,7 @@ export function anonClient(): SupabaseClient {
   )
 }
 
-export type TenantRole = 'super_admin' | 'admin' | 'supervisor' | 'technician' | 'read_only'
+export type TenantRole = 'manager' | 'supervisor' | 'employee' | 'apprentice' | 'labour_hire'
 
 export interface SeededUser {
   id: string
@@ -56,7 +56,7 @@ export interface SeededTenant {
  * with email_confirm=true so they can sign in immediately.
  */
 export async function seedTenantWithAdmin(suffix: string): Promise<SeededTenant> {
-  return seedTenantWithUser(suffix, 'admin')
+  return seedTenantWithUser(suffix, 'manager')
 }
 
 /**

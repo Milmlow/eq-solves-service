@@ -1,8 +1,15 @@
 // Global TypeScript types for EQ Solves Service
 
-export type Role = 'super_admin' | 'admin' | 'supervisor' | 'technician' | 'read_only'
+// Canonical EQ role vocabulary (migration 0114 / @eq-solutions/roles).
+// Service's tenant_members.role + profiles.role now store these values
+// directly: 'manager' | 'supervisor' | 'employee' | 'apprentice' | 'labour_hire'.
+// (Former Service roles mapped in: super_admin/admin → manager, technician →
+// employee, read_only → apprentice.)
+import type { EqRole } from '@eq-solutions/roles'
 
-export type ProfileRole = Role | 'user'
+export type Role = EqRole
+
+export type ProfileRole = Role
 
 export type Frequency = 'weekly' | 'monthly' | 'quarterly' | 'biannual' | 'annual' | 'ad_hoc'
 

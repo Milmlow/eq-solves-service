@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
         .select('user_id')
         .eq('tenant_id', row.tenant_id)
         .eq('is_active', true)
-        .in('role', ['super_admin', 'admin', 'supervisor'])
+        .in('role', ['manager', 'supervisor'])
       for (const r of (ups ?? []) as { user_id: string }[]) recipients.add(r.user_id)
 
       for (const uid of recipients) {
@@ -670,7 +670,7 @@ export async function POST(req: NextRequest) {
         .select('user_id')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
-        .in('role', ['super_admin', 'admin', 'supervisor'])
+        .in('role', ['manager', 'supervisor'])
       const ids = (ups ?? []).map((r) => (r as { user_id: string }).user_id)
       supervisorCache.set(tenantId, ids)
       return ids

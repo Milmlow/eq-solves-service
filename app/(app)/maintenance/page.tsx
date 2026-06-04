@@ -43,7 +43,7 @@ export default async function MaintenancePage({
   // tenant. Default to 'mine' for technicians; everyone else defaults
   // to 'all' but can flip via the toggle. URL param wins for explicit
   // navigation (e.g. from a "View all overdue" link).
-  const defaultView: ListView = userRole === 'technician' ? 'mine' : 'all'
+  const defaultView: ListView = userRole === 'employee' ? 'mine' : 'all'
   const effectiveView: ListView =
     viewParam === 'mine' || viewParam === 'all' ? (viewParam as ListView) : defaultView
   const filterByUser = effectiveView === 'mine' && Boolean(user)
@@ -100,11 +100,11 @@ export default async function MaintenancePage({
   // members get a separate bucket at the bottom with an "(inactive)"
   // suffix so the user can see they exist but can't pick them.
   const ROLE_ORDER: Record<string, number> = {
-    super_admin: 0,
-    admin: 1,
-    supervisor: 2,
-    technician: 3,
-    read_only: 4,
+    manager: 0,
+    supervisor: 1,
+    employee: 2,
+    apprentice: 3,
+    labour_hire: 4,
   }
 
   const activeMemberIds = (members ?? []).filter((m) => m.is_active).map((m) => m.user_id)
@@ -136,8 +136,8 @@ export default async function MaintenancePage({
         }
       })
       .sort((a, b) => {
-        const ar = ROLE_ORDER[a.role ?? 'read_only'] ?? 99
-        const br = ROLE_ORDER[b.role ?? 'read_only'] ?? 99
+        const ar = ROLE_ORDER[a.role ?? 'apprentice'] ?? 99
+        const br = ROLE_ORDER[b.role ?? 'apprentice'] ?? 99
         if (ar !== br) return ar - br
         return (a.full_name ?? a.email).localeCompare(b.full_name ?? b.email)
       })

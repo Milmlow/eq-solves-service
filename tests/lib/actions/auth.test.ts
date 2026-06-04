@@ -36,7 +36,7 @@ describe('Auth Actions (with mocked Supabase)', () => {
 
     it('returns user and tenant membership data', async () => {
       const userData = { id: 'test-user-id', email: 'test@example.com' }
-      const membershipData = { tenant_id: 'tenant-123', role: 'admin' }
+      const membershipData = { tenant_id: 'tenant-123', role: 'manager' }
 
       // Mock auth getUser
       mockSupabase.auth.getUser = vi.fn().mockResolvedValue({
@@ -100,7 +100,7 @@ describe('Auth Actions (with mocked Supabase)', () => {
         .from('users')
         .select('*')
         .eq('is_active', true)
-        .eq('role', 'admin')
+        .eq('role', 'manager')
 
       const calls = (mockSupabase._builder.eq as any).mock.calls
       expect(calls.length).toBeGreaterThanOrEqual(2)

@@ -57,6 +57,12 @@ const serverSchema = z.object({
   // secret used by eq-shell's mint-iframe-token function. Optional so the
   // app boots without it; /auth/shell-bridge returns 404 when unset.
   EQ_SHELL_BRIDGE_SECRET: z.string().optional(),
+  // Platform-admin secret for the out-of-band tenant-provisioning endpoints
+  // (/api/tenants). Cross-tenant provisioning is NOT a tenant role (migration
+  // 0114) — it runs via the service role behind this shared secret, presented
+  // in the `x-eq-platform-key` header by EQ-internal tooling. Optional so the
+  // app boots without it; the endpoints return 503 when unset.
+  EQ_PLATFORM_ADMIN_KEY: z.string().optional(),
 })
 
 let _serverEnv: z.infer<typeof serverSchema> | null = null
@@ -65,6 +71,8 @@ export function serverEnv() {
   if (_serverEnv) return _serverEnv
   const result = serverSchema.safeParse({
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    EQ_SHELL_BRIDGE_SECRET: process.env.EQ_SHELL_BRIDGE_SECRET,
+    EQ_PLATFORM_ADMIN_KEY: process.env.EQ_PLATFORM_ADMIN_KEY,
   })
   if (!result.success) {
     const formatted = result.error.issues.map((i) => `  • ${i.path.join('.')}: ${i.message}`).join('\n')

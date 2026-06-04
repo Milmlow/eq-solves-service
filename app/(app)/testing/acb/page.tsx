@@ -212,7 +212,7 @@ export default function AcbTestingPage() {
         .from('tenant_members')
         .select('user_id, role, profiles(id, full_name, email)')
         .eq('is_active', true)
-        .in('role', ['super_admin', 'admin', 'supervisor', 'technician'])
+        .in('role', ['manager', 'supervisor', 'employee'])
       const members = (data ?? []).flatMap((m) => {
         const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
         if (!p) return []

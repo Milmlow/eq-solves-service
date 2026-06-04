@@ -11,11 +11,11 @@ import { inviteUserAction } from './actions'
 // canWrite / canCreateCheck / canDoTestWork actually permit — not a
 // marketing description.
 const ROLE_DESCRIPTIONS: Record<string, string> = {
-  super_admin: 'Full system access including signing in as anyone. Reserved for the EQ team — most workspaces never need this.',
-  admin: 'Full access in this workspace: invite users, edit billing, manage all records and checks. The first person to set up a workspace is usually the admin.',
-  supervisor: 'Schedules checks, edits records (customers / sites / assets / plans), reviews defects. Cannot manage users or billing.',
-  technician: 'Runs checks and tests on-site: marks items pass / fail, saves wizard steps, raises defects. Cannot manage records.',
-  read_only: 'View-only access. Useful for customer-side stakeholders who want to see status but never edit.',
+  manager: 'Full access in this workspace: invite users, manage all records and checks. The person who sets up a workspace is usually the manager.',
+  supervisor: 'Schedules checks, edits records (customers / sites / assets / plans), reviews defects. Cannot manage users.',
+  employee: 'Runs checks and tests on-site: marks items pass / fail, saves wizard steps, raises defects. Cannot manage records.',
+  apprentice: 'View-only access. Useful for customer-side stakeholders who want to see status but never edit.',
+  labour_hire: 'Minimal access — scoped to assigned work only.',
 }
 
 export function InviteUserForm() {
@@ -25,7 +25,7 @@ export function InviteUserForm() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [ok, setOk] = useState(false)
   const [pending, startTransition] = useTransition()
-  const [selectedRole, setSelectedRole] = useState<string>('technician')
+  const [selectedRole, setSelectedRole] = useState<string>('employee')
 
   const [okEmail, setOkEmail] = useState<string>()
 
@@ -64,11 +64,11 @@ export function InviteUserForm() {
           disabled={pending}
           className={`h-10 px-4 border rounded-md text-sm text-eq-ink bg-white focus:outline-none focus:ring-2 ${errors.role ? 'border-red-400 focus:border-red-500 focus:ring-red-200' : 'border-gray-200 focus:border-eq-deep focus:ring-eq-sky/20'}`}
         >
-          <option value="super_admin">Super Admin</option>
-          <option value="admin">Admin</option>
+          <option value="manager">Manager</option>
           <option value="supervisor">Supervisor</option>
-          <option value="technician">Technician</option>
-          <option value="read_only">Read Only</option>
+          <option value="employee">Employee</option>
+          <option value="apprentice">Apprentice</option>
+          <option value="labour_hire">Labour Hire</option>
         </select>
         {errors.role && <p className="text-xs text-red-500 mt-1">{errors.role}</p>}
       </div>
