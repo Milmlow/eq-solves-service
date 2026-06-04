@@ -164,10 +164,15 @@ export async function proxy(request: NextRequest) {
             }
           )
 
+          // Verify by token_hash — GoTrue rejects the call with
+          // "400: Only the token_hash and type should be provided" if `email`
+          // is also passed (email belongs to the {email, token} OTP variant,
+          // NOT the {token_hash} variant). Passing it here was silently failing
+          // every Shell SSO exchange → no session → bounce to /auth/signin =
+          // the "double login". Verified against live auth logs 2026-06-04.
           const { error: otpErr } = await ssrClient.auth.verifyOtp({
             type: 'magiclink',
             token_hash: linkData.properties.hashed_token,
-            email: shellPayload.email!,
           })
 
           if (!otpErr) {
