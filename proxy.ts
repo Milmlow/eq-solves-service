@@ -19,6 +19,7 @@ import {
   isAalExempt,
 } from '@/lib/auth/mfa-routing'
 import { shellCookieOptions } from '@/lib/auth/shell-cookies'
+import { provisionShellMemberships } from '@/lib/auth/shell-provision'
 
 // ---------------------------------------------------------------------------
 // Shell cookie verification
@@ -176,6 +177,15 @@ export async function proxy(request: NextRequest) {
           })
 
           if (!otpErr) {
+            // Provision tenant access from the (HMAC-verified) Shell cookie so
+            // the user doesn't land on the "No tenant assigned" gate. Uses the
+            // SERVICE user id (linkData.user.id), not the Shell user_id in the
+            // cookie. Best-effort — never blocks the session. See shell-provision.
+            await provisionShellMemberships(
+              supabaseAdmin,
+              linkData.user?.id ?? '',
+              shellPayload.memberships,
+            )
             // Session established — stamp the bridge cookie and continue.
             // SameSite/Secure follow the deploy host (see shellCookieOptions).
             cookieResponse.cookies.set('eq_shell_bridge', '1', {
