@@ -37,9 +37,9 @@ Implemented for pm-check-report only; the other four generators use
 needs ~6 builder fns × 4 generators of refactoring for marginal visual
 gain — left as a follow-up if any customer flags the colour mismatch.
 
-### A3. SKS `report_company_abn` is null
+### A3. SKS `report_company_abn` is null — ✅ DONE (verified 2026-06-06)
 
-Migration 0015 added the column, but it was never populated for SKS. Current report covers read "Confidential — SKS Technologies" with no ABN suffix. Set via `/admin/reports`. ~2 min if you have the ABN handy.
+~~Migration 0015 added the column, but it was never populated for SKS.~~ Now set: `report_company_abn = 51 168 906 956`, `report_company_name = SKS Technologies`, logo + brand colour configured. No action remaining.
 
 ### A4. eq-context merge conflicts
 

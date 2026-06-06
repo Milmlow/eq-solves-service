@@ -78,6 +78,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Check not found' }, { status: 404 })
   }
 
+  // Total check-item count for the slow-run canary — counts ALL items for the
+  // check (including check-level / unlinked items), matching the pre-refactor
+  // `allItems.length` metric. Cheap HEAD count; report content is unaffected.
+  const { count: itemCount } = await supabase
+    .from('maintenance_check_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('check_id', checkId)
+
   try {
     const buffer = await generatePMAssetReport(reportInput)
     const siteName = reportInput.siteName
@@ -90,7 +98,7 @@ export async function GET(request: NextRequest) {
       status: 200,
       scale: {
         assets: reportInput.assets.length,
-        items: reportInput.assets.reduce((n, a) => n + a.tasks.length, 0),
+        items: itemCount ?? 0,
         acbTests: reportInput.linkedTests?.acb?.length ?? 0,
         nsxTests: reportInput.linkedTests?.nsx?.length ?? 0,
         rcdTests: reportInput.linkedTests?.rcd?.length ?? 0,
