@@ -30,6 +30,13 @@ export interface TechBriefEmailInput {
   afterHoursPhone: string | null
   /** Safety notes — surfaced with a red accent in the email */
   safetyNotes: string | null
+  /** Site primary contact — who the tech calls on arrival */
+  siteContact?: {
+    name: string | null
+    role: string | null
+    phone: string | null
+    email: string | null
+  } | null
   /** ISO datetime — when the visit is scheduled to start */
   scheduledStartAt: string
   /** Number of assets in the check */
@@ -98,6 +105,29 @@ export async function sendTechBriefEmail(
       <p style="font-size: 12px; font-weight: 700; color: #991b1b; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.05em;">Safety notes</p>
       <p style="font-size: 13px; color: #7f1d1d; margin: 0; white-space: pre-line;">${esc(input.safetyNotes)}</p>
     </div>`
+    : ''
+
+  const contact = input.siteContact
+  const contactBlock = (contact && (contact.name || contact.phone || contact.email))
+    ? `
+    <h2 style="font-size: 14px; font-weight: 700; color: #111827; margin: 24px 0 8px;">Site contact</h2>
+    <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+      ${contact.name ? `
+      <tr>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #6b7280; width: 36%; vertical-align: top; white-space: nowrap;">Name</td>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #111827;">${esc(contact.name)}${contact.role ? ` <span style="color: #6b7280;">— ${esc(contact.role)}</span>` : ''}</td>
+      </tr>` : ''}
+      ${contact.phone ? `
+      <tr>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #6b7280; white-space: nowrap;">Phone</td>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #111827;"><a href="tel:${esc(contact.phone)}" style="color: ${brand};">${esc(contact.phone)}</a></td>
+      </tr>` : ''}
+      ${contact.email ? `
+      <tr>
+        <td style="padding: 10px 14px; font-size: 12px; color: #6b7280; white-space: nowrap;">Email</td>
+        <td style="padding: 10px 14px; font-size: 13px; color: #111827;"><a href="mailto:${esc(contact.email)}" style="color: ${brand};">${esc(contact.email)}</a></td>
+      </tr>` : ''}
+    </table>`
     : ''
 
   const accessBlock = (input.gateCode || input.parkingNotes || input.afterHoursPhone)
@@ -171,6 +201,7 @@ export async function sendTechBriefEmail(
 
       ${safetyBlock}
       ${accessBlock}
+      ${contactBlock}
 
       <!-- CTA -->
       <div style="text-align: center; margin: 28px 0 8px;">
