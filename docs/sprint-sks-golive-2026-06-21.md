@@ -110,7 +110,15 @@ Verification (Rule 0.5) found the brief's **core was already built** on main (`s
 - **Run-sheet + last-visit-report attachments** — extracted reusable input-builders from both report routes (`lib/reports/*-input.ts`); routes now delegate (behaviour preserved); brief generates + attaches both DOCX. Best-effort.
 - **Weather** — skipped (Royce, 2026-06-06): external dependency, lowest value/effort; post-launch.
 - **Opt-out** — deferred to Phase 2 with the cron that enforces it; a manual supervisor send is a deliberate override and always sends.
-- tsc 0 errors · `next build` green · 215 tests. **Phase 2** (17:00 cron + reschedule) remains the only deferred piece.
+- tsc 0 errors · `next build` green · 215 tests.
+
+### P1-5 Phase 2 · day-before cron — ✅ built 2026-06-06 (branch `claude/tech-brief-phase2`, PR pending)
+- **Migration 0121** (applied to prod): `pre_visit_brief_sent_at` dedup column.
+- **Shared composer** `lib/notifications/send-pre-visit-brief.ts` — extracted from the manual action; both the action and cron call it. Manual send now stamps the sent gate.
+- **Cron** `/api/cron/pre-visit-brief` + Netlify scheduler (`0 7 * * *` ≈ 17:00 AEST) — finds tomorrow's scheduled checks per tenant tz, respects per-tech opt-out, sends once. **Dry-run by default**: emails nobody until `PRE_VISIT_BRIEF_CRON_ENABLED=true` is set in Netlify (so it can be verified before going live).
+- **Opt-out** `pre_visit_tech_brief` added to `/settings/notifications`; the cron enforces it (manual supervisor send still always sends — deliberate override).
+- **Reschedule** — a >1hr move of `scheduled_start_at` clears the sent gate so the cron re-fires.
+- tsc 0 errors · `next build` green · 215 tests. The whole tech-brief feature (Phase 0/1/2) is now built; remaining go-live step is to flip the cron env flag after a verification run.
 
 ### P1-5 (original plan) · Pre-visit tech brief — full Phase 1
 Build the complete enriched brief (per `runbooks/pre-visit-tech-brief-spec.md`): composer + email template (visit details, map link, site contact, access notes, scope summary, asset count, prior-visit summary, weather), ICS generator, run-sheet DOCX attachment, "Send brief" button (admin/supervisor), bell notification, opt-out preference. Phase 0 (`scheduled_start_at` + assignment) is already live underneath it. Phase 2 (cron auto-send) stays deferred.
