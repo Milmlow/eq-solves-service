@@ -195,6 +195,49 @@ export async function sendTechBriefAction(
         }
       : null
 
+    // Prior-visit summary — the last completed check at this site, with what
+    // it turned up (defects raised + items failed). Gives the tech context on
+    // what to expect / re-check. Best-effort; absence just omits the block.
+    let priorVisit:
+      | { date: string; defectCount: number; failedItemCount: number; topDefects: string[] }
+      | null = null
+    const { data: lastCheck } = await supabase
+      .from('maintenance_checks')
+      .select('id, completed_at, due_date')
+      .eq('site_id', check.site_id as string)
+      .eq('status', 'complete')
+      .neq('id', checkId)
+      .order('completed_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
+    if (lastCheck?.id) {
+      const [{ data: priorDefects }, { count: failedItemCount }] = await Promise.all([
+        supabase
+          .from('defects')
+          .select('title')
+          .eq('check_id', lastCheck.id as string)
+          .order('created_at', { ascending: false })
+          .limit(3),
+        supabase
+          .from('maintenance_check_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('check_id', lastCheck.id as string)
+          .eq('result', 'fail'),
+      ])
+      const { count: defectCount } = await supabase
+        .from('defects')
+        .select('id', { count: 'exact', head: true })
+        .eq('check_id', lastCheck.id as string)
+      priorVisit = {
+        date: (lastCheck.completed_at as string | null) ?? (lastCheck.due_date as string | null) ?? '',
+        defectCount: defectCount ?? 0,
+        failedItemCount: failedItemCount ?? 0,
+        topDefects: ((priorDefects ?? []) as { title: string | null }[])
+          .map((d) => d.title)
+          .filter((t): t is string => Boolean(t)),
+      }
+    }
+
     const appUrl =
       process.env.NEXT_PUBLIC_SITE_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
@@ -240,6 +283,7 @@ export async function sendTechBriefAction(
       afterHoursPhone: site?.after_hours_phone ?? null,
       safetyNotes: site?.safety_notes ?? null,
       siteContact,
+      priorVisit,
       scheduledStartAt,
       assetCount: assetCount ?? 0,
       checkUrl,

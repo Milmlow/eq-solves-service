@@ -37,6 +37,13 @@ export interface TechBriefEmailInput {
     phone: string | null
     email: string | null
   } | null
+  /** Prior-visit summary — last completed check at this site and what it found */
+  priorVisit?: {
+    date: string
+    defectCount: number
+    failedItemCount: number
+    topDefects: string[]
+  } | null
   /** ISO datetime — when the visit is scheduled to start */
   scheduledStartAt: string
   /** Number of assets in the check */
@@ -130,6 +137,19 @@ export async function sendTechBriefEmail(
     </table>`
     : ''
 
+  const pv = input.priorVisit
+  const priorVisitBlock = (pv && pv.date)
+    ? `
+    <h2 style="font-size: 14px; font-weight: 700; color: #111827; margin: 24px 0 8px;">Last visit</h2>
+    <div style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+      <p style="font-size: 13px; color: #374151; margin: 0 0 ${pv.topDefects.length ? '8px' : '0'};">
+        <strong>${esc(new Date(pv.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }))}</strong>
+        — ${pv.defectCount} defect${pv.defectCount === 1 ? '' : 's'} raised, ${pv.failedItemCount} item${pv.failedItemCount === 1 ? '' : 's'} failed.
+      </p>
+      ${pv.topDefects.length ? `<ul style="font-size: 12px; color: #6b7280; margin: 0; padding-left: 18px;">${pv.topDefects.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}
+    </div>`
+    : ''
+
   const accessBlock = (input.gateCode || input.parkingNotes || input.afterHoursPhone)
     ? `
     <h2 style="font-size: 14px; font-weight: 700; color: #111827; margin: 24px 0 8px;">Site access</h2>
@@ -202,6 +222,7 @@ export async function sendTechBriefEmail(
       ${safetyBlock}
       ${accessBlock}
       ${contactBlock}
+      ${priorVisitBlock}
 
       <!-- CTA -->
       <div style="text-align: center; margin: 28px 0 8px;">
