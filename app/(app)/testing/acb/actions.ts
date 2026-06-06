@@ -469,10 +469,13 @@ export async function saveAcbElectricalReadingAction(testId: string, readings: A
   value: string
   unit: string
   is_pass?: boolean
-}>) {
-  try {
+}>, mutationId?: string | null) {
+  // Replay-safe (AGENTS.md): a flaky on-site network can retry this save.
+  // The client sends a stable mutationId per commit so a retry dedupes via
+  // the audit unique index instead of double-firing propagate/sync.
+  return withIdempotency(mutationId ?? null, async () => {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false as const, error: 'Insufficient permissions.' }
 
     // Delete existing electrical readings for this test
     await supabase
@@ -497,7 +500,7 @@ export async function saveAcbElectricalReadingAction(testId: string, readings: A
         .from('acb_test_readings')
         .insert(insertReadings)
 
-      if (error) return { success: false, error: error.message }
+      if (error) return { success: false as const, error: error.message }
     }
 
     // Update step3 status
@@ -506,7 +509,7 @@ export async function saveAcbElectricalReadingAction(testId: string, readings: A
       .update({ step3_status: 'complete' })
       .eq('id', testId)
 
-    await logAuditEvent({ action: 'update', entityType: 'acb_test', entityId: testId, summary: 'Completed ACB electrical testing' })
+    await logAuditEvent({ action: 'update', entityType: 'acb_test', entityId: testId, summary: 'Completed ACB electrical testing', mutationId: mutationId ?? null })
 
     // Phase 4 (2026-04-28): when an ACB test reaches all-steps-complete,
     // check whether every other test under the linked maintenance_check
@@ -536,10 +539,8 @@ export async function saveAcbElectricalReadingAction(testId: string, readings: A
 
     revalidatePath('/testing/acb')
     revalidatePath('/maintenance')
-    return { success: true }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+    return { success: true as const }
+  })
 }
 
 export async function raiseTestDefectAction(data: {

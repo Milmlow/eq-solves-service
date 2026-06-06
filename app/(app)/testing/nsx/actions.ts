@@ -6,6 +6,7 @@ import { isAdmin, canDoTestWork } from '@/lib/utils/roles'
 import { logAuditEvent } from '@/lib/actions/audit'
 import { CreateNsxTestSchema, UpdateNsxTestSchema, CreateNsxReadingSchema } from '@/lib/validations/nsx-test'
 import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
+import { withIdempotency } from '@/lib/actions/idempotency'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
 import { syncTestResult, nsxTestExternalId, assetExternalId } from '@/lib/canonical-sync'
@@ -281,10 +282,13 @@ export async function saveNsxElectricalReadingAction(testId: string, readings: A
   value: string
   unit: string
   is_pass?: boolean
-}>) {
-  try {
+}>, mutationId?: string | null) {
+  // Replay-safe (AGENTS.md): mirrors saveAcbElectricalReadingAction — a stable
+  // client mutationId lets an on-site network retry dedupe via the audit
+  // unique index rather than double-firing propagate/sync.
+  return withIdempotency(mutationId ?? null, async () => {
     const { supabase, tenantId, role } = await requireUser()
-    if (!canDoTestWork(role)) return { success: false, error: 'Insufficient permissions.' }
+    if (!canDoTestWork(role)) return { success: false as const, error: 'Insufficient permissions.' }
 
     // Delete existing electrical readings for this test
     await supabase
@@ -309,7 +313,7 @@ export async function saveNsxElectricalReadingAction(testId: string, readings: A
         .from('nsx_test_readings')
         .insert(insertReadings)
 
-      if (error) return { success: false, error: error.message }
+      if (error) return { success: false as const, error: error.message }
     }
 
     // Update step3 status
@@ -323,6 +327,7 @@ export async function saveNsxElectricalReadingAction(testId: string, readings: A
       entityType: 'nsx_test',
       entityId: testId,
       summary: 'Completed NSX electrical testing',
+      mutationId: mutationId ?? null,
     })
 
     // Phase 4 (2026-04-28): propagate parent check completion if all
@@ -351,10 +356,8 @@ export async function saveNsxElectricalReadingAction(testId: string, readings: A
 
     revalidatePath('/testing/nsx')
     revalidatePath('/maintenance')
-    return { success: true }
-  } catch (e: unknown) {
-    return { success: false, error: (e as Error).message }
-  }
+    return { success: true as const }
+  })
 }
 
 /**
