@@ -52,6 +52,8 @@ export interface TechBriefEmailInput {
   checkUrl: string
   /** Pre-formatted ICS content (RFC 5545) */
   icsContent: string
+  /** Extra binary attachments (run-sheet DOCX, last-visit report DOCX) */
+  attachments?: { filename: string; content: Buffer }[]
 }
 
 const FROM_ADDRESS = 'EQ Solves Service <contact@eq.solutions>'
@@ -248,6 +250,10 @@ export async function sendTechBriefEmail(
         filename: 'visit.ics',
         content: Buffer.from(input.icsContent, 'utf-8').toString('base64'),
       },
+      ...(input.attachments ?? []).map((a) => ({
+        filename: a.filename,
+        content: a.content.toString('base64'),
+      })),
     ],
   })
 

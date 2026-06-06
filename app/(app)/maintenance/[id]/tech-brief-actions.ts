@@ -23,6 +23,10 @@ import { sendTechBriefEmail } from '@/lib/email/send-tech-brief'
 import { buildIcs } from '@/lib/utils/build-ics'
 import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { withIdempotency, type ActionResult } from '@/lib/actions/idempotency'
+import { generateMaintenanceChecklist } from '@/lib/reports/maintenance-checklist'
+import { buildMaintenanceChecklistInput } from '@/lib/reports/maintenance-checklist-input'
+import { generatePMAssetReport } from '@/lib/reports/pm-asset-report'
+import { buildPmAssetReportInput } from '@/lib/reports/pm-asset-report-input'
 
 /**
  * Save the scheduled_start_at for a maintenance check.
@@ -253,6 +257,34 @@ export async function sendTechBriefAction(
       addressLine || null,
     ].filter(Boolean).join(' — ')
 
+    // Attachments (spec items 6 + 35): the run-sheet DOCX for THIS visit and
+    // the last-visit report DOCX for the previous completed check at this site.
+    // Both best-effort — generation failure logs and skips, never blocks the
+    // brief. Reuses the same builders the /api report routes use, so there's
+    // no duplicated data-gathering.
+    const extraAttachments: { filename: string; content: Buffer }[] = []
+    const siteLabel = site?.name ?? 'Site'
+    try {
+      const rsInput = await buildMaintenanceChecklistInput(supabase, checkId, tenantId, 'standard')
+      if (rsInput) {
+        const buf = await generateMaintenanceChecklist(rsInput)
+        extraAttachments.push({ filename: `Run-Sheet - ${siteLabel}.docx`, content: Buffer.from(buf) })
+      }
+    } catch (e) {
+      console.warn('[tech-brief] run-sheet attachment failed:', e)
+    }
+    if (lastCheck?.id) {
+      try {
+        const rptInput = await buildPmAssetReportInput(supabase, lastCheck.id as string, tenantId, 'standard')
+        if (rptInput) {
+          const buf = await generatePMAssetReport(rptInput)
+          extraAttachments.push({ filename: `Last Visit Report - ${siteLabel}.docx`, content: Buffer.from(buf) })
+        }
+      } catch (e) {
+        console.warn('[tech-brief] last-visit-report attachment failed:', e)
+      }
+    }
+
     // Build the .ics content
     const icsContent = buildIcs({
       uid: `eq-service-check-${checkId}@eq.solutions`,
@@ -288,6 +320,7 @@ export async function sendTechBriefAction(
       assetCount: assetCount ?? 0,
       checkUrl,
       icsContent,
+      attachments: extraAttachments,
     })
 
     const emailSent = 'skipped' in emailResult ? false : true
