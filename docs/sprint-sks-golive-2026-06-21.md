@@ -102,7 +102,17 @@ Investigation (Rule 0.5 — verify live, not the branch) found **both branches a
 - Close `30-day-plan.md` A3 (ABN done); move closed items to a "Done 2026-06" section.
 - Refresh `ARCHITECTURE.md` (still references dropped `testing_checks`) and append the missing month to `CHANGELOG.md`.
 
-### P1-5 · Pre-visit tech brief — **full Phase 1** ✅ decided
+### P1-5 · Pre-visit tech brief — **full Phase 1 built** ✅ done 2026-06-06 (PR pending review)
+Verification (Rule 0.5) found the brief's **core was already built** on main (`send-tech-brief.ts`, `build-ics.ts`, `tech-brief-actions.ts`, inline `scheduled_start_at` editor, Send button, bell, audit). Built the genuine gaps on branch `claude/tech-brief-phase1`:
+- **Idempotent send** — optional `mutationId` + `withIdempotency`; the button passes a stable id (reset per success) so a double-click can't double-fire the email.
+- **site_contact** block — primary contact (name/role/phone/email) in the email.
+- **prior_visit_summary** block — last completed check at the site: defects raised, items failed, recent defect titles.
+- **Run-sheet + last-visit-report attachments** — extracted reusable input-builders from both report routes (`lib/reports/*-input.ts`); routes now delegate (behaviour preserved); brief generates + attaches both DOCX. Best-effort.
+- **Weather** — skipped (Royce, 2026-06-06): external dependency, lowest value/effort; post-launch.
+- **Opt-out** — deferred to Phase 2 with the cron that enforces it; a manual supervisor send is a deliberate override and always sends.
+- tsc 0 errors · `next build` green · 215 tests. **Phase 2** (17:00 cron + reschedule) remains the only deferred piece.
+
+### P1-5 (original plan) · Pre-visit tech brief — full Phase 1
 Build the complete enriched brief (per `runbooks/pre-visit-tech-brief-spec.md`): composer + email template (visit details, map link, site contact, access notes, scope summary, asset count, prior-visit summary, weather), ICS generator, run-sheet DOCX attachment, "Send brief" button (admin/supervisor), bell notification, opt-out preference. Phase 0 (`scheduled_start_at` + assignment) is already live underneath it. Phase 2 (cron auto-send) stays deferred.
 - **Time budget — flag:** this is the single largest item, ~4–5 of the 15 days. It runs **alongside** P0, and **must not displace P0-5 (dress rehearsal)** — if it slips, it ships the stripped composer-only version, not a slipped rehearsal. Day-1 functionality does not depend on it.
 - **Acceptance:** an admin/supervisor can send an enriched brief for an assigned visit; tech receives email + bell + ICS + run-sheet; opt-out respected.

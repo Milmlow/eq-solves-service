@@ -30,6 +30,20 @@ export interface TechBriefEmailInput {
   afterHoursPhone: string | null
   /** Safety notes — surfaced with a red accent in the email */
   safetyNotes: string | null
+  /** Site primary contact — who the tech calls on arrival */
+  siteContact?: {
+    name: string | null
+    role: string | null
+    phone: string | null
+    email: string | null
+  } | null
+  /** Prior-visit summary — last completed check at this site and what it found */
+  priorVisit?: {
+    date: string
+    defectCount: number
+    failedItemCount: number
+    topDefects: string[]
+  } | null
   /** ISO datetime — when the visit is scheduled to start */
   scheduledStartAt: string
   /** Number of assets in the check */
@@ -38,6 +52,8 @@ export interface TechBriefEmailInput {
   checkUrl: string
   /** Pre-formatted ICS content (RFC 5545) */
   icsContent: string
+  /** Extra binary attachments (run-sheet DOCX, last-visit report DOCX) */
+  attachments?: { filename: string; content: Buffer }[]
 }
 
 const FROM_ADDRESS = 'EQ Solves Service <contact@eq.solutions>'
@@ -97,6 +113,42 @@ export async function sendTechBriefEmail(
     <div style="margin: 20px 0; padding: 12px 16px; background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 0 6px 6px 0;">
       <p style="font-size: 12px; font-weight: 700; color: #991b1b; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.05em;">Safety notes</p>
       <p style="font-size: 13px; color: #7f1d1d; margin: 0; white-space: pre-line;">${esc(input.safetyNotes)}</p>
+    </div>`
+    : ''
+
+  const contact = input.siteContact
+  const contactBlock = (contact && (contact.name || contact.phone || contact.email))
+    ? `
+    <h2 style="font-size: 14px; font-weight: 700; color: #111827; margin: 24px 0 8px;">Site contact</h2>
+    <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+      ${contact.name ? `
+      <tr>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #6b7280; width: 36%; vertical-align: top; white-space: nowrap;">Name</td>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #111827;">${esc(contact.name)}${contact.role ? ` <span style="color: #6b7280;">— ${esc(contact.role)}</span>` : ''}</td>
+      </tr>` : ''}
+      ${contact.phone ? `
+      <tr>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 12px; color: #6b7280; white-space: nowrap;">Phone</td>
+        <td style="padding: 10px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #111827;"><a href="tel:${esc(contact.phone)}" style="color: ${brand};">${esc(contact.phone)}</a></td>
+      </tr>` : ''}
+      ${contact.email ? `
+      <tr>
+        <td style="padding: 10px 14px; font-size: 12px; color: #6b7280; white-space: nowrap;">Email</td>
+        <td style="padding: 10px 14px; font-size: 13px; color: #111827;"><a href="mailto:${esc(contact.email)}" style="color: ${brand};">${esc(contact.email)}</a></td>
+      </tr>` : ''}
+    </table>`
+    : ''
+
+  const pv = input.priorVisit
+  const priorVisitBlock = (pv && pv.date)
+    ? `
+    <h2 style="font-size: 14px; font-weight: 700; color: #111827; margin: 24px 0 8px;">Last visit</h2>
+    <div style="padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+      <p style="font-size: 13px; color: #374151; margin: 0 0 ${pv.topDefects.length ? '8px' : '0'};">
+        <strong>${esc(new Date(pv.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }))}</strong>
+        — ${pv.defectCount} defect${pv.defectCount === 1 ? '' : 's'} raised, ${pv.failedItemCount} item${pv.failedItemCount === 1 ? '' : 's'} failed.
+      </p>
+      ${pv.topDefects.length ? `<ul style="font-size: 12px; color: #6b7280; margin: 0; padding-left: 18px;">${pv.topDefects.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>` : ''}
     </div>`
     : ''
 
@@ -171,6 +223,8 @@ export async function sendTechBriefEmail(
 
       ${safetyBlock}
       ${accessBlock}
+      ${contactBlock}
+      ${priorVisitBlock}
 
       <!-- CTA -->
       <div style="text-align: center; margin: 28px 0 8px;">
@@ -196,6 +250,10 @@ export async function sendTechBriefEmail(
         filename: 'visit.ics',
         content: Buffer.from(input.icsContent, 'utf-8').toString('base64'),
       },
+      ...(input.attachments ?? []).map((a) => ({
+        filename: a.filename,
+        content: a.content.toString('base64'),
+      })),
     ],
   })
 

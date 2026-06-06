@@ -151,6 +151,8 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, assetF
   const [startDraft, setStartDraft] = useState<string>('')
   const [briefSending, setBriefSending] = useState(false)
   const [briefResult, setBriefResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  // Stable per-send id so a double-click dedupes server-side; reset on success.
+  const [briefMutationId, setBriefMutationId] = useState(() => crypto.randomUUID())
   const confirm = useConfirm()
 
   async function handleDownloadReport(complexity: ReportComplexity) {
@@ -571,10 +573,15 @@ export function CheckDetailPage({ check, items, checkAssets, attachments, assetF
   async function handleSendBrief() {
     setBriefResult(null)
     setBriefSending(true)
-    const result = await sendTechBriefAction(check.id)
+    const result = await sendTechBriefAction(check.id, briefMutationId)
     setBriefSending(false)
     if (result.success) {
-      setBriefResult({ ok: true, msg: result.message })
+      // Fresh id so a later intentional resend isn't deduped as a replay.
+      setBriefMutationId(crypto.randomUUID())
+      setBriefResult({
+        ok: true,
+        msg: result.idempotent ? 'Brief already sent for this click.' : (result.data?.message ?? 'Brief sent.'),
+      })
     } else {
       setBriefResult({ ok: false, msg: result.error })
     }
