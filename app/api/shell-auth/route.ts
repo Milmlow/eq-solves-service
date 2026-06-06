@@ -13,7 +13,7 @@
 //
 // SUPABASE JWT FORMAT (Phase 3 — direct Supabase session token):
 //   Standard HS256 JWT signed with SUPABASE_JWT_SECRET
-//   Payload: { sub, exp, app_metadata: { tenant_id, eq_role, is_platform_admin, email } }
+//   Payload: { sub, exp, app_metadata: { tenant_id, eq_role, is_platform_admin, email, tenant_slug } }
 //
 // LEGACY FORMAT (fallback — minted by mint-service-iframe-token):
 //   base64(JSON) + '.' + hex(HMAC-SHA256(EQ_SECRET_SALT))
@@ -130,6 +130,7 @@ interface SupabaseJwtPayload {
     eq_role?: string
     is_platform_admin?: boolean
     email?: string
+    tenant_slug?: string
   }
 }
 
@@ -206,8 +207,12 @@ export async function POST(req: NextRequest) {
   const rawEqRole = jwtClaims?.app_metadata?.eq_role ?? legacy?.eq_role ?? null
   const serviceRole: EqRole | null = asCanonicalRole(rawEqRole)
 
-  // For bridge tokens, tenant_slug is available — needed for tenant_members upsert.
-  const tenantSlug = bridge?.tenant_slug ?? null
+  // tenant_slug drives the tenant_members upsert. Bridge tokens carry it
+  // directly; the Supabase JWT path (active Phase 3 / ServiceIframe) now carries
+  // it too — eq-shell token-exchange sets app_metadata.tenant_slug for
+  // aud=service (PR #186). Reading both is what lets an SSO'd SKS manager land
+  // in the sks workspace instead of access-gate-bouncing.
+  const tenantSlug = bridge?.tenant_slug ?? jwtClaims?.app_metadata?.tenant_slug ?? null
 
   const supabase = createAdminClient()
 
@@ -249,10 +254,9 @@ export async function POST(req: NextRequest) {
   // canonical role so the user lands with the right access.
   //
   // profiles.role is the "global" role; per-tenant access also requires a
-  // tenant_members row. For bridge-token paths (tenant_slug available) we
-  // upsert tenant_members too. For JWT paths, tenant_members provisioning
-  // is deferred until slug is added to the iframe JWT (Sprint 6 — requires
-  // token-exchange.ts to include tenant_slug for aud=service).
+  // tenant_members row. Both the bridge and the Supabase JWT path now carry
+  // tenant_slug (the JWT path via eq-shell token-exchange, PR #186), so the
+  // upsert below fires for either path.
   const userId = linkData.user?.id
   if (userId && serviceRole) {
     void (async () => {
