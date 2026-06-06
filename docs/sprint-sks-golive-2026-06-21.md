@@ -44,8 +44,8 @@ A tech, on go-live morning, can:
 ### P0-0 · 🔴 Auto-defect crash — FIXED (found + fixed this session)
 **Found 2026-06-06.** All four auto-defect triggers (`fn_check_item_to_defect`, `fn_acb_reading_to_defect`, `fn_nsx_reading_to_defect`, `fn_test_record_reading_to_defect`) used a bare `ON CONFLICT (col)` that can't match the **partial** unique indexes from migrations 0061/0062. Effect: marking *any* item/reading as "fail" raised Postgres `42P10` and crashed the save — the core on-site workflow. Latent because no real failure had ever flowed through prod (auto-defect tables were empty).
 - **Fix:** [migration 0120](supabase/migrations/0120_fix_defect_autocreate_onconflict_partial_index.sql) — restates the index predicate in each `ON CONFLICT` target. No data/index change.
-- **Validated** via rolled-back prod probe, then **applied to prod** (advisors: 0 ERROR, security + performance). Re-proven by the demo seed: the failed item auto-created its defect.
-- **Regression watch:** any future edit to these triggers must keep the `WHERE <col> IS NOT NULL` predicate, or the crash returns.
+- **Validated** via rolled-back prod probes on **all four** paths (check item → medium; ACB/NSX/test-record → high via the severity helper), then **applied to prod** (advisors: 0 ERROR, security + performance). Re-proven by the demo seed: the failed item auto-created its defect.
+- **Regression guard:** [tests/integration/triggers/auto-defect-from-fail.test.ts](tests/integration/triggers/auto-defect-from-fail.test.ts) exercises all four paths + the `ON CONFLICT DO UPDATE` branch against real Postgres (`npm run test:integration`). It fails loudly if the `WHERE <col> IS NOT NULL` predicate is ever dropped again — a unit test can't catch this, the bug is entirely in the trigger.
 
 ### P0-1 · Seed scheduled PM work (the core gap)
 - **Demo practice space:** ✅ seeded to prod (idempotent `demo-practice-space.sql`) — DEMO customer + 8 assets + 3 lifecycle checks + 2 manual defects + 1 auto-defect. SKS defects register 0 → 3.
