@@ -88,12 +88,12 @@ Run the `onboarding-day.md` T-1 smoke test for real, on every workflow:
 - **Fast-follow (post-launch):** back-link historical tests to checks (or generate archive checks) so history surfaces in-workflow and in reports. Scoped as its own ticket.
 - **Acceptance (go-live):** historical tests never appear as "incomplete" anywhere; no tech sees phantom outstanding work.
 
-### P1-2 · UX go-live items → **merge both** ✅ decided
-Ship both previously-locked UX-simplification calls, currently stranded unmerged:
-- `feat/pr-f-maintenance-plan-rename` — "Job Plan" → "Maintenance Plan".
-- `feat/pr-a-tech-permission-dashboard-sidebar` — technician sidebar trim.
-- Rebase each onto current main (reskin + C6 role work moved underneath them), re-run `npm run check`, merge.
-- **Acceptance:** rename consistent across UI + nav; technician role sees the trimmed sidebar; `npm run check` clean.
+### P1-2 · UX go-live items → **already merged; stragglers cleaned** ✅ done 2026-06-06
+Investigation (Rule 0.5 — verify live, not the branch) found **both branches are already fully on main** via the UX-audit PRs (#149 et al.):
+- `feat/pr-a-tech-permission-dashboard-sidebar` — TechDashboard, role-aware sidebar (techs lose Records + Insight), Mine/All toggle, `canDoTestWork` all present on main.
+- `feat/pr-f-maintenance-plan-rename` — "Job Plan" → "Maintenance Plan" present across job-plans page, Sidebar, records, forms. (The earlier "pending" read was a three-dot-diff artifact comparing to merge-base, not main's tip.)
+- A cherry-pick of pr-f onto main collapsed to ~zero, confirming it. **No merge needed.**
+- Cleaned the 3 user-facing display-string stragglers the sweep missed (asset detail label, setup-checklist copy, two create-check validation errors). Left the Maximo paste hints, API `notFound` labels, parser, and compliance-PDF labels as-is (out of scope). Commit `6d9baf3`; `npm run check` green.
 
 ### P1-3 · Merge #240
 `fix(analytics): use canonical email as PostHog distinct_id` — based on main, single commit, safe. Merge so day-1 analytics attribute correctly.
