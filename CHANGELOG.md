@@ -4,6 +4,25 @@ All notable changes to this project are logged here. Appended by Cowork at the e
 
 ---
 
+## 2026-06-06 — SKS go-live hardening: auto-defect crash fix + full pre-visit tech brief
+
+Go-live readiness pass for the SKS tenant (target 2026-06-21). See `docs/sprint-sks-golive-2026-06-21.md`.
+
+### 🔴 Critical fix — auto-defect triggers were crashing (migration 0120, PR #241)
+All four auto-defect triggers (`fn_check_item_to_defect`, `fn_acb_reading_to_defect`, `fn_nsx_reading_to_defect`, `fn_test_record_reading_to_defect`) used a bare `ON CONFLICT (col)` that can't infer the **partial** unique indexes from 0061/0062, so marking *any* item/reading as `fail` raised Postgres `42P10`. Latent because no real failure had flowed through prod. Fixed by restating the index predicate; validated on all four paths via rolled-back prod probes; guarded by `tests/integration/triggers/auto-defect-from-fail.test.ts`.
+
+### Idempotency + UI (PR #241)
+ACB/NSX step-3 saves wrapped in `withIdempotency` with a stable client `mutationId` (no double-fire on retry). Cleaned the last "Job Plan" → "Maintenance Plan" UI stragglers (the rename + tech-permission UX were already on main).
+
+### Pre-visit tech brief — Phases 1 & 2 (PRs #242, #243)
+- **Phase 1** (#242): idempotent send, site-contact + prior-visit blocks, and run-sheet + last-visit-report DOCX attachments. The attachments reuse builders extracted from the two report routes (`lib/reports/*-input.ts`) — routes now delegate, behaviour preserved.
+- **Phase 2** (#243): day-before cron (`/api/cron/pre-visit-brief` + Netlify scheduler, ~17:00 AEST), per-tech opt-out, and >1hr-reschedule re-arming. Migration 0121 adds the `pre_visit_brief_sent_at` dedup gate. **Dry-run by default** — emails nobody until `PRE_VISIT_BRIEF_CRON_ENABLED=true`.
+
+### Data / ops
+Attached orphaned SKS user `mark.brame@sks.com.au` (manager); seeded the DEMO — Practice Space; confirmed cross-tenant isolation (PASS) and the SKS report ABN (`51 168 906 956`).
+
+---
+
 ## 2026-04-26 — Reports finish: all 6 generators on ReportShell + WO Details dispatcher restored
 
 Pending push to `main`. Closes Sprint 2.3 from the original 14-item review and restores the Work Order Details dispatcher that was lost in the prior recovery (memory note `project_phase2_ui_lost_2026_04_26`).
