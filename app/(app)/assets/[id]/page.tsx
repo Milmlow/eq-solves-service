@@ -180,7 +180,7 @@ export default async function AssetDetailPage({
     { label: 'Zone', value: (asset.block_or_zone as string | null) },
     { label: 'Install date', value: asset.install_date ? formatDate(asset.install_date as string) : null },
     { label: 'Commissioned', value: asset.commissioned_date ? formatDate(asset.commissioned_date as string) : null },
-    { label: 'Job plan', value: jobPlan ? [jobPlan.name, jobPlan.type].filter(Boolean).join(' — ') : null },
+    { label: 'Maintenance plan', value: jobPlan ? [jobPlan.name, jobPlan.type].filter(Boolean).join(' — ') : null },
   ].filter((m) => m.value)
 
   const assetActive = asset.is_active as boolean

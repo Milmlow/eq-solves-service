@@ -622,6 +622,11 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
     return r.is_pass === true ? 'pass' : r.is_pass === false ? 'fail' : 'na'
   })
 
+  // Stable per-commit id so an on-site network retry of the same save dedupes
+  // server-side. Reset after each successful save so a later edit-save is a
+  // distinct mutation (not short-circuited as a replay).
+  const [saveMutationId, setSaveMutationId] = useState(() => crypto.randomUUID())
+
   // 30% variance warning for contact resistance — phases only (exclude Neutral)
   const contactValues = (['Red', 'White', 'Blue'] as const)
     .map(p => parseFloat(contactRes[p] ?? ''))
@@ -682,9 +687,10 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
       is_pass: racking === 'pass' ? true : racking === 'fail' ? false : undefined,
     })
 
-    const result = await saveAcbElectricalReadingAction(test.id, allReadings)
+    const result = await saveAcbElectricalReadingAction(test.id, allReadings, saveMutationId)
     setLoading(false)
     if (result.success) {
+      setSaveMutationId(crypto.randomUUID())
       const hasFails = allReadings.some(r => r.is_pass === false)
       if (hasFails) onFailDetected()
       onUpdate()

@@ -570,6 +570,11 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
   const [siInstantaneous, setSiInstantaneous] = useState<SiFunctionData>(() =>
     loadSiFunction(readings, 'SI: Instantaneous - ', false))
 
+  // Stable per-commit id so an on-site network retry of the same save dedupes
+  // server-side. Reset after each successful save so a later edit-save is a
+  // distinct mutation (not short-circuited as a replay).
+  const [saveMutationId, setSaveMutationId] = useState(() => crypto.randomUUID())
+
   async function handleSave() {
     setError(null)
     setLoading(true)
@@ -595,9 +600,10 @@ function Step3Electrical({ test, readings, loading, setLoading, setError, onUpda
     allReadings.push(...siToReadings(siShortTime, 'SI: Short Time - ', true))
     allReadings.push(...siToReadings(siInstantaneous, 'SI: Instantaneous - ', false))
 
-    const result = await saveNsxElectricalReadingAction(test.id, allReadings)
+    const result = await saveNsxElectricalReadingAction(test.id, allReadings, saveMutationId)
     setLoading(false)
     if (result.success) {
+      setSaveMutationId(crypto.randomUUID())
       const hasFails = allReadings.some(r => r.is_pass === false)
       if (hasFails) onFailDetected()
       await onUpdate()

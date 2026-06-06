@@ -104,7 +104,7 @@ export function SetupChecklist({
     {
       id: 'job-plan',
       title: 'Set up a maintenance plan',
-      description: 'Job plans define the tasks performed at each visit (e.g. annual switchboard PPM, RCD time-trip). Use the 5 starter templates, pick one of yours, or import.',
+      description: 'Maintenance plans define the tasks performed at each visit (e.g. annual switchboard PPM, RCD time-trip). Use the 5 starter templates, pick one of yours, or import.',
       done: hasJobPlan,
       locked: !hasAsset,
       // Primary CTA links to the empty /job-plans page, where the hero

@@ -1179,7 +1179,7 @@ export async function batchCreateChecksAction(formData: FormData) {
     const assignedTo = (formData.get('assigned_to') as string) || null
 
     if (!jobPlanId || !startDate || !endDate) {
-      return { success: false, error: 'Job plan, start date, and end date are required.' }
+      return { success: false, error: 'Maintenance plan, start date, and end date are required.' }
     }
 
     // Phase 0 enforcement (pre-visit tech brief): batch-created
@@ -1208,7 +1208,7 @@ export async function batchCreateChecksAction(formData: FormData) {
       .eq('id', jobPlanId)
       .single()
 
-    if (!jobPlan) return { success: false, error: 'Job plan not found.' }
+    if (!jobPlan) return { success: false, error: 'Maintenance plan not found.' }
 
     // Generate check dates based on frequency
     const start = new Date(startDate)
