@@ -26,6 +26,11 @@ jobs:
   backup-database:
     name: Database dump → R2
     runs-on: ubuntu-latest
+    # Privileged secrets (DB URL, R2 keys) are scoped to this GitHub Environment.
+    # Configure Settings → Environments → production-ops with a deployment-branch
+    # rule = main only (non-disruptive: this job runs on schedule/dispatch from
+    # main, never on PRs) so the secrets can't be used from any other ref.
+    environment: production-ops
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
@@ -91,6 +96,9 @@ jobs:
   backup-storage:
     name: Storage buckets → R2
     runs-on: ubuntu-latest
+    # Scoped to the production-ops Environment (holds SUPABASE_SERVICE_ROLE_KEY
+    # + R2 keys). See branch-rule note on backup-database above.
+    environment: production-ops
     steps:
       - name: Set backup date
         run: echo "BACKUP_DATE=$(date -u +%Y-%m-%d_%H%M)" >> "$GITHUB_ENV"
