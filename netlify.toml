@@ -26,3 +26,13 @@
 # bearer token so the route authenticates it.
 [functions."supervisor-digest-scheduler"]
   schedule = "0 21 * * *"
+
+# Pre-visit tech brief — fires daily at 07:00 UTC (~17:00 AEST / 18:00 AEDT),
+# the evening before. Sends a brief for each scheduled check happening tomorrow
+# in the tenant's tz. DST drift is acceptable (day-ahead notice).
+#
+# SAFETY: the route (/api/cron/pre-visit-brief) is dry-run unless
+# PRE_VISIT_BRIEF_CRON_ENABLED=true — this schedule firing emails nobody until
+# that env var is set in Netlify.
+[functions."pre-visit-brief-scheduler"]
+  schedule = "0 7 * * *"

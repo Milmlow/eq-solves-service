@@ -2354,6 +2354,7 @@ export type Database = {
           maximo_pm_number: string | null
           maximo_wo_number: string | null
           notes: string | null
+          pre_visit_brief_sent_at: string | null
           scheduled_start_at: string | null
           signature_initials: string | null
           signature_site_url: string | null
@@ -2385,6 +2386,7 @@ export type Database = {
           maximo_pm_number?: string | null
           maximo_wo_number?: string | null
           notes?: string | null
+          pre_visit_brief_sent_at?: string | null
           scheduled_start_at?: string | null
           signature_initials?: string | null
           signature_site_url?: string | null
@@ -2416,6 +2418,7 @@ export type Database = {
           maximo_pm_number?: string | null
           maximo_wo_number?: string | null
           notes?: string | null
+          pre_visit_brief_sent_at?: string | null
           scheduled_start_at?: string | null
           signature_initials?: string | null
           signature_site_url?: string | null

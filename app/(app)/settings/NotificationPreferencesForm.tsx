@@ -41,6 +41,7 @@ const EVENT_TYPES = [
   { value: 'check_overdue', label: 'Check overdue' },
   { value: 'check_completed', label: 'Check completed' },
   { value: 'defect_raised', label: 'Defect raised' },
+  { value: 'pre_visit_tech_brief', label: 'Pre-visit brief (night before)' },
 ]
 
 const COMMON_TIMEZONES = [
