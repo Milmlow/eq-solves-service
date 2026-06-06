@@ -82,6 +82,11 @@ describe('MFA routing — regression tests for the AAL1 loop bug', () => {
       expect(isPublicPath('/api/cron/supervisor-digest')).toBe(true)
     })
 
+    it('includes /api/cron/pre-visit-brief', () => {
+      expect(PUBLIC_PATHS).toContain('/api/cron/pre-visit-brief')
+      expect(isPublicPath('/api/cron/pre-visit-brief')).toBe(true)
+    })
+
     it('does NOT treat unrelated /api/* routes as public', () => {
       expect(isPublicPath('/api/notifications')).toBe(false)
       expect(isPublicPath('/api/maintenance-checklist')).toBe(false)

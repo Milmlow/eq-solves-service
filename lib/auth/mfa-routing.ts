@@ -48,6 +48,7 @@ export const PUBLIC_PATHS = [
   // and returns the rendered signin HTML to the dispatcher.
   '/api/cron/dispatch-notifications',
   '/api/cron/supervisor-digest',
+  '/api/cron/pre-visit-brief',
   // Customer-facing unsubscribe (AU Spam Act 2003 s18 compliance).
   // The signed token in ?token=... IS the auth check — no Supabase
   // session required. Visiting flips the receive_* prefs synchronously.
