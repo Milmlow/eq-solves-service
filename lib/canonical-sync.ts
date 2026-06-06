@@ -254,6 +254,8 @@ export async function syncDefect(input: DefectSyncInput): Promise<CanonicalSyncR
  * Events emitted from EQ Service:
  *   defect.created              — when a defect is raised
  *   maintenance_check.completed — when a check is marked complete
+ *   maintenance_check.overdue   — when an overdue check is detected on page load;
+ *                                 payload: { check_id, site_id, site_name, check_name, days_overdue }
  */
 export async function emitEvent(
   event:   string,
