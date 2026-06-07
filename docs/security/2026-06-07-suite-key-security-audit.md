@@ -92,3 +92,32 @@ Read-only audit of every EQ + SKS repo on disk for critical key/security items: 
 
 ### eq-service (this repo) — nothing required
 The go-live app is clean. No code fixes applied (deliberately — no churn in the go-live repo). The CSP flip is the only item and it's a governed YOUR-ACTION.
+
+---
+
+## Fix status (2026-06-07) — what's been done
+
+All fixes are committed to **review branches, not pushed, not deployed.** Each lives in its own isolated worktree off `main`.
+
+| Finding | Branch (repo) | Status |
+|---|---|---|
+| 🔴 eq-shell `ocr-parse` unauthenticated | `claude/ocr-parse-auth-gate` (eq-shell) | ✅ session gate + CORS allow-list; syntax-coherent, CI will typecheck |
+| eq-shell `ocr-parse` CORS `*` | same branch | ✅ restricted to core.eq.solutions + previews |
+| sks `!==` token compare ×2 | `claude/sks-timing-safe-compare` (sks-nsw-labour) | ✅ `timingSafeEqual`; `node --check` clean |
+| eq-quotes webhook fail-open | `claude/quotes-webhook-failclosed` (eq-quotes-port) | ✅ fail-closed in prod; `py_compile` clean |
+| eq-cards stale RLS comment | `claude/cards-comment-fix` (eq-cards) | ✅ comment corrected (no SQL change) |
+| eq-service secrets runbook + backup.yml env | `claude/secrets-hardening` (eq-service) | ✅ committed |
+
+**To ship each:** push branch → PR → deploy preview/CI runs → review → merge on your instruction. (SKS is a separate entity — its branch ships independently, never cross-deployed.)
+
+### Deliberately NOT auto-fixed (need a decision, not a tidy-up)
+- **sks rate-limit → shared store** — real change (new table + RPC + concurrency design) touching PIN-lockout auth code. Not a safe drive-by; scope it as its own task. Current in-memory limiter still works per-instance.
+- **eq-field / sks per-user-auth cutover** — the permissive-RLS root cause; already a planned workstream. Don't patch piecemeal.
+- **anon keys in source** (eq-shell `provision-sks-tenant.mjs`, eq-solves-assets `config.js`) — public by design; moving to env risks breaking runtime for ~zero security gain. Optional.
+
+### Your-action (needs your logins — I can't execute)
+1. Google Cloud **Document AI quota cap + budget alert** (interim guard for the OCR endpoint).
+2. eq-service CSP: check Netlify `csp-report` logs → flip report-only to enforce.
+3. eq-field demo PINs: rotate in Supabase **only if** a demo tenant holds real data.
+4. eq-quotes `.env`: keep gitignored; rotate only if the file/machine was ever shared.
+5. Confirm trust models: eq-cards `share-licence` (name+licence by UUID), eq-quotes `QUOTES_SKIP_PASSWORD`.
