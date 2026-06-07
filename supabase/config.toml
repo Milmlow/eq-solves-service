@@ -1,0 +1,54 @@
+# supabase/config.toml — local dev / CI configuration
+# Reference: https://supabase.com/docs/guides/cli/config
+#
+# Minimal config. Explicitly overrides CLI defaults that cause `supabase start`
+# to fail in environments (CI, local) where the full feature set isn't needed.
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[realtime]
+enabled = true
+
+[storage]
+enabled = true
+
+[storage.vector]
+# CLI v2.105.0 enabled vector buckets by default (#5421). The local storage
+# image does not bundle the vector service, so the seed step fails with 409
+# "Vector service not configured is not enabled for this resource". Explicitly
+# opt out here so CI can use `version: latest` without pinning.
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = []
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 6
+
+[inbucket]
+enabled = true
+port = 54324
+
+[studio]
+enabled = true
+port = 54323
+
+[analytics]
+enabled = true
+port = 54327
+vector_port = 54328

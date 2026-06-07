@@ -72,7 +72,7 @@ jobs:
           echo "### Performance" >> "$GITHUB_STEP_SUMMARY"
           jq -r '.lints[]? | "- [\(.level)] \(.name): \(.detail)"' performance.json >> "$GITHUB_STEP_SUMMARY" || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: supabase-advisors
