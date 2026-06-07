@@ -31,28 +31,17 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v2
         with:
-          # Pinned: do NOT use `latest`. CLI v2.105.0 (2026-06-04, #5421)
-          # enabled vector storage buckets by default for local projects.
-          # This repo has no supabase/config.toml, so every `supabase start`
-          # is treated as a fresh project on current defaults — the storage
-          # seed step then tries to reconcile "vector buckets" and the bundled
-          # storage image rejects it with
-          #   409 InvalidRequest "Vector service not configured is not enabled"
-          # which kills the stack and reds this check for every push/PR.
-          # v2.104.0 is the last release before that default. Revisit by adding
-          # a config.toml that explicitly disables vector buckets if/when we
-          # want to track latest again.
-          version: 2.104.0
+          version: latest
 
       - name: Configure git for private @eq-solutions deps
         run: |
