@@ -49,6 +49,13 @@ export const PUBLIC_PATHS = [
   '/api/cron/dispatch-notifications',
   '/api/cron/supervisor-digest',
   '/api/cron/pre-visit-brief',
+  // Canonical durable-outbox drain + reconciliation (migration 0122). Driven by
+  // the canonical-outbox-scheduler (5-min) and canonical-reconcile-scheduler
+  // (daily) Netlify Scheduled Functions; each handler enforces Bearer CRON_SECRET
+  // internally. Without these the scheduler's POST 307-redirects to /auth/signin
+  // and the outbox never drains.
+  '/api/cron/canonical-outbox-drain',
+  '/api/cron/reconcile-canonical',
   // Customer-facing unsubscribe (AU Spam Act 2003 s18 compliance).
   // The signed token in ?token=... IS the auth check — no Supabase
   // session required. Visiting flips the receive_* prefs synchronously.
