@@ -195,9 +195,13 @@ export default async function MaintenancePage({
     (c) => c.due_date && new Date(c.due_date) < now2 && c.status !== 'complete' && c.status !== 'cancelled',
   )
   overdueChecks.forEach((c) => {
+    const sitesJoin = c.sites as { name: string } | null
+    const jobPlansJoin = c.job_plans as { name: string } | null
     void emitEvent('maintenance_check.overdue', {
       check_id: c.id,
       site_id: (c.site_id as string | null) ?? undefined,
+      site_name: sitesJoin?.name ?? undefined,
+      check_name: (c.custom_name ?? jobPlansJoin?.name) ?? undefined,
       days_overdue: Math.floor((now2.getTime() - new Date(c.due_date!).getTime()) / 86_400_000),
     })
   })
