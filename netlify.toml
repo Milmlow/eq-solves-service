@@ -36,3 +36,26 @@
 # that env var is set in Netlify.
 [functions."pre-visit-brief-scheduler"]
   schedule = "0 7 * * *"
+
+# ─────────── Canonical Outbox Drainer ───────────
+#
+# Replays canonical-api writes that failed their inline attempt — durability for
+# the canonical reference-layer sync (see lib/canonical-outbox.ts and
+# lib/canonical-sync.ts). Fires every 5 minutes and POSTs to
+# /api/cron/canonical-outbox-drain with the CRON_SECRET bearer token. A run with
+# an empty outbox is a single indexed no-op query.
+#
+# Schedule: "*/5 * * * *" = every 5 minutes
+[functions."canonical-outbox-scheduler"]
+  schedule = "*/5 * * * *"
+
+# ─────────── Canonical Reconciliation ───────────
+#
+# Drift backstop: re-syncs customers/sites that never reached canonical
+# (canonical_id IS NULL) — catches pre-outbox rows / missed enqueues so the
+# reference layer self-heals. Daily, off-peak. POSTs to
+# /api/cron/reconcile-canonical with CRON_SECRET.
+#
+# Schedule: "0 23 * * *" = 23:00 UTC daily
+[functions."canonical-reconcile-scheduler"]
+  schedule = "0 23 * * *"
