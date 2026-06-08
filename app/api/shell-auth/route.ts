@@ -37,6 +37,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { isEqRole, type EqRole } from '@eq-solutions/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { shellCookieOptions } from '@/lib/auth/shell-cookies'
+import { mintServiceJwt } from '@/lib/auth/service-jwt'
 
 const EQ_SHELL_BRIDGE_SECRET = process.env.EQ_SHELL_BRIDGE_SECRET ?? ''
 const EQ_SECRET_SALT = process.env.EQ_SECRET_SALT ?? ''
@@ -200,11 +201,43 @@ export async function POST(req: NextRequest) {
     return json(401, { error: 'invalid-token' })
   }
 
+  // ── Supabase JWT fast path ─────────────────────────────────────────────────
+  // When the incoming token is a Shell-minted Supabase JWT (token-exchange aud=service),
+  // skip generateLink entirely. The JWT already vouches for the user's identity;
+  // we re-mint it with a 4h TTL and set it as an httpOnly cookie. The browser's
+  // /shell page reads {ok: true} and skips the OTP exchange. requireUser() reads
+  // tenant_id + role directly from the cookie's claims, bypassing tenant_members
+  // (which doesn't exist in ehow).
+  if (jwtClaims) {
+    let longLivedJwt: string
+    try {
+      longLivedJwt = mintServiceJwt(jwtClaims, 4 * 60 * 60)
+    } catch {
+      return json(500, { error: 'misconfigured', detail: 'SUPABASE_JWT_SECRET not set' })
+    }
+    const cookieOpts = shellCookieOptions(req.nextUrl.host)
+    const resp = json(200, { ok: true })
+    resp.cookies.set('eq_service_jwt', longLivedJwt, {
+      httpOnly: true,
+      path: '/',
+      maxAge: 60 * 60 * 4,
+      ...cookieOpts,
+    })
+    resp.cookies.set('eq_shell_bridge', '1', {
+      httpOnly: true,
+      path: '/',
+      maxAge: 60 * 60 * 4,
+      ...cookieOpts,
+    })
+    return resp
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   // Extract the role claim from whichever token format validated.
   // Bridge token does NOT carry role claims (design gap — slug only).
   // JWT (active Phase 3 path) and legacy both carry eq_role. is_platform_admin
   // is intentionally ignored (see asCanonicalRole above).
-  const rawEqRole = jwtClaims?.app_metadata?.eq_role ?? legacy?.eq_role ?? null
+  const rawEqRole = legacy?.eq_role ?? null
   const serviceRole: EqRole | null = asCanonicalRole(rawEqRole)
 
   // tenant_slug drives the tenant_members upsert. Bridge tokens carry it
@@ -212,7 +245,7 @@ export async function POST(req: NextRequest) {
   // it too — eq-shell token-exchange sets app_metadata.tenant_slug for
   // aud=service (PR #186). Reading both is what lets an SSO'd SKS manager land
   // in the sks workspace instead of access-gate-bouncing.
-  const tenantSlug = bridge?.tenant_slug ?? jwtClaims?.app_metadata?.tenant_slug ?? null
+  const tenantSlug = bridge?.tenant_slug ?? null
 
   const supabase = createAdminClient()
 

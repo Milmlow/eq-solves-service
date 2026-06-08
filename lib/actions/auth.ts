@@ -21,10 +21,32 @@
  * tracked in docs/30-day-plan.md (B1a follow-up).
  */
 
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { verifyServiceJwt } from '@/lib/auth/service-jwt'
 import type { Role } from '@/lib/types'
 
 export async function requireUser() {
+  // Fast path: Shell JWT cookie set by /api/shell-auth (Plan B — JWT path).
+  // ehow has no tenant_members/profiles tables; identity comes from JWT claims.
+  const cookieStore = await cookies()
+  const serviceJwtRaw = cookieStore.get('eq_service_jwt')?.value
+  if (serviceJwtRaw) {
+    const claims = verifyServiceJwt(serviceJwtRaw)
+    if (claims?.app_metadata?.tenant_id && claims.app_metadata.eq_role) {
+      const supabase = await createClient()
+      return {
+        supabase,
+        // Callers use user.id for data queries; email for display only.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        user: { id: claims.sub, email: claims.app_metadata.email ?? '' } as any,
+        tenantId: claims.app_metadata.tenant_id,
+        role: claims.app_metadata.eq_role as Role,
+      }
+    }
+  }
+
+  // Standard Supabase session path (EQ entity tenants with tenant_members).
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated.')
