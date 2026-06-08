@@ -95,21 +95,68 @@ function readImageSize(buf: Buffer): { width: number; height: number } | null {
 }
 
 /**
+ * SSRF guard for logo URLs (S2-13).
+ *
+ * Accepts only:
+ *   - https: scheme
+ *   - Non-IP hostnames (no bare IPv4/IPv6 literals)
+ *   - Hostnames that are not known-private/link-local names
+ *
+ * Returns true when the URL is safe to fetch; false otherwise.
+ */
+function isSafeFetchUrl(raw: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return false
+  }
+
+  // Only HTTPS.
+  if (parsed.protocol !== 'https:') return false
+
+  const host = parsed.hostname.toLowerCase()
+
+  // Block bare IPv4 addresses.
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return false
+
+  // Block well-known private/loopback/link-local names.
+  const blockedHosts = new Set([
+    'localhost',
+    '127.0.0.1',
+    '0.0.0.0',
+    '169.254.169.254', // AWS/GCP/Azure IMDS
+    '::1',
+  ])
+  if (blockedHosts.has(host)) return false
+
+  return true
+}
+
+/**
  * Resolve a logo URL → buffer. Returns undefined on any failure (404,
- * network, bad content-type). Never throws.
+ * network, bad content-type, or unsafe URL). Never throws.
  *
  * The `width`/`height` opts describe the MAX box — the image is scaled to
  * fit inside it while preserving its natural aspect ratio, so a 5:1 wordmark
  * doesn't get squashed into a 3:1 slot. Falls back to the box size only if
  * the natural dimensions can't be read.
+ *
+ * S2-13: URL is validated (scheme, not a raw IP, not a private host) before
+ * any network call is made. Redirects are blocked and a 3-second timeout
+ * prevents stalled fetches from blocking report generation.
  */
 export async function fetchLogoImage(
   url: string | null | undefined,
   opts: { width?: number; height?: number } = {},
 ): Promise<LogoImage | undefined> {
   if (!url) return undefined
+  if (!isSafeFetchUrl(url)) return undefined
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(3000),
+    })
     if (!res.ok) return undefined
     const buf = Buffer.from(await res.arrayBuffer())
     const ct = res.headers.get('content-type') ?? ''
