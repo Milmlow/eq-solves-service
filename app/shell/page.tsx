@@ -51,6 +51,7 @@ export default function ShellEntryPage() {
         })
 
         const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean   // JWT path — session cookie already set, no OTP needed
           email?: string
           otp?: string
           error?: string
@@ -75,6 +76,12 @@ export default function ShellEntryPage() {
           signalError('auth-failed')
           setStatus('error')
           setErrMsg('Something went wrong signing you in. Please try again.')
+          return
+        }
+
+        // JWT path: shell-auth set eq_service_jwt cookie server-side, no OTP needed.
+        if (body.ok) {
+          router.replace('/')
           return
         }
 
