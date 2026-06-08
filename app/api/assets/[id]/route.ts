@@ -3,21 +3,24 @@ import { getApiUser, isAdmin } from '@/lib/api/auth'
 import { ok, err, unauthorized, forbidden, notFound } from '@/lib/api/response'
 import { UpdateAssetSchema } from '@/lib/validations/asset'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function appDataFrom(supabase: any, table: string) {
+  return supabase.schema('app_data').from(table)
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
-    const { user, tenantId } = await getApiUser()
+    const { user, tenantId, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
 
-    const { supabase } = await getApiUser()
-    const { data, error } = await supabase
-      .from('assets')
+    const { data, error } = await appDataFrom(supabase, 'assets')
       .select('*')
-      .eq('id', id)
+      .eq('asset_id', id)
       .eq('tenant_id', tenantId)
       .single()
 
@@ -37,7 +40,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const { user, tenantId, role } = await getApiUser()
+    const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
     if (!isAdmin(role)) return forbidden()
@@ -45,11 +48,9 @@ export async function PATCH(
     const body = await request.json()
     const validated = UpdateAssetSchema.parse(body)
 
-    const { supabase } = await getApiUser()
-    const { data, error } = await supabase
-      .from('assets')
+    const { data, error } = await appDataFrom(supabase, 'assets')
       .update({ ...validated, updated_at: new Date().toISOString() })
-      .eq('id', id)
+      .eq('asset_id', id)
       .eq('tenant_id', tenantId)
       .select()
       .single()
@@ -73,16 +74,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const { user, tenantId, role } = await getApiUser()
+    const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
     if (!isAdmin(role)) return forbidden()
 
-    const { supabase } = await getApiUser()
-    const { error } = await supabase
-      .from('assets')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('id', id)
+    const { error } = await appDataFrom(supabase, 'assets')
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq('asset_id', id)
       .eq('tenant_id', tenantId)
 
     if (error) {
