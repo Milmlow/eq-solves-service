@@ -755,5 +755,5 @@ async function resolveAppUrl(): Promise<string> {
   } catch {
     // headers() throws outside a request scope — fall through
   }
-  return 'https://eq-solves-service.netlify.app'
+  return 'https://service.eq.solutions'
 }

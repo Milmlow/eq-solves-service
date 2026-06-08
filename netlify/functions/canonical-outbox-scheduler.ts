@@ -23,7 +23,7 @@ function resolveAppUrl(): string {
   return (
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.URL ||
-    'https://eq-solves-service.netlify.app'
+    'https://service.eq.solutions'
   )
 }
 
