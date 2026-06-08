@@ -1,7 +1,6 @@
-/* Design tokens — consumed from @eq-solutions/tokens (git dep, pinned v1.0.0),
-   the single source of truth. No longer vendored. The old copy at
-   lib/tokens/tokens.css is now unused and slated for deletion. */
-@import "@eq-solutions/tokens/tokens.css";
+/* Single import: design tokens + all @eq-solutions/ui component styles.
+ * @eq-solutions/tokens must be listed as a direct dep (peer dep of ui). */
+@import "@eq-solutions/ui/src/index.css";
 @import "tailwindcss";
 
 /* Plus Jakarta Sans is loaded via next/font/google in app/layout.tsx,
@@ -25,6 +24,6 @@ body {
    focus:ring-* class. Field already ships this; Service now matches.
    outline-offset keeps the ring from overlapping tight borders. */
 :focus-visible {
-  outline: 2px solid var(--eq-sky, #3DA8D8);
+  outline: 2px solid var(--eq-sky);
   outline-offset: 2px;
 }
