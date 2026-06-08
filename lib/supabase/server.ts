@@ -11,9 +11,13 @@ import type { Database } from './database.types'
  * app_metadata, which RLS reads via auth.jwt() -> 'app_metadata' ->> 'tenant_id'.
  */
 export function createJwtClient(jwt: string) {
+  // JWT path queries ehow (sks-canonical) app_data.* via CANONICAL_SUPABASE_URL.
+  // Falls back to the main URL so local dev without canonical env vars still boots.
+  const canonicalUrl = process.env.CANONICAL_SUPABASE_URL ?? publicEnv.NEXT_PUBLIC_SUPABASE_URL
+  const canonicalKey = process.env.CANONICAL_SUPABASE_ANON_KEY ?? publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY
   return createServerClient<Database>(
-    publicEnv.NEXT_PUBLIC_SUPABASE_URL,
-    publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    canonicalUrl,
+    canonicalKey,
     {
       global: { headers: { Authorization: `Bearer ${jwt}` } },
       cookies: { getAll: () => [], setAll: () => {} },
