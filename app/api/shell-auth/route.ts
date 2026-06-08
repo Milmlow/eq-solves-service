@@ -51,6 +51,7 @@ interface BridgeTokenPayload {
   email: string
   tenant_slug: string
   exp: number
+  shell_user_id?: string
 }
 
 function validateBridgeToken(raw: string): BridgeTokenPayload | null {
@@ -337,11 +338,23 @@ export async function POST(req: NextRequest) {
   // SameSite/Secure follow the deploy host (see lib/auth/shell-cookies):
   // Lax under *.eq.solutions (same-site iframe with Shell — proxy.ts can read
   // this flag without third-party-cookie blocking), None fallback on netlify.app.
+  const cookieOpts = shellCookieOptions(req.nextUrl.host)
   resp.cookies.set('eq_shell_bridge', '1', {
     httpOnly: true,
     path: '/',
     maxAge: 60 * 60 * 4, // 4 hours
-    ...shellCookieOptions(req.nextUrl.host),
+    ...cookieOpts,
   })
+  // Persist the Shell-canonical UUID so the layout can use it as the PostHog
+  // distinct_id. Present only on bridge tokens minted after eq-shell PR #265.
+  // Additive — old tokens without shell_user_id simply skip this cookie.
+  if (bridge?.shell_user_id) {
+    resp.cookies.set('eq_shell_user_id', bridge.shell_user_id, {
+      httpOnly: true,
+      path: '/',
+      maxAge: 60 * 60 * 4,
+      ...cookieOpts,
+    })
+  }
   return resp
 }

@@ -126,6 +126,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // sign-out) and show an "Open in new tab" escape hatch instead.
   const cookieStore = await cookies()
   const isShellIframe = cookieStore.get('eq_shell_bridge')?.value === '1'
+  // Shell UUID for cross-app PostHog identity. Set by /api/shell-auth when the
+  // bridge token carries shell_user_id (eq-shell PR #265). Falls back to email
+  // so non-iframe sessions (direct login) stay unaffected.
+  const shellUserId = cookieStore.get('eq_shell_user_id')?.value ?? null
 
   // Inject tenant colours as CSS custom properties — overrides :root defaults
   const tenantStyle = {
@@ -221,12 +225,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <ShellReadySignal isShellIframe={isShellIframe} />
       {user && analyticsTenantId && analyticsRole && (
         <AnalyticsIdentify
-          // Cross-app PostHog distinct_id is the lowercased email. Service's
-          // user.id is a GoTrue id from its own Supabase — a different
-          // namespace from Shell's canonical UUID — so email is the only key
-          // the same human can share across Shell / Field / Service. Falls
-          // back to user.id if email is somehow missing.
-          userId={user.email ? user.email.toLowerCase() : user.id}
+          // Cross-app PostHog distinct_id. When Shell embeds Service via iframe,
+          // eq_shell_user_id cookie carries the Shell canonical UUID (set by
+          // /api/shell-auth from BridgeTokenPayload.shell_user_id, eq-shell PR #265).
+          // Falls back to lowercased email for direct-login sessions (same key
+          // EQ Shell and EQ Field use when they don't have a UUID yet), then to
+          // user.id as a last resort.
+          userId={shellUserId ?? (user.email ? user.email.toLowerCase() : user.id)}
           tenantId={isDemoSession ? 'demo-fixture' : analyticsTenantId}
           role={analyticsRole}
           appEnv={isDemoSession ? 'demo' : (process.env.NEXT_PUBLIC_APP_ENV ?? 'beta')}
