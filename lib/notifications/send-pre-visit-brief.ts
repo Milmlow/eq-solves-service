@@ -195,7 +195,7 @@ export async function composeAndSendPreVisitBrief(
   const appUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    'https://eq-solves-service.netlify.app'
+    'https://service.eq.solutions'
   const checkUrl = `${appUrl}/maintenance/${checkId}`
 
   const addressLine = [site?.address, site?.city, site?.state].filter(Boolean).join(', ')

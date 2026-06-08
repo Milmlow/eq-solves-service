@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase/server'
 const ALLOWED_ORIGINS = [
   'https://core.eq.solutions',
   'https://service.eq.solutions',
-  'https://eq-solves-service.netlify.app',
+  'https://service.eq.solutions',
 ]
 
 /**

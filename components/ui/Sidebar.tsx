@@ -275,7 +275,7 @@ export function Sidebar({
               </div>
             )}
             <a
-              href="https://eq-solves-service.netlify.app"
+              href="https://service.eq.solutions"
               target="_blank"
               rel="noopener noreferrer"
               className="w-full flex items-center gap-3 px-3 py-2 min-h-[44px] rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors text-sm font-medium touch-manipulation"

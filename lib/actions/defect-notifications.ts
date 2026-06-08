@@ -117,7 +117,7 @@ export async function notifyDefectRaised(opts: {
     const appUrl =
       process.env.NEXT_PUBLIC_SITE_URL ||
       process.env.NEXT_PUBLIC_APP_URL ||
-      'https://eq-solves-service.netlify.app'
+      'https://service.eq.solutions'
 
     for (const userId of memberIds) {
       // Bell — always.
