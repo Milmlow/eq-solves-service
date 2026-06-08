@@ -7,14 +7,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getApiUser } from '@/lib/api/auth'
 import { getCachedTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { generateComplianceReport } from '@/lib/reports/compliance-report'
 import type { ComplianceReportInput } from '@/lib/reports/compliance-report'
-import type { Role } from '@/lib/types'
 import { canWrite } from '@/lib/utils/roles'
 import { computeMaintenanceCompliance, computeComplianceBySite } from '@/lib/analytics/site-health'
 import { captureSlowReportRun } from '@/lib/observability/report-duration-canary'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function appDataFrom(supabase: any, table: string) { return supabase.schema('app_data').from(table) }
 
 // Pulls 7 separate .limit(10000) tables and synthesises a multi-section
 // DOCX. Detailed complexity at Jemena-scale crosses 15s. Set the runtime
@@ -43,27 +45,10 @@ export async function GET(request: NextRequest) {
   const validComplexities = ['summary', 'standard', 'detailed'] as const
   const complexity = complexityParam && validComplexities.includes(complexityParam) ? complexityParam : 'standard'
 
-  const supabase = await createClient()
-
-  // Auth
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const { data: membership } = await supabase
-    .from('tenant_members')
-    .select('role, tenant_id')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle()
-
-  if (!membership || !canWrite(membership.role as Role)) {
-    return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
-  }
-
-  const tenantId = membership.tenant_id
+  const { user, tenantId, role, supabase } = await getApiUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!tenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!canWrite(role)) return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
 
   // Fetch tenant settings for branding. tenants.name is the canonical
   // company name; tenant_settings overrides allow custom report-only
@@ -72,15 +57,9 @@ export async function GET(request: NextRequest) {
   // The previous `, primary_colour` select silently returned the row without
   // the column rather than erroring, and the tenant?.primary_colour fallback
   // below was always undefined. Select only `name` here.
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('name')
-    .eq('id', tenantId)
-    .maybeSingle()
-
   const tenantSettings = await getCachedTenantSettings(tenantId)
 
-  const reportCompanyName = tenantSettings?.report_company_name ?? tenant?.name ?? 'EQ Solves'
+  const reportCompanyName = tenantSettings?.report_company_name ?? 'EQ Solves'
   const reportCompanyAbn = tenantSettings?.report_company_abn ?? null
   const productName = tenantSettings?.product_name ?? 'EQ Solves Service'
   const reportPrimaryColour = (tenantSettings?.primary_colour ?? '3DA8D8').replace('#', '')
@@ -89,25 +68,24 @@ export async function GET(request: NextRequest) {
   const reportInkColour = tenantSettings?.ink_colour ?? null
 
   // Sites for name lookup and customer filtering
-  const { data: sites } = await supabase
-    .from('sites')
-    .select('id, name, customer_id')
-    .eq('is_active', true)
+  const { data: sites } = await appDataFrom(supabase, 'sites')
+    .select('site_id, name, customer_id')
+    .eq('active', true)
     .eq('tenant_id', tenantId)
     .limit(10000)
 
-  const siteMap = Object.fromEntries((sites ?? []).map((s) => [s.id, s.name]))
+  const siteMap = Object.fromEntries((sites ?? []).map((s: { site_id: string; name: string }) => [s.site_id, s.name]))
 
   // If customer selected, filter to their site IDs
   const customerSiteIds = customerId
-    ? (sites ?? []).filter((s) => s.customer_id === customerId).map((s) => s.id)
+    ? (sites ?? []).filter((s: { customer_id: string }) => s.customer_id === customerId).map((s: { site_id: string }) => s.site_id)
     : null
 
   // Build filter description
   let customerName = ''
   if (customerId) {
-    const { data: cust } = await supabase.from('customers').select('name').eq('id', customerId).maybeSingle()
-    customerName = cust?.name ?? ''
+    const { data: cust } = await appDataFrom(supabase, 'customers').select('company_name').eq('customer_id', customerId).maybeSingle()
+    customerName = (cust as { company_name?: string } | null)?.company_name ?? ''
   }
   const selectedSite = siteId ? siteMap[siteId] ?? '' : ''
   const filterParts = [
@@ -119,7 +97,7 @@ export async function GET(request: NextRequest) {
   const filterDescription = filterParts.length > 0 ? filterParts.join(' — ') : 'All data'
 
   // ── Maintenance checks ──
-  let mCheckQuery = supabase.from('maintenance_checks').select('id, status, due_date, completed_at, site_id').eq('tenant_id', tenantId).eq('is_active', true).limit(10000)
+  let mCheckQuery = appDataFrom(supabase, 'maintenance_checks').select('id, status, due_date, completed_at, site_id').eq('tenant_id', tenantId).eq('active', true).limit(10000)
   if (siteId) {
     mCheckQuery = mCheckQuery.eq('site_id', siteId)
   } else if (customerSiteIds) {
@@ -134,7 +112,7 @@ export async function GET(request: NextRequest) {
   const maintenance = computeMaintenanceCompliance(checks as Parameters<typeof computeMaintenanceCompliance>[0])
 
   // ── Test records ──
-  let tRecordQuery = supabase.from('test_records').select('id, result, test_date, site_id').eq('is_active', true).limit(10000)
+  let tRecordQuery = appDataFrom(supabase, 'test_records').select('id, result, test_date, site_id').eq('active', true).limit(10000)
   if (siteId) {
     tRecordQuery = tRecordQuery.eq('site_id', siteId)
   } else if (customerSiteIds) {
@@ -145,21 +123,25 @@ export async function GET(request: NextRequest) {
   const { data: tests } = await tRecordQuery
 
   const tTotal = tests?.length ?? 0
-  const tPass = tests?.filter((t) => t.result === 'pass').length ?? 0
-  const tFail = tests?.filter((t) => t.result === 'fail').length ?? 0
-  const tDefect = tests?.filter((t) => t.result === 'defect').length ?? 0
-  const tPending = tests?.filter((t) => t.result === 'pending').length ?? 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tPass = tests?.filter((t: any) => t.result === 'pass').length ?? 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tFail = tests?.filter((t: any) => t.result === 'fail').length ?? 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tDefect = tests?.filter((t: any) => t.result === 'defect').length ?? 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tPending = tests?.filter((t: any) => t.result === 'pending').length ?? 0
   const tPassRate = tTotal > 0 ? Math.round((tPass / tTotal) * 100) : 0
 
   // ── ACB / NSX progress ──
-  let acbQuery = supabase.from('acb_tests').select('id, step1_status, step2_status, step3_status').eq('is_active', true).limit(10000)
+  let acbQuery = appDataFrom(supabase, 'acb_tests').select('id, step1_status, step2_status, step3_status').eq('active', true).limit(10000)
   if (siteId) acbQuery = acbQuery.eq('site_id', siteId)
   else if (customerSiteIds) acbQuery = acbQuery.in('site_id', customerSiteIds)
   if (fromDate) acbQuery = acbQuery.gte('test_date', fromDate)
   if (toDate) acbQuery = acbQuery.lte('test_date', toDate)
   const { data: acbTests } = await acbQuery
 
-  let nsxQuery = supabase.from('nsx_tests').select('id, step1_status, step2_status, step3_status').eq('is_active', true).limit(10000)
+  let nsxQuery = appDataFrom(supabase, 'nsx_tests').select('id, step1_status, step2_status, step3_status').eq('active', true).limit(10000)
   if (siteId) nsxQuery = nsxQuery.eq('site_id', siteId)
   else if (customerSiteIds) nsxQuery = nsxQuery.in('site_id', customerSiteIds)
   if (fromDate) nsxQuery = nsxQuery.gte('test_date', fromDate)
@@ -179,7 +161,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Defects ──
-  let defectQuery = supabase.from('defects').select('id, severity, status, site_id').limit(10000)
+  let defectQuery = appDataFrom(supabase, 'defects').select('id, severity, status, site_id').limit(10000)
   if (siteId) defectQuery = defectQuery.eq('site_id', siteId)
   else if (customerSiteIds) defectQuery = defectQuery.in('site_id', customerSiteIds)
   if (fromDate) defectQuery = defectQuery.gte('created_at', fromDate)
@@ -219,11 +201,13 @@ export async function GET(request: NextRequest) {
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     return months.findIndex((m) => m.key === key)
   }
-  for (const t of tests ?? []) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const t of (tests ?? []) as any[]) {
     const idx = monthIdx(t.test_date)
     if (idx >= 0) { months[idx].tests++; if (t.result === 'pass') months[idx].pass++ }
   }
-  for (const c of checks ?? []) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const c of (checks ?? []) as any[]) {
     if (!c.due_date) continue
     const idx = monthIdx(c.due_date)
     if (idx >= 0) { months[idx].checks++; if (c.status === 'complete') months[idx].complete++ }
@@ -249,13 +233,20 @@ export async function GET(request: NextRequest) {
     nsx: countProgress(nsxTests as Parameters<typeof countProgress>[0]),
     defects: {
       total: defects?.length ?? 0,
-      open: defects?.filter((d) => d.status === 'open').length ?? 0,
-      inProgress: defects?.filter((d) => d.status === 'in_progress').length ?? 0,
-      resolved: defects?.filter((d) => d.status === 'resolved' || d.status === 'closed').length ?? 0,
-      critical: defects?.filter((d) => d.severity === 'critical').length ?? 0,
-      high: defects?.filter((d) => d.severity === 'high').length ?? 0,
-      medium: defects?.filter((d) => d.severity === 'medium').length ?? 0,
-      low: defects?.filter((d) => d.severity === 'low').length ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      open: defects?.filter((d: any) => d.status === 'open').length ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      inProgress: defects?.filter((d: any) => d.status === 'in_progress').length ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      resolved: defects?.filter((d: any) => d.status === 'resolved' || d.status === 'closed').length ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      critical: defects?.filter((d: any) => d.severity === 'critical').length ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      high: defects?.filter((d: any) => d.severity === 'high').length ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      medium: defects?.filter((d: any) => d.severity === 'medium').length ?? 0,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      low: defects?.filter((d: any) => d.severity === 'low').length ?? 0,
     },
     complianceBySite,
     months: months.map((m) => ({ label: m.label, tests: m.tests, pass: m.pass, checks: m.checks, complete: m.complete })),
