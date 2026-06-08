@@ -4,23 +4,25 @@ import { ok, created, err, unauthorized, forbidden } from '@/lib/api/response'
 import { parsePagination, paginationMeta } from '@/lib/api/pagination'
 import { CreateSiteSchema } from '@/lib/validations/site'
 
+// app_data schema is not in the generated Database type, so we cast.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function appDataFrom(supabase: any, table: string) {
+  return supabase.schema('app_data').from(table)
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const { user, tenantId } = await getApiUser()
+    const { user, tenantId, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
 
     const { page, per_page, from, to } = parsePagination(request.nextUrl.searchParams)
     const customerId = request.nextUrl.searchParams.get('customer_id')
 
-    const { supabase } = await getApiUser()
-
-    // Build query for count
-    let countQuery = supabase
-      .from('sites')
+    let countQuery = appDataFrom(supabase, 'sites')
       .select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId)
-      .eq('is_active', true)
+      .eq('active', true)
 
     if (customerId) {
       countQuery = countQuery.eq('customer_id', customerId)
@@ -28,13 +30,11 @@ export async function GET(request: NextRequest) {
 
     const { count } = await countQuery
 
-    // Build query for data
-    let dataQuery = supabase
-      .from('sites')
-      .select('*')
+    let dataQuery = appDataFrom(supabase, 'sites')
+      .select('site_id, name, code, client_name, site_type, address_line_1, suburb, state, postcode, customer_id, active, slug')
       .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
+      .eq('active', true)
+      .order('name', { ascending: true })
 
     if (customerId) {
       dataQuery = dataQuery.eq('customer_id', customerId)
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, tenantId, role } = await getApiUser()
+    const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
     if (!isAdmin(role)) return forbidden()
@@ -60,10 +60,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validated = CreateSiteSchema.parse(body)
 
-    const { supabase } = await getApiUser()
-    const { data, error } = await supabase
-      .from('sites')
-      .insert([{ ...validated, tenant_id: tenantId, is_active: true }])
+    const { data, error } = await appDataFrom(supabase, 'sites')
+      .insert([{ ...validated, tenant_id: tenantId, active: true }])
       .select()
       .single()
 
