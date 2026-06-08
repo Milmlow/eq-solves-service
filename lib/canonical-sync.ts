@@ -139,6 +139,33 @@ export interface DefectSyncInput {
 // Core request helper
 // ──────────────────────────────────────────────────────────────────────
 
+// A failure worth retrying: transient / server-side. Permanent 4xx (bad
+// request, auth, forbidden, not-found) will never succeed on replay, so it is
+// logged and dropped rather than queued. Mirrors isRetryableHttpStatus in
+// lib/canonical-outbox.ts (duplicated to keep that server-only module — and its
+// admin client — out of any client bundle that imports the pure helpers below).
+function isRetryableHttpStatus(status: number): boolean {
+  return status >= 500 || status === 429 || status === 408;
+}
+
+// Persist a PUT to the durable outbox when its inline attempt fails transiently,
+// so a canonical outage can't silently drop the write. Dynamically imported so
+// the server-only admin client is never pulled into a client bundle.
+async function enqueuePut(
+  resource: string,
+  payload: Record<string, unknown> & { external_id?: string },
+): Promise<void> {
+  const externalId = typeof payload.external_id === 'string' ? payload.external_id : null;
+  const { enqueueCanonicalOutbox } = await import('@/lib/canonical-outbox');
+  await enqueueCanonicalOutbox({
+    method:    'PUT',
+    resource,
+    body:      { resource, ...payload },
+    externalId,
+    dedupeKey: externalId ? `${resource}:${externalId}` : null,
+  });
+}
+
 async function putCanonical(
   resource: 'customers' | 'sites' | 'assets' | 'asset_test_results' | 'asset_defects',
   payload:  CustomerSyncInput | SiteSyncInput | AssetSyncInput | TestResultSyncInput | DefectSyncInput,
@@ -149,6 +176,7 @@ async function putCanonical(
   }
 
   const url = `${API_URL}/.netlify/functions/canonical-api`;
+  const queueable = payload as Record<string, unknown> & { external_id?: string };
 
   let res: Response;
   try {
@@ -162,8 +190,9 @@ async function putCanonical(
       body: JSON.stringify({ resource, ...payload }),
     });
   } catch (e) {
-    // Network error — log and return empty so caller can continue
-    console.error('[canonical-sync] network error', { resource, error: (e as Error).message });
+    // Network error — transient. Persist to the outbox for retry, don't drop.
+    console.error('[canonical-sync] network error — queued for retry', { resource, error: (e as Error).message });
+    await enqueuePut(resource, queueable);
     return { canonical_id: '', created: false };
   }
 
@@ -171,19 +200,25 @@ async function putCanonical(
   try {
     body = await res.json() as CanonicalApiOkResponse | CanonicalApiErrResponse;
   } catch {
-    console.error('[canonical-sync] non-JSON response', { resource, status: res.status });
+    // Non-JSON (gateway / proxy blip) — treat as transient, queue for retry.
+    console.error('[canonical-sync] non-JSON response — queued for retry', { resource, status: res.status });
+    await enqueuePut(resource, queueable);
     return { canonical_id: '', created: false };
   }
 
   if (!res.ok || !body.ok) {
     const errBody = body as CanonicalApiErrResponse;
-    console.error('[canonical-sync] API error', {
-      resource,
-      status:  res.status,
-      error:   errBody.error,
-      detail:  errBody.detail,
-    });
-    // Non-throwing — caller decides whether to retry or surface the error
+    if (isRetryableHttpStatus(res.status)) {
+      console.error('[canonical-sync] API error — queued for retry', {
+        resource, status: res.status, error: errBody.error, detail: errBody.detail,
+      });
+      await enqueuePut(resource, queueable);
+    } else {
+      // Permanent 4xx (bad request / auth / forbidden) — replay won't help.
+      console.error('[canonical-sync] API error — not retryable, dropped', {
+        resource, status: res.status, error: errBody.error, detail: errBody.detail,
+      });
+    }
     return { canonical_id: '', created: false };
   }
 
@@ -264,7 +299,7 @@ export async function emitEvent(
   if (!API_KEY) return;
 
   try {
-    await fetch(`${API_URL}/.netlify/functions/canonical-api`, {
+    const res = await fetch(`${API_URL}/.netlify/functions/canonical-api`, {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
@@ -273,9 +308,33 @@ export async function emitEvent(
       },
       body: JSON.stringify({ resource: 'events', event, payload }),
     });
+    if (!res.ok) {
+      if (isRetryableHttpStatus(res.status)) {
+        console.error('[canonical-sync] emitEvent non-ok — queued for retry', { event, status: res.status });
+        await enqueueEvent(event, payload);
+      } else {
+        console.error('[canonical-sync] emitEvent non-ok — not retryable, dropped', { event, status: res.status });
+      }
+    }
   } catch (e) {
-    console.error('[canonical-sync] emitEvent failed', { event, error: (e as Error).message });
+    // Network error — transient. Persist to the outbox for retry, don't drop.
+    console.error('[canonical-sync] emitEvent failed — queued for retry', { event, error: (e as Error).message });
+    await enqueueEvent(event, payload);
   }
+}
+
+// Persist an event POST to the durable outbox when its inline attempt fails
+// transiently. Events have no dedupe key (each is distinct). Dynamically
+// imported (server-only admin client kept out of client bundles).
+async function enqueueEvent(event: string, payload: Record<string, unknown>): Promise<void> {
+  const { enqueueCanonicalOutbox } = await import('@/lib/canonical-outbox');
+  await enqueueCanonicalOutbox({
+    method:    'POST',
+    resource:  'events',
+    body:      { resource: 'events', event, payload },
+    event,
+    dedupeKey: null,
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────────
