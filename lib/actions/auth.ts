@@ -22,22 +22,22 @@
  */
 
 import { cookies } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createJwtClient } from '@/lib/supabase/server'
 import { verifyServiceJwt } from '@/lib/auth/service-jwt'
 import type { Role } from '@/lib/types'
 
 export async function requireUser() {
   // Fast path: Shell JWT cookie set by /api/shell-auth (Plan B — JWT path).
   // ehow has no tenant_members/profiles tables; identity comes from JWT claims.
+  // createJwtClient sends the JWT as Bearer so RLS policies using auth.jwt()
+  // (e.g. sites_tenant_isolation) evaluate correctly.
   const cookieStore = await cookies()
   const serviceJwtRaw = cookieStore.get('eq_service_jwt')?.value
   if (serviceJwtRaw) {
     const claims = verifyServiceJwt(serviceJwtRaw)
     if (claims?.app_metadata?.tenant_id && claims.app_metadata.eq_role) {
-      const supabase = await createClient()
       return {
-        supabase,
-        // Callers use user.id for data queries; email for display only.
+        supabase: createJwtClient(serviceJwtRaw),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         user: { id: claims.sub, email: claims.app_metadata.email ?? '' } as any,
         tenantId: claims.app_metadata.tenant_id,

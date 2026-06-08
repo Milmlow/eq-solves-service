@@ -4,6 +4,23 @@ import { publicEnv } from '@/lib/env'
 import { shellCookieOptions } from '@/lib/auth/shell-cookies'
 import type { Database } from './database.types'
 
+/**
+ * Creates a Supabase client authenticated with an explicit JWT Bearer token.
+ * Used by the Shell JWT path (Plan B) so that RLS policies using auth.jwt()
+ * evaluate correctly — the eq_service_jwt contains tenant_id and eq_role in
+ * app_metadata, which RLS reads via auth.jwt() -> 'app_metadata' ->> 'tenant_id'.
+ */
+export function createJwtClient(jwt: string) {
+  return createServerClient<Database>(
+    publicEnv.NEXT_PUBLIC_SUPABASE_URL,
+    publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      cookies: { getAll: () => [], setAll: () => {} },
+    }
+  )
+}
+
 export async function createClient() {
   const cookieStore = await cookies()
   // SameSite policy depends on the deploy host (see lib/auth/shell-cookies):
