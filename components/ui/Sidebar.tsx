@@ -166,7 +166,7 @@ export function Sidebar({ isAdmin = false, role = null, settings, isShellIframe 
               </div>
             )}
             <a
-              href="https://eq-solves-service.netlify.app"
+              href="https://service.eq.solutions"
               target="_blank"
               rel="noopener noreferrer"
               className="eq-hub-sidebar__nav-item"

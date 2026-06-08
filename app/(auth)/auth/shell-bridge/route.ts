@@ -39,7 +39,7 @@ const BRIDGE_SECRET = process.env.EQ_SHELL_BRIDGE_SECRET ?? ''
 const ALLOWED_NEXT_ORIGINS = [
   'https://core.eq.solutions',
   'https://service.eq.solutions',
-  'https://eq-solves-service.netlify.app',
+  'https://eq-service.netlify.app',
 ]
 
 /** Validate the post-bridge redirect destination. Mirrors the logic in /auth/callback. */
