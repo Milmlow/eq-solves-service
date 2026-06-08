@@ -7,7 +7,7 @@ import { DEMO_EMAIL, DEMO_PASSWORD } from '@/lib/utils/demo'
 const ALLOWED_ORIGINS = [
   'https://core.eq.solutions',
   'https://service.eq.solutions',
-  'https://service.eq.solutions',
+  'https://eq-service.netlify.app',
 ]
 
 /**
