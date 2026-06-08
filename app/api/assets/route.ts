@@ -4,23 +4,24 @@ import { ok, created, err, unauthorized, forbidden } from '@/lib/api/response'
 import { parsePagination, paginationMeta } from '@/lib/api/pagination'
 import { CreateAssetSchema } from '@/lib/validations/asset'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function appDataFrom(supabase: any, table: string) {
+  return supabase.schema('app_data').from(table)
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const { user, tenantId } = await getApiUser()
+    const { user, tenantId, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
 
     const { page, per_page, from, to } = parsePagination(request.nextUrl.searchParams)
     const siteId = request.nextUrl.searchParams.get('site_id')
 
-    const { supabase } = await getApiUser()
-
-    // Build query for count
-    let countQuery = supabase
-      .from('assets')
+    let countQuery = appDataFrom(supabase, 'assets')
       .select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId)
-      .eq('is_active', true)
+      .eq('active', true)
 
     if (siteId) {
       countQuery = countQuery.eq('site_id', siteId)
@@ -28,13 +29,11 @@ export async function GET(request: NextRequest) {
 
     const { count } = await countQuery
 
-    // Build query for data
-    let dataQuery = supabase
-      .from('assets')
+    let dataQuery = appDataFrom(supabase, 'assets')
       .select('*')
       .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
+      .eq('active', true)
+      .order('name', { ascending: true })
 
     if (siteId) {
       dataQuery = dataQuery.eq('site_id', siteId)
@@ -43,8 +42,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await dataQuery.range(from, to)
 
     if (error) throw error
-    const total = count || 0
-    return ok(data, paginationMeta(page, per_page, total))
+    return ok(data, paginationMeta(page, per_page, count || 0))
   } catch (error) {
     return err(error instanceof Error ? error.message : 'Failed to fetch assets')
   }
@@ -52,7 +50,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, tenantId, role } = await getApiUser()
+    const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
     if (!isAdmin(role)) return forbidden()
@@ -60,10 +58,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validated = CreateAssetSchema.parse(body)
 
-    const { supabase } = await getApiUser()
-    const { data, error } = await supabase
-      .from('assets')
-      .insert([{ ...validated, tenant_id: tenantId, is_active: true }])
+    const { data, error } = await appDataFrom(supabase, 'assets')
+      .insert([{ ...validated, tenant_id: tenantId, active: true }])
       .select()
       .single()
 
