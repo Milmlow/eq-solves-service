@@ -320,6 +320,29 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // Commercials routes — gated to manager / admin / owner roles.
+  // /commercials/* was split out of /admin/* (see next.config.ts redirects)
+  // but the same privilege boundary applies: only privileged tenant members
+  // should access renewal packs, contract-scope tooling, and related features.
+  // S2-12: proxy-layer guard mirrors the /admin gate above so there is no
+  // path that bypasses the role check via the /commercials prefix directly.
+  if (pathname.startsWith('/commercials')) {
+    const { data: membership } = await supabase
+      .from('tenant_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .in('role', ['manager', 'admin', 'owner'])
+      .limit(1)
+      .maybeSingle()
+
+    if (!membership) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Deactivated users are signed out on any protected route.
   if (!isPublic && !isAalExemptPath) {
     const { data: profile } = await supabase
