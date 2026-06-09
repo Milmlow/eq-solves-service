@@ -6,6 +6,10 @@
  *
  * Prerequisite: migration 0123_site_credentials_encryption.sql must be applied.
  *
+ * NOTE: site_credentials lives in the app_data schema (not public).
+ * All table queries use .schema('app_data'). The encryption is done
+ * server-side via the _admin_rekey_site_credential() RPC (service-role only).
+ *
  * Required env vars:
  *   NEXT_PUBLIC_SUPABASE_URL      — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY     — service role key (bypasses RLS)
@@ -56,7 +60,9 @@ async function main() {
   console.log(`\n=== rekey-site-credentials ${DRY_RUN ? '[DRY RUN]' : '[LIVE]'} ===\n`);
 
   // Count rows that still have plaintext in at least one column
+  // site_credentials is in the app_data schema
   const { count: totalPlaintext, error: countErr } = await supabase
+    .schema('app_data')
     .from('site_credentials')
     .select('id', { count: 'exact', head: true })
     .or('password_value_plain.not.is.null,username_plain.not.is.null');
@@ -84,6 +90,7 @@ async function main() {
 
   while (true) {
     const { data: rows, error: fetchErr } = await supabase
+      .schema('app_data')
       .from('site_credentials')
       .select('id, tenant_id, customer_id, site_id, system_name, username_plain, password_value_plain, url, notes')
       .or('password_value_plain.not.is.null,username_plain.not.is.null')
@@ -97,19 +104,13 @@ async function main() {
 
     for (const row of rows) {
       try {
-        // Use the SECURITY DEFINER upsert RPC which handles encryption server-side.
-        // We pass the key at call time — it is NOT persisted in Postgres.
-        const { error: rpcErr } = await supabase.rpc('upsert_site_credential', {
-          p_tenant_id:   row.tenant_id,
-          p_customer_id: row.customer_id,
-          p_site_id:     row.site_id,
-          p_system_name: row.system_name,
-          p_username:    row.username_plain ?? '',
-          p_password:    row.password_value_plain ?? '',
-          p_url:         row.url,
-          p_notes:       row.notes,
-          p_key:         credKey,
-          p_id:          row.id,
+        // Use the service-only _admin_rekey_site_credential RPC.
+        // This function reads the existing _plain columns, encrypts them
+        // in-place with pgcrypto, then nulls the _plain columns.
+        // Requires service_role key — no JWT tenant check in the function.
+        const { error: rpcErr } = await supabase.rpc('_admin_rekey_site_credential', {
+          p_id:  row.id,
+          p_key: credKey,
         });
 
         if (rpcErr) {
@@ -140,6 +141,7 @@ async function main() {
 
   // Verify: no plaintext rows remain
   const { count: remaining, error: verifyErr } = await supabase
+    .schema('app_data')
     .from('site_credentials')
     .select('id', { count: 'exact', head: true })
     .or('password_value_plain.not.is.null,username_plain.not.is.null');
