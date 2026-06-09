@@ -18,13 +18,26 @@ import { OnboardingWizard } from './onboarding/OnboardingWizard'
 import { MfaGraceBanner } from '@/components/ui/MfaGraceBanner'
 import { NoTenantGate } from '@/components/ui/NoTenantGate'
 import { createClient } from '@/lib/supabase/server'
+import { verifyServiceJwt } from '@/lib/auth/service-jwt'
 import { getTenantSettings } from '@/lib/tenant/getTenantSettings'
 import { isDemoEmail } from '@/lib/utils/demo'
 import type { Role } from '@/lib/types'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Read cookie store early — needed for both the JWT path below and isShellIframe further down.
+  const cookieStore = await cookies()
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+
+  // JWT path: Shell iframe sessions set eq_service_jwt (minted by /api/shell-auth fast-path)
+  // instead of establishing a real Supabase auth session. The standard supabase.auth.getUser()
+  // misses this cookie — read it directly, same as getApiUser() in lib/api/auth.ts.
+  // ehow has no tenant_members, so we derive isAdmin/analyticsTenantId/analyticsRole from
+  // JWT claims and skip the DB lookup entirely.
+  const serviceJwtRaw = cookieStore.get('eq_service_jwt')?.value
+  const jwtClaims = serviceJwtRaw ? verifyServiceJwt(serviceJwtRaw) : null
+  const hasJwtSession = !!(jwtClaims?.app_metadata?.tenant_id && jwtClaims.app_metadata.eq_role)
 
   let isAdmin = false
   let showOnboarding = false
@@ -117,6 +130,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .maybeSingle()
     userName = profile?.full_name ?? null
     mfaGraceStartedAt = (profile as { mfa_grace_started_at?: string | null } | null)?.mfa_grace_started_at ?? null
+  } else if (hasJwtSession && jwtClaims) {
+    // JWT path: Shell iframe session via eq_service_jwt. No tenant_members on ehow —
+    // read role and tenant directly from JWT claims.
+    isAdmin = jwtClaims.app_metadata.eq_role === 'manager'
+    analyticsRole = jwtClaims.app_metadata.eq_role ?? null
+    analyticsTenantId = jwtClaims.app_metadata.tenant_id ?? null
+    showOnboarding = false
   }
 
   const { settings } = await getTenantSettings()
@@ -124,7 +144,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Detect shell iframe sessions — set by /api/shell-auth after a successful
   // HMAC exchange. When true, strip standalone chrome (footer, help widget,
   // sign-out) and show an "Open in new tab" escape hatch instead.
-  const cookieStore = await cookies()
+  // cookieStore was read at the top of this function.
   const isShellIframe = cookieStore.get('eq_shell_bridge')?.value === '1'
   // Shell UUID for cross-app PostHog identity. Set by /api/shell-auth when the
   // bridge token carries shell_user_id (eq-shell PR #265). Falls back to email
@@ -223,15 +243,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <OnboardingWizard userName={userName} companyName={tenantName} />
       )}
       <ShellReadySignal isShellIframe={isShellIframe} />
-      {user && analyticsTenantId && analyticsRole && (
+      {analyticsTenantId && analyticsRole && (
         <AnalyticsIdentify
           // Cross-app PostHog distinct_id. When Shell embeds Service via iframe,
           // eq_shell_user_id cookie carries the Shell canonical UUID (set by
           // /api/shell-auth from BridgeTokenPayload.shell_user_id, eq-shell PR #265).
-          // Falls back to lowercased email for direct-login sessions (same key
-          // EQ Shell and EQ Field use when they don't have a UUID yet), then to
-          // user.id as a last resort.
-          userId={shellUserId ?? (user.email ? user.email.toLowerCase() : user.id)}
+          // Falls back to lowercased email (from Supabase session or JWT claims for
+          // the iframe JWT path), then user/JWT sub as a last resort.
+          userId={
+            shellUserId
+            ?? (user?.email?.toLowerCase())
+            ?? (jwtClaims?.app_metadata?.email?.toLowerCase())
+            ?? user?.id
+            ?? jwtClaims?.sub
+            ?? 'unknown'
+          }
           tenantId={isDemoSession ? 'demo-fixture' : analyticsTenantId}
           role={analyticsRole}
           appEnv={isDemoSession ? 'demo' : (process.env.NEXT_PUBLIC_APP_ENV ?? 'beta')}
