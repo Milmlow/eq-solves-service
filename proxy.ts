@@ -54,7 +54,14 @@ export async function proxy(request: NextRequest) {
   //   4. Subsequent requests carry eq_shell_bridge=1 → skip this block.
   // ---------------------------------------------------------------------------
   const alreadyBridged = request.cookies.get('eq_shell_bridge')?.value === '1'
-  if (!alreadyBridged && pathname !== '/api/shell-sso') {
+  // Skip SSO redirect on public paths (/auth/signin, /auth/callback, etc.) so
+  // that shell-sso failures don't create an infinite redirect loop:
+  //   shell-sso fails → /auth/signin → shell-sso → /auth/signin → …
+  // When shell-sso succeeds it sets eq_shell_bridge=1 which breaks the loop;
+  // but on any failure the user must be able to reach the signin page.
+  // Also exempt /api/shell-sso itself (it IS the SSO handler).
+  const isSsoExempt = alreadyBridged || pathname === '/api/shell-sso' || isPublicPath(pathname)
+  if (!isSsoExempt) {
     const hasShellCookie = !!request.cookies.get('eq_shell_session')?.value
     if (hasShellCookie) {
       const ssoUrl = request.nextUrl.clone()
