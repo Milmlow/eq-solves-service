@@ -86,6 +86,54 @@ export async function proxy(request: NextRequest) {
   // isMfaPath is exported for callers that need it, but not used in this
   // middleware body — the AAL exemption check covers the same routes.
 
+  // ── TOKEN MODE JWT session fast path (edge-runtime safe) ─────────────────
+  // When Shell embeds Service on a non-.eq.solutions domain (deploy previews,
+  // local dev), COOKIE MODE is unavailable (SameSite=Lax won't cross subdomain).
+  // TOKEN MODE runs instead:
+  //   1. ServiceIframe mints a 60s Supabase JWT via token-exchange.
+  //   2. /shell POSTs the JWT to /api/shell-auth.
+  //   3. shell-auth verifies it with EQ_SHELL_JWT_SECRET, re-mints as a 4h
+  //      eq_service_jwt (httpOnly) cookie and sets eq_shell_bridge=1.
+  //   4. updateSession() returns user=null (no standard Supabase session).
+  //   5. Without this block, !user triggers a redirect to /auth/signin.
+  //
+  // This block detects a live TOKEN MODE session and short-circuits so the
+  // request reaches app code. App-layer requireUser/getApiUser handle auth
+  // by reading eq_service_jwt directly — full sig verification happens there.
+  //
+  // Security: both eq_shell_bridge and eq_service_jwt are httpOnly and set
+  // exclusively by server code after a successful token exchange. Client JS
+  // cannot satisfy this guard by injection.
+  if (alreadyBridged) {
+    const serviceJwtRaw = request.cookies.get('eq_service_jwt')?.value
+    if (serviceJwtRaw) {
+      let jwtExp: number | null = null
+      try {
+        const b64 = serviceJwtRaw.split('.')[1]
+        if (b64) {
+          const padded = b64.replace(/-/g, '+').replace(/_/g, '/').padEnd(
+            Math.ceil(b64.length / 4) * 4,
+            '='
+          )
+          const payload = JSON.parse(atob(padded)) as { exp?: number }
+          jwtExp = typeof payload.exp === 'number' ? payload.exp : null
+        }
+      } catch { /* malformed token — treat as expired, fall through to normal flow */ }
+
+      if (jwtExp !== null && jwtExp * 1000 > Date.now()) {
+        // Redirect authenticated JWT sessions away from public auth pages.
+        if (isPublic) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/dashboard'
+          return NextResponse.redirect(url)
+        }
+        // Pass through — app layer handles auth via eq_service_jwt cookie.
+        return response
+      }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Unauthenticated users -> /auth/signin (except for public routes).
   if (!user) {
     if (isPublic) return response

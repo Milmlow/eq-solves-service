@@ -43,7 +43,14 @@ const EQ_SHELL_BRIDGE_SECRET = process.env.EQ_SHELL_BRIDGE_SECRET ?? ''
 // S2-9: legacy service tokens used EQ_SECRET_SALT; the per-consumer key is
 // EQ_SERVICE_HANDOFF_KEY. Fall back to EQ_SECRET_SALT for existing deploys.
 const EQ_SECRET_SALT = process.env.EQ_SERVICE_HANDOFF_KEY ?? process.env.EQ_SECRET_SALT ?? ''
-const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? ''
+// Shell-minted JWTs (token-exchange aud=service) are signed with Shell's
+// SUPABASE_JWT_SECRET (jvkn Supabase project). If this Service deploy connects
+// to a different project (ehow/urjh), the secrets differ and validation fails.
+// Set EQ_SHELL_JWT_SECRET on this Netlify site to Shell's SUPABASE_JWT_SECRET
+// value — keeps this project's own JWT secret untouched while enabling the
+// cross-app fast path. Falls back to SUPABASE_JWT_SECRET for deployments where
+// both apps intentionally share the same Supabase project.
+const SUPABASE_JWT_SECRET = process.env.EQ_SHELL_JWT_SECRET || process.env.SUPABASE_JWT_SECRET || ''
 
 // ── Bridge token (preferred) ──────────────────────────────────────────────────
 
