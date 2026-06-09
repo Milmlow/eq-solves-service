@@ -103,10 +103,16 @@ export async function proxy(request: NextRequest) {
   //   • `EQ_SECRET_SALT` not configured on this deploy
   // ---------------------------------------------------------------------------
   const alreadyBridged = request.cookies.get('eq_shell_bridge')?.value === '1'
+  // eslint-disable-next-line no-console
+  console.error('[proxy:sso] path=%s bridged=%s', pathname, alreadyBridged)
   if (!alreadyBridged) {
     const rawShellCookie = request.cookies.get('eq_shell_session')?.value
+    // eslint-disable-next-line no-console
+    console.error('[proxy:sso] shell_cookie_present=%s', !!rawShellCookie)
     if (rawShellCookie) {
       const shellPayload = verifyShellCookie(rawShellCookie)
+      // eslint-disable-next-line no-console
+      console.error('[proxy:sso] verify_ok=%s salt_present=%s', !!shellPayload, !!process.env.EQ_SECRET_SALT)
       if (shellPayload) {
         // Build a mutable response so we can set cookies while still
         // forwarding the request to the Next.js render pipeline.
@@ -124,6 +130,8 @@ export async function proxy(request: NextRequest) {
             email: shellPayload.email!,
           })
 
+        // eslint-disable-next-line no-console
+        console.error('[proxy:sso] generateLink err=%s token_present=%s', linkErr?.message, !!linkData?.properties?.hashed_token)
         if (linkErr || !linkData?.properties?.hashed_token) {
           await supabaseAdmin.auth.admin.createUser({
             email: shellPayload.email!,
@@ -136,6 +144,8 @@ export async function proxy(request: NextRequest) {
           })
           linkData = retry.data
           linkErr = retry.error
+          // eslint-disable-next-line no-console
+          console.error('[proxy:sso] generateLink retry err=%s token_present=%s', linkErr?.message, !!linkData?.properties?.hashed_token)
         }
 
         if (!linkErr && linkData?.properties?.hashed_token) {
@@ -175,6 +185,8 @@ export async function proxy(request: NextRequest) {
             type: 'magiclink',
             token_hash: linkData.properties.hashed_token,
           })
+          // eslint-disable-next-line no-console
+          console.error('[proxy:sso] verifyOtp err=%s', otpErr?.message)
 
           if (!otpErr) {
             // Provision tenant access from the (HMAC-verified) Shell cookie so
