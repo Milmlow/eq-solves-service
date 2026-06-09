@@ -194,8 +194,13 @@ export async function proxy(request: NextRequest) {
               maxAge: 60 * 60 * 4, // 4 hours
               ...sameSiteOpts,
             })
-            // Redirect public/auth pages to dashboard now that we have a session.
-            if (isPublicPath(pathname)) {
+            // Redirect to dashboard when the shell SSO succeeds and the user is
+            // on a public/auth page OR the root path. Root path must be handled
+            // here in middleware: the page component calls redirect('/dashboard')
+            // which throws NEXT_REDIRECT, bypassing the middleware Set-Cookie
+            // headers — the Supabase session cookies are never stored and the
+            // next request to /dashboard finds no session → /auth/signin loop.
+            if (isPublicPath(pathname) || pathname === '/') {
               const url = request.nextUrl.clone()
               url.pathname = '/dashboard'
               const redirectRes = NextResponse.redirect(url)
