@@ -34,7 +34,10 @@ interface ShellCookiePayload {
 }
 
 function verifyShellCookie(raw: string): ShellCookiePayload | null {
-  const salt = process.env.EQ_SECRET_SALT
+  // eq-shell signs session cookies with EQ_SESSION_SALT (falling back to EQ_SECRET_SALT).
+  // Mirror the same priority here so HMAC verification succeeds on deploys where
+  // EQ_SESSION_SALT is set on shell but EQ_SECRET_SALT is the legacy key on service.
+  const salt = process.env.EQ_SESSION_SALT ?? process.env.EQ_SECRET_SALT
   if (!salt) return null
   const dot = raw.lastIndexOf('.')
   if (dot === -1) return null
