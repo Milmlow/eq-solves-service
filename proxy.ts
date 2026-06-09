@@ -5,11 +5,7 @@
  * Proprietary and confidential. All rights reserved.
  */
 import { NextResponse, type NextRequest } from 'next/server'
-import { createHmac, timingSafeEqual } from 'node:crypto'
 import { updateSession } from '@/lib/supabase/middleware'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { createServerClient } from '@supabase/ssr'
-import { publicEnv } from '@/lib/env'
 import { trackServer } from '@/lib/analytics-server'
 import {
   PUBLIC_PATHS,
@@ -18,53 +14,6 @@ import {
   isPublicPath,
   isAalExempt,
 } from '@/lib/auth/mfa-routing'
-import { shellCookieOptions } from '@/lib/auth/shell-cookies'
-import { provisionShellMemberships } from '@/lib/auth/shell-provision'
-
-// ---------------------------------------------------------------------------
-// Shell cookie verification
-// ---------------------------------------------------------------------------
-
-interface ShellCookiePayload {
-  user_id: string
-  tenant_id: string
-  active_tenant_id: string
-  role: string
-  is_platform_admin: boolean
-  memberships: Array<{ tenant_id: string; role: string; slug?: string }>
-  email?: string
-  name?: string | null
-  exp: number
-}
-
-/**
- * Parse and HMAC-verify the `eq_shell_session` cookie.
- * Returns the payload if valid; null otherwise (missing, tampered, expired,
- * or `email` absent — old cookies pre-2026-05-28 don't carry it).
- */
-function verifyShellCookie(raw: string): ShellCookiePayload | null {
-  const salt = process.env.EQ_SECRET_SALT
-  if (!salt) return null
-  const dot = raw.lastIndexOf('.')
-  if (dot === -1) return null
-  const b64 = raw.slice(0, dot)
-  const sig = raw.slice(dot + 1)
-  try {
-    const json = Buffer.from(b64, 'base64').toString('utf8')
-    const expected = createHmac('sha256', salt).update(json).digest('hex')
-    // timingSafeEqual requires equal-length buffers
-    const expectedBuf = Buffer.from(expected, 'hex')
-    const sigBuf = Buffer.from(sig, 'hex')
-    if (expectedBuf.length !== sigBuf.length) return null
-    if (!timingSafeEqual(expectedBuf, sigBuf)) return null
-    const data = JSON.parse(json) as Partial<ShellCookiePayload>
-    if (typeof data.exp !== 'number' || data.exp < Date.now()) return null
-    if (!data.email || typeof data.email !== 'string') return null
-    return data as ShellCookiePayload
-  } catch {
-    return null
-  }
-}
 
 // ---------------------------------------------------------------------------
 
@@ -89,144 +38,31 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // ---------------------------------------------------------------------------
-  // Fast path: cookie-based Shell SSO
+  // Shell SSO fast path — cookie detection only (edge-runtime safe).
   //
-  // If the request carries a valid `eq_shell_session` cookie AND there is no
-  // existing `eq_shell_bridge` flag, attempt to establish a Supabase session
-  // server-side without the 5-step /shell → shell-auth round-trip.
+  // The heavy work (HMAC verify, Supabase admin generateLink/verifyOtp) runs
+  // in the Node.js API route /api/shell-sso, NOT here. The edge runtime
+  // (Deno/V8) has restricted access to node:crypto and Buffer; doing crypto
+  // here causes silent failures that look like a missing session.
   //
-  // Conditions that skip this path (fall through to token flow):
-  //   • `eq_shell_bridge=1` already set  → session already bootstrapped
-  //   • `eq_shell_session` absent or HMAC-invalid
-  //   • Cookie `exp` has lapsed
-  //   • `email` field absent (old cookies minted before 2026-05-28)
-  //   • `EQ_SECRET_SALT` not configured on this deploy
+  // Flow:
+  //   1. Browser sends GET / to service.eq.solutions.
+  //   2. If eq_shell_session cookie is present and eq_shell_bridge is not set,
+  //      redirect to /api/shell-sso?next=<pathname>.
+  //   3. /api/shell-sso (Node.js) verifies the HMAC, exchanges the OTP, sets
+  //      Supabase session cookies + eq_shell_bridge=1, and redirects to <next>.
+  //   4. Subsequent requests carry eq_shell_bridge=1 → skip this block.
   // ---------------------------------------------------------------------------
   const alreadyBridged = request.cookies.get('eq_shell_bridge')?.value === '1'
-  // eslint-disable-next-line no-console
-  console.error('[proxy:sso] path=%s bridged=%s', pathname, alreadyBridged)
-  if (!alreadyBridged) {
-    const rawShellCookie = request.cookies.get('eq_shell_session')?.value
-    // eslint-disable-next-line no-console
-    console.error('[proxy:sso] shell_cookie_present=%s', !!rawShellCookie)
-    if (rawShellCookie) {
-      const shellPayload = verifyShellCookie(rawShellCookie)
-      // eslint-disable-next-line no-console
-      console.error('[proxy:sso] verify_ok=%s salt_present=%s', !!shellPayload, !!process.env.EQ_SECRET_SALT)
-      if (shellPayload) {
-        // Build a mutable response so we can set cookies while still
-        // forwarding the request to the Next.js render pipeline.
-        let cookieResponse = NextResponse.next({ request })
-        // Lax under *.eq.solutions (same-site iframe), None fallback on
-        // *.netlify.app — see lib/auth/shell-cookies.
-        const sameSiteOpts = shellCookieOptions(request.nextUrl.host)
-
-        const supabaseAdmin = createAdminClient()
-
-        // Generate a magic-link OTP. Auto-provision if the user doesn't exist.
-        let { data: linkData, error: linkErr } =
-          await supabaseAdmin.auth.admin.generateLink({
-            type: 'magiclink',
-            email: shellPayload.email!,
-          })
-
-        // eslint-disable-next-line no-console
-        console.error('[proxy:sso] generateLink err=%s token_present=%s', linkErr?.message, !!linkData?.properties?.hashed_token)
-        if (linkErr || !linkData?.properties?.hashed_token) {
-          await supabaseAdmin.auth.admin.createUser({
-            email: shellPayload.email!,
-            email_confirm: true,
-            user_metadata: shellPayload.name ? { full_name: shellPayload.name } : {},
-          })
-          const retry = await supabaseAdmin.auth.admin.generateLink({
-            type: 'magiclink',
-            email: shellPayload.email!,
-          })
-          linkData = retry.data
-          linkErr = retry.error
-          // eslint-disable-next-line no-console
-          console.error('[proxy:sso] generateLink retry err=%s token_present=%s', linkErr?.message, !!linkData?.properties?.hashed_token)
-        }
-
-        if (!linkErr && linkData?.properties?.hashed_token) {
-          // Exchange the OTP server-side using an SSR client that writes
-          // the resulting Supabase auth cookies directly onto `cookieResponse`.
-          const ssrClient = createServerClient(
-            publicEnv.NEXT_PUBLIC_SUPABASE_URL,
-            publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-            {
-              cookies: {
-                getAll() {
-                  return request.cookies.getAll()
-                },
-                setAll(cookiesToSet) {
-                  cookiesToSet.forEach(({ name, value }) =>
-                    request.cookies.set(name, value)
-                  )
-                  cookieResponse = NextResponse.next({ request })
-                  cookiesToSet.forEach(({ name, value, options }) =>
-                    cookieResponse.cookies.set(name, value, {
-                      ...options,
-                      ...sameSiteOpts,
-                    })
-                  )
-                },
-              },
-            }
-          )
-
-          // Verify by token_hash — GoTrue rejects the call with
-          // "400: Only the token_hash and type should be provided" if `email`
-          // is also passed (email belongs to the {email, token} OTP variant,
-          // NOT the {token_hash} variant). Passing it here was silently failing
-          // every Shell SSO exchange → no session → bounce to /auth/signin =
-          // the "double login". Verified against live auth logs 2026-06-04.
-          const { error: otpErr } = await ssrClient.auth.verifyOtp({
-            type: 'magiclink',
-            token_hash: linkData.properties.hashed_token,
-          })
-          // eslint-disable-next-line no-console
-          console.error('[proxy:sso] verifyOtp err=%s', otpErr?.message)
-
-          if (!otpErr) {
-            // Provision tenant access from the (HMAC-verified) Shell cookie so
-            // the user doesn't land on the "No tenant assigned" gate. Uses the
-            // SERVICE user id (linkData.user.id), not the Shell user_id in the
-            // cookie. Best-effort — never blocks the session. See shell-provision.
-            await provisionShellMemberships(
-              supabaseAdmin,
-              linkData.user?.id ?? '',
-              shellPayload.memberships,
-            )
-            // Session established — stamp the bridge cookie and continue.
-            // SameSite/Secure follow the deploy host (see shellCookieOptions).
-            cookieResponse.cookies.set('eq_shell_bridge', '1', {
-              httpOnly: true,
-              path: '/',
-              maxAge: 60 * 60 * 4, // 4 hours
-              ...sameSiteOpts,
-            })
-            // Redirect to dashboard when the shell SSO succeeds and the user is
-            // on a public/auth page OR the root path. Root path must be handled
-            // here in middleware: the page component calls redirect('/dashboard')
-            // which throws NEXT_REDIRECT, bypassing the middleware Set-Cookie
-            // headers — the Supabase session cookies are never stored and the
-            // next request to /dashboard finds no session → /auth/signin loop.
-            if (isPublicPath(pathname) || pathname === '/') {
-              const url = request.nextUrl.clone()
-              url.pathname = '/dashboard'
-              const redirectRes = NextResponse.redirect(url)
-              cookieResponse.cookies.getAll().forEach(({ name, value, ...opts }) =>
-                redirectRes.cookies.set(name, value, opts)
-              )
-              return redirectRes
-            }
-            return cookieResponse
-          }
-          // OTP exchange failed — fall through to standard flow.
-        }
-        // generateLink failed — fall through to standard flow.
-      }
+  if (!alreadyBridged && pathname !== '/api/shell-sso') {
+    const hasShellCookie = !!request.cookies.get('eq_shell_session')?.value
+    if (hasShellCookie) {
+      const ssoUrl = request.nextUrl.clone()
+      ssoUrl.pathname = '/api/shell-sso'
+      ssoUrl.search = ''
+      // Redirect to the current path after SSO; root is mapped to /dashboard.
+      ssoUrl.searchParams.set('next', pathname === '/' ? '/dashboard' : pathname)
+      return NextResponse.redirect(ssoUrl)
     }
   }
 
