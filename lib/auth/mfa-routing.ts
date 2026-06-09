@@ -67,6 +67,12 @@ export const PUBLIC_PATHS = [
   // Shell auth API — validates the HMAC token and returns a one-time OTP.
   // Called by /shell (client-side fetch) before any session exists.
   '/api/shell-auth',
+  // Shell SSO handler — COOKIE MODE entry point. The proxy redirects here
+  // when it detects eq_shell_session but no eq_shell_bridge. The handler
+  // verifies the HMAC and exchanges an OTP for a Supabase session. No user
+  // session exists on arrival; must be public or the proxy's !user check
+  // redirects /api/shell-sso to /auth/signin before the handler runs.
+  '/api/shell-sso',
   // Out-of-band tenant-provisioning API (migration 0114). Called server-to-
   // server by EQ-internal tooling with NO Supabase session — auth is the
   // `x-eq-platform-key` header checked inside the handler (lib/api/platform-
