@@ -227,7 +227,13 @@ export default async function DashboardPage({
   // the audience for tenant setup.
   const isSetupRole = userRole === 'manager'
   const hasAnyCompletedCheck = counts.checks.complete > 0
-  const inSetupMode = isSetupRole && !hasAnyCompletedCheck
+  // A workspace with existing customers, sites, or assets is already configured —
+  // don't show the new-workspace checklist regardless of check completion.
+  const hasExistingWorkspace =
+    counts.entities.customers > 0 ||
+    counts.entities.sites > 0 ||
+    counts.entities.assets > 0
+  const inSetupMode = isSetupRole && !hasAnyCompletedCheck && !hasExistingWorkspace
   const forceShowChecklist = params.setup === 'show'
 
   // Pre-compute the checklist inputs whenever we're in setup mode — we
