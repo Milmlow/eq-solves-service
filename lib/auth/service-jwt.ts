@@ -1,6 +1,14 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
-const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? ''
+// Prefer the dedicated service JWT secret; fall back to the Supabase project
+// JWT secret until EQ_SERVICE_JWT_SECRET is deployed to all environments.
+const JWT_SECRET = process.env.EQ_SERVICE_JWT_SECRET || process.env.SUPABASE_JWT_SECRET || ''
+
+if (!process.env.EQ_SERVICE_JWT_SECRET) {
+  if (process.env.SUPABASE_JWT_SECRET) {
+    console.warn('[security] EQ_SERVICE_JWT_SECRET not set — falling back to SUPABASE_JWT_SECRET')
+  }
+}
 
 export interface ServiceJwtClaims {
   sub: string
@@ -15,16 +23,17 @@ export interface ServiceJwtClaims {
 }
 
 /**
- * Verifies a Supabase-compatible JWT signed with SUPABASE_JWT_SECRET.
+ * Verifies a Supabase-compatible JWT signed with EQ_SERVICE_JWT_SECRET
+ * (falls back to SUPABASE_JWT_SECRET if the dedicated secret is not yet set).
  * Returns decoded claims or null if the signature is invalid or the token is expired.
  */
 export function verifyServiceJwt(raw: string): ServiceJwtClaims | null {
-  if (!SUPABASE_JWT_SECRET) return null
+  if (!JWT_SECRET) return null
   const parts = raw.split('.')
   if (parts.length !== 3) return null
   try {
     const signingInput = `${parts[0]}.${parts[1]}`
-    const expected = createHmac('sha256', SUPABASE_JWT_SECRET).update(signingInput).digest('base64url')
+    const expected = createHmac('sha256', JWT_SECRET).update(signingInput).digest('base64url')
     if (expected.length !== parts[2].length) return null
     if (!timingSafeEqual(Buffer.from(expected, 'base64url'), Buffer.from(parts[2], 'base64url'))) return null
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Partial<ServiceJwtClaims>
@@ -42,7 +51,7 @@ export function verifyServiceJwt(raw: string): ServiceJwtClaims | null {
  * Used by shell-auth to convert the 60s iframe token into a 4h session cookie.
  */
 export function mintServiceJwt(from: ServiceJwtClaims, ttlSeconds: number): string {
-  if (!SUPABASE_JWT_SECRET) throw new Error('SUPABASE_JWT_SECRET not set')
+  if (!JWT_SECRET) throw new Error('EQ_SERVICE_JWT_SECRET (or SUPABASE_JWT_SECRET fallback) not set')
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
   const now = Math.floor(Date.now() / 1000)
   const payload = Buffer.from(JSON.stringify({
@@ -53,6 +62,6 @@ export function mintServiceJwt(from: ServiceJwtClaims, ttlSeconds: number): stri
     exp: now + ttlSeconds,
     app_metadata: from.app_metadata,
   })).toString('base64url')
-  const sig = createHmac('sha256', SUPABASE_JWT_SECRET).update(`${header}.${payload}`).digest('base64url')
+  const sig = createHmac('sha256', JWT_SECRET).update(`${header}.${payload}`).digest('base64url')
   return `${header}.${payload}.${sig}`
 }
