@@ -30,6 +30,22 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+// Load .env.local — tsx does not auto-load it (that's a Next.js feature)
+try {
+  const raw = readFileSync(resolve(process.cwd(), '.env.local'), 'utf-8');
+  for (const line of raw.split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const eq = t.indexOf('=');
+    if (eq === -1) continue;
+    const key = t.slice(0, eq).trim();
+    const val = t.slice(eq + 1).trim();
+    if (key && !(key in process.env)) process.env[key] = val;
+  }
+} catch { /* no .env.local — rely on shell env */ }
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const BATCH_SIZE = 50;
