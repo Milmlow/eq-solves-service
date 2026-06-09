@@ -40,7 +40,9 @@ import { shellCookieOptions } from '@/lib/auth/shell-cookies'
 import { mintServiceJwt } from '@/lib/auth/service-jwt'
 
 const EQ_SHELL_BRIDGE_SECRET = process.env.EQ_SHELL_BRIDGE_SECRET ?? ''
-const EQ_SECRET_SALT = process.env.EQ_SECRET_SALT ?? ''
+// S2-9: legacy service tokens used EQ_SECRET_SALT; the per-consumer key is
+// EQ_SERVICE_HANDOFF_KEY. Fall back to EQ_SECRET_SALT for existing deploys.
+const EQ_SECRET_SALT = process.env.EQ_SERVICE_HANDOFF_KEY ?? process.env.EQ_SECRET_SALT ?? ''
 const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? ''
 
 // ── Bridge token (preferred) ──────────────────────────────────────────────────
