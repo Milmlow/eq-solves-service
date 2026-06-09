@@ -61,12 +61,6 @@ export async function proxy(request: NextRequest) {
   // but on any failure the user must be able to reach the signin page.
   // Also exempt /api/shell-sso itself (it IS the SSO handler).
   const isSsoExempt = alreadyBridged || pathname === '/api/shell-sso' || isPublicPath(pathname)
-  // Debug: log cookie presence on every request so we can confirm proxy.ts is running
-  // and whether eq_shell_session is arriving. Remove once SSO is verified.
-  // eslint-disable-next-line no-console
-  console.log('[proxy] path=%s bridged=%s exempt=%s cookies=%s',
-    pathname, alreadyBridged, isSsoExempt,
-    request.cookies.getAll().map(c => c.name).join(',') || '<none>')
   if (!isSsoExempt) {
     const hasShellCookie = !!request.cookies.get('eq_shell_session')?.value
     if (hasShellCookie) {

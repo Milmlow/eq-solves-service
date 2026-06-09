@@ -74,10 +74,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // eslint-disable-next-line no-console
-  console.log('[shell-sso] hit — host=%s cookies=%s', request.nextUrl.host,
-    request.cookies.getAll().map(c => c.name).join(','))
-
   const rawShellCookie = request.cookies.get('eq_shell_session')?.value
   if (!rawShellCookie) return fail('no_cookie')
 
