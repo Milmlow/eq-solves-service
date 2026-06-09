@@ -64,16 +64,29 @@ export async function GET(request: NextRequest) {
   const safePath = nextParam.startsWith('/') ? nextParam : '/dashboard'
 
   const siteBaseEarly = process.env.NEXT_PUBLIC_SITE_URL ?? `https://${request.nextUrl.host}`
-  const fail = () => NextResponse.redirect(new URL('/auth/signin', siteBaseEarly))
+  // Debug: include a reason param so the failure is visible in the browser address bar
+  // during development. The param is ignored by /auth/signin — safe to ship.
+  const fail = (reason: string) => {
+    // eslint-disable-next-line no-console
+    console.error('[shell-sso] fail reason=%s', reason)
+    const url = new URL('/auth/signin', siteBaseEarly)
+    url.searchParams.set('sso_err', reason)
+    return NextResponse.redirect(url)
+  }
+
+  // eslint-disable-next-line no-console
+  console.log('[shell-sso] hit — host=%s cookies=%s', request.nextUrl.host,
+    request.cookies.getAll().map(c => c.name).join(','))
 
   const rawShellCookie = request.cookies.get('eq_shell_session')?.value
-  if (!rawShellCookie) return fail()
+  if (!rawShellCookie) return fail('no_cookie')
 
   const shellPayload = verifyShellCookie(rawShellCookie)
   if (!shellPayload) {
     // eslint-disable-next-line no-console
-    console.error('[shell-sso] HMAC verify failed — salt_present=%s', !!process.env.EQ_SECRET_SALT)
-    return fail()
+    console.error('[shell-sso] HMAC verify failed — session_salt=%s secret_salt=%s',
+      !!process.env.EQ_SESSION_SALT, !!process.env.EQ_SECRET_SALT)
+    return fail('hmac_fail')
   }
 
   const host = request.nextUrl.host
@@ -90,11 +103,15 @@ export async function GET(request: NextRequest) {
   if (linkErr || !linkData?.properties?.hashed_token) {
     // eslint-disable-next-line no-console
     console.error('[shell-sso] generateLink err=%s — auto-provisioning user', linkErr?.message)
-    await supabaseAdmin.auth.admin.createUser({
+    const { error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email: shellPayload.email!,
       email_confirm: true,
       user_metadata: shellPayload.name ? { full_name: shellPayload.name } : {},
     })
+    if (createErr) {
+      // eslint-disable-next-line no-console
+      console.error('[shell-sso] createUser failed: %s', createErr.message)
+    }
     const retry = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: shellPayload.email!,
@@ -106,7 +123,7 @@ export async function GET(request: NextRequest) {
   if (linkErr || !linkData?.properties?.hashed_token) {
     // eslint-disable-next-line no-console
     console.error('[shell-sso] generateLink retry failed: %s', linkErr?.message)
-    return fail()
+    return fail('generate_link')
   }
 
   // Exchange OTP server-side. Use an SSR client that writes Supabase auth
@@ -147,7 +164,7 @@ export async function GET(request: NextRequest) {
   if (otpErr) {
     // eslint-disable-next-line no-console
     console.error('[shell-sso] verifyOtp failed: %s', otpErr.message)
-    return fail()
+    return fail('verify_otp')
   }
 
   // Best-effort membership provisioning.
