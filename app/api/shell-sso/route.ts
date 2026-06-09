@@ -60,10 +60,8 @@ export async function GET(request: NextRequest) {
   const nextParam = request.nextUrl.searchParams.get('next') ?? '/dashboard'
   const safePath = nextParam.startsWith('/') ? nextParam : '/dashboard'
 
-  const signinUrl = request.nextUrl.clone()
-  signinUrl.pathname = '/auth/signin'
-  signinUrl.search = ''
-  const fail = () => NextResponse.redirect(signinUrl)
+  const siteBaseEarly = process.env.NEXT_PUBLIC_SITE_URL ?? `https://${request.nextUrl.host}`
+  const fail = () => NextResponse.redirect(new URL('/auth/signin', siteBaseEarly))
 
   const rawShellCookie = request.cookies.get('eq_shell_session')?.value
   if (!rawShellCookie) return fail()
@@ -110,11 +108,13 @@ export async function GET(request: NextRequest) {
 
   // Exchange OTP server-side. Use an SSR client that writes Supabase auth
   // cookies directly onto the redirect response.
+  //
+  // Build the redirect URL from NEXT_PUBLIC_SITE_URL rather than cloning
+  // request.nextUrl — when the API route runs via the Netlify server handler,
+  // nextUrl may carry the internal handler hostname instead of service.eq.solutions.
   const cookieStore = await cookies()
-  const redirectUrl = request.nextUrl.clone()
-  redirectUrl.pathname = safePath
-  redirectUrl.search = ''
-  const redirectRes = NextResponse.redirect(redirectUrl)
+  const siteBase = process.env.NEXT_PUBLIC_SITE_URL ?? `https://${request.nextUrl.host}`
+  const redirectRes = NextResponse.redirect(new URL(safePath, siteBase))
 
   const ssrClient = createServerClient(
     publicEnv.NEXT_PUBLIC_SUPABASE_URL,
