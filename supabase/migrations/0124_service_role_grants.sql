@@ -14,6 +14,13 @@
 -- privilege is a silent no-op in PostgreSQL. Safe to apply.
 -- On local / CI: adds the missing grants so integration tests can seed
 -- and clean up tenants via the service_role key.
+--
+-- Note: ALTER DEFAULT PRIVILEGES FOR ROLE postgres is intentionally omitted.
+-- That statement requires the caller to BE postgres or a superuser; migrations
+-- run as supabase_admin (not postgres) in the local Docker stack, so it fails
+-- with "permission denied to change default privileges". The explicit
+-- GRANT ON ALL TABLES statements below are sufficient for all existing tables,
+-- and new migrations that create tables in future can be GRANTed individually.
 
 -- Schema USAGE
 GRANT USAGE ON SCHEMA public   TO service_role;
@@ -26,25 +33,3 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app_data TO service
 -- Sequence grants (needed for nextval() on default-valued serial columns).
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public   TO service_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app_data TO service_role;
-
--- Default privileges: future tables created by `postgres` automatically
--- inherit these grants so subsequent migrations don't need explicit GRANTs.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT ALL ON TABLES TO service_role;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO service_role;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA app_data
-  GRANT ALL ON TABLES TO service_role;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA app_data
-  GRANT USAGE, SELECT ON SEQUENCES TO service_role;
-
--- supabase_admin role exists on the cloud platform only — guard the
--- ALTER DEFAULT PRIVILEGES so the migration applies cleanly on local too.
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_admin') THEN
-    EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO service_role';
-    EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO service_role';
-  END IF;
-END $$;
