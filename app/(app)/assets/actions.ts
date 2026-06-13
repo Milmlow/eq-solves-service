@@ -146,11 +146,36 @@ export async function importAssetsAction(
       return { success: false, error: 'No valid rows after validation.', imported: 0, rowErrors }
     }
 
-    // Batch insert with tenant_id
+    // Batch insert with tenant_id. Select back the inserted rows so we can
+    // push each to canonical (the single-create/update paths sync; bulk import
+    // previously did not — assets imported in bulk never reached canonical).
     const insertRows = validRows.map((r) => ({ ...r, tenant_id: tenantId }))
-    const { error } = await supabase.from('assets').insert(insertRows)
+    const { data: inserted, error } = await supabase
+      .from('assets')
+      .insert(insertRows)
+      .select('id, name, asset_type, site_id, manufacturer, model, serial_number, location, install_date')
 
     if (error) return { success: false, error: error.message, imported: 0, rowErrors }
+
+    // Fire-and-forget canonical sync per imported asset — mirrors the
+    // importCustomersAction / importSitesAction background-sync pattern.
+    if (inserted) {
+      void Promise.allSettled(
+        inserted.map((a) =>
+          syncAsset({
+            external_id:      assetExternalId(a.id),
+            name:             a.name,
+            asset_type:       a.asset_type,
+            external_site_id: a.site_id ? siteExternalId(a.site_id) : undefined,
+            location:         a.location ?? undefined,
+            manufacturer:     a.manufacturer ?? undefined,
+            model:            a.model ?? undefined,
+            serial_number:    a.serial_number ?? undefined,
+            install_date:     a.install_date ?? undefined,
+          }),
+        ),
+      )
+    }
 
     await logAuditEvent({ action: 'create', entityType: 'asset', summary: `Imported ${validRows.length} assets from CSV` })
     revalidatePath('/assets')
