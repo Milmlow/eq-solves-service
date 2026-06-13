@@ -18,6 +18,8 @@ interface Props {
   totalCustomers: number
   canonicalCustomers: number
   canonicalSites: number
+  totalAssets: number
+  canonicalAssets: number
 }
 
 export function IntegrationsClient({
@@ -28,6 +30,8 @@ export function IntegrationsClient({
   totalCustomers,
   canonicalCustomers,
   canonicalSites,
+  totalAssets,
+  canonicalAssets,
 }: Props) {
   return (
     <div className="space-y-4">
@@ -42,6 +46,8 @@ export function IntegrationsClient({
         canonicalCustomers={canonicalCustomers}
         totalSites={totalSites}
         canonicalSites={canonicalSites}
+        totalAssets={totalAssets}
+        canonicalAssets={canonicalAssets}
       />
     </div>
   )
@@ -53,25 +59,32 @@ function CanonicalSyncCard({
   canonicalCustomers,
   totalSites,
   canonicalSites,
+  totalAssets,
+  canonicalAssets,
 }: {
   canonicalConfigured: boolean
   totalCustomers: number
   canonicalCustomers: number
   totalSites: number
   canonicalSites: number
+  totalAssets: number
+  canonicalAssets: number
 }) {
   const [backfillPending, startBackfill] = useTransition()
   const [pullPending,     startPull]     = useTransition()
   const [backfillResult, setBackfillResult] = useState<BackfillResult | { success: false; error: string } | null>(null)
   const [pullResult,     setPullResult]     = useState<PullFromCanonicalResult | { success: false; error: string } | null>(null)
 
-  // Optimistic counts — bump after a successful back-fill so bars update
+  // Optimistic counts — bump after a successful pull/back-fill so bars update
   // without a full reload (revalidatePath handles the server state separately).
   const [localCanonicalCustomers, setLocalCanonicalCustomers] = useState(canonicalCustomers)
   const [localCanonicalSites, setLocalCanonicalSites] = useState(canonicalSites)
+  const [localCanonicalAssets, setLocalCanonicalAssets] = useState(canonicalAssets)
+  const [localTotalAssets, setLocalTotalAssets] = useState(totalAssets)
 
   const customerPct = totalCustomers > 0 ? Math.round((localCanonicalCustomers / totalCustomers) * 100) : 0
   const sitePct     = totalSites     > 0 ? Math.round((localCanonicalSites     / totalSites)     * 100) : 0
+  const assetPct    = localTotalAssets > 0 ? Math.round((localCanonicalAssets  / localTotalAssets) * 100) : 0
   const allSynced   = localCanonicalCustomers >= totalCustomers && localCanonicalSites >= totalSites && totalCustomers > 0
   const hasGap      = localCanonicalCustomers < totalCustomers || localCanonicalSites < totalSites
 
@@ -96,6 +109,12 @@ function CanonicalSyncCard({
     startPull(async () => {
       const res = await pullFromCanonicalAction()
       setPullResult(res)
+      if (res.success) {
+        setLocalCanonicalCustomers((prev) => prev + res.customers.created)
+        setLocalCanonicalSites((prev) => prev + res.sites.created)
+        setLocalTotalAssets((prev) => prev + res.assets.created)
+        setLocalCanonicalAssets((prev) => prev + res.assets.created)
+      }
     })
   }
 
@@ -143,7 +162,7 @@ function CanonicalSyncCard({
             (e.g. from EQ Field or a prior migration).
           </p>
 
-          {(totalCustomers > 0 || totalSites > 0) && (
+          {(totalCustomers > 0 || totalSites > 0 || localTotalAssets > 0) && (
             <div className="space-y-3 mb-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
               {totalCustomers > 0 && (
                 <div>
@@ -179,6 +198,25 @@ function CanonicalSyncCard({
                     <div
                       className="h-full bg-eq-sky rounded-full transition-all duration-500"
                       style={{ width: `${Math.min(sitePct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {localTotalAssets > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-eq-ink">Assets synced to canonical</span>
+                    <span className="text-xs font-semibold text-eq-ink">
+                      {localCanonicalAssets} / {localTotalAssets}
+                      {assetPct < 100 && (
+                        <span className="ml-1 font-normal text-eq-grey">({assetPct}%)</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-eq-sky rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(assetPct, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -285,12 +323,16 @@ function buildPullMessage(r: PullFromCanonicalResult): string {
   const cUpd = r.customers.updated
   const sNew = r.sites.created
   const sUpd = r.sites.updated
-  const failed = r.customers.failed + r.sites.failed
+  const aNew = r.assets.created
+  const aUpd = r.assets.updated
+  const failed = r.customers.failed + r.sites.failed + r.assets.failed
 
   if (cNew > 0) parts.push(`${cNew} customer${cNew !== 1 ? 's' : ''} added`)
   if (cUpd > 0) parts.push(`${cUpd} customer${cUpd !== 1 ? 's' : ''} updated`)
   if (sNew > 0) parts.push(`${sNew} site${sNew !== 1 ? 's' : ''} added`)
   if (sUpd > 0) parts.push(`${sUpd} site${sUpd !== 1 ? 's' : ''} updated`)
+  if (aNew > 0) parts.push(`${aNew} asset${aNew !== 1 ? 's' : ''} added`)
+  if (aUpd > 0) parts.push(`${aUpd} asset${aUpd !== 1 ? 's' : ''} updated`)
   if (failed > 0) parts.push(`${failed} failed`)
   if (parts.length === 0)
     return 'Nothing new — all canonical records are already in this workspace.'
