@@ -49,6 +49,7 @@ interface CanonicalItem {
   site_id?: string | null       // canonical site UUID
   location?: string | null
   manufacturer?: string | null
+  make?: string | null          // canonical raw column (asset make)
   model?: string | null
   serial_number?: string | null
   install_date?: string | null
@@ -69,10 +70,11 @@ interface CanonicalPage {
 }
 
 export interface CanonicalPullResult {
-  tenantId:  string
-  customers: { created: number; updated: number; failed: number }
-  sites:     { created: number; updated: number; failed: number }
-  assets:    { created: number; updated: number; failed: number }
+  tenantId:    string
+  customers:   { created: number; updated: number; failed: number }
+  sites:       { created: number; updated: number; failed: number }
+  assets:      { created: number; updated: number; failed: number }
+  instruments: { created: number; updated: number; failed: number }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -254,6 +256,13 @@ export async function pullCanonical(): Promise<CanonicalPullResult> {
   // ── 3. Assets ────────────────────────────────────────────────────────────────
   const canonicalAssets = await fetchAll('assets')
 
+  // plant_equipment assets are SKS's own test tools → route to the instruments
+  // register (step 4), not the customer-asset table. All other types are
+  // customer site assets. Verified: plant_equipment lives only on the
+  // null-customer "SKS — Internal" site, never on a customer site.
+  const siteAssets       = canonicalAssets.filter(a => a.asset_type !== 'plant_equipment')
+  const instrumentAssets = canonicalAssets.filter(a => a.asset_type === 'plant_equipment')
+
   const { data: existingAssets } = await supabase
     .from('assets')
     .select('id, canonical_id')
@@ -266,10 +275,10 @@ export async function pullCanonical(): Promise<CanonicalPullResult> {
 
   let assetCreated = 0, assetUpdated = 0, assetFailed = 0
 
-  const toCreateA = canonicalAssets.filter(
+  const toCreateA = siteAssets.filter(
     a => a.name && a.site_id && siteCanonicalToService.has(a.site_id) && !assetCanonicalToService.has(a.id)
   )
-  const toUpdateA = canonicalAssets.filter(a => a.name && assetCanonicalToService.has(a.id))
+  const toUpdateA = siteAssets.filter(a => a.name && assetCanonicalToService.has(a.id))
 
   for (let i = 0; i < toCreateA.length; i += CHUNK) {
     const chunk = toCreateA.slice(i, i + CHUNK).map(a => ({
@@ -313,10 +322,71 @@ export async function pullCanonical(): Promise<CanonicalPullResult> {
     assetUpdated++
   }
 
+  // ── 4. Instruments (canonical plant_equipment) ───────────────────────────────
+  // SKS's own test tools live in the instruments register, not the asset table.
+  // Matched by canonical_id (migration 0130); not site-bound.
+  // instruments.canonical_id is newer than the generated types (0130) — cast
+  // until database.types.ts is regenerated (see project_ts_types_stale).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sbInstr = supabase as any
+  const { data: existingInstruments } = await sbInstr
+    .from('instruments')
+    .select('id, canonical_id')
+    .eq('tenant_id', tenantId)
+    .not('canonical_id', 'is', null)
+
+  const instrCanonicalToService = new Map<string, string>(
+    ((existingInstruments ?? []) as { id: string; canonical_id: string }[])
+      .map(i => [i.canonical_id, i.id])
+  )
+
+  let instrCreated = 0, instrUpdated = 0, instrFailed = 0
+
+  const toCreateI = instrumentAssets.filter(a => a.name && !instrCanonicalToService.has(a.id))
+  const toUpdateI = instrumentAssets.filter(a => a.name &&  instrCanonicalToService.has(a.id))
+
+  for (let i = 0; i < toCreateI.length; i += CHUNK) {
+    const chunk = toCreateI.slice(i, i + CHUNK).map(a => ({
+      tenant_id:           tenantId,
+      name:                a.name!,
+      instrument_type:     a.asset_type ?? 'test_equipment',
+      make:                a.make ?? a.manufacturer ?? null,
+      model:               a.model ?? null,
+      serial_number:       a.serial_number ?? null,
+      status:              'active',
+      is_active:           a.active !== false,
+      canonical_id:        a.id,
+      canonical_synced_at: now,
+    }))
+    const { data: inserted, error } = await sbInstr
+      .from('instruments')
+      .insert(chunk)
+      .select('id')
+    if (error) { instrFailed += chunk.length; continue }
+    instrCreated += inserted?.length ?? 0
+  }
+
+  for (const a of toUpdateI) {
+    const serviceId = instrCanonicalToService.get(a.id)!
+    const { error } = await sbInstr
+      .from('instruments')
+      .update({
+        name:                a.name!,
+        make:                a.make ?? a.manufacturer ?? null,
+        model:               a.model ?? null,
+        serial_number:       a.serial_number ?? null,
+        canonical_synced_at: now,
+      })
+      .eq('id', serviceId)
+    if (error) { instrFailed++; continue }
+    instrUpdated++
+  }
+
   return {
     tenantId,
-    customers: { created: customerCreated, updated: customerUpdated, failed: customerFailed },
-    sites:     { created: siteCreated,     updated: siteUpdated,     failed: siteFailed     },
-    assets:    { created: assetCreated,    updated: assetUpdated,    failed: assetFailed    },
+    customers:   { created: customerCreated, updated: customerUpdated, failed: customerFailed },
+    sites:       { created: siteCreated,     updated: siteUpdated,     failed: siteFailed     },
+    assets:      { created: assetCreated,    updated: assetUpdated,    failed: assetFailed    },
+    instruments: { created: instrCreated,    updated: instrUpdated,    failed: instrFailed    },
   }
 }
