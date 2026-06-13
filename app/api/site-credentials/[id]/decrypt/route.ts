@@ -13,10 +13,8 @@
  */
 
 import { NextRequest } from 'next/server'
-import { getApiUser } from '@/lib/api/auth'
+import { getApiUser, canWrite } from '@/lib/api/auth'
 import { ok, err, unauthorized, forbidden } from '@/lib/api/response'
-
-const SUPERVISOR_ROLES = ['super_admin', 'admin', 'supervisor'] as const
 
 function getCredentialsKey(): string | null {
   return process.env.SITE_CREDENTIALS_KEY ?? null
@@ -31,7 +29,7 @@ export async function GET(
     const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
-    if (!SUPERVISOR_ROLES.includes(role as typeof SUPERVISOR_ROLES[number])) {
+    if (!canWrite(role)) {
       return forbidden()
     }
 

@@ -19,11 +19,9 @@
 
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { getApiUser } from '@/lib/api/auth'
+import { getApiUser, canWrite } from '@/lib/api/auth'
 import { ok, created, err, unauthorized, forbidden } from '@/lib/api/response'
 import { parsePagination, paginationMeta } from '@/lib/api/pagination'
-
-const SUPERVISOR_ROLES = ['super_admin', 'admin', 'supervisor'] as const
 
 const CreateCredentialSchema = z.object({
   customer_id:  z.string().uuid(),
@@ -44,7 +42,7 @@ export async function GET(request: NextRequest) {
     const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
-    if (!SUPERVISOR_ROLES.includes(role as typeof SUPERVISOR_ROLES[number])) {
+    if (!canWrite(role)) {
       return forbidden()
     }
 
@@ -82,7 +80,7 @@ export async function POST(request: NextRequest) {
     const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
-    if (!SUPERVISOR_ROLES.includes(role as typeof SUPERVISOR_ROLES[number])) {
+    if (!canWrite(role)) {
       return forbidden()
     }
 
