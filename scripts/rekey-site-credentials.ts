@@ -6,8 +6,8 @@
  *
  * Prerequisite: migration 0123_site_credentials_encryption.sql must be applied.
  *
- * NOTE: site_credentials lives in the app_data schema (not public).
- * All table queries use .schema('app_data'). The encryption is done
+ * NOTE: site_credentials lives in the public schema (migration 0123 encrypts
+ * in place; it does NOT move the table to app_data). The encryption is done
  * server-side via the _admin_rekey_site_credential() RPC (service-role only).
  *
  * Required env vars:
@@ -76,9 +76,8 @@ async function main() {
   console.log(`\n=== rekey-site-credentials ${DRY_RUN ? '[DRY RUN]' : '[LIVE]'} ===\n`);
 
   // Count rows that still have plaintext in at least one column
-  // site_credentials is in the app_data schema
+  // site_credentials is in the public schema (migration 0123, in-place encryption)
   const { count: totalPlaintext, error: countErr } = await supabase
-    .schema('app_data')
     .from('site_credentials')
     .select('id', { count: 'exact', head: true })
     .or('password_value_plain.not.is.null,username_plain.not.is.null');
@@ -106,7 +105,6 @@ async function main() {
 
   while (true) {
     const { data: rows, error: fetchErr } = await supabase
-      .schema('app_data')
       .from('site_credentials')
       .select('id, tenant_id, customer_id, site_id, system_name, username_plain, password_value_plain, url, notes')
       .or('password_value_plain.not.is.null,username_plain.not.is.null')
@@ -157,7 +155,6 @@ async function main() {
 
   // Verify: no plaintext rows remain
   const { count: remaining, error: verifyErr } = await supabase
-    .schema('app_data')
     .from('site_credentials')
     .select('id', { count: 'exact', head: true })
     .or('password_value_plain.not.is.null,username_plain.not.is.null');

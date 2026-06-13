@@ -12,11 +12,8 @@
 
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { getApiUser } from '@/lib/api/auth'
+import { getApiUser, canWrite, isAdmin } from '@/lib/api/auth'
 import { ok, err, unauthorized, forbidden } from '@/lib/api/response'
-
-const SUPERVISOR_ROLES = ['super_admin', 'admin', 'supervisor'] as const
-const ADMIN_ROLES      = ['super_admin', 'admin'] as const
 
 const UpdateCredentialSchema = z.object({
   system_name: z.string().min(1).max(200).optional(),
@@ -39,7 +36,7 @@ export async function PATCH(
     const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
-    if (!SUPERVISOR_ROLES.includes(role as typeof SUPERVISOR_ROLES[number])) {
+    if (!canWrite(role)) {
       return forbidden()
     }
 
@@ -124,7 +121,7 @@ export async function DELETE(
     const { user, tenantId, role, supabase } = await getApiUser()
     if (!user) return unauthorized()
     if (!tenantId) return forbidden()
-    if (!ADMIN_ROLES.includes(role as typeof ADMIN_ROLES[number])) {
+    if (!isAdmin(role)) {
       return forbidden()
     }
 
