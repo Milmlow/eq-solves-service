@@ -5,6 +5,26 @@
 -- using pgcrypto symmetric encryption. The encryption key is held
 -- in SITE_CREDENTIALS_KEY (Netlify env var) and passed at query time
 -- via SECURITY DEFINER RPCs so the plaintext never persists in Postgres.
+
+-- Create app_data schema if not present (exists on remote but was never
+-- created via a migration — this makes fresh local Supabase apply correctly).
+CREATE SCHEMA IF NOT EXISTS app_data;
+
+-- Move site_credentials from public to app_data if it hasn't been moved yet.
+-- On remote the table was relocated out-of-band; on a fresh local it starts in
+-- public (created by migration 0078). The SET SCHEMA carries all indexes,
+-- triggers, and RLS policies with it — no other tables hold FKs pointing at
+-- this table, so the move is safe.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'site_credentials'
+  ) THEN
+    ALTER TABLE public.site_credentials SET SCHEMA app_data;
+  END IF;
+END $$;
+
 --
 -- NOTE (2026-06-09 fix): site_credentials lives in app_data schema,
 -- not public. Functions stay in public schema so the Supabase JS
