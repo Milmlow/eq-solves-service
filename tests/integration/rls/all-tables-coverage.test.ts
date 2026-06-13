@@ -54,7 +54,9 @@ const PUBLIC_TRUE_ALLOWED = new Set<string>([
   'estimates',       // public estimate links
   'estimate_events', // public estimate interaction log
   '_meta',           // build/attribution metadata, read-only public
-  'context_files',   // context-system docs, public read / service_role write
+  // NOTE: context_files was here while it had an anon "Public read" policy.
+  // Migration 0128 dropped that; its only remaining policy is service_role-only
+  // (auto-skipped by isServiceRoleOnly below), so it no longer needs a waiver.
 ])
 
 interface IntrospectionTable {
@@ -77,6 +79,13 @@ interface Introspection {
 
 function isPermissiveTrue(p: IntrospectionPolicy): boolean {
   return p.qual === 'true' || p.with_check === 'true'
+}
+
+// A `true` predicate scoped to service_role only is always safe: service_role
+// bypasses RLS regardless, so the policy grants it nothing it didn't already
+// have, and it is never reachable by anon/authenticated. These are not leaks.
+function isServiceRoleOnly(p: IntrospectionPolicy): boolean {
+  return p.roles.length === 1 && p.roles[0] === 'service_role'
 }
 
 describe('RLS — whole-schema coverage (auto-discovered)', () => {
@@ -124,7 +133,7 @@ describe('RLS — whole-schema coverage (auto-discovered)', () => {
       if (!t.has_tenant_id) continue
       const pols = policiesByTable.get(t.table_name) ?? []
       for (const p of pols) {
-        if (isPermissiveTrue(p)) {
+        if (isPermissiveTrue(p) && !isServiceRoleOnly(p)) {
           offenders.push(`${t.table_name}.${p.policy} (${p.cmd}, roles=${p.roles.join('|')})`)
         }
       }
@@ -156,7 +165,7 @@ describe('RLS — whole-schema coverage (auto-discovered)', () => {
       if (PUBLIC_TRUE_ALLOWED.has(t.table_name)) continue
       const pols = policiesByTable.get(t.table_name) ?? []
       for (const p of pols) {
-        if (isPermissiveTrue(p)) {
+        if (isPermissiveTrue(p) && !isServiceRoleOnly(p)) {
           offenders.push(`${t.table_name}.${p.policy} (${p.cmd}, roles=${p.roles.join('|')})`)
         }
       }
