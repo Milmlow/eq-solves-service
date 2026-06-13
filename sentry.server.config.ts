@@ -7,7 +7,7 @@
 // Next.js Sentry integration looks for it by exact path.
 
 import * as Sentry from '@sentry/nextjs'
-import type { Event as SentryEvent } from '@sentry/types'
+import type { ErrorEvent as SentryEvent } from '@sentry/core'
 
 // Collect T3 secret values at module load so beforeSend can scrub them from
 // any event that accidentally captures an env var value in an error message,
