@@ -44,6 +44,24 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // SAFETY GATE: the canonical customer/site data is SKS's full Simpro CRM
+  // (~350 customers, 591 sites) — most have no maintenance assets and many are
+  // suppliers/duplicates. pullCanonical does not yet honour the per-app
+  // service_enabled flag, so an unguarded run would flood the CMMS with
+  // non-maintenance records. The pull stays DRY-RUN (no DB writes) until
+  // CANONICAL_PULL_CRON_ENABLED=true is set in Netlify — flip that on only once
+  // pullCanonical is scoped to service-enabled records. See
+  // docs/SPRINT-2026-06-golive-hardening.md (Phase 2).
+  if (process.env.CANONICAL_PULL_CRON_ENABLED !== 'true') {
+    console.log('[canonical-pull] DRY-RUN — CANONICAL_PULL_CRON_ENABLED not set; skipped')
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      ranAt: new Date().toISOString(),
+      note: 'Skipped — set CANONICAL_PULL_CRON_ENABLED=true to enable (only after pullCanonical honours service_enabled).',
+    })
+  }
+
   try {
     const result = await pullCanonical()
     console.log('[canonical-pull] completed', result)
