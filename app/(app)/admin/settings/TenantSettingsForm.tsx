@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { FormInput } from '@/components/ui/FormInput'
 import { Button } from '@/components/ui/Button'
 import { MediaPicker } from '@/components/ui/MediaPicker'
 import { updateTenantSettingsAction } from './actions'
+import { uploadMediaAction } from '@/app/(app)/admin/media/actions'
 import { extractColoursFromImage } from '@/lib/utils/extract-colours'
 import type { TenantSettings } from '@/lib/types'
-import { Wand2, RotateCcw } from 'lucide-react'
+import { Wand2, RotateCcw, Upload } from 'lucide-react'
 
 const DEFAULT_COLOURS = {
   primary: '#3DA8D8',
@@ -39,6 +40,36 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
   )
   const [extracting, setExtracting] = useState(false)
   const [extractError, setExtractError] = useState<string | null>(null)
+
+  // Inline logo upload — uploads directly to storage + inserts into Media Library
+  // with the correct report_image category so it appears in the picker and in reports.
+  const logoInputRef     = useRef<HTMLInputElement>(null)
+  const logoDarkInputRef = useRef<HTMLInputElement>(null)
+  const [logoUploading,     setLogoUploading]     = useState(false)
+  const [logoDarkUploading, setLogoDarkUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  async function handleLogoUpload(
+    file: File,
+    surface: 'light' | 'dark',
+    setter: (url: string) => void,
+    setUploading: (v: boolean) => void,
+  ) {
+    setUploadError(null)
+    setUploading(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('name', file.name.replace(/\.[^.]+$/, ''))
+    fd.append('categories', 'report_image')
+    fd.append('surface', surface)
+    const result = await uploadMediaAction(fd)
+    setUploading(false)
+    if (result.success && result.fileUrl) {
+      setter(result.fileUrl)
+    } else {
+      setUploadError((result as { success: false; error?: string }).error ?? 'Upload failed.')
+    }
+  }
 
   // Commercial-tier toggle. When off (default for SKS NSW etc.), the
   // contract-scope period-locking, audit history view, variations register,
@@ -117,15 +148,14 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
         </p>
         <div className="space-y-4">
           <FormInput
-            label="Product Name"
+            label="Company Name"
             name="product_name"
             required
             defaultValue={settings.product_name}
-            placeholder="e.g. EQ Solves"
+            placeholder="e.g. SKS Technologies"
           />
 
-          {/* Light-surface logo — single source of truth: Media Library.
-              Upload via Admin → Media Library, then pick here. */}
+          {/* Light-surface logo */}
           <MediaPicker
             label="Logo (Light Surface)"
             value={logoUrl || null}
@@ -135,10 +165,31 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
             previewBackground="light"
             placeholder="Pick your company logo from the Media Library…"
           />
-          <p className="text-xs text-eq-grey -mt-2">
-            Used in headers, body sections, and email signatures.
-            Upload variants via Admin → Media Library.
-          </p>
+          <div className="flex items-center gap-3 -mt-2">
+            <p className="text-xs text-eq-grey flex-1">
+              Used in headers, body sections, and email signatures.
+            </p>
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={logoUploading}
+              className="inline-flex items-center gap-1.5 text-xs text-eq-deep hover:text-eq-sky disabled:opacity-50 flex-shrink-0"
+            >
+              <Upload className="w-3 h-3" />
+              {logoUploading ? 'Uploading…' : 'Upload image'}
+            </button>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleLogoUpload(file, 'light', setLogoUrl, setLogoUploading)
+                e.target.value = ''
+              }}
+            />
+          </div>
 
           {/* Dark-surface logo variant */}
           <MediaPicker
@@ -150,10 +201,35 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
             previewBackground="dark"
             placeholder="Select dark-surface logo from Media Library…"
           />
-          <p className="text-xs text-eq-grey -mt-2">
-            Used on report covers and dark banners. Leave empty to fall back
-            to the light logo.
-          </p>
+          <div className="flex items-center gap-3 -mt-2">
+            <p className="text-xs text-eq-grey flex-1">
+              Used on report covers and dark banners. Leave empty to fall back to the light logo.
+            </p>
+            <button
+              type="button"
+              onClick={() => logoDarkInputRef.current?.click()}
+              disabled={logoDarkUploading}
+              className="inline-flex items-center gap-1.5 text-xs text-eq-deep hover:text-eq-sky disabled:opacity-50 flex-shrink-0"
+            >
+              <Upload className="w-3 h-3" />
+              {logoDarkUploading ? 'Uploading…' : 'Upload image'}
+            </button>
+            <input
+              ref={logoDarkInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleLogoUpload(file, 'dark', setLogoUrlOnDark, setLogoDarkUploading)
+                e.target.value = ''
+              }}
+            />
+          </div>
+
+          {uploadError && (
+            <p className="text-xs text-red-600">{uploadError}</p>
+          )}
 
           {/* Hidden inputs for form submission */}
           <input type="hidden" name="logo_url" value={logoUrl} />
