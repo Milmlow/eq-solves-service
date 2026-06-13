@@ -1,35 +1,46 @@
--- Migration 0124: Explicit service_role table grants
+-- Migration 0124: Explicit role table grants for CI / local dev
 --
--- Supabase cloud projects have service_role granted ALL privileges on all
--- public-schema tables automatically via ALTER DEFAULT PRIVILEGES that the
--- platform sets up at project creation time. A fresh local Supabase instance
--- (supabase start / GitHub Actions CI) does not carry that same default
--- privilege context, so service_role INSERT on `tenants` raises
--- "permission denied for table tenants" even though BYPASSRLS is set.
+-- Supabase cloud projects set up these grants at project creation time via
+-- ALTER DEFAULT PRIVILEGES. A fresh local Supabase instance (supabase start
+-- in CI) does not carry that same context, causing two failure modes:
 --
--- RLS bypass (BYPASSRLS role attribute) and table-level GRANT are independent.
--- BYPASSRLS skips policy evaluation; it does NOT grant table privileges.
+--   1. service_role INSERT on `tenants` raises "permission denied" even though
+--      BYPASSRLS is set. BYPASSRLS skips RLS evaluation, NOT table-level GRANT.
+--
+--   2. authenticated DELETE on `maintenance_checks` raises "permission denied
+--      for table tenant_members". The RLS USING clause directly queries
+--      tenant_members (not via a SECURITY DEFINER wrapper), so authenticated
+--      needs SELECT privilege on tenant_members to evaluate the policy.
+--
+-- Supabase cloud pattern (replicated here):
+--   anon       → SELECT on all tables  (intake forms, public read)
+--   authenticated → ALL on all tables  (RLS controls what rows they touch)
+--   service_role  → ALL on all tables  (BYPASSRLS + full admin access)
 --
 -- On remote (prod): GRANT is idempotent — re-granting an already-held
 -- privilege is a silent no-op in PostgreSQL. Safe to apply.
--- On local / CI: adds the missing grants so integration tests can seed
--- and clean up tenants via the service_role key.
 --
--- Note: ALTER DEFAULT PRIVILEGES FOR ROLE postgres is intentionally omitted.
+-- ALTER DEFAULT PRIVILEGES FOR ROLE postgres is intentionally omitted.
 -- That statement requires the caller to BE postgres or a superuser; migrations
--- run as supabase_admin (not postgres) in the local Docker stack, so it fails
--- with "permission denied to change default privileges". The explicit
--- GRANT ON ALL TABLES statements below are sufficient for all existing tables,
--- and new migrations that create tables in future can be GRANTed individually.
+-- run as supabase_admin in the local Docker stack, so it fails with
+-- "permission denied to change default privileges".
 
+-- ----------------------------------------------------------------
 -- Schema USAGE
-GRANT USAGE ON SCHEMA public   TO service_role;
+-- ----------------------------------------------------------------
+GRANT USAGE ON SCHEMA public   TO anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA app_data TO service_role;
 
--- Retroactive table grants (all tables that exist at migration time).
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public   TO service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app_data TO service_role;
+-- ----------------------------------------------------------------
+-- Table grants (all tables existing at this migration's apply time)
+-- ----------------------------------------------------------------
+GRANT SELECT                              ON ALL TABLES IN SCHEMA public   TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE      ON ALL TABLES IN SCHEMA public   TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE      ON ALL TABLES IN SCHEMA public   TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE      ON ALL TABLES IN SCHEMA app_data TO service_role;
 
--- Sequence grants (needed for nextval() on default-valued serial columns).
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public   TO service_role;
+-- ----------------------------------------------------------------
+-- Sequence grants
+-- ----------------------------------------------------------------
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public   TO anon, authenticated, service_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app_data TO service_role;
