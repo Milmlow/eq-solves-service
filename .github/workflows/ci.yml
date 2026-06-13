@@ -31,6 +31,12 @@ jobs:
       - name: TypeScript (tsc --noEmit)
         run: npx tsc --noEmit
 
+      - name: Server-action security audit
+        # Fails if any mutating server action lacks a requireUser()/getApiUser()
+        # /auth.getUser() guard. Reviewed exceptions live in the script's
+        # ALLOWLIST. Pure static check — no DB needed.
+        run: npm run audit:actions
+
       - name: npm audit (high severity)
         # Fails if any high or critical vulnerabilities are present.
         # Use `npm audit fix` locally before opening the PR.

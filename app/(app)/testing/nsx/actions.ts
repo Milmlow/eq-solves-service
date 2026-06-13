@@ -9,7 +9,7 @@ import { propagateCheckCompletionIfReady } from '@/lib/actions/check-completion'
 import { withIdempotency } from '@/lib/actions/idempotency'
 import { notifyDefectRaised } from '@/lib/actions/defect-notifications'
 import { mirrorBreakerColumns } from '@/lib/utils/breaker-cols'
-import { syncTestResult, nsxTestExternalId, assetExternalId } from '@/lib/canonical-sync'
+import { syncTestResult, syncDefect, nsxTestExternalId, assetExternalId, defectExternalId, siteExternalId } from '@/lib/canonical-sync'
 
 export async function createNsxTestAction(formData: FormData) {
   try {
@@ -391,6 +391,20 @@ export async function raiseNsxTestDefectAction(data: {
       .single()
 
     if (error) return { success: false, error: error.message }
+
+    // Canonical sync — fire-and-forget defect record. Mirrors the maintenance
+    // raiseDefectAction path so test-raised defects reach canonical too
+    // (previously they did not — they were invisible to the reference layer).
+    void syncDefect({
+      external_id:       defectExternalId(inserted.id),
+      external_asset_id: data.asset_id ? assetExternalId(data.asset_id) : undefined,
+      external_site_id:  data.site_id  ? siteExternalId(data.site_id)   : undefined,
+      title:             data.title.trim(),
+      description:       data.description?.trim() || undefined,
+      severity:          data.severity || 'medium',
+      status:            'open',
+      raised_date:       new Date().toISOString().split('T')[0],
+    })
 
     await notifyDefectRaised({
       tenantId,
