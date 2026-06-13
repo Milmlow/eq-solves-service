@@ -59,3 +59,16 @@
 # Schedule: "0 23 * * *" = 23:00 UTC daily
 [functions."canonical-reconcile-scheduler"]
   schedule = "0 23 * * *"
+
+# ─────────── Canonical Pull ───────────────────
+#
+# Nightly pull from sks-canonical into eq-service: fetches customers, sites,
+# and assets added or updated in EQ Field and upserts them locally. Closes the
+# sync loop — write-through handles eq-service→canonical; this handles
+# canonical→eq-service. Runs at 22:00 UTC (before the reconcile at 23:00 UTC)
+# so newly-pulled records are immediately backstopped. Skips gracefully if
+# CANONICAL_API_KEY_SERVICE is not set.
+#
+# Schedule: "0 22 * * *" = 22:00 UTC daily
+[functions."canonical-pull-scheduler"]
+  schedule = "0 22 * * *"
