@@ -1,0 +1,26 @@
+-- 0127_fix_notifications_insert_policy
+--
+-- SECURITY FIX (migration/prod drift, surfaced by the RLS coverage test).
+--
+-- Migration 0011 created:
+--     CREATE POLICY "Service can insert notifications"
+--       ON public.notifications FOR INSERT WITH CHECK (true);
+-- The comment said "Service role can insert", but the policy omitted
+-- `TO service_role`, so it defaulted to role `public`. Combined with
+-- WITH CHECK (true), this let ANY authenticated user insert a notification
+-- row carrying an arbitrary tenant_id / user_id — a cross-tenant write
+-- (notification spoofing into another tenant).
+--
+-- The live production DB already had this policy removed (manual drift that
+-- was never captured in a migration), so a database freshly built from
+-- migrations was LESS secure than production. This migration captures that
+-- fix so migrations match the secure production state.
+--
+-- No authenticated INSERT policy is needed: every notification is written by
+-- the service role, which bypasses RLS —
+--   • lib/actions/notifications.ts        (createAdminClient)
+--   • lib/actions/defect-notifications.ts (createAdminClient)
+--   • cron / triggers
+-- Verified: production runs correctly with no notifications INSERT policy.
+
+DROP POLICY IF EXISTS "Service can insert notifications" ON public.notifications;
