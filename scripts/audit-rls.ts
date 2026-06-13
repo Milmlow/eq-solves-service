@@ -39,7 +39,8 @@ const PUBLIC_TRUE_ALLOWED = new Set<string>([
   'estimates',
   'estimate_events',
   '_meta',
-  'context_files',
+  // context_files: anon "Public read" dropped in migration 0128; its only
+  // remaining policy is service_role-only (auto-skipped), so no waiver needed.
 ])
 
 interface IntrospectionTable {
@@ -75,6 +76,12 @@ function projectRef(url: string): string {
 
 function isPermissiveTrue(p: IntrospectionPolicy): boolean {
   return p.qual === 'true' || p.with_check === 'true'
+}
+
+// A `true` predicate scoped to service_role only is always safe — service_role
+// bypasses RLS regardless and the policy is unreachable by anon/authenticated.
+function isServiceRoleOnly(p: IntrospectionPolicy): boolean {
+  return p.roles.length === 1 && p.roles[0] === 'service_role'
 }
 
 async function main(): Promise<number> {
@@ -124,7 +131,7 @@ async function main(): Promise<number> {
   for (const t of tables) {
     if (!t.has_tenant_id) continue
     for (const p of policiesByTable.get(t.table_name) ?? []) {
-      if (isPermissiveTrue(p)) {
+      if (isPermissiveTrue(p) && !isServiceRoleOnly(p)) {
         findings.push({
           level: 'ERROR',
           table: t.table_name,
@@ -150,7 +157,7 @@ async function main(): Promise<number> {
   for (const t of tables) {
     if (t.has_tenant_id || PUBLIC_TRUE_ALLOWED.has(t.table_name)) continue
     for (const p of policiesByTable.get(t.table_name) ?? []) {
-      if (isPermissiveTrue(p)) {
+      if (isPermissiveTrue(p) && !isServiceRoleOnly(p)) {
         findings.push({
           level: 'WARN',
           table: t.table_name,

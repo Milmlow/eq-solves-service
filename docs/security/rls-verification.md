@@ -80,13 +80,18 @@ Edit both `tests/integration/rls/all-tables-coverage.test.ts` and
   `canonical_outbox`, `context_proposals`, `tenant_slug_tombstones`.
 - **`PUBLIC_TRUE_ALLOWED`** (intentional public surfaces with `USING (true)`):
   `briefs`, `estimates`, `estimate_events` (public intake), `_meta`
-  (read-only attribution metadata), `context_files` (public-read context docs,
-  service_role write).
+  (read-only attribution metadata).
 
-> **Confirm before SKS go-live:** `_meta` and `context_files` are anon-readable
-> (`USING (true)`, SELECT). Neither is tenant-scoped, so neither is a
-> cross-tenant leak — but verify their contents are genuinely meant to be
-> public. If not, scope the policy and remove from `PUBLIC_TRUE_ALLOWED`.
+A permissive `true` policy scoped to **service_role only** is auto-allowed
+(service_role bypasses RLS regardless; the policy is unreachable by
+anon/authenticated) — it never needs a waiver. `context_files` relies on this
+after migration 0128.
+
+> **Resolved 2026-06-13:** `context_files` previously had an anon `"Public read"`
+> policy that made ~141 internal dev/architecture notes world-readable via the
+> anon key. Migration 0128 dropped it — the table is now service-role-only.
+> `_meta` remains anon-readable by design (a single ownership/attribution row,
+> no tenant data).
 
 ## Last verified
 
