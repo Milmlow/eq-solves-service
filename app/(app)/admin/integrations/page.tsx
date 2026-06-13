@@ -20,6 +20,8 @@ export default async function IntegrationsPage() {
     { count: totalCustomers },
     { count: canonicalCustomers },
     { count: canonicalSites },
+    { count: totalAssets },
+    { count: canonicalAssets },
   ] = await Promise.all([
     supabase
       .from('sites')
@@ -42,6 +44,16 @@ export default async function IntegrationsPage() {
       .not('canonical_id', 'is', null),
     supabase
       .from('sites')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true)
+      .not('canonical_id', 'is', null),
+    // canonical_id added in migration 0125
+    supabase
+      .from('assets')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true),
+    supabase
+      .from('assets')
       .select('*', { count: 'exact', head: true })
       .eq('is_active', true)
       .not('canonical_id', 'is', null),
@@ -71,6 +83,8 @@ export default async function IntegrationsPage() {
         totalCustomers={totalCustomers ?? 0}
         canonicalCustomers={canonicalCustomers ?? 0}
         canonicalSites={canonicalSites ?? 0}
+        totalAssets={totalAssets ?? 0}
+        canonicalAssets={canonicalAssets ?? 0}
       />
     </div>
   )

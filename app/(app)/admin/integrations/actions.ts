@@ -373,6 +373,14 @@ interface CanonicalGetItem {
   postcode?: string | null
   country?: string | null
   customer_id?: string | null  // canonical customer UUID
+  // asset fields
+  asset_type?: string | null
+  site_id?: string | null      // canonical site UUID
+  location?: string | null
+  manufacturer?: string | null
+  model?: string | null
+  serial_number?: string | null
+  install_date?: string | null
   active?: boolean
 }
 
@@ -385,7 +393,7 @@ interface CanonicalGetResponse {
 }
 
 async function fetchAllCanonicalPages(
-  resource: 'customers' | 'sites',
+  resource: 'customers' | 'sites' | 'assets',
 ): Promise<CanonicalGetItem[]> {
   if (!CANONICAL_KEY) throw new Error('CANONICAL_API_KEY_SERVICE not configured')
   const PAGE = 500
@@ -426,6 +434,7 @@ export interface PullFromCanonicalResult {
   success: true
   customers: { created: number; updated: number; failed: number }
   sites:     { created: number; updated: number; failed: number }
+  assets:    { created: number; updated: number; failed: number }
 }
 
 export async function pullFromCanonicalAction(): Promise<
@@ -567,20 +576,93 @@ export async function pullFromCanonicalAction(): Promise<
       siteUpdated++
     }
 
+    // ── 3. Pull assets ─────────────────────────────────────────────────────
+    const canonicalAssets = await fetchAllCanonicalPages('assets')
+
+    const { data: existingAssets } = await supabase
+      .from('assets')
+      .select('id, canonical_id')
+      .not('canonical_id', 'is', null)
+
+    const assetCanonicalToService = new Map<string, string>(
+      (existingAssets ?? []).map(a => [a.canonical_id as string, a.id as string])
+    )
+
+    let assetCreated = 0
+    let assetUpdated = 0
+    let assetFailed  = 0
+
+    // Only import assets where we can resolve the parent site.
+    const toCreateA = canonicalAssets.filter(
+      a => a.name && a.site_id && siteCanonicalToService.has(a.site_id) && !assetCanonicalToService.has(a.id)
+    )
+    const toUpdateA = canonicalAssets.filter(
+      a => a.name && assetCanonicalToService.has(a.id)
+    )
+
+    // Batch inserts (chunks of 100).
+    for (let i = 0; i < toCreateA.length; i += CHUNK) {
+      const chunk = toCreateA.slice(i, i + CHUNK).map(a => ({
+        tenant_id:           tenantId,
+        site_id:             siteCanonicalToService.get(a.site_id!)!,
+        name:                a.name!,
+        asset_type:          a.asset_type ?? 'General',
+        manufacturer:        a.manufacturer ?? null,
+        model:               a.model ?? null,
+        serial_number:       a.serial_number ?? null,
+        location:            a.location ?? null,
+        install_date:        a.install_date ?? null,
+        is_active:           a.active !== false,
+        canonical_id:        a.id,
+        canonical_synced_at: now,
+      }))
+      const { data: inserted, error } = await supabase
+        .from('assets')
+        .insert(chunk)
+        .select('id')
+      if (error) {
+        assetFailed += chunk.length
+        continue
+      }
+      assetCreated += inserted?.length ?? 0
+    }
+
+    // Sequential updates (only safe fields — site_id is never overwritten).
+    for (const a of toUpdateA) {
+      const serviceId = assetCanonicalToService.get(a.id)!
+      const { error } = await supabase
+        .from('assets')
+        .update({
+          name:                a.name!,
+          asset_type:          a.asset_type ?? 'General',
+          manufacturer:        a.manufacturer ?? null,
+          model:               a.model ?? null,
+          serial_number:       a.serial_number ?? null,
+          location:            a.location ?? null,
+          install_date:        a.install_date ?? null,
+          canonical_synced_at: now,
+        })
+        .eq('id', serviceId)
+      if (error) { assetFailed++; continue }
+      assetUpdated++
+    }
+
     await logAuditEvent({
       action: 'create',
       entityType: 'customer',
-      summary: `Canonical pull — ${customerCreated} customers created, ${customerUpdated} updated, ${customerFailed} failed; ${siteCreated} sites created, ${siteUpdated} updated, ${siteFailed} failed`,
+      summary: `Canonical pull — ${customerCreated} customers created, ${customerUpdated} updated, ${customerFailed} failed; ${siteCreated} sites created, ${siteUpdated} updated, ${siteFailed} failed; ${assetCreated} assets created, ${assetUpdated} updated, ${assetFailed} failed`,
     })
 
     revalidatePath('/admin/integrations')
     revalidatePath('/customers')
     revalidatePath('/sites')
+    revalidatePath('/assets')
 
     return {
       success: true,
       customers: { created: customerCreated, updated: customerUpdated, failed: customerFailed },
       sites:     { created: siteCreated,     updated: siteUpdated,     failed: siteFailed     },
+      assets:    { created: assetCreated,    updated: assetUpdated,    failed: assetFailed    },
     }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }
