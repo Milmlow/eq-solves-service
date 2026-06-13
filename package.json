@@ -12,6 +12,7 @@
     "lint": "eslint",
     "check": "tsc --noEmit && next build",
     "audit:rls": "tsx scripts/audit-rls.ts",
+    "audit:actions": "tsx scripts/audit-server-actions.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts"
