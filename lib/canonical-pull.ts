@@ -53,6 +53,11 @@ interface CanonicalItem {
   serial_number?: string | null
   install_date?: string | null
   active?: boolean
+  // Per-app assignment flag (canonical customers + sites). Only records
+  // explicitly enabled for Service are pulled — keeps the CMMS scoped to
+  // maintenance customers, not SKS's full Simpro CRM. Requires the canonical-api
+  // to include service_enabled in its projection (eq-shell).
+  service_enabled?: boolean
 }
 
 interface CanonicalPage {
@@ -148,8 +153,12 @@ export async function pullCanonical(): Promise<CanonicalPullResult> {
 
   let customerCreated = 0, customerUpdated = 0, customerFailed = 0
 
-  const toCreateC = canonicalCustomers.filter(c => c.company_name && !canonicalToService.has(c.id))
-  const toUpdateC = canonicalCustomers.filter(c => c.company_name &&  canonicalToService.has(c.id))
+  // Scope to Service-assigned customers only (service_enabled === true). The
+  // canonical-api must return service_enabled for this to select anything; until
+  // it does, this pull is a safe no-op (nothing matches), and the cron stays
+  // gated (CANONICAL_PULL_CRON_ENABLED) regardless.
+  const toCreateC = canonicalCustomers.filter(c => c.company_name && c.service_enabled === true && !canonicalToService.has(c.id))
+  const toUpdateC = canonicalCustomers.filter(c => c.company_name && c.service_enabled === true &&  canonicalToService.has(c.id))
 
   for (let i = 0; i < toCreateC.length; i += CHUNK) {
     const chunk = toCreateC.slice(i, i + CHUNK).map(c => ({
@@ -197,8 +206,8 @@ export async function pullCanonical(): Promise<CanonicalPullResult> {
 
   let siteCreated = 0, siteUpdated = 0, siteFailed = 0
 
-  const toCreateS = canonicalSites.filter(s => s.name && !siteCanonicalToService.has(s.id))
-  const toUpdateS = canonicalSites.filter(s => s.name &&  siteCanonicalToService.has(s.id))
+  const toCreateS = canonicalSites.filter(s => s.name && s.service_enabled === true && !siteCanonicalToService.has(s.id))
+  const toUpdateS = canonicalSites.filter(s => s.name && s.service_enabled === true &&  siteCanonicalToService.has(s.id))
 
   for (let i = 0; i < toCreateS.length; i += CHUNK) {
     const chunk = toCreateS.slice(i, i + CHUNK).map(s => ({
