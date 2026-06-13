@@ -117,11 +117,11 @@ export function TenantSettingsForm({ settings }: TenantSettingsFormProps) {
         </p>
         <div className="space-y-4">
           <FormInput
-            label="Product Name"
+            label="Company Name"
             name="product_name"
             required
             defaultValue={settings.product_name}
-            placeholder="e.g. EQ Solves"
+            placeholder="e.g. SKS Technologies"
           />
 
           {/* Light-surface logo — single source of truth: Media Library.
