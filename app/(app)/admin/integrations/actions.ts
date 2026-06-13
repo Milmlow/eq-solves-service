@@ -33,7 +33,10 @@ import {
   siteExternalId,
 } from '@/lib/canonical-sync'
 
-const FIELD_API_URL = process.env.FIELD_API_URL ?? ''
+const FIELD_API_URL   = process.env.FIELD_API_URL ?? ''
+const CANONICAL_URL   = process.env.CANONICAL_API_URL   ?? 'https://core.eq.solutions'
+const CANONICAL_KEY   = process.env.CANONICAL_API_KEY_SERVICE
+const CANONICAL_TENANT = process.env.CANONICAL_TENANT_SLUG ?? 'sks'
 const EQ_SECRET_SALT = process.env.EQ_SECRET_SALT ?? ''
 
 export interface FieldSite {
@@ -327,6 +330,257 @@ export async function backfillCanonicalAction(): Promise<
       success: true,
       customers: { synced: customersSynced, skipped: customersSkipped, failed: customersFailed },
       sites:     { synced: sitesSynced,     skipped: sitesSkipped,     failed: sitesFailed     },
+    }
+  } catch (e: unknown) {
+    return { success: false, error: (e as Error).message }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// pullFromCanonicalAction
+//
+// One-shot admin action — imports customers and sites FROM the canonical store
+// INTO eq-service's local DB. Direction: canonical → service (opposite of
+// backfill). Used to onboard eq-service onto an existing canonical tenant
+// (e.g. SKS, which already has 391 customers and 591 sites in sks-canonical
+// populated by the tenant migration and EQ Field).
+//
+// Match logic:
+//   - Existing row (canonical_id set): update name/email/phone/address only.
+//     Service-specific fields (logo_url, gate_code, etc.) are preserved.
+//   - New row: INSERT with canonical_id stamped. Customer link for sites is
+//     resolved via the canonical_id → service_id map built from step 1.
+//
+// Idempotent: safe to run more than once. Existing records are updated, not
+// duplicated. New records are created only if they don't exist yet.
+//
+// Customer and site records are batch-inserted (chunks of 100) to keep
+// the action within Netlify's function-timeout budget for large tenants.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface CanonicalGetItem {
+  id: string
+  external_id?: string
+  // customer fields
+  company_name?: string | null
+  email?: string | null
+  primary_phone?: string | null
+  // site fields
+  name?: string | null
+  address_line_1?: string | null
+  suburb?: string | null
+  state?: string | null
+  postcode?: string | null
+  country?: string | null
+  customer_id?: string | null  // canonical customer UUID
+  active?: boolean
+}
+
+interface CanonicalGetResponse {
+  ok: boolean
+  total: number
+  limit: number
+  offset: number
+  data: CanonicalGetItem[]
+}
+
+async function fetchAllCanonicalPages(
+  resource: 'customers' | 'sites',
+): Promise<CanonicalGetItem[]> {
+  if (!CANONICAL_KEY) throw new Error('CANONICAL_API_KEY_SERVICE not configured')
+  const PAGE = 500
+  const all: CanonicalGetItem[] = []
+  let offset = 0
+
+  for (;;) {
+    const url = new URL(`${CANONICAL_URL}/.netlify/functions/canonical-api`)
+    url.searchParams.set('resource', resource)
+    url.searchParams.set('limit', String(PAGE))
+    url.searchParams.set('offset', String(offset))
+    url.searchParams.set('active', 'true')
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${CANONICAL_KEY}`,
+        'X-Tenant': CANONICAL_TENANT,
+      },
+      cache: 'no-store',
+    })
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      throw new Error(`Canonical ${resource} GET ${res.status}: ${txt.slice(0, 200)}`)
+    }
+
+    const body: CanonicalGetResponse = await res.json()
+    if (!body.ok || !Array.isArray(body.data)) break
+    all.push(...body.data)
+    if (all.length >= body.total || body.data.length < PAGE) break
+    offset += PAGE
+  }
+
+  return all
+}
+
+export interface PullFromCanonicalResult {
+  success: true
+  customers: { created: number; updated: number; failed: number }
+  sites:     { created: number; updated: number; failed: number }
+}
+
+export async function pullFromCanonicalAction(): Promise<
+  PullFromCanonicalResult | { success: false; error: string }
+> {
+  try {
+    const { supabase, tenantId, role } = await requireUser()
+    if (!isAdmin(role)) return { success: false, error: 'Insufficient permissions.' }
+
+    if (!CANONICAL_KEY) {
+      return { success: false, error: 'CANONICAL_API_KEY_SERVICE is not configured in Netlify.' }
+    }
+
+    const now = new Date().toISOString()
+    const CHUNK = 100
+
+    // ── 1. Pull customers ──────────────────────────────────────────────────
+    const canonicalCustomers = await fetchAllCanonicalPages('customers')
+
+    // Build a canonical_id → service_id map from rows already in eq-service.
+    const { data: existingCustomers } = await supabase
+      .from('customers')
+      .select('id, canonical_id')
+      .not('canonical_id', 'is', null)
+
+    const canonicalToService = new Map<string, string>(
+      (existingCustomers ?? []).map(c => [c.canonical_id as string, c.id as string])
+    )
+
+    let customerCreated = 0
+    let customerUpdated = 0
+    let customerFailed = 0
+
+    // Partition into creates vs updates.
+    const toCreateC = canonicalCustomers.filter(c => c.company_name && !canonicalToService.has(c.id))
+    const toUpdateC = canonicalCustomers.filter(c => c.company_name &&  canonicalToService.has(c.id))
+
+    // Batch inserts.
+    for (let i = 0; i < toCreateC.length; i += CHUNK) {
+      const chunk = toCreateC.slice(i, i + CHUNK).map(c => ({
+        tenant_id:           tenantId,
+        name:                c.company_name!,
+        email:               c.email ?? null,
+        phone:               c.primary_phone ?? null,
+        is_active:           true,
+        canonical_id:        c.id,
+        canonical_synced_at: now,
+      }))
+      const { data: inserted, error } = await supabase
+        .from('customers')
+        .insert(chunk)
+        .select('id, canonical_id')
+      if (error) {
+        customerFailed += chunk.length
+        continue
+      }
+      customerCreated += inserted?.length ?? 0
+      for (const row of inserted ?? []) {
+        if (row.canonical_id) canonicalToService.set(row.canonical_id as string, row.id as string)
+      }
+    }
+
+    // Sequential updates (service-specific fields are preserved via explicit column list).
+    for (const c of toUpdateC) {
+      const serviceId = canonicalToService.get(c.id)!
+      const { error } = await supabase
+        .from('customers')
+        .update({
+          name:                c.company_name!,
+          email:               c.email ?? null,
+          phone:               c.primary_phone ?? null,
+          canonical_synced_at: now,
+        })
+        .eq('id', serviceId)
+      if (error) { customerFailed++; continue }
+      customerUpdated++
+    }
+
+    // ── 2. Pull sites ──────────────────────────────────────────────────────
+    const canonicalSites = await fetchAllCanonicalPages('sites')
+
+    const { data: existingSites } = await supabase
+      .from('sites')
+      .select('id, canonical_id')
+      .not('canonical_id', 'is', null)
+
+    const siteCanonicalToService = new Map<string, string>(
+      (existingSites ?? []).map(s => [s.canonical_id as string, s.id as string])
+    )
+
+    let siteCreated = 0
+    let siteUpdated = 0
+    let siteFailed = 0
+
+    const toCreateS = canonicalSites.filter(s => s.name && !siteCanonicalToService.has(s.id))
+    const toUpdateS = canonicalSites.filter(s => s.name &&  siteCanonicalToService.has(s.id))
+
+    // Batch inserts.
+    for (let i = 0; i < toCreateS.length; i += CHUNK) {
+      const chunk = toCreateS.slice(i, i + CHUNK).map(s => ({
+        tenant_id:           tenantId,
+        name:                s.name!,
+        customer_id:         s.customer_id ? (canonicalToService.get(s.customer_id) ?? null) : null,
+        address:             s.address_line_1 ?? null,
+        city:                s.suburb ?? null,
+        state:               s.state ?? null,
+        postcode:            s.postcode ?? null,
+        country:             s.country ?? undefined,
+        is_active:           true,
+        canonical_id:        s.id,
+        canonical_synced_at: now,
+      }))
+      const { data: inserted, error } = await supabase
+        .from('sites')
+        .insert(chunk)
+        .select('id')
+      if (error) {
+        siteFailed += chunk.length
+        continue
+      }
+      siteCreated += inserted?.length ?? 0
+    }
+
+    // Sequential updates.
+    for (const s of toUpdateS) {
+      const serviceId = siteCanonicalToService.get(s.id)!
+      const { error } = await supabase
+        .from('sites')
+        .update({
+          name:                s.name!,
+          address:             s.address_line_1 ?? null,
+          city:                s.suburb ?? null,
+          state:               s.state ?? null,
+          postcode:            s.postcode ?? null,
+          canonical_synced_at: now,
+        })
+        .eq('id', serviceId)
+      if (error) { siteFailed++; continue }
+      siteUpdated++
+    }
+
+    await logAuditEvent({
+      action: 'create',
+      entityType: 'customer',
+      summary: `Canonical pull — ${customerCreated} customers created, ${customerUpdated} updated, ${customerFailed} failed; ${siteCreated} sites created, ${siteUpdated} updated, ${siteFailed} failed`,
+    })
+
+    revalidatePath('/admin/integrations')
+    revalidatePath('/customers')
+    revalidatePath('/sites')
+
+    return {
+      success: true,
+      customers: { created: customerCreated, updated: customerUpdated, failed: customerFailed },
+      sites:     { created: siteCreated,     updated: siteUpdated,     failed: siteFailed     },
     }
   } catch (e: unknown) {
     return { success: false, error: (e as Error).message }

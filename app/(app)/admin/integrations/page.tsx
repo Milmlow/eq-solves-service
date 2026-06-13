@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic'
 export default async function IntegrationsPage() {
   // Check config server-side so the client component knows whether to show
   // the "not configured" warning without exposing env var names to the browser.
-  const fieldConfigured = !!(process.env.FIELD_API_URL && process.env.EQ_SECRET_SALT)
+  const fieldConfigured     = !!(process.env.FIELD_API_URL && process.env.EQ_SECRET_SALT)
+  const canonicalConfigured = !!(process.env.CANONICAL_API_KEY_SERVICE)
 
   // Fetch sync coverage stats. RLS scopes both queries to the current tenant
   // automatically — no manual tenant_id filter needed.
@@ -64,6 +65,7 @@ export default async function IntegrationsPage() {
 
       <IntegrationsClient
         fieldConfigured={fieldConfigured}
+        canonicalConfigured={canonicalConfigured}
         totalSites={totalSites ?? 0}
         syncedSites={syncedSites ?? 0}
         totalCustomers={totalCustomers ?? 0}

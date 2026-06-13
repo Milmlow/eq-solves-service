@@ -3,8 +3,8 @@
 import { useState, useTransition } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { RefreshCw, CheckCircle2, AlertCircle, Link2, CloudUpload } from 'lucide-react'
-import { syncSitesFromFieldAction, backfillCanonicalAction, type BackfillResult } from './actions'
+import { RefreshCw, CheckCircle2, AlertCircle, Link2, CloudUpload, CloudDownload } from 'lucide-react'
+import { syncSitesFromFieldAction, backfillCanonicalAction, pullFromCanonicalAction, type BackfillResult, type PullFromCanonicalResult } from './actions'
 
 type SyncResult =
   | { success: true; created: number; updated: number; message?: string }
@@ -12,6 +12,7 @@ type SyncResult =
 
 interface Props {
   fieldConfigured: boolean
+  canonicalConfigured: boolean
   totalSites: number
   syncedSites: number
   totalCustomers: number
@@ -21,6 +22,7 @@ interface Props {
 
 export function IntegrationsClient({
   fieldConfigured,
+  canonicalConfigured,
   totalSites,
   syncedSites,
   totalCustomers,
@@ -35,6 +37,7 @@ export function IntegrationsClient({
         syncedSites={syncedSites}
       />
       <CanonicalSyncCard
+        canonicalConfigured={canonicalConfigured}
         totalCustomers={totalCustomers}
         canonicalCustomers={canonicalCustomers}
         totalSites={totalSites}
@@ -45,18 +48,22 @@ export function IntegrationsClient({
 }
 
 function CanonicalSyncCard({
+  canonicalConfigured,
   totalCustomers,
   canonicalCustomers,
   totalSites,
   canonicalSites,
 }: {
+  canonicalConfigured: boolean
   totalCustomers: number
   canonicalCustomers: number
   totalSites: number
   canonicalSites: number
 }) {
-  const [isPending, startTransition] = useTransition()
-  const [result, setResult] = useState<BackfillResult | { success: false; error: string } | null>(null)
+  const [backfillPending, startBackfill] = useTransition()
+  const [pullPending,     startPull]     = useTransition()
+  const [backfillResult, setBackfillResult] = useState<BackfillResult | { success: false; error: string } | null>(null)
+  const [pullResult,     setPullResult]     = useState<PullFromCanonicalResult | { success: false; error: string } | null>(null)
 
   // Optimistic counts — bump after a successful back-fill so bars update
   // without a full reload (revalidatePath handles the server state separately).
@@ -68,17 +75,46 @@ function CanonicalSyncCard({
   const allSynced   = localCanonicalCustomers >= totalCustomers && localCanonicalSites >= totalSites && totalCustomers > 0
   const hasGap      = localCanonicalCustomers < totalCustomers || localCanonicalSites < totalSites
 
+  const isPending = backfillPending || pullPending
+
   function handleBackfill() {
-    setResult(null)
-    startTransition(async () => {
+    setBackfillResult(null)
+    setPullResult(null)
+    startBackfill(async () => {
       const res = await backfillCanonicalAction()
-      setResult(res)
+      setBackfillResult(res)
       if (res.success) {
         setLocalCanonicalCustomers((prev) => Math.min(prev + res.customers.synced, totalCustomers))
         setLocalCanonicalSites((prev) => Math.min(prev + res.sites.synced, totalSites))
       }
     })
   }
+
+  function handlePull() {
+    setBackfillResult(null)
+    setPullResult(null)
+    startPull(async () => {
+      const res = await pullFromCanonicalAction()
+      setPullResult(res)
+    })
+  }
+
+  const statusBadge = !canonicalConfigured ? (
+    <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+      Not configured
+    </span>
+  ) : allSynced ? (
+    <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+      All synced
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-xs text-eq-grey bg-gray-100 px-2 py-0.5 rounded-full">
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+      Write-through active
+    </span>
+  )
 
   return (
     <Card>
@@ -90,33 +126,29 @@ function CanonicalSyncCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <h2 className="text-sm font-semibold text-eq-ink">Canonical API</h2>
-            {allSynced ? (
-              <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                All synced
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-xs text-eq-grey bg-gray-100 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                Write-through active
-              </span>
-            )}
+            {statusBadge}
           </div>
+
+          {!canonicalConfigured && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">
+              Set <code className="font-mono font-medium">CANONICAL_API_KEY_SERVICE</code> in
+              Netlify environment variables to enable canonical sync and import.
+            </p>
+          )}
 
           <p className="text-xs text-eq-grey mb-3">
             Customers and sites are pushed to the EQ canonical store whenever they are
-            created or updated. The coverage below shows how many records have a confirmed
-            canonical ID. Run a back-fill to sync existing records created before this
-            integration was active.
+            created or updated. Use <strong>Import from Canonical</strong> to pull in
+            records that already exist in the canonical store but not yet in this workspace
+            (e.g. from EQ Field or a prior migration).
           </p>
 
           {(totalCustomers > 0 || totalSites > 0) && (
             <div className="space-y-3 mb-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
-              {/* Customers */}
               {totalCustomers > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-eq-ink">Customers synced</span>
+                    <span className="text-xs font-medium text-eq-ink">Customers synced to canonical</span>
                     <span className="text-xs font-semibold text-eq-ink">
                       {localCanonicalCustomers} / {totalCustomers}
                       {customerPct < 100 && (
@@ -132,11 +164,10 @@ function CanonicalSyncCard({
                   </div>
                 </div>
               )}
-              {/* Sites */}
               {totalSites > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-eq-ink">Sites synced</span>
+                    <span className="text-xs font-medium text-eq-ink">Sites synced to canonical</span>
                     <span className="text-xs font-semibold text-eq-ink">
                       {localCanonicalSites} / {totalSites}
                       {sitePct < 100 && (
@@ -158,48 +189,74 @@ function CanonicalSyncCard({
             </div>
           )}
 
-          {/* Back-fill button — only shown when there are unsynced records */}
-          {hasGap && (
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Import from canonical (pull direction) */}
+            <Button
+              variant="primary"
+              size="sm"
+              loading={pullPending}
+              disabled={!canonicalConfigured || isPending}
+              onClick={handlePull}
+            >
+              <CloudDownload className="w-3.5 h-3.5 mr-1.5" />
+              Import from Canonical
+            </Button>
+
+            {/* Back-fill (push direction) — only shown when there are unsynced records */}
+            {hasGap && (
               <Button
                 variant="secondary"
                 size="sm"
-                loading={isPending}
-                disabled={isPending}
+                loading={backfillPending}
+                disabled={!canonicalConfigured || isPending}
                 onClick={handleBackfill}
               >
                 <CloudUpload className="w-3.5 h-3.5 mr-1.5" />
                 Back-fill Canonical
               </Button>
-              {!isPending && !result && (
-                <span className="text-xs text-eq-grey">
-                  Syncs{' '}
-                  {totalCustomers - localCanonicalCustomers > 0
-                    ? `${totalCustomers - localCanonicalCustomers} customer${totalCustomers - localCanonicalCustomers !== 1 ? 's' : ''}`
-                    : ''}
-                  {totalCustomers - localCanonicalCustomers > 0 && totalSites - localCanonicalSites > 0 ? ' and ' : ''}
-                  {totalSites - localCanonicalSites > 0
-                    ? `${totalSites - localCanonicalSites} site${totalSites - localCanonicalSites !== 1 ? 's' : ''}`
-                    : ''}{' '}
-                  without a canonical ID.
-                </span>
-              )}
-            </div>
-          )}
+            )}
 
-          {result && (
+            {!isPending && !backfillResult && !pullResult && hasGap && canonicalConfigured && (
+              <span className="text-xs text-eq-grey">
+                {totalCustomers - localCanonicalCustomers > 0 &&
+                  `${totalCustomers - localCanonicalCustomers} customer${totalCustomers - localCanonicalCustomers !== 1 ? 's' : ''} not yet pushed`}
+                {totalCustomers - localCanonicalCustomers > 0 && totalSites - localCanonicalSites > 0 ? ', ' : ''}
+                {totalSites - localCanonicalSites > 0 &&
+                  `${totalSites - localCanonicalSites} site${totalSites - localCanonicalSites !== 1 ? 's' : ''} not yet pushed`}
+              </span>
+            )}
+          </div>
+
+          {backfillResult && (
             <div className={`mt-3 flex items-start gap-2 text-xs rounded-md px-3 py-2 ${
-              result.success
+              backfillResult.success
                 ? 'bg-green-50 text-green-800 border border-green-200'
                 : 'bg-red-50 text-red-800 border border-red-200'
             }`}>
-              {result.success
+              {backfillResult.success
                 ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 : <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />}
               <span>
-                {result.success
-                  ? buildBackfillMessage(result)
-                  : result.error}
+                {backfillResult.success
+                  ? buildBackfillMessage(backfillResult)
+                  : backfillResult.error}
+              </span>
+            </div>
+          )}
+
+          {pullResult && (
+            <div className={`mt-3 flex items-start gap-2 text-xs rounded-md px-3 py-2 ${
+              pullResult.success
+                ? 'bg-green-50 text-green-800 border border-green-200'
+                : 'bg-red-50 text-red-800 border border-red-200'
+            }`}>
+              {pullResult.success
+                ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                : <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />}
+              <span>
+                {pullResult.success
+                  ? buildPullMessage(pullResult)
+                  : pullResult.error}
               </span>
             </div>
           )}
@@ -216,9 +273,27 @@ function buildBackfillMessage(r: BackfillResult): string {
   if (r.sites.synced > 0)
     parts.push(`${r.sites.synced} site${r.sites.synced !== 1 ? 's' : ''} synced`)
   if (r.customers.failed + r.sites.failed > 0)
-    parts.push(`${r.customers.failed + r.sites.failed} failed (check CANONICAL_API_KEY_SERVICE)`)
+    parts.push(`${r.customers.failed + r.sites.failed} failed`)
   if (parts.length === 0)
     return 'Nothing to sync — all records already have a canonical ID.'
+  return `Done — ${parts.join(', ')}.`
+}
+
+function buildPullMessage(r: PullFromCanonicalResult): string {
+  const parts: string[] = []
+  const cNew = r.customers.created
+  const cUpd = r.customers.updated
+  const sNew = r.sites.created
+  const sUpd = r.sites.updated
+  const failed = r.customers.failed + r.sites.failed
+
+  if (cNew > 0) parts.push(`${cNew} customer${cNew !== 1 ? 's' : ''} added`)
+  if (cUpd > 0) parts.push(`${cUpd} customer${cUpd !== 1 ? 's' : ''} updated`)
+  if (sNew > 0) parts.push(`${sNew} site${sNew !== 1 ? 's' : ''} added`)
+  if (sUpd > 0) parts.push(`${sUpd} site${sUpd !== 1 ? 's' : ''} updated`)
+  if (failed > 0) parts.push(`${failed} failed`)
+  if (parts.length === 0)
+    return 'Nothing new — all canonical records are already in this workspace.'
   return `Done — ${parts.join(', ')}.`
 }
 

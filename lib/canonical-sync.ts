@@ -10,9 +10,9 @@
  *
  *   import { syncCustomer, syncSite } from '@/lib/canonical-sync';
  *
- *   // After creating/updating a customer:
+ *   // After creating/updating a customer (use the helper, never a literal):
  *   const canonical = await syncCustomer({
- *     external_id: `eq-service:${row.id}`,
+ *     external_id: customerExternalId(row.id),
  *     company_name: row.name,
  *     email: row.email,
  *     ...
@@ -24,12 +24,10 @@
  *   CANONICAL_API_KEY_SERVICE  — bearer key for EQ Service
  *   CANONICAL_TENANT_SLUG      — e.g. "sks"
  *
- * The external_id convention for EQ Service records:
- *   customers: "eq-service:${customer.id}"
- *   sites:     "eq-service:site:${site.id}"
- *
- * This keeps external_id globally unique across source apps without needing
- * namespaced UUIDs.
+ * external_id convention: see the "External-ID helpers" section at the bottom.
+ * Always build external_id via those helpers — they encode the keys the tenant
+ * migration already used, so write-through updates the migrated row instead of
+ * duplicating it. Never hand-write an "eq-service:" literal.
  */
 
 const API_URL    = process.env.CANONICAL_API_URL    ?? 'https://core.eq.solutions';
@@ -63,7 +61,7 @@ interface CanonicalApiErrResponse {
 
 // Writable customer fields (subset — only what EQ Service tracks).
 export interface CustomerSyncInput {
-  external_id:    string;          // required, e.g. "eq-service:12"
+  external_id:    string;          // required — raw customer UUID (customerExternalId)
   company_name?:  string;
   email?:         string;
   primary_phone?: string;
@@ -77,12 +75,12 @@ export interface CustomerSyncInput {
 
 // Writable site fields (subset).
 export interface SiteSyncInput {
-  external_id:         string;    // required, e.g. "eq-service:site:99"
+  external_id:         string;    // required — raw site UUID (siteExternalId)
   name?:               string;
   client_name?:        string;
   site_type?:          string;
   customer_id?:        string;    // canonical customer UUID (if known)
-  external_customer_id?: string;  // e.g. "eq-service:12" — used when canonical customer_id unknown
+  external_customer_id?: string;  // raw customer UUID (customerExternalId) when canonical customer_id unknown
   address_line_1?:     string;
   suburb?:             string;
   state?:              string;
@@ -96,10 +94,10 @@ export interface SiteSyncInput {
 
 // Writable asset fields (PPM extension).
 export interface AssetSyncInput {
-  external_id:          string;   // required, e.g. "eq-service:asset:123"
+  external_id:          string;   // required — raw asset UUID (assetExternalId)
   name?:                string;
   asset_type?:          string;
-  external_site_id?:    string;   // e.g. "eq-service:site:99"
+  external_site_id?:    string;   // raw site UUID (siteExternalId)
   location?:            string;
   manufacturer?:        string;
   model?:               string;
@@ -113,8 +111,8 @@ export interface AssetSyncInput {
 
 // Test result sync — fired when any test (RCD, ACB, NSX, test_record) saves.
 export interface TestResultSyncInput {
-  external_id:         string;    // required, e.g. "eq-service:rcd_test:abc"
-  external_asset_id?:  string;    // e.g. "eq-service:asset:123"
+  external_id:         string;    // required — "eq-service:<acb|nsx|rcd|test_record>:<uuid>" (use the *TestExternalId helpers)
+  external_asset_id?:  string;    // raw asset UUID (assetExternalId)
   test_type:           string;    // "rcd" | "acb" | "nsx" | "thermal" | …
   test_date?:          string;    // ISO date
   pass_fail?:          'pass' | 'fail' | 'pending';
@@ -124,9 +122,9 @@ export interface TestResultSyncInput {
 
 // Defect sync — fired when a defect is raised or updated.
 export interface DefectSyncInput {
-  external_id:         string;    // required, e.g. "eq-service:defect:abc"
-  external_asset_id?:  string;    // e.g. "eq-service:asset:123"
-  external_site_id?:   string;    // e.g. "eq-service:site:99"
+  external_id:         string;    // required — raw defect UUID (defectExternalId)
+  external_asset_id?:  string;    // raw asset UUID (assetExternalId)
+  external_site_id?:   string;    // raw site UUID (siteExternalId)
   title?:              string;
   description?:        string;
   severity?:           string;
@@ -338,62 +336,54 @@ async function enqueueEvent(event: string, payload: Record<string, unknown>): Pr
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// External-ID helpers
+// External-ID helpers — canonical identity convention
 // ──────────────────────────────────────────────────────────────────────
+//
+// These MUST match the keys the tenant-plane migration (migrate-tenants.mjs)
+// already wrote into sks-canonical.app_data, or every write-through inserts
+// a duplicate instead of updating the migrated row. Convention (confirmed
+// against the as-built canonical, 2026-06-08):
+//
+//   • Tables fed by exactly ONE EQ Service table
+//       → external_id = the source row's raw UUID (no prefix).
+//         UUIDs are globally unique; the (tenant_id, external_id) index is
+//         per-table, so no namespacing is needed.
+//         Applies to: customers, sites, assets, defects.
+//
+//   • Tables fed by MANY EQ Service tables (a merge)
+//       → external_id = `eq-service:<source>:<uuid>` to disambiguate.
+//         Applies to: asset_test_results (acb | nsx | rcd | test_record).
+//
+// Never hand-write an "eq-service:" literal — always go through these helpers.
 
-/**
- * Build the standard external_id for an EQ Service customer.
- * Always prefix with "eq-service:" to avoid collisions with EQ Quotes IDs.
- */
 export function customerExternalId(serviceCustomerId: string | number): string {
-  return `eq-service:${serviceCustomerId}`;
+  return `${serviceCustomerId}`;
 }
 
-/**
- * Build the standard external_id for an EQ Service site.
- */
 export function siteExternalId(serviceSiteId: string | number): string {
-  return `eq-service:site:${serviceSiteId}`;
+  return `${serviceSiteId}`;
 }
 
-/**
- * Build the standard external_id for an EQ Service asset.
- */
 export function assetExternalId(serviceAssetId: string | number): string {
-  return `eq-service:asset:${serviceAssetId}`;
+  return `${serviceAssetId}`;
 }
 
-/**
- * Build the standard external_id for an RCD test.
- */
 export function rcdTestExternalId(testId: string | number): string {
-  return `eq-service:rcd_test:${testId}`;
+  return `eq-service:rcd:${testId}`;
 }
 
-/**
- * Build the standard external_id for an ACB test.
- */
 export function acbTestExternalId(testId: string | number): string {
-  return `eq-service:acb_test:${testId}`;
+  return `eq-service:acb:${testId}`;
 }
 
-/**
- * Build the standard external_id for an NSX test.
- */
 export function nsxTestExternalId(testId: string | number): string {
-  return `eq-service:nsx_test:${testId}`;
+  return `eq-service:nsx:${testId}`;
 }
 
-/**
- * Build the standard external_id for a generic test record.
- */
 export function testRecordExternalId(testId: string | number): string {
   return `eq-service:test_record:${testId}`;
 }
 
-/**
- * Build the standard external_id for a defect.
- */
 export function defectExternalId(defectId: string | number): string {
-  return `eq-service:defect:${defectId}`;
+  return `${defectId}`;
 }
