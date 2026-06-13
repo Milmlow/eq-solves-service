@@ -6,13 +6,13 @@
 // the shell token in the URL hash. This page reads the token, calls
 // /api/shell-auth to validate it and get a one-time OTP, then uses the
 // browser Supabase client to verify the OTP and establish a session.
-// On success it redirects to the main app (/).
-//
-// This route lives outside the (app) group so it's reachable without
-// an existing session — it IS the session bootstrap for iframe users.
+// On success it navigates directly to /dashboard via window.location.replace
+// (not router.replace('/')) to avoid passing through the root page which
+// emits a server-side redirect to /dashboard — two redirects instead of one,
+// and Next.js router soft-nav stacking has been observed creating redirect
+// loops in iframe contexts when the page.tsx redirect fires as an HTTP 3xx.
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 type Status = 'loading' | 'error'
@@ -24,7 +24,6 @@ function signalError(code: string) {
 }
 
 export default function ShellEntryPage() {
-  const router = useRouter()
   const [status, setStatus] = useState<Status>('loading')
   const [errMsg, setErrMsg] = useState<string>('')
 
@@ -80,8 +79,10 @@ export default function ShellEntryPage() {
         }
 
         // JWT path: shell-auth set eq_service_jwt cookie server-side, no OTP needed.
+        // Navigate directly to /dashboard — skips the root page's redirect() call
+        // which can produce HTTP 3xx loops in sandboxed iframe contexts.
         if (body.ok) {
-          router.replace('/')
+          window.location.replace('/dashboard')
           return
         }
 
@@ -106,8 +107,8 @@ export default function ShellEntryPage() {
           return
         }
 
-        // Session established — redirect to the main app.
-        router.replace('/')
+        // Session established — navigate directly to dashboard (same reasoning as above).
+        window.location.replace('/dashboard')
       } catch {
         signalError('network-error')
         setStatus('error')
@@ -116,7 +117,7 @@ export default function ShellEntryPage() {
     }
 
     void exchange()
-  }, [router])
+  }, [])
 
   const containerStyle: React.CSSProperties = {
     display: 'flex',
