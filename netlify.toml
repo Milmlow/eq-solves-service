@@ -1,7 +1,10 @@
 [build]
-  # GITHUB_TOKEN — GitHub PAT (repo scope) set in Netlify env vars.
-  # Used for git URL rewrite for private github: deps (@eq-solutions/*).
+  # GITHUB_TOKEN — GitHub PAT (repo + write:packages) set in Netlify env vars.
+  # Used for: (1) git URL rewrite for github: deps, (2) GitHub Packages npm auth
+  # for @eq-solutions/ui. NODE_AUTH_TOKEN is derived from it so npm reads
+  # .npmrc's //npm.pkg.github.com/:_authToken substitution correctly.
   command = """
+    export NODE_AUTH_TOKEN="${GITHUB_TOKEN:-}" && \
     GHBASE="https://${GITHUB_TOKEN:+${GITHUB_TOKEN}@}github.com/" && \
     git config --global --add url."${GHBASE}".insteadOf "https://github.com/" && \
     git config --global --add url."${GHBASE}".insteadOf "git@github.com:" && \
