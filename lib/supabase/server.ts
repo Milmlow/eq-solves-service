@@ -11,13 +11,22 @@ import type { Database } from './database.types'
  * app_metadata, which RLS reads via auth.jwt() -> 'app_metadata' ->> 'tenant_id'.
  */
 export function createJwtClient(jwt: string) {
-  // JWT path queries ehow (sks-canonical) app_data.* via CANONICAL_SUPABASE_URL.
-  // Falls back to the main URL so local dev without canonical env vars still boots.
-  const canonicalUrl = process.env.CANONICAL_SUPABASE_URL ?? publicEnv.NEXT_PUBLIC_SUPABASE_URL
-  const canonicalKey = process.env.CANONICAL_SUPABASE_ANON_KEY ?? publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  // Identity convergence (Phase 1, gated): when IDENTITY_CLAIMS_ENABLED, the
+  // data-JWT is signed with Service's OWN (urjh) secret and Service's data lives
+  // in urjh, so target Service's own project — the JWT is validated natively and
+  // RLS resolves identity from its claims (migration 0131). When OFF (default),
+  // legacy routing: the JWT path queried ehow (sks-canonical) app_data.* via
+  // CANONICAL_SUPABASE_URL, falling back to the main URL for local dev.
+  const useOwnProject = process.env.IDENTITY_CLAIMS_ENABLED === 'true'
+  const url = useOwnProject
+    ? publicEnv.NEXT_PUBLIC_SUPABASE_URL
+    : (process.env.CANONICAL_SUPABASE_URL ?? publicEnv.NEXT_PUBLIC_SUPABASE_URL)
+  const key = useOwnProject
+    ? publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    : (process.env.CANONICAL_SUPABASE_ANON_KEY ?? publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   return createServerClient<Database>(
-    canonicalUrl,
-    canonicalKey,
+    url,
+    key,
     {
       global: { headers: { Authorization: `Bearer ${jwt}` } },
       cookies: { getAll: () => [], setAll: () => {} },

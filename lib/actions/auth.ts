@@ -24,6 +24,7 @@
 import { cookies } from 'next/headers'
 import { createClient, createJwtClient } from '@/lib/supabase/server'
 import { verifyServiceJwt } from '@/lib/auth/service-jwt'
+import { resolveFederatedTenantId } from '@/lib/auth/federated-identity'
 import type { Role } from '@/lib/types'
 
 export async function requireUser() {
@@ -36,12 +37,19 @@ export async function requireUser() {
   if (serviceJwtRaw) {
     const claims = verifyServiceJwt(serviceJwtRaw)
     if (claims?.app_metadata?.tenant_id && claims.app_metadata.eq_role) {
-      return {
-        supabase: createJwtClient(serviceJwtRaw),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        user: { id: claims.sub, email: claims.app_metadata.email ?? '' } as any,
-        tenantId: claims.app_metadata.tenant_id,
-        role: claims.app_metadata.eq_role as Role,
+      // Resolve the Service tenant id — by slug when convergence is enabled
+      // (canonical tenant-ID namespace differs from Service's and can collide),
+      // else the raw claim (legacy, unchanged). Unresolved → fall through to the
+      // standard session path rather than trusting a stale id.
+      const tenantId = await resolveFederatedTenantId(claims)
+      if (tenantId) {
+        return {
+          supabase: createJwtClient(serviceJwtRaw),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          user: { id: claims.sub, email: claims.app_metadata.email ?? '' } as any,
+          tenantId,
+          role: claims.app_metadata.eq_role as Role,
+        }
       }
     }
   }

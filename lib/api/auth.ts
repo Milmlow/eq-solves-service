@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { createClient, createJwtClient } from '@/lib/supabase/server'
 import { verifyServiceJwt } from '@/lib/auth/service-jwt'
+import { resolveFederatedTenantId } from '@/lib/auth/federated-identity'
 import type { Role } from '@/lib/types'
 
 // Re-export the canonical role helpers from the single source (lib/utils/roles)
@@ -26,13 +27,17 @@ export async function getApiUser() {
     const claims = verifyServiceJwt(serviceJwtRaw)
     if (claims?.app_metadata?.tenant_id && claims.app_metadata.eq_role) {
       const role = claims.app_metadata.eq_role as Role
-      return {
-        supabase: createJwtClient(serviceJwtRaw),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        user: { id: claims.sub, email: claims.app_metadata.email ?? '' } as any,
-        tenantId: claims.app_metadata.tenant_id,
-        role,
-        canonicalRole: role,
+      // Resolve by slug when convergence is enabled (else raw claim, unchanged).
+      const tenantId = await resolveFederatedTenantId(claims)
+      if (tenantId) {
+        return {
+          supabase: createJwtClient(serviceJwtRaw),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          user: { id: claims.sub, email: claims.app_metadata.email ?? '' } as any,
+          tenantId,
+          role,
+          canonicalRole: role,
+        }
       }
     }
   }
