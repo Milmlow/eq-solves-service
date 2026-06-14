@@ -17,6 +17,8 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@eq-solutions'
 
       - name: Configure git for private @eq-solutions deps
         run: |
@@ -27,6 +29,8 @@ jobs:
 
       - name: Install deps
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.EQ_TOKENS_PAT }}
 
       - name: TypeScript (tsc --noEmit)
         run: npx tsc --noEmit
