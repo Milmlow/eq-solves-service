@@ -26,10 +26,6 @@ jobs:
     name: tsc + next build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      packages: read
-
     # The build needs the same NEXT_PUBLIC_* env vars Netlify uses, otherwise
     # Next collects-page-data step fails with "Invalid public environment
     # variables". Provide placeholders here — they're fine for compilation,
@@ -48,8 +44,6 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@eq-solutions'
 
       - name: Configure git for private @eq-solutions deps
         run: |
@@ -59,9 +53,7 @@ jobs:
           git config --global --add url."https://${{ secrets.EQ_TOKENS_PAT }}@github.com/".insteadOf "git+ssh://git@github.com/"
 
       - name: Install dependencies
-        run: npm install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
 
       - name: Type check
         run: npx tsc --noEmit

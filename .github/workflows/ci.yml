@@ -10,9 +10,6 @@ jobs:
   typecheck-and-audit:
     name: Typecheck + audit
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
     steps:
       - uses: actions/checkout@v6
 
@@ -20,8 +17,6 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@eq-solutions'
 
       - name: Configure git for private @eq-solutions deps
         run: |
@@ -31,9 +26,7 @@ jobs:
           git config --global --add url."https://${{ secrets.EQ_TOKENS_PAT }}@github.com/".insteadOf "git+ssh://git@github.com/"
 
       - name: Install deps
-        run: npm install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
 
       - name: TypeScript (tsc --noEmit)
         run: npx tsc --noEmit
