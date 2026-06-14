@@ -1,8 +1,10 @@
 [build]
-  # Lockfile resolved URLs use HTTPS codeload tarball format so npm ci
-  # doesn't need SSH access to GitHub. GITHUB_TOKEN env var is kept for
-  # any future private deps — when unset the rewrite targets plain HTTPS.
+  # GITHUB_TOKEN — GitHub PAT (read:packages + repo) set in Netlify env vars.
+  # Used for: (1) git URL rewrite for github: deps, (2) GitHub Packages registry
+  # auth for @eq-solutions/ui (^1.5.0). NODE_AUTH_TOKEN is derived from it so
+  # npm reads .npmrc's //npm.pkg.github.com/:_authToken substitution correctly.
   command = """
+    export NODE_AUTH_TOKEN="${GITHUB_TOKEN:-}" && \
     GHBASE="https://${GITHUB_TOKEN:+${GITHUB_TOKEN}@}github.com/" && \
     git config --global --add url."${GHBASE}".insteadOf "https://github.com/" && \
     git config --global --add url."${GHBASE}".insteadOf "git@github.com:" && \
