@@ -1,6 +1,9 @@
 import { unstable_cache } from 'next/cache'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { verifyServiceJwt } from '@/lib/auth/service-jwt'
+import { IDENTITY_CLAIMS_ENABLED, resolveFederatedTenantId } from '@/lib/auth/federated-identity'
 import type { TenantSettings } from '@/lib/types'
 
 const DEFAULTS: TenantSettings = {
@@ -107,7 +110,28 @@ export async function getTenantSettings(): Promise<{
 }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { settings: DEFAULTS, tenantId: null }
+  if (!user) {
+    // Federated (Shell) sessions carry no cookie user — identity is in the
+    // eq_service_jwt claim. When convergence is enabled, resolve the tenant by
+    // slug and read its settings (via the admin-client cache, no RLS), so the
+    // page shows the real brand instead of falling back to EQ defaults. Flag
+    // off (default) → unchanged: defaults. Mirrors requireUser's resolution.
+    if (IDENTITY_CLAIMS_ENABLED) {
+      const jwtRaw = (await cookies()).get('eq_service_jwt')?.value
+      const claims = jwtRaw ? verifyServiceJwt(jwtRaw) : null
+      if (claims) {
+        const jwtTenantId = await resolveFederatedTenantId(claims)
+        if (jwtTenantId) {
+          const settings = await getCachedTenantSettings(jwtTenantId)
+          return {
+            settings: settings ?? { ...DEFAULTS, tenant_id: jwtTenantId },
+            tenantId: jwtTenantId,
+          }
+        }
+      }
+    }
+    return { settings: DEFAULTS, tenantId: null }
+  }
 
   // Get user's tenant membership
   const { data: membership } = await supabase
