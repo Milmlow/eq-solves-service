@@ -26,7 +26,9 @@ jobs:
           git config --global --add url."https://${{ secrets.EQ_TOKENS_PAT }}@github.com/".insteadOf "git+ssh://git@github.com/"
 
       - name: Install deps
-        run: npm ci
+        run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.EQ_TOKENS_PAT }}
 
       - name: TypeScript (tsc --noEmit)
         run: npx tsc --noEmit
