@@ -40,22 +40,25 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@eq-solutions'
 
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v2
         with:
           version: latest
 
-      - name: Configure git and npm for private @eq-solutions deps
+      - name: Configure git for private @eq-solutions deps
         run: |
           git config --global --add url."https://${{ secrets.EQ_TOKENS_PAT }}@github.com/".insteadOf "https://github.com/"
           git config --global --add url."https://${{ secrets.EQ_TOKENS_PAT }}@github.com/".insteadOf "git@github.com:"
           git config --global --add url."https://${{ secrets.EQ_TOKENS_PAT }}@github.com/".insteadOf "ssh://git@github.com/"
           git config --global --add url."https://${{ secrets.EQ_TOKENS_PAT }}@github.com/".insteadOf "git+ssh://git@github.com/"
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
 
       - name: Install dependencies
         run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # `supabase start` boots Postgres + GoTrue + PostgREST + Realtime in
       # Docker containers and applies every migration in supabase/migrations/.
