@@ -41,6 +41,30 @@ Recon (eq-shell + Field + live `urjh` introspection) changed three things:
 `app/(app)/layout.tsx`, `app/(app)/dashboard/page.tsx`, `proxy.ts`) + **one migration** redefining the
 two helper functions + reconcile 11 members in canonical.
 
+## Phase 1 foundation review — outcome (2026-06-14)
+
+Adversarial multi-agent review (5 agents) of migration 0131 + the design.
+**Verdict: GO to _apply_ 0131 (it's a no-op with the flag off) — NO-GO to flip the flag until the
+must-fixes below land.** Two criticals caught before any code-path existed:
+
+- **[CRITICAL] Tenant-ID namespace collision.** Canonical and Service use _different_ IDs for the same
+  tenants, and they can collide — e.g. `a0000000…` = "EQ Solutions" in canonical but "Demo Electrical"
+  in Service. Trusting the raw `app_metadata.tenant_id` claim as a Service `tenants.id` could expose
+  one tenant's data to another. **Fix: resolve tenant by `tenant_slug` → Service `tenants.id` (a
+  lookup), never the raw claim id.** Material design change — see design doc.
+- **[CRITICAL] DoS via malformed claim.** Empty/garbled `tenant_id` → `::uuid` raises 22P02 → aborts
+  every query that calls the helper (120 policies). **Fix: safe-uuid guard + nullif-empty in
+  `_identity_use_claims`.**
+- **[HIGH] Self-asserted role.** `eq_role` trusted with no DB cross-check (62 policies) → possible
+  elevation. **Fix: cross-check against membership; `LEAST(claimed, actual)` or gate on membership.**
+- **[HIGH] Code-path wiring.** `createJwtClient` must target **urjh** (not ehow/canonical); mint with
+  urjh's own secret; add the new transport **before** deleting the old; map uid; lock down
+  `_identity_use_claims`.
+
+**Net:** keystone stays (flag off = safe to apply). Phase 1 must add tenant-by-slug resolution, uuid
+hardening, role cross-check, and the code-path fixes → shadow-run → only then flip. Full report:
+workflow run `wf_bd13b9f8-f67`.
+
 ## Phase map
 
 | Phase | What | Reversible? | Gate |

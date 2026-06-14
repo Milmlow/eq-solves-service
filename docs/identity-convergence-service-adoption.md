@@ -69,10 +69,21 @@ a downtime-and-relogin migration.
    claims; (c) use it as the session against `urjh`. `auth.uid()`=canonical `sub`,
    `auth.role()`=authenticated, claims available — all natively, all behind a flag, all reversible.
 2. **Re-point the two RLS helpers, not the policies.** Rewrite `get_user_tenant_ids()` and
-   `get_user_role()` (SECURITY DEFINER) to read from `auth.jwt() -> 'app_metadata'`
-   (`tenant_id`, `eq_role`) — with `tenant_members` as a transition fallback. **Every existing RLS
-   policy then converges with zero policy rewrites**, and the `logos` storage check
-   (`auth.role() = 'authenticated'`) passes because the Shell JWT already carries `role:authenticated`.
+   `get_user_role()` (SECURITY DEFINER) to read identity from the JWT claims — with `tenant_members`
+   as a transition fallback. **Every existing RLS policy then converges with zero policy rewrites**,
+   and the `logos` storage check (`auth.role() = 'authenticated'`) passes because the Shell JWT already
+   carries `role:authenticated`.
+   **⚠️ Review must-fixes (2026-06-14 adversarial review) — these change how the claims are read:**
+   - **Resolve tenant by `tenant_slug`, NOT the raw `tenant_id` claim.** Canonical and Service use
+     different tenant-ID namespaces and they can collide (`a0000000…` = "EQ Solutions" in canonical
+     but "Demo Electrical" in Service). Map `app_metadata.tenant_slug` → `public.tenants.id` (a
+     lookup); never cast the canonical `tenant_id` claim to a Service `tenants.id`. **Without this it's
+     a cross-tenant data-exposure bug.**
+   - **Safe-cast the uuid.** A malformed/empty claim hitting `::uuid` raises `22P02` and aborts every
+     query calling the helper (120 policies) — a self-inflicted outage. Guard with a `_safe_uuid` +
+     `nullif(...,'')`.
+   - **Don't trust `eq_role` blind.** Cross-check the claimed role against the reconciled membership
+     (`LEAST(claimed, actual)` or gate on membership) so a forged claim can't elevate (62 policies).
 3. **Delete the parallel machinery.** Remove `mintServiceJwt` + the re-mint, the `requireUser()` JWT
    fast-path, the JWT branch in `app/(app)/layout.tsx`, and `createJwtClient`. One path:
    validate the Shell JWT → use its claims. (This *deletes* code; the correct version is smaller.)
