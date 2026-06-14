@@ -57,11 +57,17 @@ a downtime-and-relogin migration.
 
 ## Target design for Service (mirror Field)
 
-1. **Bring `urjh` into the federation.** Set eq-service's project JWT secret to the **shared
-   canonical `SUPABASE_JWT_SECRET`** so its GoTrue/PostgREST/Storage accept Shell-issued JWTs
-   natively. ⚠️ This reissues `urjh`'s anon/service_role keys (they're JWTs signed by that secret) —
-   Service's Netlify env keys must be rotated in lockstep. This is the pivotal, careful step; it's
-   exactly how Field's `nspb` is already configured, so it's proven, not novel.
+1. **Mint a data-JWT with `urjh`'s OWN secret (Field's actual pattern — no secret swap).**
+   Phase-0 recon (2026-06-14) found Field does **not** swap its data project's JWT secret. It
+   *verifies* the inbound Shell JWT with the canonical secret, then **mints a short-lived data-JWT
+   signed with the tenant data-project's own secret** (`verify-pin.js` `mint-data-jwt`,
+   `_jwtSecretForTenant`), carrying the canonical claims (`sub`, `tenant_id`, `eq_role`,
+   `role:authenticated`). The client uses that as the Supabase session. **So Service keeps `urjh`'s
+   existing JWT secret — no key reissue, no irreversible swap.** Service: (a) verify the inbound Shell
+   JWT with the canonical secret (`EQ_SHELL_JWT_SECRET`, already wired in `shell-auth/route.ts`);
+   (b) mint a short-lived data-JWT signed with `urjh`'s own `SUPABASE_JWT_SECRET` carrying those
+   claims; (c) use it as the session against `urjh`. `auth.uid()`=canonical `sub`,
+   `auth.role()`=authenticated, claims available — all natively, all behind a flag, all reversible.
 2. **Re-point the two RLS helpers, not the policies.** Rewrite `get_user_tenant_ids()` and
    `get_user_role()` (SECURITY DEFINER) to read from `auth.jwt() -> 'app_metadata'`
    (`tenant_id`, `eq_role`) — with `tenant_members` as a transition fallback. **Every existing RLS

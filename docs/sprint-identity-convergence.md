@@ -19,14 +19,36 @@ This sprint is *adoption*, not a new decision.
 - Every phase: `tsc --noEmit` 0 errors, `npm run check` green, RLS isolation + `audit:rls` /
   `audit:actions` gates pass, Supabase advisors (security+perf) 0 new ERROR.
 
+## Phase 0 findings (2026-06-14) — plan got smaller and safer
+
+Recon (eq-shell + Field + live `urjh` introspection) changed three things:
+
+1. **No irreversible secret swap.** Field does **not** swap its data-project JWT secret. It verifies
+   the Shell JWT with the canonical secret, then mints a **short-lived data-JWT signed with the data
+   project's own secret** (`verify-pin.js` `mint-data-jwt`). Service does the same with `urjh`'s
+   existing secret — **no key reissue.** The cutover becomes a **reversible flag flip**, not a
+   one-way door. (This supersedes the old "Phase 3 irreversible" framing below.)
+2. **The 2-function lever is confirmed.** `urjh` has **167 RLS policies / 54 tables; 120 (72%) run
+   through `get_user_tenant_ids()` / `get_user_role()`** → re-point those two functions and 120
+   policies converge with zero edits. 19 use `auth.uid()` directly (review individually); 0 read
+   claims today; **no columns default to `auth.uid()`** (no DB-default churn).
+3. **CSP is likely a non-issue.** In-Shell apps are true **cross-origin iframes**, each keeping its
+   own CSP; Service's iframe uses Service's CSP (already allows `urjh`). The earlier CSP error was the
+   Shell frame, not Service's. → eq-shell CSP change probably **not** needed (confirm in Phase 1).
+
+**Change surface:** ~9 code files (`lib/auth/service-jwt.ts`, `lib/supabase/server.ts`,
+`lib/actions/auth.ts`, `lib/api/auth.ts`, `app/api/shell-auth/route.ts`, `app/shell/page.tsx`,
+`app/(app)/layout.tsx`, `app/(app)/dashboard/page.tsx`, `proxy.ts`) + **one migration** redefining the
+two helper functions + reconcile 11 members in canonical.
+
 ## Phase map
 
 | Phase | What | Reversible? | Gate |
 |---|---|---|---|
-| 0 | Verify & decide (no code) | n/a | → Royce go/no-go to build |
+| 0 | Verify & decide (no code) — **DONE** | n/a | → Royce go/no-go to build |
 | 1 | Build behind a flag on a Supabase **branch** | Yes | — |
 | 2 | Reconcile identities (data prep, dry-run) | Yes | — |
-| 3 | **Cutover** (secret swap + flip) in prod | **No** | → Royce sign-off + scheduled window |
+| 3 | Flip the flag in prod (data-JWT + claims RLS) | **Yes — flag-gated** | → Royce sign-off + window |
 | 4 | Cleanup, soak, advisors, docs | Yes | — |
 
 ---
@@ -67,15 +89,15 @@ The two unknowns that could move the plan, settled before we touch anything.
 - **Exit:** every active member has a canonical identity + correct role; mapping verified.
   **Owner:** me/agent (needs canonical read/write access — Royce dependency).
 
-### Phase 3 — Cutover  *(IRREVERSIBLE — GATE)*
+### Phase 3 — Flip the flag in prod  *(reversible, flag-gated — GATE)*
 
-- [ ] **Royce sign-off + scheduled low-traffic window.** Rollback rehearsed first.
-- [ ] Swap `urjh` prod JWT secret to the shared canonical secret; rotate Service Netlify keys in
-  lockstep (single change set).
-- [ ] eq-shell: confirm `aud=service` token-exchange in use; add `urjh` to `connect-src` if Phase 0
-  said so.
+- [ ] **Royce sign-off + low-traffic window.** Rollback rehearsed first.
+- [ ] Turn the claims/data-JWT path ON in prod (the same flag proven on the Phase-1 branch). **No
+  secret swap, no key reissue** — `urjh` keeps its own JWT secret; Service mints the data-JWT with it.
+- [ ] eq-shell: confirm `aud=service` token-exchange in use; CSP change only if Phase 1 proved it's
+  needed (Phase-0 says probably not).
 - [ ] Smoke matrix: in-Shell × direct login, each role, storage upload, RLS tenant isolation.
-- **Exit:** prod in-Shell Service works for SKS; rollback path confirmed live.  **Owner:** Royce-gated, me-executed.
+- **Exit:** prod in-Shell Service works for SKS; flag-off rollback confirmed live.  **Owner:** Royce-gated, me-executed.
 
 ### Phase 4 — Cleanup & soak
 
@@ -90,10 +112,10 @@ The two unknowns that could move the plan, settled before we touch anything.
 
 ## Rollback
 
-The **Phase 3 secret swap is the single high-risk gate.** Mitigations: proven on the Phase-1 branch
-first; keep the claims-vs-`tenant_members` fallback switch; rehearse revert (restore prior secret +
-keys, flip helpers back to `tenant_members`) before the window. Don't delete `tenant_members` data
-until the soak passes.
+Phase 0 removed the one-way door — there is **no secret swap**, so the prod step is a **flag flip**.
+Mitigations: prove it on the Phase-1 branch first; the helper functions keep a
+claims-vs-`tenant_members` fallback switch; flag-off restores the old behaviour instantly. Don't
+delete `tenant_members` data until the soak passes.
 
 ## Effort & timing
 
