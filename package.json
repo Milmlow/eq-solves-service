@@ -22,7 +22,7 @@
     "@eq-solutions/tokens": "github:eq-solutions/eq-design-tokens#v1.3.2",
     "@eq-solutions/ui": "github:eq-solutions/eq-ui#v1.5.0",
     "@sentry/nextjs": "^10.53.1",
-    "@supabase/ssr": "^0.10.0",
+    "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.101.1",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
