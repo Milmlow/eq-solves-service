@@ -56,6 +56,13 @@ export function mintServiceJwt(from: ServiceJwtClaims, ttlSeconds: number): stri
   const now = Math.floor(Date.now() / 1000)
   const payload = Buffer.from(JSON.stringify({
     aud: 'authenticated',
+    // `role` (not `aud`) is what PostgREST/Storage read to pick the Postgres
+    // role for the request. Without it, Bearer requests from this minted token
+    // run as `anon`, so any RLS policy checking `auth.role() = 'authenticated'`
+    // (e.g. the `logos` storage bucket) rejects the write with "new row
+    // violates row-level security policy". Shell-bridged users are fully
+    // authenticated — emit the claim so they get the `authenticated` role.
+    role: 'authenticated',
     iss: 'supabase',
     sub: from.sub,
     iat: now,
