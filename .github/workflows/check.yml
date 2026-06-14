@@ -26,7 +26,6 @@ jobs:
     name: tsc + next build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     # The build needs the same NEXT_PUBLIC_* env vars Netlify uses, otherwise
     # Next collects-page-data step fails with "Invalid public environment
     # variables". Provide placeholders here — they're fine for compilation,

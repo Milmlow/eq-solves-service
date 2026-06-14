@@ -29,7 +29,6 @@ jobs:
     name: Integration tests (Supabase local)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - uses: actions/checkout@v6
 
