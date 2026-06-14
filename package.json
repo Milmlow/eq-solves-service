@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@eq-solutions/roles": "github:eq-solutions/eq-roles#v2.3.0",
-    "@eq-solutions/tokens": "github:eq-solutions/eq-design-tokens#v1.3.2",
+    "@eq-solutions/tokens": "github:eq-solutions/eq-design-tokens#v1.3.3",
     "@eq-solutions/ui": "github:eq-solutions/eq-ui#v1.5.0",
     "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.10.0",
