@@ -110,6 +110,30 @@ The two unknowns that could move the plan, settled before we touch anything.
 
 ---
 
+## Rigor track — the "no mistakes" guarantees (woven through every phase)
+
+- **Branch-first.** All schema + JWT work on a Supabase branch; prod `urjh` untouched until the flag flip.
+- **Reversible everywhere.** Every change behind a feature flag; the prod step is a flag flip with
+  instant flag-off rollback; `tenant_members` data retained through the soak.
+- **Shadow run — prove, don't assume.** Before the flip, compute the claims-based `get_user_*()`
+  results *alongside* the current `tenant_members`-based results and log any divergence on real
+  traffic. Flip only when divergence = 0. (This is the single biggest insurance against a silent
+  authz regression.)
+- **Hard gates, every phase.** RLS tenant-isolation suite green · `audit:rls` + `audit:actions` ·
+  `tsc --noEmit` 0 · `npm run check` green · Supabase advisors (security+perf) 0 new ERROR.
+- **Smoke matrix.** Every role × key surfaces (settings, logo upload, a check workflow, a report) ×
+  {in-Shell, direct login} × {SKS, demo}.
+- **Adversarial review before merge.** Independent multi-agent pass over the auth diff hunting RLS
+  bypass, tenant-crossing, token forgery, and MFA/AAL regression. (Opt-in; billed.)
+- **Rollback rehearsal.** Exercise and time the flag-off path on the branch before the prod window.
+
+## Reusable as the federation template
+
+Service is the second app onto the federation (Field was first). Capture the working recipe — verify
+the Shell JWT → mint a data-JWT with the app's own key → claims-based RLS helpers → reconcile identity
+into `shell_control` — as the documented **"how an app joins the EQ federation"** runbook (mirror into
+eq-context). Quotes / Cards / Expenses then fast-follow. One careful sprint, suite-wide payoff.
+
 ## Rollback
 
 Phase 0 removed the one-way door — there is **no secret swap**, so the prod step is a **flag flip**.
